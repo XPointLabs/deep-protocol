@@ -1,0 +1,15 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Sodium.Core" Version="1.4.1" />
+    <ProjectReference Include="..\Deep.Protocol.Abstractions\Deep.Protocol.Abstractions.csproj" />
+    <ProjectReference Include="..\Deep.Protocol.Protobuf\Deep.Protocol.Protobuf.csproj" />
+  </ItemGroup>
+
+</Project>

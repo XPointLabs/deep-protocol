@@ -1,0 +1,71 @@
+﻿name: build-test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore Deep.Protocol.slnx
+
+      - name: Build
+        run: dotnet build Deep.Protocol.slnx --configuration Release --no-restore
+
+      - name: Protocol golden-vector gate
+        run: >
+          dotnet test tests/Deep.Protocol.Tests/Deep.Protocol.Tests.csproj
+          --configuration Release
+          --no-build
+          --filter "FullyQualifiedName~GoldenVectorTests"
+
+      - name: Protocol differential gate
+        run: >
+          dotnet test tests/Deep.Protocol.Tests/Deep.Protocol.Tests.csproj
+          --configuration Release
+          --no-build
+          --filter "FullyQualifiedName~SodiumDifferentialTests|FullyQualifiedName~CrossLanguageDifferentialTests"
+
+      - name: Protocol fuzz-smoke gate
+        run: >
+          dotnet test tests/Deep.Protocol.Tests/Deep.Protocol.Tests.csproj
+          --configuration Release
+          --no-build
+          --filter "FullyQualifiedName~ProtocolFuzzSmokeTests|FullyQualifiedName~ProtocolParserCodecFuzzTests"
+
+      - name: Test
+        run: >
+          dotnet test Deep.Protocol.slnx
+          --configuration Release
+          --no-build
+          --collect:"XPlat Code Coverage"
+          --results-directory artifacts/test-results
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: artifacts/test-results/**/*.xml
+          if-no-files-found: ignore
+
+      - name: Upload vector diffs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vector-diffs
+          path: artifacts/vector-diffs
+          if-no-files-found: ignore

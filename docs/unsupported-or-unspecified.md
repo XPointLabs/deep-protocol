@@ -1,0 +1,92 @@
+# Unsupported Or Unspecified
+
+This document lists areas where the .NET port intentionally stops at an adapter boundary or marks a
+TODO instead of inventing behavior.
+
+## Crypto
+
+Implemented in managed production adapter (`SodiumSessionProtocolCrypto`):
+
+- libsodium-compatible 1:1 envelope encryption/decryption (`crypto_box_seal` semantics)
+- Ed25519 seed (32-byte) to libsodium-style secret key normalization (64-byte)
+- Ed25519 public key to X25519 conversion
+- blinded recipient encryption for `0x15` and `0x25` paths
+- personalized BLAKE2b-256
+
+Still not fully implemented in managed code:
+
+- deterministic Session encryption variant specifics that differ from sealed-box behavior
+- full upstream-equivalent groups v2 bt encoding and key lifecycle/rekey semantics
+- ONS, push notification, and attachment encryption helpers
+
+`ISessionProtocolCrypto` and `IProtocolHashing` remain extension points for hosts that need alternative native bindings.
+
+### B1 acceptance criteria mapping
+
+- Envelope encrypt/decrypt: round-trip and sodium differential tests are green.
+- Ed25519 seed normalization: adapter output matches direct sodium key expansion.
+- Ed25519/X25519 conversion: adapter output matches direct sodium conversion.
+- Blinded recipient paths: both `0x15` and `0x25` prefixes are preserved and decryptable.
+- Personalized BLAKE2b-256: adapter output matches direct sodium `HashSaltPersonal`.
+
+## Onion Requests
+
+Implemented in managed production adapter (`SodiumOnionRequestCrypto`):
+
+- `xchacha20`
+- `aes-gcm`
+- `gcm` alias for `aes-gcm`
+- sealed-box onion request build path (destination + optional hops)
+- encrypted response decrypt with JSON envelope parsing (`statusCode`/`code`, object/array headers)
+- fallback to raw plaintext body when response is not JSON
+
+Remaining gaps / blockers:
+
+- path construction, repair, strike counting, cache persistence, and router scheduling
+
+## Groups
+
+Implemented:
+
+- protobuf group update extraction (`GroupUpdateParser`)
+- groups v2 message encrypt/decrypt through production sodium adapter
+- group payload compression + padding restoration on decrypt path
+
+It does not yet port:
+
+- `groups/info`
+- `groups/members`
+- `groups/keys`
+- key rotation and rekey state
+- full bt encoding parity for groups payload internals
+- legacy closed group behavior
+
+## Config Namespace Merge
+
+Implemented:
+
+- `SharedConfigMessage` parsing from `Content` envelopes
+- per-namespace merge policy with seqno ordering: `Applied`, `Duplicate`, `Stale`, `Invalid`
+
+Remaining gaps / blockers:
+
+- full upstream config namespace families and merge conflict resolution nuances
+- coupling with group key lifecycle/rotation state
+
+Legacy group `0x05` encryption is rejected, matching the upstream high-level protocol helper.
+
+## Community Migration
+
+The compatibility path for `Content` vs `Envelope` community messages is implemented. The final
+network transition stage is not assumed. The code keeps both parse paths active, matching the
+transition comments in `SessionProtos.proto`.
+
+## Protobuf Unknowns
+
+The schemas are copied unchanged. Unknown protobuf fields are handled by Google.Protobuf according
+to its runtime behavior; no custom unknown-field policy has been added.
+
+## Golden Vectors
+
+Current fixtures are deterministic managed fixtures. Cross-language crypto vectors should be added
+when native bindings are available. Failing vector tests write diffs under `artifacts/vector-diffs`.
