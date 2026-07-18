@@ -48,6 +48,9 @@ Primary upstream areas reviewed:
 - P03B canonical mailbox capability, free-admission and accepted/durable receipt contracts,
   isolated in `Deep.Protocol.DeepExtension.MailboxCapabilities`; crypto, replay and capability
   production remain host-provided interfaces with no production registration
+- P03C contact-scoped nearby rendezvous, canonical handshake framing, replay scope and
+  platform-neutral lifecycle, isolated in `Deep.Protocol.DeepExtension.NearbyHandshakes`; the
+  mutually authenticated AKE remains a blocked host adapter with no production implementation
 
 ## Wire Semantics Preserved
 
@@ -96,5 +99,12 @@ expected operation/generation/payload/tombstone context. Replay guards distingui
 idempotent-retry, stale-replay and conflict decisions. The library does not claim opaque bytes are
 secret or unlinkable and does not create keys, persist lifecycle/replay state, execute storage,
 choose a signature/digest primitive, apply billing, or enable a runtime feature.
+
+P03C adds fixed `NRV1` advertisements and bounded `NHS1` initiator/responder frames. The public
+orchestrator passes exact canonical transcript bytes, expected contact identity, period,
+resumption counter, bundle version and hop-local attempt ID through
+`INearbyAuthenticatedKeyExchange`. Stable peer identity and session key material appear only after
+adapter authentication and replay acceptance. No radio transport, permission, UI, background
+scheduler, production AKE adapter or runtime registration is included.
 
 Tests use an explicit fake adapter only to verify managed state and wire container behavior.

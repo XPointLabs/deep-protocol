@@ -142,3 +142,21 @@ persistence. Test fixtures use deterministic SHA-256-based signatures only to ma
 verifier vectors reproducible; they are not production cryptography. Production activation
 remains blocked until later producer, storage, client integration and external security work
 supplies and verifies those dependencies.
+
+## P03C nearby handshake gaps
+
+P03C defines contact-scoped rendezvous framing, a two-message transcript boundary, replay scope and
+platform-neutral lifecycle. It deliberately does not implement:
+
+- contact discovery-secret issuance, synchronization, rotation or recovery;
+- a production mutually authenticated AKE, key schedule, resumption-ticket protection or durable
+  replay state;
+- BLE advertisements/scanning, radio permissions, Wi-Fi transfer, UI or background scheduling;
+- open first-contact discovery;
+- forward secrecy, post-compromise security, deniability, global anonymity, radio unlinkability or
+  a foreground/background availability SLA.
+
+The existing Session sealed-box and onion-request adapters do not satisfy the complete
+transcript-bound mutually authenticated AKE contract and are not registered for P03C. The
+deterministic adapter exists only in tests. Production activation requires selection and external
+review of an established AKE, cross-language vectors, durable state and mobile/Windows E2E.

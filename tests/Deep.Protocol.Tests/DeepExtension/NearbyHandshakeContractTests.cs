@@ -150,7 +150,7 @@ public sealed class NearbyHandshakeContractTests
             Mac("I", NearbyHandshakeCodec.GetBindingBytes(binding), localIdentity,
                 expectedPeerIdentity.ToArray());
 
-        public NearbyResponderResult RespondAuthenticated(
+        public byte[] CreateResponderPayload(
             NearbyHandshakeBinding binding,
             ReadOnlySpan<byte> canonicalInitiatorFrame,
             ReadOnlySpan<byte> expectedPeerIdentity)
@@ -160,11 +160,24 @@ public sealed class NearbyHandshakeContractTests
             var decoded = NearbyHandshakeCodec.DecodeFrame(canonicalInitiatorFrame);
             if (!CryptographicOperations.FixedTimeEquals(expected, decoded.AdapterPayload.Span))
                 throw new NearbyHandshakeException(NearbyHandshakeError.AuthenticationFailed, "wrong contact");
-            var payload = Mac("R", canonicalInitiatorFrame.ToArray(), localIdentity,
+            return Mac("R", canonicalInitiatorFrame.ToArray(), localIdentity,
                 expectedPeerIdentity.ToArray());
-            return new NearbyResponderResult(payload,
-                new NearbyEstablishedSession(expectedPeerIdentity.ToArray(),
-                    SHA256.HashData(canonicalInitiatorFrame.ToArray().Concat(payload).ToArray())));
+        }
+
+        public NearbyEstablishedSession CompleteResponder(
+            NearbyHandshakeBinding binding,
+            ReadOnlySpan<byte> canonicalInitiatorFrame,
+            ReadOnlySpan<byte> canonicalResponderFrame,
+            ReadOnlySpan<byte> expectedPeerIdentity)
+        {
+            var response = NearbyHandshakeCodec.DecodeFrame(canonicalResponderFrame);
+            var expected = Mac("R", canonicalInitiatorFrame.ToArray(), localIdentity,
+                expectedPeerIdentity.ToArray());
+            if (!CryptographicOperations.FixedTimeEquals(expected, response.AdapterPayload.Span))
+                throw new NearbyHandshakeException(NearbyHandshakeError.AuthenticationFailed, "tamper");
+            return new NearbyEstablishedSession(expectedPeerIdentity.ToArray(),
+                SHA256.HashData(canonicalInitiatorFrame.ToArray()
+                    .Concat(response.AdapterPayload.ToArray()).ToArray()));
         }
 
         public NearbyEstablishedSession CompleteInitiator(
