@@ -2,7 +2,7 @@
   "schema": "deep-survival-work-package-report.v1",
   "workPackage": "P03B",
   "title": "Mailbox capability and durable receipt contract",
-  "status": "corrected-runtime-blocked-pending-independent-rereview",
+  "status": "accepted-contract-runtime-blocked-independent-go",
   "humanOwner": "Mr. X",
   "repository": "deep-protocol",
   "branch": "survival/w01-p03b-mailbox-capabilities",
@@ -47,6 +47,21 @@
     "freeAdmissionPaymentOrthogonality": "pass-schema-reflection-and-nested-current-window",
     "productionRuntime": "blocked-not-registered",
     "externalCryptoReview": "blocked-not-run"
+  },
+  "independentReview": {
+    "initialVerdict": "NO-GO",
+    "initialCounts": {
+      "p0": 0,
+      "p1": 3,
+      "p2": 1
+    },
+    "correctiveVerdict": "GO",
+    "correctiveCounts": {
+      "p0": 0,
+      "p1": 0,
+      "p2": 0,
+      "p3": 0
+    }
   },
   "blockers": [
     "No reviewed capability producer or lifecycle persistence.",

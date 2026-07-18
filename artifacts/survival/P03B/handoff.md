@@ -18,6 +18,7 @@ are green.
 The initial independent review returned NO-GO with P0=0/P1=3/P2=1. All findings were converted to
 red tests and corrected: signing-statement equivocation comparison, nested/current free admission,
 explicit idempotency outcomes with bounded cached result, and required caller expectation binding.
+Corrective independent rereview returned GO with P0=0/P1=0/P2=0/P3=0 in scope.
 
 Not implemented: capability producer/lifecycle storage, real storage operations, billing, quota
 accounting, production crypto, key distribution or registration. Do not wire these contracts into

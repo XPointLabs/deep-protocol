@@ -19,3 +19,22 @@ Corrected source commit:
 Post-correction verification: Release build 0 warnings/errors; full 133/133; focused 34/34.
 The corrected tree requires an independent rereview before P03B can receive GO. Runtime remains
 blocked regardless of review outcome.
+
+## Corrective rereview
+
+Final verdict: **GO**. Counts: P0=0, P1=0, P2=0, P3=0 in corrective scope.
+
+The reviewer independently confirmed:
+
+- all four initial findings are closed by code and regression tests;
+- focused rerun passes 34/34;
+- recorded full 133/133, focused 34/34, coverage counters and evidence hashes match;
+- all three package sizes/SHA-256 values and nuspec source commit
+  `6e2c709a378ffac40c441e97e2e4da40aac9a104` match;
+- ADR/vector hashes match and the worktree is clean;
+- no production crypto, replay persistence, registration, default, deployment or publication was
+  introduced.
+
+Residual production risks remain the declared blockers: producer/lifecycle persistence, durable
+guard implementation, approved crypto/key distribution, storage/client E2E, cross-language
+vectors and external review.
