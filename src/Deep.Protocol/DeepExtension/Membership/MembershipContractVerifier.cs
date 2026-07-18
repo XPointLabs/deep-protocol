@@ -15,12 +15,12 @@ public static class MembershipContractVerifier
             signed.Statement.MinimumProtocol, signed.Statement.MaximumProtocol,
             signed.Statement.PolicyVersion, MembershipSignatureDomain.Membership,
             statement, signed.Signatures, context, verifier);
-        var hash = Digest(verifier, statement);
+        var hash = MembershipContractHash.Sha256(statement);
         return new VerifiedMembershipCommitment
         {
             Statement = signed.Statement,
             CanonicalHash = hash,
-            NextLastKnownGood = NextLkg(context, signed.Statement.Sequence, hash)
+            NextLastKnownGood = NextLkg(context.LastKnownGood, signed.Statement.Sequence, hash)
         };
     }
 
@@ -37,8 +37,8 @@ public static class MembershipContractVerifier
             signed.Statement.MinimumProtocol, signed.Statement.MaximumProtocol,
             signed.Statement.PolicyVersion, MembershipSignatureDomain.Bridge,
             statement, signed.Signatures, context, verifier);
-        var hash = Digest(verifier, statement);
-        var candidateHash = Digest(verifier,
+        var hash = MembershipContractHash.Sha256(statement);
+        var candidateHash = MembershipContractHash.Sha256(
             MembershipContractCodec.GetBridgeCandidateBytes(signed.Statement));
         var witness = signed.Statement.ForkWitness;
         if (witness.CandidateDomain != MembershipSignatureDomain.Bridge ||
@@ -50,54 +50,79 @@ public static class MembershipContractVerifier
         {
             Statement = signed.Statement,
             CanonicalHash = hash,
-            NextLastKnownGood = NextLkg(context, signed.Statement.Sequence, hash)
+            NextLastKnownGood = NextLkg(context.LastKnownGood, signed.Statement.Sequence, hash)
         };
     }
 
-    public static void VerifyDelegation(
+    public static VerifiedSignerDelegation VerifyDelegation(
         SignerDelegation delegation,
         NetworkGenesis genesis,
+        MembershipLastKnownGood authorityLastKnownGood,
         ulong verificationTimeUnixSeconds,
         uint allowedClockSkewSeconds,
         ushort protocol,
         IMembershipSignatureVerifier verifier)
     {
         ArgumentNullException.ThrowIfNull(delegation);
-        ArgumentNullException.ThrowIfNull(genesis);
-        ValidateSkew(allowedClockSkewSeconds);
-        MembershipContractCodec.ValidatePolicy(genesis.Policy);
-        if (!delegation.NetworkId.Span.SequenceEqual(genesis.NetworkId.Span))
-            throw Error(MembershipContractError.NetworkMismatch, "Delegation network does not match genesis.");
-        if (delegation.PolicyVersion != genesis.PolicyVersion ||
-            !SetEquals(delegation.OnlineSignerIds, genesis.Policy.OnlineSignerIds))
-            throw Error(MembershipContractError.PolicyMismatch, "Delegation policy does not match genesis.");
-        VerifyTimeAndProtocol(delegation.ValidFromUnixSeconds, delegation.ValidUntilUnixSeconds,
-            delegation.MinimumProtocol, delegation.MaximumProtocol, verificationTimeUnixSeconds,
-            allowedClockSkewSeconds, protocol);
-        VerifySignatures(MembershipContractCodec.GetDelegationSigningBytes(delegation),
-            delegation.Signatures, MembershipSignatureDomain.OfflineDelegation,
-            genesis.Policy.OfflineRootSignerIds, genesis.Policy.OfflineThreshold, verifier);
+        ValidateAuthoritySuccessor(
+            delegation.NetworkId,
+            delegation.PolicyVersion,
+            delegation.Sequence,
+            delegation.PreviousHash,
+            genesis,
+            authorityLastKnownGood);
+        VerifyDelegationAuthority(
+            delegation, genesis, verificationTimeUnixSeconds,
+            allowedClockSkewSeconds, protocol, verifier);
+        var canonical = MembershipContractCodec.GetDelegationSigningBytes(delegation);
+        var hash = MembershipContractHash.Sha256(canonical);
+        return new VerifiedSignerDelegation
+        {
+            Statement = delegation,
+            CanonicalHash = hash,
+            NextAuthorityLastKnownGood = NextLkg(
+                authorityLastKnownGood, delegation.Sequence, hash)
+        };
     }
 
-    public static void VerifyRevocation(
+    public static VerifiedSignerRevocation VerifyRevocation(
         SignerRevocation revocation,
         NetworkGenesis genesis,
+        MembershipLastKnownGood authorityLastKnownGood,
         ulong verificationTimeUnixSeconds,
         uint allowedClockSkewSeconds,
         ushort protocol,
         IMembershipSignatureVerifier verifier)
     {
         ArgumentNullException.ThrowIfNull(revocation);
-        if (!revocation.NetworkId.Span.SequenceEqual(genesis.NetworkId.Span) ||
-            revocation.PolicyVersion != genesis.PolicyVersion)
-            throw Error(MembershipContractError.NetworkMismatch, "Revocation authority does not match genesis.");
+        ValidateAuthoritySuccessor(
+            revocation.NetworkId,
+            revocation.PolicyVersion,
+            revocation.Sequence,
+            revocation.PreviousHash,
+            genesis,
+            authorityLastKnownGood);
         ValidateSkew(allowedClockSkewSeconds);
-        VerifyTimeAndProtocol(revocation.ValidFromUnixSeconds, revocation.ValidUntilUnixSeconds,
-            revocation.MinimumProtocol, revocation.MaximumProtocol, verificationTimeUnixSeconds,
-            allowedClockSkewSeconds, protocol);
-        VerifySignatures(MembershipContractCodec.GetRevocationSigningBytes(revocation),
-            revocation.Signatures, MembershipSignatureDomain.OfflineRevocation,
-            genesis.Policy.OfflineRootSignerIds, genesis.Policy.OfflineThreshold, verifier);
+        VerifyTimeAndProtocol(
+            revocation.ValidFromUnixSeconds, revocation.ValidUntilUnixSeconds,
+            revocation.MinimumProtocol, revocation.MaximumProtocol,
+            verificationTimeUnixSeconds, allowedClockSkewSeconds, protocol);
+        VerifySignatures(
+            MembershipContractCodec.GetRevocationSigningBytes(revocation),
+            revocation.Signatures,
+            MembershipSignatureDomain.OfflineRevocation,
+            genesis.OfflineRoots,
+            genesis.Policy.OfflineThreshold,
+            verifier);
+        var canonical = MembershipContractCodec.GetRevocationSigningBytes(revocation);
+        var hash = MembershipContractHash.Sha256(canonical);
+        return new VerifiedSignerRevocation
+        {
+            Statement = revocation,
+            CanonicalHash = hash,
+            NextAuthorityLastKnownGood = NextLkg(
+                authorityLastKnownGood, revocation.Sequence, hash)
+        };
     }
 
     public static MembershipForkEvidence CreateForkEvidence(
@@ -108,26 +133,78 @@ public static class MembershipContractVerifier
     {
         var firstBytes = MembershipContractCodec.GetMembershipSigningBytes(first.Statement);
         var secondBytes = MembershipContractCodec.GetMembershipSigningBytes(second.Statement);
-        VerifyForkCandidate(first, context, verifier, firstBytes);
-        VerifyForkCandidate(second, context, verifier, secondBytes);
-        var firstHash = Digest(verifier, firstBytes);
-        var secondHash = Digest(verifier, secondBytes);
-        if (first.Statement.Sequence != second.Statement.Sequence ||
-            !first.Statement.NetworkId.Span.SequenceEqual(second.Statement.NetworkId.Span) ||
-            !first.Statement.PreviousHash.Span.SequenceEqual(second.Statement.PreviousHash.Span) ||
-            firstHash.AsSpan().SequenceEqual(secondHash))
-            throw Error(MembershipContractError.NotForkEvidence, "Statements do not prove equivocation.");
-        return new MembershipForkEvidence
-        {
-            NetworkId = first.Statement.NetworkId.ToArray(),
-            Domain = MembershipSignatureDomain.Membership,
-            Sequence = first.Statement.Sequence,
-            PreviousHash = first.Statement.PreviousHash.ToArray(),
-            FirstCanonicalStatement = firstBytes,
-            SecondCanonicalStatement = secondBytes,
-            FirstHash = firstHash,
-            SecondHash = secondHash
-        };
+        _ = VerifyMembership(first, context, verifier);
+        _ = VerifyMembership(second, context, verifier);
+        return CreateEvidence(
+            MembershipSignatureDomain.Membership,
+            first.Statement.NetworkId,
+            first.Statement.Sequence,
+            first.Statement.PreviousHash,
+            firstBytes,
+            second.Statement.NetworkId,
+            second.Statement.Sequence,
+            second.Statement.PreviousHash,
+            secondBytes);
+    }
+
+    public static MembershipForkEvidence CreateDelegationForkEvidence(
+        SignerDelegation first,
+        SignerDelegation second,
+        NetworkGenesis genesis,
+        MembershipLastKnownGood authorityLastKnownGood,
+        ulong verificationTimeUnixSeconds,
+        uint allowedClockSkewSeconds,
+        ushort protocol,
+        IMembershipSignatureVerifier verifier)
+    {
+        _ = VerifyDelegation(first, genesis, authorityLastKnownGood,
+            verificationTimeUnixSeconds, allowedClockSkewSeconds, protocol, verifier);
+        _ = VerifyDelegation(second, genesis, authorityLastKnownGood,
+            verificationTimeUnixSeconds, allowedClockSkewSeconds, protocol, verifier);
+        return CreateEvidence(
+            MembershipSignatureDomain.OfflineDelegation,
+            first.NetworkId, first.Sequence, first.PreviousHash,
+            MembershipContractCodec.GetDelegationSigningBytes(first),
+            second.NetworkId, second.Sequence, second.PreviousHash,
+            MembershipContractCodec.GetDelegationSigningBytes(second));
+    }
+
+    public static MembershipForkEvidence CreateRevocationForkEvidence(
+        SignerRevocation first,
+        SignerRevocation second,
+        NetworkGenesis genesis,
+        MembershipLastKnownGood authorityLastKnownGood,
+        ulong verificationTimeUnixSeconds,
+        uint allowedClockSkewSeconds,
+        ushort protocol,
+        IMembershipSignatureVerifier verifier)
+    {
+        _ = VerifyRevocation(first, genesis, authorityLastKnownGood,
+            verificationTimeUnixSeconds, allowedClockSkewSeconds, protocol, verifier);
+        _ = VerifyRevocation(second, genesis, authorityLastKnownGood,
+            verificationTimeUnixSeconds, allowedClockSkewSeconds, protocol, verifier);
+        return CreateEvidence(
+            MembershipSignatureDomain.OfflineRevocation,
+            first.NetworkId, first.Sequence, first.PreviousHash,
+            MembershipContractCodec.GetRevocationSigningBytes(first),
+            second.NetworkId, second.Sequence, second.PreviousHash,
+            MembershipContractCodec.GetRevocationSigningBytes(second));
+    }
+
+    public static MembershipForkEvidence CreateBridgeForkEvidence(
+        SignedBridgeSnapshot first,
+        SignedBridgeSnapshot second,
+        MembershipVerificationContext context,
+        IMembershipSignatureVerifier verifier)
+    {
+        _ = VerifyBridge(first, context, verifier);
+        _ = VerifyBridge(second, context, verifier);
+        return CreateEvidence(
+            MembershipSignatureDomain.Bridge,
+            first.Statement.NetworkId, first.Statement.Sequence, first.Statement.PreviousHash,
+            MembershipContractCodec.GetBridgeSigningBytes(first.Statement),
+            second.Statement.NetworkId, second.Statement.Sequence, second.Statement.PreviousHash,
+            MembershipContractCodec.GetBridgeSigningBytes(second.Statement));
     }
 
     public static NetworkGenesis ImportSelfHostedGenesis(
@@ -136,23 +213,14 @@ public static class MembershipContractVerifier
         IMembershipSignatureVerifier verifier)
     {
         var genesis = MembershipContractCodec.DecodeGenesis(canonicalGenesis);
-        VerifySignatures(canonicalGenesis.ToArray(), signatures, MembershipSignatureDomain.Genesis,
-            genesis.Policy.OfflineRootSignerIds, genesis.Policy.OfflineThreshold, verifier);
+        VerifySignatures(
+            canonicalGenesis.ToArray(),
+            signatures,
+            MembershipSignatureDomain.Genesis,
+            genesis.OfflineRoots,
+            genesis.Policy.OfflineThreshold,
+            verifier);
         return genesis;
-    }
-
-    private static void VerifyForkCandidate(
-        SignedMembershipCommitment signed,
-        MembershipVerificationContext context,
-        IMembershipSignatureVerifier verifier,
-        byte[] bytes)
-    {
-        VerifyOnlineStatement(
-            signed.Statement.NetworkId, signed.Statement.Sequence, signed.Statement.PreviousHash,
-            signed.Statement.ValidFromUnixSeconds, signed.Statement.ValidUntilUnixSeconds,
-            signed.Statement.MinimumProtocol, signed.Statement.MaximumProtocol,
-            signed.Statement.PolicyVersion, MembershipSignatureDomain.Membership,
-            bytes, signed.Signatures, context, verifier, allowSameSuccessorForEvidence: true);
     }
 
     private static void VerifyOnlineStatement(
@@ -168,47 +236,99 @@ public static class MembershipContractVerifier
         byte[] statement,
         IReadOnlyList<MembershipSignature> signatures,
         MembershipVerificationContext context,
-        IMembershipSignatureVerifier verifier,
-        bool allowSameSuccessorForEvidence = false)
+        IMembershipSignatureVerifier verifier)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(verifier);
+        MembershipContractCodec.ValidatePolicy(context.Genesis.Policy);
         ValidateSkew(context.AllowedClockSkewSeconds);
-        if (!networkId.Span.SequenceEqual(context.Genesis.NetworkId.Span) ||
-            !networkId.Span.SequenceEqual(context.LastKnownGood.NetworkId.Span))
-            throw Error(MembershipContractError.NetworkMismatch, "Statement is for another network.");
-        if (policyVersion != context.Genesis.PolicyVersion ||
-            policyVersion != context.LastKnownGood.PolicyVersion)
-            throw Error(MembershipContractError.PolicyMismatch, "Statement policy version is not trusted.");
-        if (sequence != context.LastKnownGood.Sequence + 1)
-            throw Error(MembershipContractError.InvalidSequence, "Statement must be the next monotonic sequence.");
-        if (!previousHash.Span.SequenceEqual(context.LastKnownGood.CanonicalHash.Span))
-            throw Error(MembershipContractError.PreviousHashMismatch, "Statement previous hash does not match LKG.");
-        VerifyTimeAndProtocol(validFrom, validUntil, minimumProtocol, maximumProtocol,
-            context.VerificationTimeUnixSeconds, context.AllowedClockSkewSeconds, context.ClientProtocol);
-        VerifyDelegation(context.ActiveDelegation, context.Genesis, context.VerificationTimeUnixSeconds,
-            context.AllowedClockSkewSeconds, context.ClientProtocol, verifier);
-        var delegationHash = Digest(verifier,
-            MembershipContractCodec.GetDelegationSigningBytes(context.ActiveDelegation));
-        if (context.RevokedDelegationHashes.Any(value => value.Span.SequenceEqual(delegationHash)))
+        ValidateSuccessor(
+            networkId, policyVersion, sequence, previousHash,
+            context.Genesis, context.LastKnownGood);
+        VerifyTimeAndProtocol(
+            validFrom, validUntil, minimumProtocol, maximumProtocol,
+            context.VerificationTimeUnixSeconds, context.AllowedClockSkewSeconds,
+            context.ClientProtocol);
+        VerifyPinnedDelegation(context, verifier);
+        VerifySignatures(
+            statement,
+            signatures,
+            domain,
+            context.ActiveDelegation.OnlineSigners,
+            context.Genesis.Policy.OnlineThreshold,
+            verifier);
+    }
+
+    private static void VerifyPinnedDelegation(
+        MembershipVerificationContext context,
+        IMembershipSignatureVerifier verifier)
+    {
+        var delegation = context.ActiveDelegation;
+        var authority = context.AuthorityLastKnownGood;
+        if (!authority.NetworkId.Span.SequenceEqual(context.Genesis.NetworkId.Span) ||
+            authority.PolicyVersion != context.Genesis.PolicyVersion ||
+            delegation.Sequence != authority.Sequence ||
+            !delegation.NetworkId.Span.SequenceEqual(authority.NetworkId.Span))
+            throw Error(MembershipContractError.AuthorityMismatch, "Active delegation authority LKG is inconsistent.");
+        var canonical = MembershipContractCodec.GetDelegationSigningBytes(delegation);
+        var hash = MembershipContractHash.Sha256(canonical);
+        if (!authority.CanonicalHash.Span.SequenceEqual(hash))
+            throw Error(MembershipContractError.AuthorityMismatch, "Active delegation is not the authority LKG.");
+        VerifyDelegationAuthority(
+            delegation,
+            context.Genesis,
+            context.VerificationTimeUnixSeconds,
+            context.AllowedClockSkewSeconds,
+            context.ClientProtocol,
+            verifier);
+        if (context.RevokedDelegationHashes.Any(value => value.Span.SequenceEqual(hash)))
             throw Error(MembershipContractError.RevokedDelegation, "Online signer delegation is revoked.");
-        VerifySignatures(statement, signatures, domain, context.ActiveDelegation.OnlineSignerIds,
-            context.Genesis.Policy.OnlineThreshold, verifier);
+    }
+
+    private static void VerifyDelegationAuthority(
+        SignerDelegation delegation,
+        NetworkGenesis genesis,
+        ulong verificationTimeUnixSeconds,
+        uint allowedClockSkewSeconds,
+        ushort protocol,
+        IMembershipSignatureVerifier verifier)
+    {
+        ValidateSkew(allowedClockSkewSeconds);
+        MembershipContractCodec.ValidatePolicy(genesis.Policy);
+        if (!delegation.NetworkId.Span.SequenceEqual(genesis.NetworkId.Span))
+            throw Error(MembershipContractError.NetworkMismatch, "Delegation network does not match genesis.");
+        if (delegation.PolicyVersion != genesis.PolicyVersion ||
+            !SetEquals(
+                delegation.OnlineSigners.Select(static signer => signer.SignerId),
+                genesis.Policy.OnlineSignerIds))
+            throw Error(MembershipContractError.PolicyMismatch, "Delegation policy does not match genesis.");
+        VerifyTimeAndProtocol(
+            delegation.ValidFromUnixSeconds, delegation.ValidUntilUnixSeconds,
+            delegation.MinimumProtocol, delegation.MaximumProtocol,
+            verificationTimeUnixSeconds, allowedClockSkewSeconds, protocol);
+        VerifySignatures(
+            MembershipContractCodec.GetDelegationSigningBytes(delegation),
+            delegation.Signatures,
+            MembershipSignatureDomain.OfflineDelegation,
+            genesis.OfflineRoots,
+            genesis.Policy.OfflineThreshold,
+            verifier);
     }
 
     private static void VerifySignatures(
-        byte[] statement,
+        byte[] canonicalStatement,
         IReadOnlyList<MembershipSignature> signatures,
         MembershipSignatureDomain expectedDomain,
-        IReadOnlyList<ReadOnlyMemory<byte>> authorizedSignerIds,
+        IReadOnlyList<MembershipSignerDescriptor> authorizedSigners,
         int threshold,
         IMembershipSignatureVerifier verifier)
     {
         if (signatures.Count == 0)
             throw Error(MembershipContractError.InsufficientQuorum, "No signatures were supplied.");
-        var authorized = authorizedSignerIds
-            .Select(static value => Convert.ToHexString(value.Span))
-            .ToHashSet(StringComparer.Ordinal);
+        var authorized = authorizedSigners.ToDictionary(
+            static signer => Convert.ToHexString(signer.SignerId.Span),
+            StringComparer.Ordinal);
+        var framed = MembershipSigningDomains.Frame(expectedDomain, canonicalStatement);
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var accepted = 0;
         foreach (var signature in signatures)
@@ -218,17 +338,87 @@ public static class MembershipContractVerifier
             if (signature.SignerId.Length != MembershipLimits.SignerIdLength ||
                 signature.Signature.Length is < MembershipLimits.MinimumSignatureLength or > MembershipLimits.MaximumSignatureLength)
                 throw Error(MembershipContractError.InvalidSignature, "Signature framing is invalid.");
-            var signer = Convert.ToHexString(signature.SignerId.Span);
-            if (!authorized.Contains(signer))
+            var signerId = Convert.ToHexString(signature.SignerId.Span);
+            if (!authorized.TryGetValue(signerId, out var signer))
                 throw Error(MembershipContractError.UnknownSigner, "Signer is not authorized for this role.");
-            if (!seen.Add(signer))
+            if (!seen.Add(signerId))
                 throw Error(MembershipContractError.DuplicateSigner, "Duplicate signatures do not count toward quorum.");
-            if (!verifier.Verify(signature.SignerId.Span, expectedDomain, statement, signature.Signature.Span))
+            if (!verifier.Verify(
+                    signature.SignerId.Span,
+                    signer.PublicKey.Span,
+                    expectedDomain,
+                    framed,
+                    signature.Signature.Span))
                 throw Error(MembershipContractError.InvalidSignature, "Signature verification failed.");
             accepted++;
         }
         if (accepted < threshold)
             throw Error(MembershipContractError.InsufficientQuorum, "Signature threshold was not met.");
+    }
+
+    private static void ValidateAuthoritySuccessor(
+        ReadOnlyMemory<byte> networkId,
+        uint policyVersion,
+        ulong sequence,
+        ReadOnlyMemory<byte> previousHash,
+        NetworkGenesis genesis,
+        MembershipLastKnownGood authorityLastKnownGood)
+    {
+        ValidateSuccessor(
+            networkId, policyVersion, sequence, previousHash, genesis, authorityLastKnownGood);
+    }
+
+    private static void ValidateSuccessor(
+        ReadOnlyMemory<byte> networkId,
+        uint policyVersion,
+        ulong sequence,
+        ReadOnlyMemory<byte> previousHash,
+        NetworkGenesis genesis,
+        MembershipLastKnownGood lastKnownGood)
+    {
+        if (!networkId.Span.SequenceEqual(genesis.NetworkId.Span) ||
+            !networkId.Span.SequenceEqual(lastKnownGood.NetworkId.Span))
+            throw Error(MembershipContractError.NetworkMismatch, "Statement is for another network.");
+        if (policyVersion != genesis.PolicyVersion ||
+            policyVersion != lastKnownGood.PolicyVersion)
+            throw Error(MembershipContractError.PolicyMismatch, "Statement policy version is not trusted.");
+        if (lastKnownGood.Sequence == ulong.MaxValue)
+            throw Error(MembershipContractError.SequenceOverflow, "Sequence cannot advance beyond UInt64.");
+        if (sequence != lastKnownGood.Sequence + 1)
+            throw Error(MembershipContractError.InvalidSequence, "Statement must be the next monotonic sequence.");
+        if (!previousHash.Span.SequenceEqual(lastKnownGood.CanonicalHash.Span))
+            throw Error(MembershipContractError.PreviousHashMismatch, "Statement previous hash does not match LKG.");
+    }
+
+    private static MembershipForkEvidence CreateEvidence(
+        MembershipSignatureDomain domain,
+        ReadOnlyMemory<byte> firstNetwork,
+        ulong firstSequence,
+        ReadOnlyMemory<byte> firstPrevious,
+        byte[] firstBytes,
+        ReadOnlyMemory<byte> secondNetwork,
+        ulong secondSequence,
+        ReadOnlyMemory<byte> secondPrevious,
+        byte[] secondBytes)
+    {
+        var firstHash = MembershipContractHash.Sha256(firstBytes);
+        var secondHash = MembershipContractHash.Sha256(secondBytes);
+        if (firstSequence != secondSequence ||
+            !firstNetwork.Span.SequenceEqual(secondNetwork.Span) ||
+            !firstPrevious.Span.SequenceEqual(secondPrevious.Span) ||
+            firstHash.AsSpan().SequenceEqual(secondHash))
+            throw Error(MembershipContractError.NotForkEvidence, "Statements do not prove equivocation.");
+        return new MembershipForkEvidence
+        {
+            NetworkId = firstNetwork.ToArray(),
+            Domain = domain,
+            Sequence = firstSequence,
+            PreviousHash = firstPrevious.ToArray(),
+            FirstCanonicalStatement = firstBytes,
+            SecondCanonicalStatement = secondBytes,
+            FirstHash = firstHash,
+            SecondHash = secondHash
+        };
     }
 
     private static void VerifyTimeAndProtocol(
@@ -251,20 +441,12 @@ public static class MembershipContractVerifier
             throw Error(MembershipContractError.ClockSkewOutOfRange, "Clock skew exceeds the fail-closed bound.");
     }
 
-    private static byte[] Digest(IMembershipSignatureVerifier verifier, ReadOnlySpan<byte> bytes)
-    {
-        var digest = verifier.Digest(bytes);
-        if (digest is null || digest.Length != MembershipLimits.HashLength)
-            throw Error(MembershipContractError.InvalidField, "Verifier returned an invalid digest.");
-        return digest;
-    }
-
     private static MembershipLastKnownGood NextLkg(
-        MembershipVerificationContext context, ulong sequence, ReadOnlyMemory<byte> hash) =>
+        MembershipLastKnownGood current, ulong sequence, ReadOnlyMemory<byte> hash) =>
         new()
         {
-            NetworkId = context.LastKnownGood.NetworkId.ToArray(),
-            PolicyVersion = context.LastKnownGood.PolicyVersion,
+            NetworkId = current.NetworkId.ToArray(),
+            PolicyVersion = current.PolicyVersion,
             Sequence = sequence,
             CanonicalHash = hash.ToArray()
         };

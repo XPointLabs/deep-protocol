@@ -201,6 +201,7 @@ public sealed class MembershipContractTests
             Domain = MembershipSignatureDomain.Genesis,
             Signature = verifier.Sign(
                 root.SignerId.Span,
+                root.PublicKey.Span,
                 MembershipSignatureDomain.Genesis,
                 canonical)
         }).ToArray();

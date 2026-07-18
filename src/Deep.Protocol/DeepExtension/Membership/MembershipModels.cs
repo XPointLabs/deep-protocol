@@ -11,6 +11,7 @@ public static class MembershipLimits
     public const int MaximumSigners = 32;
     public const int MaximumBridgeContacts = 64;
     public const int MaximumContactLength = 512;
+    public const int MaximumInclusionProofDepth = 64;
     public const uint MaximumClockSkewSeconds = 900;
 }
 
@@ -61,7 +62,9 @@ public enum MembershipContractError
     RevokedDelegation,
     InvalidDelegation,
     ForkDetected,
-    NotForkEvidence
+    NotForkEvidence,
+    AuthorityMismatch,
+    SequenceOverflow
 }
 
 public sealed record MembershipPolicy
@@ -119,7 +122,7 @@ public sealed record SignerDelegation
     public required ushort MinimumProtocol { get; init; }
     public required ushort MaximumProtocol { get; init; }
     public required uint PolicyVersion { get; init; }
-    public required IReadOnlyList<ReadOnlyMemory<byte>> OnlineSignerIds { get; init; }
+    public required IReadOnlyList<MembershipSignerDescriptor> OnlineSigners { get; init; }
     public required IReadOnlyList<MembershipSignature> Signatures { get; init; }
 }
 
@@ -222,6 +225,7 @@ public sealed record MembershipVerificationContext
 {
     public required NetworkGenesis Genesis { get; init; }
     public required SignerDelegation ActiveDelegation { get; init; }
+    public required MembershipLastKnownGood AuthorityLastKnownGood { get; init; }
     public required IReadOnlyList<ReadOnlyMemory<byte>> RevokedDelegationHashes { get; init; }
     public required MembershipLastKnownGood LastKnownGood { get; init; }
     public required ulong VerificationTimeUnixSeconds { get; init; }
@@ -255,12 +259,25 @@ public sealed record MembershipForkEvidence
     public required ReadOnlyMemory<byte> SecondHash { get; init; }
 }
 
+public sealed record VerifiedSignerDelegation
+{
+    public required SignerDelegation Statement { get; init; }
+    public required ReadOnlyMemory<byte> CanonicalHash { get; init; }
+    public required MembershipLastKnownGood NextAuthorityLastKnownGood { get; init; }
+}
+
+public sealed record VerifiedSignerRevocation
+{
+    public required SignerRevocation Statement { get; init; }
+    public required ReadOnlyMemory<byte> CanonicalHash { get; init; }
+    public required MembershipLastKnownGood NextAuthorityLastKnownGood { get; init; }
+}
+
 public interface IMembershipSignatureVerifier
 {
-    byte[] Digest(ReadOnlySpan<byte> canonicalBytes);
-
     bool Verify(
         ReadOnlySpan<byte> signerId,
+        ReadOnlySpan<byte> publicKey,
         MembershipSignatureDomain domain,
         ReadOnlySpan<byte> signingBytes,
         ReadOnlySpan<byte> signature);

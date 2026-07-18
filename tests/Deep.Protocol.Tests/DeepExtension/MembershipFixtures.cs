@@ -5,25 +5,33 @@ namespace Deep.Protocol.Tests.DeepExtension;
 
 internal sealed class DeterministicMembershipVerifier : IMembershipSignatureVerifier
 {
-    public byte[] Digest(ReadOnlySpan<byte> canonicalBytes) =>
-        SHA256.HashData(canonicalBytes);
-
     public bool Verify(
         ReadOnlySpan<byte> signerId,
+        ReadOnlySpan<byte> publicKey,
         MembershipSignatureDomain domain,
         ReadOnlySpan<byte> signingBytes,
         ReadOnlySpan<byte> signature) =>
-        signature.SequenceEqual(Sign(signerId, domain, signingBytes));
+        signature.SequenceEqual(SignFramed(signerId, publicKey, signingBytes));
 
     public byte[] Sign(
         ReadOnlySpan<byte> signerId,
+        ReadOnlySpan<byte> publicKey,
         MembershipSignatureDomain domain,
+        ReadOnlySpan<byte> canonicalStatement) =>
+        SignFramed(
+            signerId,
+            publicKey,
+            MembershipSigningDomains.Frame(domain, canonicalStatement));
+
+    private static byte[] SignFramed(
+        ReadOnlySpan<byte> signerId,
+        ReadOnlySpan<byte> publicKey,
         ReadOnlySpan<byte> signingBytes)
     {
-        var framed = new byte[signerId.Length + 1 + signingBytes.Length];
+        var framed = new byte[signerId.Length + publicKey.Length + signingBytes.Length];
         signerId.CopyTo(framed);
-        framed[signerId.Length] = (byte)domain;
-        signingBytes.CopyTo(framed.AsSpan(signerId.Length + 1));
+        publicKey.CopyTo(framed.AsSpan(signerId.Length));
+        signingBytes.CopyTo(framed.AsSpan(signerId.Length + publicKey.Length));
         return SHA256.HashData(framed);
     }
 }
@@ -32,6 +40,20 @@ internal static class MembershipFixtures
 {
     private static readonly ReadOnlyMemory<byte>[] OfflineSignerIds = Signers(0x10, 5);
     private static readonly ReadOnlyMemory<byte>[] OnlineSignerIds = Signers(0x40, 3);
+    private static readonly MembershipSignerDescriptor[] OfflineSigners =
+        OfflineSignerIds.Select((id, index) => new MembershipSignerDescriptor
+        {
+            SignerId = id,
+            Role = MembershipSignerRole.OfflineRoot,
+            PublicKey = Range(0xe0 + index * 3, MembershipLimits.PublicKeyLength)
+        }).ToArray();
+    private static readonly MembershipSignerDescriptor[] OnlineSigners =
+        OnlineSignerIds.Select((id, index) => new MembershipSignerDescriptor
+        {
+            SignerId = id,
+            Role = MembershipSignerRole.Online,
+            PublicKey = Range(0x80 + index * 3, MembershipLimits.PublicKeyLength)
+        }).ToArray();
 
     public static NodeMembershipCommitment Commitment(
         ulong sequence,
@@ -67,7 +89,30 @@ internal static class MembershipFixtures
         {
             Statement = commitment,
             Signatures = signerIndexes.Select(index => Signature(
-                OnlineSignerIds[index], domain, bytes, verifier)).ToArray()
+                OnlineSigners[index], domain, bytes, verifier)).ToArray()
+        };
+    }
+
+    public static SignedMembershipCommitment SignWithCryptographicDomain(
+        NodeMembershipCommitment commitment,
+        MembershipSignatureDomain declaredDomain,
+        MembershipSignatureDomain cryptographicDomain,
+        DeterministicMembershipVerifier verifier)
+    {
+        var bytes = MembershipContractCodec.GetMembershipSigningBytes(commitment);
+        return new SignedMembershipCommitment
+        {
+            Statement = commitment,
+            Signatures = OnlineSigners.Take(2).Select(signer => new MembershipSignature
+            {
+                SignerId = signer.SignerId.ToArray(),
+                Domain = declaredDomain,
+                Signature = verifier.Sign(
+                    signer.SignerId.Span,
+                    signer.PublicKey.Span,
+                    cryptographicDomain,
+                    bytes)
+            }).ToArray()
         };
     }
 
@@ -96,7 +141,7 @@ internal static class MembershipFixtures
         {
             Signatures = Enumerable.Range(0, 3)
                 .Select(index => Signature(
-                    OfflineSignerIds[index],
+                    OfflineSigners[index],
                     MembershipSignatureDomain.OfflineDelegation,
                     bytes,
                     verifier))
@@ -106,6 +151,13 @@ internal static class MembershipFixtures
         {
             Genesis = genesis,
             ActiveDelegation = delegation,
+            AuthorityLastKnownGood = new MembershipLastKnownGood
+            {
+                NetworkId = genesis.NetworkId.ToArray(),
+                PolicyVersion = genesis.PolicyVersion,
+                Sequence = delegation.Sequence,
+                CanonicalHash = MembershipContractHash.Sha256(bytes)
+            },
             RevokedDelegationHashes = [],
             LastKnownGood = new MembershipLastKnownGood
             {
@@ -130,11 +182,10 @@ internal static class MembershipFixtures
             MaximumProtocol = 3,
             IssuedAtUnixSeconds = 800,
             Policy = MembershipPolicy.Beta(OfflineSignerIds, OnlineSignerIds),
-            OfflineRoots = OfflineSignerIds.Select((id, index) => new MembershipSignerDescriptor
+            OfflineRoots = OfflineSigners.Select(static value => value with
             {
-                SignerId = id,
-                Role = MembershipSignerRole.OfflineRoot,
-                PublicKey = Range(0xe0 + index, MembershipLimits.PublicKeyLength)
+                SignerId = value.SignerId.ToArray(),
+                PublicKey = value.PublicKey.ToArray()
             }).ToArray()
         };
 
@@ -170,12 +221,11 @@ internal static class MembershipFixtures
         };
         if (candidateHash.HasValue)
             return snapshot;
-        var verifier = new DeterministicMembershipVerifier();
         return snapshot with
         {
             ForkWitness = snapshot.ForkWitness with
             {
-                CandidateHash = verifier.Digest(
+                CandidateHash = MembershipContractHash.Sha256(
                     MembershipContractCodec.GetBridgeCandidateBytes(snapshot))
             }
         };
@@ -183,47 +233,163 @@ internal static class MembershipFixtures
 
     public static SignedBridgeSnapshot SignedBridge(
         DeterministicMembershipVerifier verifier,
-        IReadOnlyList<int> signerIndexes)
+        IReadOnlyList<int> signerIndexes,
+        bool alternateContact = false)
     {
         var snapshot = BridgeSnapshot();
+        if (alternateContact)
+        {
+            snapshot = snapshot with
+            {
+                EntryContacts =
+                [
+                    snapshot.EntryContacts[0] with
+                    {
+                        Contact = "https://alternate.example.invalid/v1"
+                    }
+                ]
+            };
+            snapshot = snapshot with
+            {
+                ForkWitness = snapshot.ForkWitness with
+                {
+                    CandidateHash = MembershipContractHash.Sha256(
+                        MembershipContractCodec.GetBridgeCandidateBytes(snapshot))
+                }
+            };
+        }
         var bytes = MembershipContractCodec.GetBridgeSigningBytes(snapshot);
         return new SignedBridgeSnapshot
         {
             Statement = snapshot,
             Signatures = signerIndexes.Select(index => Signature(
-                OnlineSignerIds[index],
+                OnlineSigners[index],
                 MembershipSignatureDomain.Bridge,
                 bytes,
                 verifier)).ToArray()
         };
     }
 
+    public static MembershipLastKnownGood GenesisAuthorityLastKnownGood()
+    {
+        var genesis = Genesis();
+        return new MembershipLastKnownGood
+        {
+            NetworkId = genesis.NetworkId.ToArray(),
+            PolicyVersion = genesis.PolicyVersion,
+            Sequence = genesis.GenesisSequence,
+            CanonicalHash = MembershipContractHash.Sha256(
+                MembershipContractCodec.EncodeGenesis(genesis))
+        };
+    }
+
+    public static SignerDelegation SignedDelegation(
+        DeterministicMembershipVerifier verifier,
+        bool alternateKey = false,
+        bool expired = false)
+    {
+        var delegation = UnsignedDelegation(expired);
+        if (alternateKey)
+        {
+            delegation = delegation with
+            {
+                OnlineSigners = delegation.OnlineSigners.Select((signer, index) =>
+                    index == 0
+                        ? signer with { PublicKey = Range(0x22, MembershipLimits.PublicKeyLength) }
+                        : signer).ToArray()
+            };
+        }
+        var bytes = MembershipContractCodec.GetDelegationSigningBytes(delegation);
+        return delegation with
+        {
+            Signatures = OfflineSigners.Take(3)
+                .Select(signer => Signature(
+                    signer, MembershipSignatureDomain.OfflineDelegation, bytes, verifier))
+                .ToArray()
+        };
+    }
+
+    public static SignerRevocation SignedRevocation(
+        DeterministicMembershipVerifier verifier,
+        bool alternate = false)
+    {
+        var delegation = SignedDelegation(verifier);
+        var delegationHash = MembershipContractHash.Sha256(
+            MembershipContractCodec.GetDelegationSigningBytes(delegation));
+        var revocation = new SignerRevocation
+        {
+            NetworkId = delegation.NetworkId.ToArray(),
+            Sequence = 3,
+            PreviousHash = delegationHash,
+            IssuedAtUnixSeconds = 1000,
+            ValidFromUnixSeconds = 1000,
+            ValidUntilUnixSeconds = 1200,
+            MinimumProtocol = 1,
+            MaximumProtocol = 3,
+            PolicyVersion = 1,
+            DelegationHash = alternate
+                ? Range(0x33, MembershipLimits.HashLength)
+                : delegationHash,
+            Signatures = []
+        };
+        var bytes = MembershipContractCodec.GetRevocationSigningBytes(revocation);
+        return revocation with
+        {
+            Signatures = OfflineSigners.Take(3)
+                .Select(signer => Signature(
+                    signer, MembershipSignatureDomain.OfflineRevocation, bytes, verifier))
+                .ToArray()
+        };
+    }
+
+    public static MembershipInclusionProof InclusionProof() =>
+        new()
+        {
+            NetworkId = Range(0x70, MembershipLimits.NetworkIdLength),
+            Sequence = 7,
+            MemberCommitment = Range(0x60, MembershipLimits.HashLength),
+            LeafIndex = 2,
+            SiblingHashes =
+            [
+                Range(0x20, MembershipLimits.HashLength),
+                Range(0x40, MembershipLimits.HashLength)
+            ]
+        };
+
     private static SignerDelegation UnsignedDelegation(bool expired) =>
         new()
         {
             NetworkId = Range(0x70, MembershipLimits.NetworkIdLength),
             Sequence = 2,
-            PreviousHash = Range(0x90, MembershipLimits.HashLength),
+            PreviousHash = GenesisAuthorityLastKnownGood().CanonicalHash.ToArray(),
             IssuedAtUnixSeconds = 900,
             ValidFromUnixSeconds = 900,
             ValidUntilUnixSeconds = expired ? 950UL : 1300UL,
             MinimumProtocol = 1,
             MaximumProtocol = 3,
             PolicyVersion = 1,
-            OnlineSignerIds = OnlineSignerIds,
+            OnlineSigners = OnlineSigners.Select(static value => value with
+            {
+                SignerId = value.SignerId.ToArray(),
+                PublicKey = value.PublicKey.ToArray()
+            }).ToArray(),
             Signatures = []
         };
 
     private static MembershipSignature Signature(
-        ReadOnlyMemory<byte> signerId,
+        MembershipSignerDescriptor signer,
         MembershipSignatureDomain domain,
         ReadOnlySpan<byte> bytes,
         DeterministicMembershipVerifier verifier) =>
         new()
         {
-            SignerId = signerId.ToArray(),
+            SignerId = signer.SignerId.ToArray(),
             Domain = domain,
-            Signature = verifier.Sign(signerId.Span, domain, bytes)
+            Signature = verifier.Sign(
+                signer.SignerId.Span,
+                signer.PublicKey.Span,
+                domain,
+                bytes)
         };
 
     private static ReadOnlyMemory<byte>[] Signers(int start, int count) =>

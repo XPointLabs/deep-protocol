@@ -12,6 +12,9 @@ public static class MembershipContractCodec
     private static ReadOnlySpan<byte> BridgeMagic => "MBS1"u8;
     private static ReadOnlySpan<byte> MembershipMagic => "MMC1"u8;
     private static ReadOnlySpan<byte> ForkMagic => "MFW1"u8;
+    private static ReadOnlySpan<byte> InclusionProofMagic => "MIP1"u8;
+    private static ReadOnlySpan<byte> SignedMembershipMagic => "MSM1"u8;
+    private static ReadOnlySpan<byte> SignedBridgeMagic => "MSB1"u8;
 
     public static byte[] EncodeGenesis(NetworkGenesis genesis)
     {
@@ -84,19 +87,7 @@ public static class MembershipContractCodec
     }
 
     public static byte[] GetDelegationSigningBytes(SignerDelegation delegation) =>
-        EncodeAuthorityStatement(
-            DelegationMagic,
-            delegation.NetworkId,
-            delegation.Sequence,
-            delegation.PreviousHash,
-            delegation.IssuedAtUnixSeconds,
-            delegation.ValidFromUnixSeconds,
-            delegation.ValidUntilUnixSeconds,
-            delegation.MinimumProtocol,
-            delegation.MaximumProtocol,
-            delegation.PolicyVersion,
-            delegation.OnlineSignerIds,
-            extraHash: null);
+        EncodeDelegationStatement(delegation);
 
     public static byte[] GetRevocationSigningBytes(SignerRevocation revocation) =>
         EncodeAuthorityStatement(
@@ -113,6 +104,71 @@ public static class MembershipContractCodec
             [],
             revocation.DelegationHash);
 
+    public static SignerDelegation DecodeDelegationSigningBytes(ReadOnlySpan<byte> encoded)
+    {
+        var reader = new CanonicalReader(encoded, DelegationMagic);
+        ReadCommon(ref reader, out var networkId, out var sequence, out var previousHash,
+            out var issued, out var validFrom, out var validUntil, out var minimumProtocol,
+            out var maximumProtocol, out var policyVersion);
+        var count = reader.Count(MembershipLimits.MaximumSigners);
+        var signers = new MembershipSignerDescriptor[count];
+        for (var index = 0; index < count; index++)
+        {
+            signers[index] = new MembershipSignerDescriptor
+            {
+                SignerId = reader.Fixed(MembershipLimits.SignerIdLength),
+                Role = reader.Enum<MembershipSignerRole>(),
+                PublicKey = ReadDescriptorRemainder(ref reader)
+            };
+        }
+        reader.End();
+        var result = new SignerDelegation
+        {
+            NetworkId = networkId,
+            Sequence = sequence,
+            PreviousHash = previousHash,
+            IssuedAtUnixSeconds = issued,
+            ValidFromUnixSeconds = validFrom,
+            ValidUntilUnixSeconds = validUntil,
+            MinimumProtocol = minimumProtocol,
+            MaximumProtocol = maximumProtocol,
+            PolicyVersion = policyVersion,
+            OnlineSigners = signers,
+            Signatures = []
+        };
+        RequireCanonical(encoded, GetDelegationSigningBytes(result));
+        return result;
+    }
+
+    public static SignerRevocation DecodeRevocationSigningBytes(ReadOnlySpan<byte> encoded)
+    {
+        var reader = new CanonicalReader(encoded, RevocationMagic);
+        ReadCommon(ref reader, out var networkId, out var sequence, out var previousHash,
+            out var issued, out var validFrom, out var validUntil, out var minimumProtocol,
+            out var maximumProtocol, out var policyVersion);
+        var count = reader.UInt16();
+        if (count != 0)
+            throw Error(MembershipContractError.InvalidLength, "Revocation signer body must be empty.");
+        var delegationHash = reader.Fixed(MembershipLimits.HashLength);
+        reader.End();
+        var result = new SignerRevocation
+        {
+            NetworkId = networkId,
+            Sequence = sequence,
+            PreviousHash = previousHash,
+            IssuedAtUnixSeconds = issued,
+            ValidFromUnixSeconds = validFrom,
+            ValidUntilUnixSeconds = validUntil,
+            MinimumProtocol = minimumProtocol,
+            MaximumProtocol = maximumProtocol,
+            PolicyVersion = policyVersion,
+            DelegationHash = delegationHash,
+            Signatures = []
+        };
+        RequireCanonical(encoded, GetRevocationSigningBytes(result));
+        return result;
+    }
+
     public static byte[] GetBridgeSigningBytes(BridgeSnapshot snapshot)
     {
         var candidate = GetBridgeCandidateBytes(snapshot);
@@ -128,6 +184,10 @@ public static class MembershipContractCodec
             snapshot.MinimumProtocol, snapshot.MaximumProtocol, snapshot.PolicyVersion);
         if (snapshot.EntryContacts.Count is 0 or > MembershipLimits.MaximumBridgeContacts)
             throw Error(MembershipContractError.InvalidField, "Bridge contact count is outside canonical bounds.");
+        ValidateDistinctMemories(
+            snapshot.EntryContacts.Select(static contact => contact.EntryId).ToArray(),
+            MembershipLimits.SignerIdLength,
+            "Bridge entry identifiers");
         var writer = WriteCommon(BridgeMagic, snapshot.NetworkId, snapshot.Sequence, snapshot.PreviousHash,
             snapshot.IssuedAtUnixSeconds, snapshot.ValidFromUnixSeconds, snapshot.ValidUntilUnixSeconds,
             snapshot.MinimumProtocol, snapshot.MaximumProtocol, snapshot.PolicyVersion);
@@ -257,6 +317,60 @@ public static class MembershipContractCodec
         return result;
     }
 
+    public static byte[] EncodeInclusionProof(MembershipInclusionProof proof)
+    {
+        ArgumentNullException.ThrowIfNull(proof);
+        if (proof.NetworkId.Length != MembershipLimits.NetworkIdLength ||
+            proof.Sequence == 0 ||
+            proof.MemberCommitment.Length != MembershipLimits.HashLength ||
+            proof.SiblingHashes.Count > MembershipLimits.MaximumInclusionProofDepth ||
+            proof.SiblingHashes.Any(static hash => hash.Length != MembershipLimits.HashLength))
+            throw Error(MembershipContractError.InvalidField, "Membership inclusion proof is invalid.");
+        if (proof.SiblingHashes.Count < 32 &&
+            proof.LeafIndex >= (1u << proof.SiblingHashes.Count))
+            throw Error(MembershipContractError.InvalidField, "Leaf index exceeds the proof depth.");
+        var writer = new CanonicalWriter(72 + proof.SiblingHashes.Count * MembershipLimits.HashLength);
+        writer.Magic(InclusionProofMagic);
+        writer.Byte(Version);
+        writer.Zero(3);
+        writer.Fixed(proof.NetworkId, MembershipLimits.NetworkIdLength, "network ID");
+        writer.UInt64(proof.Sequence);
+        writer.Fixed(proof.MemberCommitment, MembershipLimits.HashLength, "member commitment");
+        writer.UInt32(proof.LeafIndex);
+        writer.UInt16(checked((ushort)proof.SiblingHashes.Count));
+        writer.Zero(2);
+        foreach (var sibling in proof.SiblingHashes)
+            writer.Fixed(sibling, MembershipLimits.HashLength, "sibling hash");
+        return writer.ToArray();
+    }
+
+    public static MembershipInclusionProof DecodeInclusionProof(ReadOnlySpan<byte> encoded)
+    {
+        var reader = new CanonicalReader(encoded, InclusionProofMagic);
+        var networkId = reader.Fixed(MembershipLimits.NetworkIdLength);
+        var sequence = reader.UInt64();
+        var commitment = reader.Fixed(MembershipLimits.HashLength);
+        var leafIndex = reader.UInt32();
+        var depth = reader.UInt16();
+        if (depth > MembershipLimits.MaximumInclusionProofDepth)
+            throw Error(MembershipContractError.InvalidLength, "Inclusion proof depth exceeds the bound.");
+        reader.Zero(2);
+        var siblings = new ReadOnlyMemory<byte>[depth];
+        for (var index = 0; index < depth; index++)
+            siblings[index] = reader.Fixed(MembershipLimits.HashLength);
+        reader.End();
+        var proof = new MembershipInclusionProof
+        {
+            NetworkId = networkId,
+            Sequence = sequence,
+            MemberCommitment = commitment,
+            LeafIndex = leafIndex,
+            SiblingHashes = siblings
+        };
+        RequireCanonical(encoded, EncodeInclusionProof(proof));
+        return proof;
+    }
+
     private static ulong ReadWitnessRemainderSequence(ref CanonicalReader reader)
     {
         reader.Zero(3);
@@ -264,10 +378,62 @@ public static class MembershipContractCodec
     }
 
     public static byte[] EncodeSignedMembership(SignedMembershipCommitment signed) =>
-        AppendSignatures(GetMembershipSigningBytes(signed.Statement), signed.Signatures);
+        EncodeSignedContainer(
+            SignedMembershipMagic,
+            GetMembershipSigningBytes(signed.Statement),
+            signed.Signatures);
 
     public static byte[] EncodeSignedBridge(SignedBridgeSnapshot signed) =>
-        AppendSignatures(GetBridgeSigningBytes(signed.Statement), signed.Signatures);
+        EncodeSignedContainer(
+            SignedBridgeMagic,
+            GetBridgeSigningBytes(signed.Statement),
+            signed.Signatures);
+
+    public static SignedMembershipCommitment DecodeSignedMembership(ReadOnlySpan<byte> encoded)
+    {
+        DecodeSignedContainer(encoded, SignedMembershipMagic, out var statement, out var signatures);
+        return new SignedMembershipCommitment
+        {
+            Statement = DecodeMembershipSigningBytes(statement),
+            Signatures = signatures
+        };
+    }
+
+    public static SignedBridgeSnapshot DecodeSignedBridge(ReadOnlySpan<byte> encoded)
+    {
+        DecodeSignedContainer(encoded, SignedBridgeMagic, out var statement, out var signatures);
+        return new SignedBridgeSnapshot
+        {
+            Statement = DecodeBridgeSigningBytes(statement),
+            Signatures = signatures
+        };
+    }
+
+    private static byte[] EncodeDelegationStatement(SignerDelegation delegation)
+    {
+        ArgumentNullException.ThrowIfNull(delegation);
+        ValidateCommon(delegation.NetworkId, delegation.Sequence, delegation.PreviousHash,
+            delegation.IssuedAtUnixSeconds, delegation.ValidFromUnixSeconds,
+            delegation.ValidUntilUnixSeconds, delegation.MinimumProtocol,
+            delegation.MaximumProtocol, delegation.PolicyVersion);
+        ValidateDescriptors(
+            delegation.OnlineSigners,
+            MembershipSignerRole.Online,
+            expectedCount: 3);
+        var writer = WriteCommon(DelegationMagic, delegation.NetworkId, delegation.Sequence,
+            delegation.PreviousHash, delegation.IssuedAtUnixSeconds,
+            delegation.ValidFromUnixSeconds, delegation.ValidUntilUnixSeconds,
+            delegation.MinimumProtocol, delegation.MaximumProtocol, delegation.PolicyVersion);
+        writer.UInt16(checked((ushort)delegation.OnlineSigners.Count));
+        foreach (var signer in OrderDescriptors(delegation.OnlineSigners))
+        {
+            writer.Fixed(signer.SignerId, MembershipLimits.SignerIdLength, "signer ID");
+            writer.Byte((byte)signer.Role);
+            writer.Zero(3);
+            writer.Fixed(signer.PublicKey, MembershipLimits.PublicKeyLength, "public key");
+        }
+        return writer.ToArray();
+    }
 
     private static byte[] EncodeAuthorityStatement(
         ReadOnlySpan<byte> magic,
@@ -290,8 +456,11 @@ public static class MembershipContractCodec
         var writer = WriteCommon(magic, networkId, sequence, previousHash, issued, validFrom, validUntil,
             minimumProtocol, maximumProtocol, policyVersion);
         writer.UInt16(checked((ushort)signerIds.Count));
-        foreach (var signerId in OrderIds(signerIds))
-            writer.Fixed(signerId, MembershipLimits.SignerIdLength, "signer ID");
+        if (signerIds.Count != 0)
+        {
+            foreach (var signerId in OrderIds(signerIds))
+                writer.Fixed(signerId, MembershipLimits.SignerIdLength, "signer ID");
+        }
         if (extraHash.HasValue)
             writer.Fixed(extraHash.Value, MembershipLimits.HashLength, "delegation hash");
         return writer.ToArray();
@@ -347,13 +516,11 @@ public static class MembershipContractCodec
             genesis.MinimumProtocol == 0 ||
             genesis.MinimumProtocol > genesis.MaximumProtocol ||
             genesis.OfflineRoots.Count != genesis.Policy.OfflineRootSignerIds.Count ||
-            genesis.OfflineRoots.Any(static root =>
-                root.Role != MembershipSignerRole.OfflineRoot ||
-                root.SignerId.Length != MembershipLimits.SignerIdLength ||
-                root.PublicKey.Length != MembershipLimits.PublicKeyLength) ||
+            genesis.OfflineRoots.Count != 5 ||
             !SetEquals(genesis.OfflineRoots.Select(static root => root.SignerId),
                 genesis.Policy.OfflineRootSignerIds))
             throw Error(MembershipContractError.InvalidField, "Network genesis is invalid.");
+        ValidateDescriptors(genesis.OfflineRoots, MembershipSignerRole.OfflineRoot, expectedCount: 5);
     }
 
     internal static void ValidatePolicy(MembershipPolicy policy)
@@ -361,9 +528,9 @@ public static class MembershipContractCodec
         ArgumentNullException.ThrowIfNull(policy);
         ValidateIdSet(policy.OfflineRootSignerIds);
         ValidateIdSet(policy.OnlineSignerIds);
-        if (policy.Version == 0 ||
-            policy.OfflineThreshold == 0 || policy.OfflineThreshold > policy.OfflineRootSignerIds.Count ||
-            policy.OnlineThreshold == 0 || policy.OnlineThreshold > policy.OnlineSignerIds.Count)
+        if (policy.Version != 1 ||
+            policy.OfflineThreshold != 3 || policy.OfflineRootSignerIds.Count != 5 ||
+            policy.OnlineThreshold != 2 || policy.OnlineSignerIds.Count != 3)
             throw Error(MembershipContractError.InvalidPolicy, "Membership threshold policy is invalid.");
     }
 
@@ -404,13 +571,24 @@ public static class MembershipContractCodec
         };
     }
 
-    private static byte[] AppendSignatures(byte[] statement, IReadOnlyList<MembershipSignature> signatures)
+    private static byte[] EncodeSignedContainer(
+        ReadOnlySpan<byte> magic,
+        byte[] statement,
+        IReadOnlyList<MembershipSignature> signatures)
     {
         if (signatures.Count is 0 or > MembershipLimits.MaximumSigners)
             throw Error(MembershipContractError.InvalidSignature, "Signature count is invalid.");
-        var writer = new CanonicalWriter(statement.Length + signatures.Sum(static value => value.Signature.Length + 20));
-        writer.Bytes(statement);
+        if (statement.Length > ushort.MaxValue)
+            throw Error(MembershipContractError.InvalidLength, "Signed statement is too large.");
+        var writer = new CanonicalWriter(
+            12 + statement.Length + signatures.Sum(static value => value.Signature.Length + 20));
+        writer.Magic(magic);
+        writer.Byte(Version);
+        writer.Zero(1);
+        writer.UInt16(checked((ushort)statement.Length));
         writer.UInt16(checked((ushort)signatures.Count));
+        writer.Zero(2);
+        writer.Bytes(statement);
         foreach (var signature in signatures.OrderBy(static value => value.SignerId, MemoryComparer.Instance))
         {
             writer.Fixed(signature.SignerId, MembershipLimits.SignerIdLength, "signer ID");
@@ -422,6 +600,99 @@ public static class MembershipContractCodec
             writer.Bytes(signature.Signature.Span);
         }
         return writer.ToArray();
+    }
+
+    private static void DecodeSignedContainer(
+        ReadOnlySpan<byte> encoded,
+        ReadOnlySpan<byte> magic,
+        out byte[] statement,
+        out IReadOnlyList<MembershipSignature> signatures)
+    {
+        var reader = new CanonicalReader(encoded, magic, reservedAfterVersion: 1);
+        var statementLength = reader.UInt16();
+        var signatureCount = reader.Count(MembershipLimits.MaximumSigners);
+        reader.Zero(2);
+        statement = reader.Fixed(statementLength);
+        var values = new MembershipSignature[signatureCount];
+        for (var index = 0; index < signatureCount; index++)
+        {
+            var signerId = reader.Fixed(MembershipLimits.SignerIdLength);
+            var domain = reader.Enum<MembershipSignatureDomain>();
+            reader.Zero(1);
+            var signatureLength = reader.UInt16();
+            if (signatureLength is < MembershipLimits.MinimumSignatureLength or > MembershipLimits.MaximumSignatureLength)
+                throw Error(MembershipContractError.InvalidSignature, "Signature length is invalid.");
+            values[index] = new MembershipSignature
+            {
+                SignerId = signerId,
+                Domain = domain,
+                Signature = reader.Fixed(signatureLength)
+            };
+        }
+        reader.End();
+        var canonicalIds = values.Select(static value => value.SignerId).ToArray();
+        ValidateDistinctMemories(canonicalIds, MembershipLimits.SignerIdLength, "Signature signer IDs");
+        if (!canonicalIds.SequenceEqual(
+                canonicalIds.OrderBy(static value => value, MemoryComparer.Instance),
+                MemoryEqualityComparer.Instance))
+            throw Error(MembershipContractError.NonCanonicalOrder, "Signatures are not canonically ordered.");
+        signatures = values;
+    }
+
+    private static void ReadCommon(
+        ref CanonicalReader reader,
+        out byte[] networkId,
+        out ulong sequence,
+        out byte[] previousHash,
+        out ulong issued,
+        out ulong validFrom,
+        out ulong validUntil,
+        out ushort minimumProtocol,
+        out ushort maximumProtocol,
+        out uint policyVersion)
+    {
+        networkId = reader.Fixed(MembershipLimits.NetworkIdLength);
+        sequence = reader.UInt64();
+        previousHash = reader.Fixed(MembershipLimits.HashLength);
+        issued = reader.UInt64();
+        validFrom = reader.UInt64();
+        validUntil = reader.UInt64();
+        minimumProtocol = reader.UInt16();
+        maximumProtocol = reader.UInt16();
+        policyVersion = reader.UInt32();
+    }
+
+    private static void ValidateDescriptors(
+        IReadOnlyList<MembershipSignerDescriptor> descriptors,
+        MembershipSignerRole role,
+        int expectedCount)
+    {
+        if (descriptors.Count != expectedCount ||
+            descriptors.Any(value =>
+                value.Role != role ||
+                value.SignerId.Length != MembershipLimits.SignerIdLength ||
+                value.PublicKey.Length != MembershipLimits.PublicKeyLength))
+            throw Error(MembershipContractError.InvalidField, "Signer descriptors are invalid.");
+        ValidateDistinctMemories(
+            descriptors.Select(static value => value.SignerId).ToArray(),
+            MembershipLimits.SignerIdLength,
+            "Signer identifiers");
+        ValidateDistinctMemories(
+            descriptors.Select(static value => value.PublicKey).ToArray(),
+            MembershipLimits.PublicKeyLength,
+            "Signer public keys");
+    }
+
+    private static void ValidateDistinctMemories(
+        IReadOnlyList<ReadOnlyMemory<byte>> values,
+        int requiredLength,
+        string name)
+    {
+        if (values.Any(value => value.Length != requiredLength))
+            throw Error(MembershipContractError.InvalidLength, $"{name} have invalid lengths.");
+        var encoded = values.Select(static value => Convert.ToHexString(value.Span)).ToArray();
+        if (encoded.Distinct(StringComparer.Ordinal).Count() != encoded.Length)
+            throw Error(MembershipContractError.DuplicateSigner, $"{name} must be distinct.");
     }
 
     private static IReadOnlyList<ReadOnlyMemory<byte>> OrderIds(IEnumerable<ReadOnlyMemory<byte>> values)
@@ -471,6 +742,15 @@ public static class MembershipContractCodec
             x.Span.SequenceCompareTo(y.Span);
     }
 
+    private sealed class MemoryEqualityComparer : IEqualityComparer<ReadOnlyMemory<byte>>
+    {
+        public static readonly MemoryEqualityComparer Instance = new();
+        public bool Equals(ReadOnlyMemory<byte> x, ReadOnlyMemory<byte> y) =>
+            x.Span.SequenceEqual(y.Span);
+        public int GetHashCode(ReadOnlyMemory<byte> obj) =>
+            obj.IsEmpty ? 0 : BinaryPrimitives.ReadInt32BigEndian(obj.Span[..Math.Min(4, obj.Length)]);
+    }
+
     private sealed class CanonicalWriter(int capacity)
     {
         private readonly List<byte> _bytes = new(capacity);
@@ -501,14 +781,17 @@ public static class MembershipContractCodec
     {
         private readonly ReadOnlySpan<byte> _bytes;
         private int _offset;
-        public CanonicalReader(ReadOnlySpan<byte> bytes, ReadOnlySpan<byte> magic)
+        public CanonicalReader(
+            ReadOnlySpan<byte> bytes,
+            ReadOnlySpan<byte> magic,
+            int reservedAfterVersion = 3)
         {
             _bytes = bytes;
             _offset = 0;
             if (bytes.Length < 8) throw Error(MembershipContractError.InvalidLength, "Statement is truncated.");
             if (!Take(4).SequenceEqual(magic)) throw Error(MembershipContractError.InvalidMagic, "Statement magic is invalid.");
             if (Take(1)[0] != Version) throw Error(MembershipContractError.UnsupportedVersion, "Statement version is unsupported.");
-            Zero(3);
+            Zero(reservedAfterVersion);
         }
         public byte[] Fixed(int length) => Take(length).ToArray();
         public ushort UInt16() => BinaryPrimitives.ReadUInt16BigEndian(Take(2));
