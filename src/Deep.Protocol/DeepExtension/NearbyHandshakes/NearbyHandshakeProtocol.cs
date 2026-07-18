@@ -17,7 +17,7 @@ public static class NearbyHandshakeProtocol
 
         var hint = crypto.DeriveRendezvousHint(
             NearbyHandshakeDomains.RendezvousHint,
-            contactDiscoverySecret.Bytes.Span, period, bundleVersion);
+            contactDiscoverySecret, period, bundleVersion);
         return NearbyHandshakeCodec.EncodeAdvertisement(bundleVersion, hint);
     }
 
@@ -47,7 +47,7 @@ public static class NearbyHandshakeProtocol
         {
             var candidate = crypto.DeriveRendezvousHint(
                 NearbyHandshakeDomains.RendezvousHint,
-                contactDiscoverySecret.Bytes.Span, period, advertisement.BundleVersion);
+                contactDiscoverySecret, period, advertisement.BundleVersion);
             if (candidate.Length == NearbyHandshakeLimits.HintLength &&
                 System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
                     candidate, advertisement.Hint.Span))

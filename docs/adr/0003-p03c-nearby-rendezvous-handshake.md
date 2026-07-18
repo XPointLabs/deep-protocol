@@ -21,9 +21,10 @@ foreground availability or a background discovery SLA.
 A future reviewed adapter derives a 16-byte hint from a contact discovery secret, the fixed
 `Deep/P03C/RendezvousHint/v1` domain, bundle version and unsigned period number. The managed
 contract never derives one contact secret from another and never accepts a raw Session ID as the
-secret. Public rendezvous APIs require the explicit `ContactDiscoverySecret` handle created by a
-reviewed producer, not a byte-span identity parameter; raw Session-ID-shaped input is rejected by
-that factory boundary.
+secret. Public rendezvous APIs require an opaque, non-exportable `ContactDiscoverySecret` handle
+returned by `IContactDiscoverySecretProvider`; neither the protocol nor adapter API accepts secret
+bytes. This structurally enforces the provider boundary but does not prove that a future provider
+uses correct entropy, storage or contact derivation, which remains a production review blocker.
 
 The platform supplies a monotonic/wall-clock mapping and period number. The default policy accepts
 the current and immediately previous period, with at most one future period for configured clock

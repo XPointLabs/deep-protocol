@@ -102,21 +102,19 @@ public sealed record NearbyHandshakePeriodPolicy
 
 public sealed class ContactDiscoverySecret
 {
-    private ContactDiscoverySecret(ReadOnlySpan<byte> bytes) => Bytes = bytes.ToArray();
+    internal ContactDiscoverySecret() { }
+}
 
-    public ReadOnlyMemory<byte> Bytes { get; }
+public interface IContactDiscoverySecretProvider
+{
+    ContactDiscoverySecret GetContactScopedSecret();
+}
 
-    public static ContactDiscoverySecret FromReviewedProducer(ReadOnlySpan<byte> bytes)
-    {
-        if (bytes.Length != NearbyHandshakeLimits.ContactDiscoverySecretLength)
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(bytes),
-                "A reviewed contact discovery producer must supply exactly 32 secret bytes.");
-        }
+public abstract class ContactDiscoverySecretProviderBase : IContactDiscoverySecretProvider
+{
+    public abstract ContactDiscoverySecret GetContactScopedSecret();
 
-        return new ContactDiscoverySecret(bytes);
-    }
+    protected static ContactDiscoverySecret CreateOpaqueSecretHandle() => new();
 }
 
 public sealed record NearbyRendezvousMatch(
@@ -173,7 +171,7 @@ public interface INearbyAuthenticatedKeyExchange
 {
     byte[] DeriveRendezvousHint(
         ReadOnlySpan<byte> domain,
-        ReadOnlySpan<byte> contactSecret,
+        ContactDiscoverySecret contactSecret,
         ulong period,
         byte bundleVersion);
 
