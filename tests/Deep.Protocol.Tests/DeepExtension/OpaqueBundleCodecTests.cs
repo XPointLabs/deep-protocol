@@ -201,6 +201,30 @@ public sealed class OpaqueBundleCodecTests
     }
 
     [Fact]
+    public void CallerPolicies_MayNarrowButNeverExtendKnownCriticalFeatures()
+    {
+        Assert.Equal(
+            OpaqueBundleFeatures.V1Required | OpaqueBundleFeatures.LegacyDpe1Compatibility,
+            OpaqueBundleFeatureSet.KnownCriticalFeatures);
+
+        var nativeOnlyProfile = new OpaqueBundleNegotiatedProfile(
+            OpaqueBundleWireVersion.V1,
+            OpaqueBundleFeatures.V1Required,
+            AllowLegacyDpe1: false);
+        var nativeOnlyPolicy = StrictV1Policy() with
+        {
+            SupportedCriticalFeatures = OpaqueBundleFeatures.V1Required
+        };
+        var encoded = OpaqueBundleCodec.Encode(
+            CreateDepositRequest([0xaa], [0xbb]),
+            nativeOnlyProfile);
+
+        var decoded = OpaqueBundleCodec.Decode(encoded, nativeOnlyPolicy);
+
+        Assert.Equal(OpaqueBundlePayloadKind.NativeOpaque, decoded.PayloadKind);
+    }
+
+    [Fact]
     public void Encode_RejectsUndefinedPayloadKindBeforeWriting()
     {
         var request = CreateDepositRequest([0xaa], [0xbb]) with

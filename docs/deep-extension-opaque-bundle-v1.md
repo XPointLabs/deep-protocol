@@ -48,6 +48,9 @@ V1 requires critical bits `SenderSealedHeader`, `MailboxCapabilities` and
 `TransportLocalCorrelation`. Unknown critical bits fail closed; unknown optional bits are carried
 to the caller. Reserved bytes and padding must be zero. The exact encoded length is the smallest
 selected padding block containing the header and declared bodies; non-canonical alternatives fail.
+The implementation-owned `OpaqueBundleFeatureSet.KnownCriticalFeatures` mask is the upper bound for
+offers, negotiated profiles and decode policies. Callers may narrow that mask, but cannot extend it
+by marking an unknown critical bit as locally supported.
 
 Strict bounds:
 
@@ -68,6 +71,9 @@ The extension has no implicit/default activation. Peers exchange explicit minimu
 and supported critical features through a transport-owned negotiation channel. The negotiator
 chooses the highest common version at or above the caller's minimum safe version. No intersection,
 missing V1 features or an unimplemented selected version fails closed.
+Offers containing critical bits outside the implementation-owned known mask fail before
+intersection. The encoder and decoder apply that same independent mask in addition to the caller's
+profile or policy.
 
 A strict reader configures accepted version and expiry-bucket windows. An older/unknown version,
 version below the strict floor, unknown critical feature, expired/future-out-of-window bucket or

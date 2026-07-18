@@ -34,6 +34,7 @@ Any regression in these suites fails CI.
 | Group codec output decryptability and envelope parse via direct sodium | `CrossLanguageDifferentialTests.GroupCodecCiphertextDecryptsWithDirectSodium` | Covered |
 | Onion layered request build/decrypt parity vs direct sodium sealed-box operations | `CrossLanguageDifferentialTests.OnionBuildLayeringAndResponseDecryptMatchDirectSodium` | Covered |
 | Robustness on malformed/random protocol payloads | `ProtocolFuzzSmokeTests`, `ProtocolParserCodecFuzzTests` | Covered |
+| DPB1 structured failure branches | `OpaqueBundleMalformedAndFuzzTests.DeterministicStructuredMutations_ReachNamedFailureBranches`, truncation and encoder separation tests | Covered by deterministic structural mutations |
 
 ## Remaining Risk Areas
 
@@ -43,6 +44,12 @@ The following areas remain open and are tracked as parity blockers/risk:
 2. Full upstream bt encoding parity details for all groups internals.
 3. Onion network-layer parity: path construction/repair, strike accounting, cache persistence, scheduler behavior.
 4. Deeper protobuf/parser fuzzing (coverage-guided fuzzing with corpus minimization) is not yet wired; current gates are deterministic random fuzz-smoke tests.
+
+P03 DPB1 adds deterministic structural mutations for declared-length overflow, truncation,
+trailing bytes, non-canonical padding, unknown/missing critical features, undefined payload kind,
+transport-attempt/dedup equality and legacy opt-in. This suite is branch-targeted regression
+testing, not coverage-guided fuzzing. The separate fixed-seed random malformed-input loop is also a
+smoke test, not a claim of fuzz-engine exploration or corpus minimization.
 
 ## Suggested Next Verification Hardening
 

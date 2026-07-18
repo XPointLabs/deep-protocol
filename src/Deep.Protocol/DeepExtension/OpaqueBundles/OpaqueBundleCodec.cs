@@ -46,6 +46,13 @@ public static class OpaqueBundleNegotiator
         {
             throw new ArgumentException("Minimum version must not exceed maximum version.", parameterName);
         }
+
+        if ((offer.SupportedCriticalFeatures & ~OpaqueBundleFeatureSet.KnownCriticalFeatures) !=
+            OpaqueBundleFeatures.None)
+        {
+            throw new OpaqueBundleNegotiationException(
+                $"{parameterName} declares a critical feature not implemented by this codec.");
+        }
     }
 }
 
@@ -172,7 +179,17 @@ public static class OpaqueBundleCodec
         }
 
         var criticalFeatures = (OpaqueBundleFeatures)BinaryPrimitives.ReadUInt32BigEndian(encoded.Slice(10, 4));
-        var unknownCriticalFeatures = criticalFeatures & ~policy.SupportedCriticalFeatures;
+        if ((policy.SupportedCriticalFeatures & ~OpaqueBundleFeatureSet.KnownCriticalFeatures) !=
+            OpaqueBundleFeatures.None)
+        {
+            throw Policy(
+                OpaqueBundleDecodeError.UnknownCriticalFeature,
+                "The decode policy attempts to extend the codec's implemented critical features.");
+        }
+
+        var acceptedCriticalFeatures =
+            policy.SupportedCriticalFeatures & OpaqueBundleFeatureSet.KnownCriticalFeatures;
+        var unknownCriticalFeatures = criticalFeatures & ~acceptedCriticalFeatures;
         if (unknownCriticalFeatures != OpaqueBundleFeatures.None)
         {
             throw Policy(OpaqueBundleDecodeError.UnknownCriticalFeature, "The bundle declares an unsupported critical feature.");
@@ -274,6 +291,22 @@ public static class OpaqueBundleCodec
             throw Policy(OpaqueBundleDecodeError.UnsupportedVersion, "Only explicitly negotiated V1 encoding is implemented.");
         }
 
+        if ((profile.SupportedCriticalFeatures & ~OpaqueBundleFeatureSet.KnownCriticalFeatures) !=
+            OpaqueBundleFeatures.None)
+        {
+            throw Policy(
+                OpaqueBundleDecodeError.UnknownCriticalFeature,
+                "The negotiated profile attempts to extend the codec's implemented critical features.");
+        }
+
+        if ((request.CriticalFeatures & ~OpaqueBundleFeatureSet.KnownCriticalFeatures) !=
+            OpaqueBundleFeatures.None)
+        {
+            throw Policy(
+                OpaqueBundleDecodeError.UnknownCriticalFeature,
+                "The request declares a critical feature not implemented by this codec.");
+        }
+
         if ((request.CriticalFeatures & OpaqueBundleFeatures.V1Required) != OpaqueBundleFeatures.V1Required)
         {
             throw Policy(OpaqueBundleDecodeError.MissingRequiredFeature, "V1 encoding requires every V1 critical feature.");
@@ -294,6 +327,11 @@ public static class OpaqueBundleCodec
         if (request.ReplayMaterial.Length != OpaqueBundleLimits.ReplayMaterialLength)
         {
             throw Policy(OpaqueBundleDecodeError.InvalidIdentifier, "Replay material must be exactly 16 bytes.");
+        }
+
+        if (request.PayloadKind is not (OpaqueBundlePayloadKind.NativeOpaque or OpaqueBundlePayloadKind.LegacyDpe1))
+        {
+            throw Format(OpaqueBundleDecodeError.InvalidEnumValue, "The payload kind is invalid.");
         }
 
         ValidateLength(

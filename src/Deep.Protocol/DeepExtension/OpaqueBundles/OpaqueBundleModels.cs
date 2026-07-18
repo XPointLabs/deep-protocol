@@ -28,6 +28,13 @@ public enum OpaqueBundleFeatures : uint
     V1Required = SenderSealedHeader | MailboxCapabilities | TransportLocalCorrelation
 }
 
+public static class OpaqueBundleFeatureSet
+{
+    public const OpaqueBundleFeatures KnownCriticalFeatures =
+        OpaqueBundleFeatures.V1Required |
+        OpaqueBundleFeatures.LegacyDpe1Compatibility;
+}
+
 public enum OpaqueBundlePayloadKind : byte
 {
     NativeOpaque = 1,
