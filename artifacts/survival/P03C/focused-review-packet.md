@@ -1,6 +1,6 @@
 # P03C independent review packet
 
-Review corrected source `8d77e833b595aae8936d9b9d1b3f6ef76180a426` and the following evidence commit.
+Review final corrected source `261c77658c8ff1f51ba45116ca8d938b1336eaa9` and the following evidence commit.
 Read ADR 0003, prompt and P03/P03A/P03B pins.
 
 Priorities: contact-scoped default/no raw identity; bounded period overlap/scanner claims;

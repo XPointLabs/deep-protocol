@@ -15,3 +15,8 @@ All findings were converted to corrective tests and code:
 Corrective red `4f9d28b658823f1d634e469c017c56f155758ae2`; corrected source
 `8d77e833b595aae8936d9b9d1b3f6ef76180a426`. Post-correction full 147/147, focused 14/14.
 Independent corrective rereview is required; runtime remains blocked.
+
+Final follow-up findings were closed by removing all public raw-byte secret minting in favor of an
+opaque provider-issued handle and by testing resumption 5→6, duplicate 6 and rollback 5 rejection.
+Final red `b095c81a9d55212a0a5c9995aea4218c5da69d3c`; final source
+`261c77658c8ff1f51ba45116ca8d938b1336eaa9`.

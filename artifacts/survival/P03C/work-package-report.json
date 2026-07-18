@@ -12,7 +12,9 @@
   "implementationCommit": "86581beb69ce0ed8084a31e4aa4e08ac7675c60c",
   "correctiveRedCommit": "4f9d28b658823f1d634e469c017c56f155758ae2",
   "correctiveImplementationCommit": "8d77e833b595aae8936d9b9d1b3f6ef76180a426",
-  "packageVersion": "0.3.0-p03c.8d77e83",
+  "finalCorrectiveRedCommit": "b095c81a9d55212a0a5c9995aea4218c5da69d3c",
+  "finalCorrectiveImplementationCommit": "261c77658c8ff1f51ba45116ca8d938b1336eaa9",
+  "packageVersion": "0.3.0-p03c.261c776",
   "pins": {
     "promptSha256": "51f8d946df3498f2f3c5cefef389be6e2c671fa3c8c75cb63cabea74d9e9622c",
     "p03bReportGitBlobSha256": "22836f8e648f5d388b41b128610484669131fc4a53634f52765f9a8021f0f9f2",
