@@ -105,7 +105,8 @@ bytes.
 
 - nonce context: exactly 32 bytes per domain;
 - sender authentication data after decryption: 1..512 bytes;
-- legacy DPE1: 4..1,048,576 bytes;
+- legacy DPE1: 4..1,048,032 bytes, reserving the nonce context and bounded adapter overhead;
+- adapter ciphertext overhead above plaintext: 1..512 bytes;
 - adapter ciphertexts must fit the existing DPB1 encrypted-header/payload and total encoded bounds;
 - no parser allocates from an unvalidated declared length.
 
@@ -123,4 +124,3 @@ production negotiation and claims that P01 is resolved remain BLOCKED until:
 Rollback disables P03A negotiation/new writes while retaining separately readable legacy and
 opaque state. It must never reinterpret an authenticated-envelope failure as permission to retry
 clear DPE1 or raw account addressing.
-

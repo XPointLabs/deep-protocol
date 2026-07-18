@@ -160,7 +160,10 @@ public static class OpaqueBundleCodec
         }
 
         var payloadKind = (OpaqueBundlePayloadKind)encoded[6];
-        if (payloadKind is not (OpaqueBundlePayloadKind.NativeOpaque or OpaqueBundlePayloadKind.LegacyDpe1))
+        if (payloadKind is not (
+            OpaqueBundlePayloadKind.NativeOpaque or
+            OpaqueBundlePayloadKind.LegacyDpe1 or
+            OpaqueBundlePayloadKind.AuthenticatedLegacyDpe1))
         {
             throw Format(OpaqueBundleDecodeError.InvalidEnumValue, "The payload kind is invalid.");
         }
@@ -329,7 +332,10 @@ public static class OpaqueBundleCodec
             throw Policy(OpaqueBundleDecodeError.InvalidIdentifier, "Replay material must be exactly 16 bytes.");
         }
 
-        if (request.PayloadKind is not (OpaqueBundlePayloadKind.NativeOpaque or OpaqueBundlePayloadKind.LegacyDpe1))
+        if (request.PayloadKind is not (
+            OpaqueBundlePayloadKind.NativeOpaque or
+            OpaqueBundlePayloadKind.LegacyDpe1 or
+            OpaqueBundlePayloadKind.AuthenticatedLegacyDpe1))
         {
             throw Format(OpaqueBundleDecodeError.InvalidEnumValue, "The payload kind is invalid.");
         }
@@ -389,9 +395,32 @@ public static class OpaqueBundleCodec
                 throw Format(OpaqueBundleDecodeError.InvalidLegacyPayload, "Legacy compatibility payload must contain exact DPE1 bytes.");
             }
         }
-        else if ((criticalFeatures & OpaqueBundleFeatures.LegacyDpe1Compatibility) != 0)
+        else if (payloadKind == OpaqueBundlePayloadKind.AuthenticatedLegacyDpe1)
         {
-            throw Policy(OpaqueBundleDecodeError.InvalidLegacyPayload, "Native opaque payloads must not declare legacy DPE1 compatibility.");
+            if (!allowLegacyDpe1)
+            {
+                throw Policy(
+                    OpaqueBundleDecodeError.LegacyPayloadNotAllowed,
+                    "Authenticated legacy DPE1 requires an explicit negotiated migration profile.");
+            }
+
+            var required =
+                OpaqueBundleFeatures.LegacyDpe1Compatibility |
+                OpaqueBundleFeatures.AuthenticatedCompatibilityEnvelope;
+            if ((criticalFeatures & required) != required)
+            {
+                throw Policy(
+                    OpaqueBundleDecodeError.MissingRequiredFeature,
+                    "Authenticated legacy DPE1 requires both compatibility-envelope critical features.");
+            }
+        }
+        else if ((criticalFeatures &
+            (OpaqueBundleFeatures.LegacyDpe1Compatibility |
+             OpaqueBundleFeatures.AuthenticatedCompatibilityEnvelope)) != 0)
+        {
+            throw Policy(
+                OpaqueBundleDecodeError.InvalidLegacyPayload,
+                "Native opaque payloads must not declare legacy compatibility features.");
         }
     }
 

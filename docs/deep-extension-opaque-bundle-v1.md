@@ -29,7 +29,7 @@ All integers are unsigned, big-endian. Header length is exactly 64 bytes.
 | 0 | 4 | ASCII `DPB1` |
 | 4 | 1 | wire version (`1`) |
 | 5 | 1 | minimum reader version (`1`) |
-| 6 | 1 | payload kind: `1` native opaque, `2` exact legacy DPE1 |
+| 6 | 1 | payload kind: `1` native opaque, `2` exact legacy DPE1, `3` authenticated legacy envelope |
 | 7 | 1 | capability role: `1` deposit, `2` retrieve |
 | 8 | 1 | padding class: 256, 1024, 4096 or 16384 byte block |
 | 9 | 1 | reserved zero |
@@ -92,6 +92,12 @@ The codec neither decrypts nor rewrites those bytes. Encoding and decoding both 
 The default profile rejects legacy payloads. Mr. X must approve a bounded compatibility window.
 Disabling new opaque writes must not delete either legacy or new-format state. A strict release
 must never fall back silently after an opaque read/write failure.
+
+Payload kind `AuthenticatedLegacyDpe1` additionally requires the
+`AuthenticatedCompatibilityEnvelope` critical feature. Its payload is ciphertext rather than
+clear DPE1 and is accepted only through the P03A orchestration contract. P03A has no production
+crypto adapter or runtime registration in this package; see
+`adr/0001-p03a-compatibility-metadata-envelope.md`.
 
 ## Replay, revocation and authenticated failures
 

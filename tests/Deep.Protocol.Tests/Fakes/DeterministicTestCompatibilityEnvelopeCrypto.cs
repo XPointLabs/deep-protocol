@@ -37,7 +37,10 @@ internal sealed class DeterministicTestCompatibilityEnvelopeCrypto : ICompatibil
             request.AssociatedData.Span,
             ciphertext);
 
-        return new CompatibilityEnvelopeSealedResult([.. tag, .. ciphertext]);
+        var sealedBytes = new byte[tag.Length + ciphertext.Length];
+        tag.CopyTo(sealedBytes, 0);
+        ciphertext.CopyTo(sealedBytes, tag.Length);
+        return new CompatibilityEnvelopeSealedResult(sealedBytes);
     }
 
     public CompatibilityEnvelopeOpenedResult Open(CompatibilityEnvelopeOpenRequest request)

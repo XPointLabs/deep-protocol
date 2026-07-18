@@ -42,6 +42,9 @@ Primary upstream areas reviewed:
 - shared config envelope parsing and namespace seqno-based merge state machine
 - opt-in Deep-extension opaque bundle V1 encoding/decoding and version negotiation, isolated in
   `Deep.Protocol.DeepExtension.OpaqueBundles`
+- P03A authenticated compatibility-envelope orchestration and production crypto/replay interfaces,
+  isolated in `Deep.Protocol.DeepExtension.CompatibilityEnvelopes`; no production crypto
+  implementation or runtime registration is shipped
 
 ## Wire Semantics Preserved
 
@@ -76,5 +79,10 @@ Remaining upstream parity gaps are documented in `unsupported-or-unspecified.md`
 The opaque bundle V1 contract is not Session-compatible wire behavior and does not modify generated
 protobufs, Session namespaces or existing vectors. It is disabled unless a host completes explicit
 feature negotiation. See `deep-extension-opaque-bundle-v1.md`.
+
+P03A adds an explicitly negotiated payload kind that can carry exact DPE1 bytes only after a future
+sender-authenticated recipient-encryption adapter seals them. Current sodium sealed-box adapters do
+not prove control of the claimed application sender key, so they are not registered for P03A.
+Production activation remains blocked by `docs/adr/0001-p03a-compatibility-metadata-envelope.md`.
 
 Tests use an explicit fake adapter only to verify managed state and wire container behavior.

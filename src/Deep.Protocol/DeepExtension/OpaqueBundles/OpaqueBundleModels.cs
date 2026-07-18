@@ -25,6 +25,7 @@ public enum OpaqueBundleFeatures : uint
     MailboxCapabilities = 1 << 1,
     TransportLocalCorrelation = 1 << 2,
     LegacyDpe1Compatibility = 1 << 3,
+    AuthenticatedCompatibilityEnvelope = 1 << 4,
     V1Required = SenderSealedHeader | MailboxCapabilities | TransportLocalCorrelation
 }
 
@@ -32,13 +33,15 @@ public static class OpaqueBundleFeatureSet
 {
     public const OpaqueBundleFeatures KnownCriticalFeatures =
         OpaqueBundleFeatures.V1Required |
-        OpaqueBundleFeatures.LegacyDpe1Compatibility;
+        OpaqueBundleFeatures.LegacyDpe1Compatibility |
+        OpaqueBundleFeatures.AuthenticatedCompatibilityEnvelope;
 }
 
 public enum OpaqueBundlePayloadKind : byte
 {
     NativeOpaque = 1,
-    LegacyDpe1 = 2
+    LegacyDpe1 = 2,
+    AuthenticatedLegacyDpe1 = 3
 }
 
 public enum OpaqueBundlePaddingClass : byte

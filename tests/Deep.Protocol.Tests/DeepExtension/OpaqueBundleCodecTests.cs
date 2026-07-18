@@ -204,7 +204,9 @@ public sealed class OpaqueBundleCodecTests
     public void CallerPolicies_MayNarrowButNeverExtendKnownCriticalFeatures()
     {
         Assert.Equal(
-            OpaqueBundleFeatures.V1Required | OpaqueBundleFeatures.LegacyDpe1Compatibility,
+            OpaqueBundleFeatures.V1Required |
+            OpaqueBundleFeatures.LegacyDpe1Compatibility |
+            OpaqueBundleFeatures.AuthenticatedCompatibilityEnvelope,
             OpaqueBundleFeatureSet.KnownCriticalFeatures);
 
         var nativeOnlyProfile = new OpaqueBundleNegotiatedProfile(

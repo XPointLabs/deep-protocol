@@ -103,6 +103,20 @@ security-sensitive producer semantics remain deliberately unsupported:
 - rotating push handles and unlinkability across accounts, epochs and transports;
 - a reviewed sender-sealed-header encryption construction.
 
+P03A defines `ICompatibilityEnvelopeCrypto` and `ICompatibilityEnvelopeReplayGuard`, plus
+deterministic contract vectors through a test-assembly-only adapter. It deliberately does not ship
+a production implementation. The current recipient sealed-box helper encrypts a claimed sender
+identifier but does not cryptographically authenticate control of that sender key; the onion
+adapter is anonymous by design. Treating either as P03A sender authentication is unsupported.
+
+Production P03A remains blocked on:
+
+- selection and independent verification of an established authenticated recipient-encryption
+  construction;
+- codec-domain-to-key/nonce mapping and upstream differential vectors;
+- durable atomic replay state scoped to capability epoch;
+- runtime registration and external cryptographic review.
+
 The codec only carries caller-provided opaque/encrypted bytes. It is not a ratchet, MLS, sealed
 sender implementation or proof of forward secrecy. P01 privacy findings therefore remain unresolved
 until the producer/verifier and downstream storage/push contracts exist and receive external

@@ -22,6 +22,7 @@
 | Network routers/snode pool | `include/session/network`, `src/network` | Not ported | Out of scope for the protocol library except onion abstractions. |
 | Config namespaces/merge logic | `include/session/config`, `src/config`, `docs/api` | Partial | `SharedConfigMessage` parsing and per-namespace seqno merge semantics (applied/duplicate/stale/invalid) are implemented. Remaining gaps: full upstream namespace families and key lifecycle integration. |
 | Deep opaque bundle V1 | Deep extension; not a Session wire format | Implemented, disabled by default | Canonical allocation-bounded codec, explicit negotiation, separate opaque deposit/retrieve capability types and exact opt-in DPE1 compatibility payload. Capability derivation/authentication is not implemented and requires external review. |
+| P03A authenticated compatibility envelope | Deep extension; not a Session wire format | Contract implemented, runtime blocked | Production crypto/replay interfaces, canonical outer binding, exact post-decrypt DPE1 recovery and test-only vectors exist. No approved sender-authenticated recipient-encryption adapter is implemented or registered; no production default. |
 
 Golden vectors currently cover deterministic managed protocol surfaces: padding, protobuf
 serialization, and known upstream identity fixtures. Crypto parity vectors should be added alongside
