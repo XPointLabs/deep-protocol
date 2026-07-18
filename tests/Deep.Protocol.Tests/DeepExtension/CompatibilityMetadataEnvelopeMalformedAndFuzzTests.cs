@@ -166,6 +166,48 @@ public sealed class CompatibilityMetadataEnvelopeMalformedAndFuzzTests
         Assert.Equal(expectedError, exception.Error);
     }
 
+    [Theory]
+    [InlineData(OverheadDomain.Header, false)]
+    [InlineData(OverheadDomain.Header, true)]
+    [InlineData(OverheadDomain.Payload, false)]
+    [InlineData(OverheadDomain.Payload, true)]
+    public void DecodeRejectsInvalidCiphertextOverhead_BeforeReplayCommit(
+        OverheadDomain domain,
+        bool aboveMaximum)
+    {
+        var headerPlaintext = CreateHeaderPlaintext();
+        var payloadPlaintext = CreateRequest().LegacyDpe1.ToArray();
+        var headerCiphertextLength = headerPlaintext.Length + 1;
+        var payloadCiphertextLength = payloadPlaintext.Length + 1;
+        var targetPlaintextLength = domain == OverheadDomain.Header
+            ? headerPlaintext.Length
+            : payloadPlaintext.Length;
+        var invalidCiphertextLength = aboveMaximum
+            ? targetPlaintextLength + CompatibilityEnvelopeLimits.MaximumCryptoOverhead + 1
+            : targetPlaintextLength;
+        if (domain == OverheadDomain.Header)
+        {
+            headerCiphertextLength = invalidCiphertextLength;
+        }
+        else
+        {
+            payloadCiphertextLength = invalidCiphertextLength;
+        }
+
+        var encoded = CreateDirectEnvelope(headerCiphertextLength, payloadCiphertextLength);
+        var replay = new CountingReplayGuard();
+        var exception = Assert.Throws<CompatibilityEnvelopeException>(() =>
+            CompatibilityMetadataEnvelopeCodec.Decode(
+                encoded,
+                RecipientMaterial(),
+                Policy(),
+                new ValidOpenedResultCrypto(headerPlaintext, payloadPlaintext),
+                replay));
+
+        Assert.Equal(CompatibilityEnvelopeError.InvalidCryptoResult, exception.Error);
+        Assert.Equal(0, replay.Calls);
+    }
+
     [Fact]
     public void EncodeRejectsMalformedDpe1AndOversizedCryptoResult()
     {
@@ -215,6 +257,54 @@ public sealed class CompatibilityMetadataEnvelopeMalformedAndFuzzTests
         }
 
         return result;
+    }
+
+    private static byte[] CreateDirectEnvelope(
+        int headerCiphertextLength,
+        int payloadCiphertextLength)
+    {
+        var request = CreateRequest();
+        return OpaqueBundleCodec.Encode(
+            new OpaqueBundleWriteRequest
+            {
+                Capability = request.Capability,
+                TransportAttemptId = request.TransportAttemptId,
+                EndToEndDedupId = request.EndToEndDedupId,
+                ExpiryBucket = request.ExpiryBucket,
+                PaddingClass = OpaqueBundlePaddingClass.Bytes1024,
+                ReplayMaterial = request.ReplayMaterial,
+                EncryptedHeader = FrameZeros(
+                    request.HeaderNonceContext,
+                    headerCiphertextLength),
+                EncryptedPayload = FrameZeros(
+                    request.PayloadNonceContext,
+                    payloadCiphertextLength),
+                PayloadKind = OpaqueBundlePayloadKind.AuthenticatedLegacyDpe1,
+                CriticalFeatures =
+                    OpaqueBundleFeatures.V1Required |
+                    OpaqueBundleFeatures.LegacyDpe1Compatibility |
+                    OpaqueBundleFeatures.AuthenticatedCompatibilityEnvelope
+            },
+            Profile());
+    }
+
+    private static byte[] FrameZeros(
+        ReadOnlyMemory<byte> nonceContext,
+        int ciphertextLength)
+    {
+        var framed = new byte[nonceContext.Length + ciphertextLength];
+        nonceContext.Span.CopyTo(framed);
+        return framed;
+    }
+
+    private static byte[] CreateHeaderPlaintext()
+    {
+        var header = new byte[CompatibilityEnvelopeLimits.HeaderPlaintextLength];
+        Encoding.ASCII.GetBytes("P3A1").CopyTo(header, 0);
+        BinaryPrimitives.WriteUInt32BigEndian(
+            header.AsSpan(4),
+            checked((uint)CreateRequest().LegacyDpe1.Length));
+        return header;
     }
 
     private static CompatibilityEnvelopeWriteRequest CreateRequest() =>
@@ -267,6 +357,12 @@ public sealed class CompatibilityMetadataEnvelopeMalformedAndFuzzTests
         PayloadSender
     }
 
+    public enum OverheadDomain
+    {
+        Header,
+        Payload
+    }
+
     private sealed class AcceptOnceReplayGuard : ICompatibilityEnvelopeReplayGuard
     {
         private bool _accepted;
@@ -297,6 +393,36 @@ public sealed class CompatibilityMetadataEnvelopeMalformedAndFuzzTests
 
         public CompatibilityEnvelopeOpenedResult Open(CompatibilityEnvelopeOpenRequest request) =>
             mutate(request, inner.Open(request));
+    }
+
+    private sealed class ValidOpenedResultCrypto(
+        ReadOnlyMemory<byte> headerPlaintext,
+        ReadOnlyMemory<byte> payloadPlaintext)
+        : ICompatibilityEnvelopeCrypto
+    {
+        private static readonly byte[] SenderAuthentication = Range(0xc0, 32);
+
+        public CompatibilityEnvelopeSealedResult Seal(CompatibilityEnvelopeSealRequest request) =>
+            throw new NotSupportedException();
+
+        public CompatibilityEnvelopeOpenedResult Open(CompatibilityEnvelopeOpenRequest request) =>
+            new(
+                request.Purpose == CompatibilityEnvelopePurpose.Header
+                    ? headerPlaintext
+                    : payloadPlaintext,
+                SenderAuthentication);
+    }
+
+    private sealed class CountingReplayGuard : ICompatibilityEnvelopeReplayGuard
+    {
+        public int Calls { get; private set; }
+
+        public bool TryAccept(CompatibilityEnvelopeReplayScope scope)
+        {
+            _ = scope;
+            Calls++;
+            return true;
+        }
     }
 
     private sealed class OversizedSealCrypto : ICompatibilityEnvelopeCrypto
