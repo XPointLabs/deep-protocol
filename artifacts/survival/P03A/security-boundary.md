@@ -15,6 +15,8 @@ Decision: contract implemented; production runtime activation BLOCKED.
   replay material, payload kind/features and both nonce contexts;
 - zero optional outer metadata for P03A;
 - strict component/overhead/total bounds;
+- symmetric post-open verification that authenticated header and payload ciphertext overhead is
+  exactly 1..512 bytes, before replay state can be committed;
 - wrong-recipient, tamper, domain swap, replay, expiry/downgrade, malformed post-decrypt data,
   truncation and mutation gates;
 - production assembly contains zero implementations of `ICompatibilityEnvelopeCrypto`.
@@ -49,4 +51,3 @@ networks see client endpoints/timing/volume; routed hops see adjacency; platform
 separate correlation surface. Ingress plus storage, storage plus push, all routed hops, endpoint
 compromise and a global passive observer can still correlate timing, size, topology and device
 activity. Capability equality remains linkable within the lifecycle epoch defined by later work.
-

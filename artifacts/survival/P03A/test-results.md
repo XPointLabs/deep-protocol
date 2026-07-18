@@ -6,22 +6,25 @@ Environment: Windows, .NET SDK 10.0.301, target `net10.0`, Release.
 | --- | --- |
 | Restore | pass |
 | Release build | pass; 0 warnings, 0 errors |
-| Full Release tests with XPlat coverage | pass; 95/95, 0 skipped |
-| Focused P03A tests | pass; 16/16, 0 skipped |
-| P03 plus P03A focused compatibility lane | pass; 48/48 |
+| Full Release tests with XPlat coverage | pass; 99/99, 0 skipped |
+| Focused P03A tests | pass; 20/20, 0 skipped |
+| P03 plus P03A focused compatibility lane | pass; 52/52 |
+| Post-open ciphertext overhead bounds | pass; header/payload at overhead 0 and 513 rejected before replay |
 | Every single-bit mutation of canonical 512-byte vector | pass; 4096/4096 rejected |
 | Every canonical-vector truncation | pass; 512/512 rejected |
 | Fixed-seed random malformed smoke | pass; 2048 inputs |
-| Coverage | 2027/5536 lines (36.61%); 841/2957 branches (28.44%) |
+| Coverage | 2045/5550 lines (36.84%); 840/2963 branches (28.34%) |
 
 Evidence SHA-256:
 
 - full TRX:
-  `4d7daa759de82ac9ae2a085d8096d5f7e6bceea9df8fbadedb1dfcf864605b0c`;
+  `b73646179b68389689a7d4cc0b27c04c789b87cdf5a268a81d455a86d591279f`;
 - focused TRX:
-  `9598c9ed8cd1aa4193961df2a72b03addff2ef9c69d369a62794b47f922b6b51`;
+  `94a4eb43a2c9d26a453b23b6769a5c6f5aee56d5554a9fe86fc5c67080403d16`;
+- P03/P03A compatibility TRX:
+  `eb7ff1c43f33f6d8d49039b09ea6b63cc15d1934194ad55a1c5cd676413a436a`;
 - full Cobertura:
-  `49526733e280e7279ff7bd29f261289e7c7f3cee4b98f72c638a69de47177d8c`;
+  `e9de820ac6f7bea023e9ab455571c9d2558cd87fa5a180035ce0abce2b4b8df0`;
 - canonical test-adapter vector:
   `fd05c9c63ceee13607f484af5759fbfaf7a438e3aacaa01ade369fa393a882de`;
 - ADR:
@@ -31,4 +34,3 @@ The deterministic adapter exists only in the test assembly. Its bytes are a fram
 contract vector, not a production cryptographic or cross-language primitive vector. The
 single-bit, truncation and fixed-seed suites are deterministic regression/smoke tests, not
 coverage-guided fuzzing.
-

@@ -1,6 +1,6 @@
 # P03A focused independent review packet
 
-Review exact source commit `a3f70363cf8aa2eef4f5a8d80be50bc638911201` and the subsequent
+Review exact source commit `241fca1ed9999183a488a8798fdbc822eb091484` and the subsequent
 evidence-only commit. Do not treat the deterministic test adapter as a selected primitive.
 
 ## Required reviewer questions
@@ -17,6 +17,7 @@ evidence-only commit. Do not treat the deterministic test adapter as a selected 
    through an existing sodium adapter?
 7. Are the observer/collusion and no-forward-secrecy claims limited honestly?
 8. Do package hashes, nuspec source commits, vector hash and test evidence match?
+9. Do both authenticated domains enforce ciphertext overhead 1..512 after open and before replay
+   state mutation?
 
 Production activation must remain NO-GO even if the contract review is GO.
-

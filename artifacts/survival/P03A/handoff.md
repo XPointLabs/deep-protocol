@@ -1,9 +1,10 @@
 # P03A local package handoff
 
-Local package version: `0.3.0-p03a.a3f7036`.
+Local package version: `0.3.0-p03a.241fca1`.
 
 Verify all three package hashes against `package-manifest.json`. The packages were not published.
-Every nuspec pins source commit `a3f70363cf8aa2eef4f5a8d80be50bc638911201`.
+Every nuspec pins source commit `241fca1ed9999183a488a8798fdbc822eb091484`.
+The older `0.3.0-p03a.a3f7036` package files are superseded and must not be selected.
 
 Permitted downstream use:
 
@@ -22,4 +23,3 @@ Forbidden until blockers close:
 The future production adapter must implement both codec-owned domains, recipient confidentiality,
 cryptographic sender authentication revealed only after decryption, nonce/key separation and
 uniform authentication failure. It also needs independent upstream/differential vectors.
-

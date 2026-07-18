@@ -2,7 +2,7 @@
   "schema": "deep-survival-work-package-report.v1",
   "workPackage": "P03",
   "title": "Opaque bundle and metadata contract",
-  "status": "corrected-pending-independent-rereview",
+  "status": "accepted-independent-go",
   "humanOwner": "Mr. X",
   "repository": "deep-protocol",
   "baseBranch": "main",
@@ -14,6 +14,16 @@
   "correctiveImplementationCommit": "372c5f15d6198c7af83ac9bddc9daf95dfe9cef2",
   "overflowGuardRedCommit": "b81d96348f9f1ece2d24f278ef1235440c72cfea",
   "finalCorrectiveImplementationCommit": "814f15d8965da8728132ba35a61cf47457b2b00b",
+  "acceptedSourceCommit": "814f15d8965da8728132ba35a61cf47457b2b00b",
+  "acceptedEvidenceCommit": "90e306ebf9d4ce722b95f128f5ff4bebcaddcde3",
+  "independentReview": {
+    "decision": "GO",
+    "reviewedEvidenceCommit": "90e306ebf9d4ce722b95f128f5ff4bebcaddcde3",
+    "p0": 0,
+    "p1": 0,
+    "p2": 0,
+    "scope": "local protocol contract and downstream integration only; not production activation"
+  },
   "programRevision": "096b776b0946b8ce8d661312eeb231432e2c80e6",
   "dependencyManifest": {
     "path": "C:/W/deep-survival/wave01b/deep-devops-sec-hardening/release/manifests/survival-v2.0.1-i01b.local.json",
