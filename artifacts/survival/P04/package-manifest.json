@@ -1,0 +1,24 @@
+{
+  "schema": "deep-local-package-manifest.v1",
+  "packageVersion": "0.3.0-p04.388e482",
+  "sourceCommit": "388e482823c8e5d0844c0468ad48d76958d6065e",
+  "publication": "local-only-not-published",
+  "runtimeActivation": "blocked-no-approved-production-verifier-or-durable-state",
+  "packages": [
+    {
+      "file": "packages/Deep.Protocol.0.3.0-p04.388e482.nupkg",
+      "bytes": 89903,
+      "sha256": "b279f1fa3c22b367dbbb92d71e859c21260ede2ef8e8e09268eb2c35ca3e5bcf"
+    },
+    {
+      "file": "packages/Deep.Protocol.Abstractions.0.3.0-p04.388e482.nupkg",
+      "bytes": 25664,
+      "sha256": "574eff314cbd9548b855cb17e2728c30e40c4c9cc43fd38a52f77ef24c7cfabb"
+    },
+    {
+      "file": "packages/Deep.Protocol.Protobuf.0.3.0-p04.388e482.nupkg",
+      "bytes": 51180,
+      "sha256": "7ab6111217ec1d280cd718a5a5687e4e9cd30dedda8c0428b4880650af72767e"
+    }
+  ]
+}
