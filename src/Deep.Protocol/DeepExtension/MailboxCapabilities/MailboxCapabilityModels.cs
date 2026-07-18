@@ -10,6 +10,7 @@ public static class MailboxCapabilityLimits
     public const int FixedAdmissionHeaderLength = 36;
     public const int MinimumAdmissionAuthorizationLength = 16;
     public const int MaximumAdmissionAuthorizationLength = 256;
+    public const int MaximumCachedOutcomeLength = 4096;
     public const int MaximumPresentationLength =
         FixedPresentationHeaderLength +
         MaximumDomainValueLength +
@@ -58,7 +59,9 @@ public enum MailboxCapabilityError
     InvalidAdmission,
     ReservedFieldNotZero,
     MalformedLength,
-    ReplayRejected
+    ReplayRejected,
+    IdempotencyConflict,
+    InvalidReplayEvaluation
 }
 
 public abstract class MailboxDomainValue
@@ -123,11 +126,39 @@ public sealed record MailboxCapabilityReplayScope(
     MailboxCapabilityDomain Domain,
     ulong Generation,
     ulong ReplayCounter,
-    ReadOnlyMemory<byte> IdempotencyKey);
+    ReadOnlyMemory<byte> IdempotencyKey,
+    ReadOnlyMemory<byte> CanonicalPresentation);
+
+public enum MailboxCapabilityReplayDecision
+{
+    AcceptedNew = 1,
+    IdempotentReplay = 2,
+    ReplayRejected = 3,
+    IdempotencyConflict = 4
+}
+
+public enum MailboxCapabilityReplayDisposition
+{
+    New = 1,
+    IdempotentReplay = 2
+}
+
+public sealed record MailboxCapabilityReplayEvaluation
+{
+    public required MailboxCapabilityReplayDecision Decision { get; init; }
+    public required ReadOnlyMemory<byte> CachedOutcome { get; init; }
+}
+
+public sealed record MailboxCapabilityDecodeResult
+{
+    public required MailboxCapabilityPresentation Presentation { get; init; }
+    public required MailboxCapabilityReplayDisposition ReplayDisposition { get; init; }
+    public required ReadOnlyMemory<byte> CachedOutcome { get; init; }
+}
 
 public interface IMailboxCapabilityReplayGuard
 {
-    bool TryAccept(MailboxCapabilityReplayScope scope);
+    MailboxCapabilityReplayEvaluation Evaluate(MailboxCapabilityReplayScope scope);
 }
 
 public sealed class MailboxCapabilityException(
@@ -137,4 +168,3 @@ public sealed class MailboxCapabilityException(
 {
     public MailboxCapabilityError Error { get; } = error;
 }
-

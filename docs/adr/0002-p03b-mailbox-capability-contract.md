@@ -51,7 +51,8 @@ The optional free-admission slot is an orthogonal bounded authorization:
 
 It contains no payer, wallet, account, plan, token balance or payment identity. It does not change
 capability domain, generation, replay or receipt rules. Billing and quota algorithms are out of
-scope.
+scope. Its validity window must be nested inside the outer capability window, and decode accepts
+the presented admission only while both windows are current.
 
 ## Receipts and errors
 
@@ -72,15 +73,23 @@ durable status, and identical operation/generation/cursor/tombstone/payload dige
 signature binds the ordered replica statement digests. Signature and digest operations are
 interfaces; P03B ships no production implementation and chooses no new primitive.
 
+The public durable verifier also requires the caller's expected operation ID, generation, payload
+digest and tombstone state. A valid internally consistent quorum for another request is rejected;
+internal agreement alone is not authorization to complete the caller's operation.
+
 Coordinator equivocation evidence contains two independently verified canonical `MQR1` statements
-with the same coordinator ID and sequence but different signed statement bytes. The contract
-preserves evidence; it does not publish, punish or resolve equivocation.
+with the same coordinator ID and sequence but different coordinator signing bytes. Different wire
+bytes caused only by two valid signatures of the same signing statement are not equivocation. The
+contract preserves evidence; it does not publish, punish or resolve equivocation.
 
 ## Replay, idempotency and tombstones
 
 The 16-byte idempotency key is scoped to one operation and generation. It is not a stable message,
 account or cross-transport ID. Replay counters are monotonic within producer-owned state, which is
-not implemented here. A client must reject stale/repeated counters through a future durable guard.
+not implemented here. The durable guard receives the exact bounded canonical presentation and
+must explicitly classify it as new, same-presentation idempotent retry, stale replay or
+idempotency conflict. Only an idempotent retry may return a bounded cached outcome; inconsistent
+decision/outcome combinations fail closed.
 
 A tombstone is an explicit signed receipt state at a cursor. It is not inferred from an empty
 payload and does not delete evidence. Accepted status is not durable. Only a verified `MQR1` with

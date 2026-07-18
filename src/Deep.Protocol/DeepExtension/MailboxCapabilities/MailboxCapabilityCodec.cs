@@ -43,7 +43,7 @@ public static class MailboxCapabilityCodec
         return encoded;
     }
 
-    public static MailboxCapabilityPresentation Decode(
+    public static MailboxCapabilityDecodeResult Decode(
         ReadOnlySpan<byte> encoded,
         MailboxCapabilityDomain expectedDomain,
         MailboxCapabilityDecodePolicy policy,
@@ -171,15 +171,49 @@ public static class MailboxCapabilityCodec
             domain,
             presentation.Generation,
             presentation.ReplayCounter,
-            presentation.IdempotencyKey.ToArray());
-        if (!replayGuard.TryAccept(scope))
+            presentation.IdempotencyKey.ToArray(),
+            encoded.ToArray());
+        var evaluation = replayGuard.Evaluate(scope);
+        if (evaluation is null)
         {
             throw Error(
-                MailboxCapabilityError.ReplayRejected,
-                "The capability presentation replay scope was already accepted.");
+                MailboxCapabilityError.InvalidReplayEvaluation,
+                "The replay guard returned no evaluation.");
         }
 
-        return presentation;
+        return evaluation.Decision switch
+        {
+            MailboxCapabilityReplayDecision.AcceptedNew
+                when evaluation.CachedOutcome.IsEmpty =>
+                new MailboxCapabilityDecodeResult
+                {
+                    Presentation = presentation,
+                    ReplayDisposition = MailboxCapabilityReplayDisposition.New,
+                    CachedOutcome = ReadOnlyMemory<byte>.Empty
+                },
+            MailboxCapabilityReplayDecision.IdempotentReplay
+                when evaluation.CachedOutcome.Length is
+                    > 0 and <= MailboxCapabilityLimits.MaximumCachedOutcomeLength =>
+                new MailboxCapabilityDecodeResult
+                {
+                    Presentation = presentation,
+                    ReplayDisposition = MailboxCapabilityReplayDisposition.IdempotentReplay,
+                    CachedOutcome = evaluation.CachedOutcome.ToArray()
+                },
+            MailboxCapabilityReplayDecision.ReplayRejected
+                when evaluation.CachedOutcome.IsEmpty =>
+                throw Error(
+                    MailboxCapabilityError.ReplayRejected,
+                    "The capability presentation is a rejected replay."),
+            MailboxCapabilityReplayDecision.IdempotencyConflict
+                when evaluation.CachedOutcome.IsEmpty =>
+                throw Error(
+                    MailboxCapabilityError.IdempotencyConflict,
+                    "The idempotency key conflicts with a different canonical presentation."),
+            _ => throw Error(
+                MailboxCapabilityError.InvalidReplayEvaluation,
+                "The replay evaluation decision and cached outcome are inconsistent.")
+        };
     }
 
     private static void ValidatePresentation(
@@ -235,6 +269,13 @@ public static class MailboxCapabilityCodec
         if (presentation.FreeAdmission is not null)
         {
             ValidateAdmission(presentation.FreeAdmission);
+            if (presentation.FreeAdmission.ValidFromBucket < presentation.NotBeforeBucket ||
+                presentation.FreeAdmission.ValidUntilBucket > presentation.ExpiresAtBucket)
+            {
+                throw Error(
+                    MailboxCapabilityError.InvalidAdmission,
+                    "The free-admission window must be nested in the capability window.");
+            }
         }
 
         if (policy is null)
@@ -273,6 +314,15 @@ public static class MailboxCapabilityCodec
         if (presentation.Lifecycle == MailboxCapabilityLifecycle.Recovery && !policy.AllowRecovery)
         {
             throw Error(MailboxCapabilityError.RecoveryNotAllowed, "Recovery capability use is not allowed.");
+        }
+
+        if (presentation.FreeAdmission is not null &&
+            (policy.CurrentBucket < presentation.FreeAdmission.ValidFromBucket ||
+             policy.CurrentBucket > presentation.FreeAdmission.ValidUntilBucket))
+        {
+            throw Error(
+                MailboxCapabilityError.InvalidAdmission,
+                "The free-admission slot is outside its accepted validity window.");
         }
     }
 

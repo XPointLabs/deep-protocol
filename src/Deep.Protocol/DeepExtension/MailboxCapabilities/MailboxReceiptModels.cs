@@ -61,6 +61,7 @@ public enum MailboxReceiptError
     DuplicateReplica,
     NotDurable,
     ReplicaDisagreement,
+    UnexpectedStatement,
     InvalidErrorReceipt,
     NotEquivocation
 }
@@ -86,6 +87,14 @@ public sealed record MailboxDurableQuorumReceipt
     public required MailboxReplicaReceipt FirstReplica { get; init; }
     public required MailboxReplicaReceipt SecondReplica { get; init; }
     public required ReadOnlyMemory<byte> Signature { get; init; }
+}
+
+public sealed record MailboxDurableQuorumExpectation
+{
+    public required ReadOnlyMemory<byte> OperationId { get; init; }
+    public required ulong Generation { get; init; }
+    public required ReadOnlyMemory<byte> PayloadDigest { get; init; }
+    public required bool IsTombstone { get; init; }
 }
 
 public sealed class MailboxErrorReceipt : IEquatable<MailboxErrorReceipt>
@@ -146,4 +155,3 @@ public sealed class MailboxReceiptException(
 {
     public MailboxReceiptError Error { get; } = error;
 }
-

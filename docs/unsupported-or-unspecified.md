@@ -135,7 +135,10 @@ It deliberately does not implement:
 - free-admission issuance/accounting or any paid quota, wallet, payer or subscription identity;
 - legacy migration execution, production registration, service defaults or deployment.
 
-`IMailboxReceiptCrypto` and `IMailboxCapabilityReplayGuard` are trust boundaries. Test fixtures use
-deterministic SHA-256-based signatures only to make codec and verifier vectors reproducible; they
-are not production cryptography. Production activation remains blocked until later producer,
-storage, client integration and external security work supplies and verifies those dependencies.
+`IMailboxReceiptCrypto` and `IMailboxCapabilityReplayGuard` are trust boundaries. The replay guard
+must durably compare the supplied canonical presentation and return a previously committed bounded
+outcome only for an exact idempotent retry; P03B defines this decision contract but supplies no
+persistence. Test fixtures use deterministic SHA-256-based signatures only to make codec and
+verifier vectors reproducible; they are not production cryptography. Production activation
+remains blocked until later producer, storage, client integration and external security work
+supplies and verifies those dependencies.

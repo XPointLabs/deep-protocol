@@ -91,7 +91,9 @@ Production activation remains blocked by `docs/adr/0001-p03a-compatibility-metad
 P03B adds three non-convertible runtime/wire domains (deposit, retrieve and placement), bounded
 generation/lifecycle/overlap/replay/idempotency fields, and canonical `MRR1`/`MQR1`/`MBE1`
 receipts. A durable quorum verifies two different replica identifiers and signatures plus a
-coordinator signature over ordered receipt digests. The library does not claim opaque bytes are
+coordinator signature over ordered receipt digests, then binds the verified result to the caller's
+expected operation/generation/payload/tombstone context. Replay guards distinguish new,
+idempotent-retry, stale-replay and conflict decisions. The library does not claim opaque bytes are
 secret or unlinkable and does not create keys, persist lifecycle/replay state, execute storage,
 choose a signature/digest primitive, apply billing, or enable a runtime feature.
 

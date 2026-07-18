@@ -4,6 +4,28 @@ public static class MailboxReceiptVerifier
 {
     public static VerifiedMailboxDurableQuorum VerifyDurableQuorum(
         ReadOnlySpan<byte> encoded,
+        IMailboxReceiptCrypto crypto,
+        MailboxDurableQuorumExpectation expectation)
+    {
+        ArgumentNullException.ThrowIfNull(expectation);
+        ValidateExpectation(expectation);
+        var verified = VerifyStatement(encoded, crypto);
+        var statement = verified.CoordinatorReceipt.FirstReplica;
+        if (!statement.OperationId.Span.SequenceEqual(expectation.OperationId.Span) ||
+            statement.Generation != expectation.Generation ||
+            statement.IsTombstone != expectation.IsTombstone ||
+            !statement.PayloadDigest.Span.SequenceEqual(expectation.PayloadDigest.Span))
+        {
+            throw Error(
+                MailboxReceiptError.UnexpectedStatement,
+                "The verified durable statement does not match the expected request context.");
+        }
+
+        return verified;
+    }
+
+    private static VerifiedMailboxDurableQuorum VerifyStatement(
+        ReadOnlySpan<byte> encoded,
         IMailboxReceiptCrypto crypto)
     {
         ArgumentNullException.ThrowIfNull(crypto);
@@ -57,11 +79,13 @@ public static class MailboxReceiptVerifier
         ReadOnlySpan<byte> secondStatement,
         IMailboxReceiptCrypto crypto)
     {
-        var first = VerifyDurableQuorum(firstStatement, crypto).CoordinatorReceipt;
-        var second = VerifyDurableQuorum(secondStatement, crypto).CoordinatorReceipt;
+        var first = VerifyStatement(firstStatement, crypto).CoordinatorReceipt;
+        var second = VerifyStatement(secondStatement, crypto).CoordinatorReceipt;
+        var firstSigningBytes = MailboxReceiptCodec.GetQuorumSigningBytes(first, crypto);
+        var secondSigningBytes = MailboxReceiptCodec.GetQuorumSigningBytes(second, crypto);
         if (!first.CoordinatorId.Span.SequenceEqual(second.CoordinatorId.Span) ||
             first.CoordinatorSequence != second.CoordinatorSequence ||
-            firstStatement.SequenceEqual(secondStatement))
+            firstSigningBytes.AsSpan().SequenceEqual(secondSigningBytes))
         {
             throw Error(
                 MailboxReceiptError.NotEquivocation,
@@ -99,6 +123,19 @@ public static class MailboxReceiptVerifier
         first.Cursor == second.Cursor &&
         first.IsTombstone == second.IsTombstone &&
         first.PayloadDigest.Span.SequenceEqual(second.PayloadDigest.Span);
+
+    private static void ValidateExpectation(MailboxDurableQuorumExpectation expectation)
+    {
+        if (expectation.OperationId.Length != MailboxReceiptLimits.IdentifierLength ||
+            expectation.OperationId.Span.IndexOfAnyExcept((byte)0) < 0 ||
+            expectation.Generation == 0 ||
+            expectation.PayloadDigest.Length != MailboxReceiptLimits.DigestLength)
+        {
+            throw Error(
+                MailboxReceiptError.UnexpectedStatement,
+                "The durable quorum expectation is outside canonical bounds.");
+        }
+    }
 
     private static MailboxReceiptException Error(
         MailboxReceiptError error,
