@@ -1,0 +1,17 @@
+{
+  "name": "P03B mailbox receipt V1 test-verifier vectors",
+  "sourceRepository": "XPointLabs/deep-protocol",
+  "sourceCommit": "P03B deterministic test verifier only; no production signature primitive",
+  "vectors": [
+    {
+      "id": "deep-extension/mailbox-receipt/v1/replica-durable",
+      "kind": "mailbox-replica-receipt-v1-test-verifier",
+      "hex": "00"
+    },
+    {
+      "id": "deep-extension/mailbox-receipt/v1/quorum-two-replicas",
+      "kind": "mailbox-durable-quorum-v1-test-verifier",
+      "hex": "00"
+    }
+  ]
+}

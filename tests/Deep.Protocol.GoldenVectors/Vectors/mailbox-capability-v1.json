@@ -1,0 +1,13 @@
+{
+  "name": "P03B mailbox capability V1 contract vectors",
+  "sourceRepository": "XPointLabs/deep-protocol",
+  "sourceCommit": "P03B contract; opaque bytes have no secrecy claim",
+  "vectors": [
+    {
+      "id": "deep-extension/mailbox-capability/v1/deposit-active",
+      "kind": "mailbox-capability-presentation-v1",
+      "message": "Deposit 40..5f, generation 7, not-before 1000, expiry 1100, replay 9, idempotency 10..1f, no admission.",
+      "hex": "00"
+    }
+  ]
+}
