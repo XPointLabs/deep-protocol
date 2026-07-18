@@ -153,6 +153,9 @@ public sealed class MembershipSecondCorrectiveTests
         var signed = MembershipFixtures.SignedCommitment(7, verifier);
         Assert.Throws<MembershipContractException>(() =>
             MembershipContractVerifier.VerifyMembership(
+                signed, MembershipFixtures.Context(), null!));
+        Assert.Throws<MembershipContractException>(() =>
+            MembershipContractVerifier.VerifyMembership(
                 signed with { Signatures = null! }, MembershipFixtures.Context(), verifier));
         Assert.Throws<MembershipContractException>(() =>
             MembershipContractVerifier.VerifyMembership(
@@ -176,6 +179,22 @@ public sealed class MembershipSecondCorrectiveTests
                         .ToArray()
                 },
                 verifier));
+    }
+
+    [Fact]
+    public void SignedAuthorityEnvelope_RejectsZeroSignatureCanonicalPrefix()
+    {
+        var verifier = new DeterministicMembershipVerifier();
+        var encoded = MembershipContractCodec.EncodeSignedDelegation(
+            MembershipFixtures.SignedDelegation(verifier));
+        var statementLength = System.Buffers.Binary.BinaryPrimitives.ReadUInt16BigEndian(
+            encoded.AsSpan(6, 2));
+        var unsignedEnvelope = encoded.AsSpan(0, 12 + statementLength).ToArray();
+        unsignedEnvelope[8] = 0;
+        unsignedEnvelope[9] = 0;
+
+        Assert.Throws<MembershipContractException>(() =>
+            MembershipContractCodec.DecodeSignedDelegation(unsignedEnvelope));
     }
 
     [Fact]
