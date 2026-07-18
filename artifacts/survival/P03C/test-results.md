@@ -5,18 +5,18 @@ Environment: Windows, .NET SDK 10.0.301, target `net10.0`, Release.
 | Check | Result |
 | --- | --- |
 | Release build | pass; 0 warnings, 0 errors |
-| Full Release tests with XPlat coverage | pass; 146/146, 0 skipped |
-| Focused P03C tests | pass; 13/13, 0 skipped |
+| Full Release tests with XPlat coverage | pass; 147/147, 0 skipped |
+| Focused P03C tests | pass; 14/14, 0 skipped |
 | Advertisement/frame truncations | every canonical prefix rejected |
 | Fixed-seed malformed frame smoke | pass; 2,000 inputs |
 | Wrong contact/tamper/replay | rejected by deterministic test-only adapter contract |
-| Coverage | 2,972/6,619 lines (44.90%); 1,215/3,493 branches (34.78%) |
+| Coverage | 3,015/6,661 lines (45.26%); 1,230/3,511 branches (35.03%) |
 
-SHA-256: full TRX `e5dac98e1db24e321261a29fb286d6065f9e11df4263badbbe10f5c698bf33e3`;
-focused TRX `3476d6588107726d946903f85df19c3747b3be1ce827b63b2610ebf6d2d19f73`;
-Cobertura `c3f86f64622a996e5aed6c2e7175ccd2faa50d333e9e247367a16bfbd2a5c0d4`;
-vector `665e0d69c732205a0b9e7178fc7180550dbc933800816cfb8e8d68d8b90d413a`;
-ADR `5ddc17a76003cb7db9b839893ab49a3ffd77c78924453882dc8974ca68121cc1`.
+SHA-256: full TRX `2db47c56d5cb5f4b66a9ccf338e60e4565b3c1423e893ad0d9e4ec3284a2fee4`;
+focused TRX `c990ef8f524fb474db8b750fb6ab27d5f5dd391e45025ed0e8b6e8a73053eb25`;
+Cobertura `2cee2923f68776faae85c5011d5fdeaeb851632c476fa5b91da713a3cdf4f5b0`;
+vector `104b0de3b029b6e738be48ee81a1bd236a8a8307aa94083f959410e575c6fcad`;
+ADR `a9010ff67aaa6b55cf1010356f0e5f771e9df1f1b7171f1e4feb200858b09cd8`.
 
 The deterministic adapter is test code, not a production AKE or cross-language crypto vector.
 Random malformed testing is deterministic smoke, not coverage-guided fuzzing.

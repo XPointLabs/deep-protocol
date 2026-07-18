@@ -2,7 +2,7 @@
   "schema": "deep-survival-work-package-report.v1",
   "workPackage": "P03C",
   "title": "Contact-scoped nearby rendezvous and authenticated handshake contract",
-  "status": "implemented-runtime-blocked-pending-independent-review",
+  "status": "corrected-runtime-blocked-pending-independent-rereview",
   "humanOwner": "Mr. X",
   "repository": "deep-protocol",
   "branch": "survival/w01-p03c-nearby-handshake",
@@ -10,15 +10,17 @@
   "adrCommit": "389d7f09b2c6b9a5d61ffc207efa93a3f1d9c95f",
   "redCommit": "d10c6a255686b006b7235de902c790fb48dbdcb6",
   "implementationCommit": "86581beb69ce0ed8084a31e4aa4e08ac7675c60c",
-  "packageVersion": "0.3.0-p03c.86581be",
+  "correctiveRedCommit": "4f9d28b658823f1d634e469c017c56f155758ae2",
+  "correctiveImplementationCommit": "8d77e833b595aae8936d9b9d1b3f6ef76180a426",
+  "packageVersion": "0.3.0-p03c.8d77e83",
   "pins": {
     "promptSha256": "51f8d946df3498f2f3c5cefef389be6e2c671fa3c8c75cb63cabea74d9e9622c",
     "p03bReportGitBlobSha256": "22836f8e648f5d388b41b128610484669131fc4a53634f52765f9a8021f0f9f2",
     "p03bPackageManifestGitBlobSha256": "1c820f59033bee6157ecc89c9d7123664f404a6b6a9f5a05703667be5f45f694"
   },
   "tests": {
-    "fullRelease": { "passed": 146, "failed": 0, "skipped": 0 },
-    "focusedP03C": { "passed": 13, "failed": 0, "skipped": 0 },
+    "fullRelease": { "passed": 147, "failed": 0, "skipped": 0 },
+    "focusedP03C": { "passed": 14, "failed": 0, "skipped": 0 },
     "fixedSeedMalformedSmoke": 2000,
     "coverageGuidedFuzzing": "not-run-not-claimed"
   },
