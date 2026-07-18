@@ -12,6 +12,7 @@ public static class MembershipLimits
     public const int MaximumBridgeContacts = 64;
     public const int MaximumContactLength = 512;
     public const int MaximumInclusionProofDepth = 64;
+    public const int MaximumRevokedDelegationHashes = 64;
     public const uint MaximumClockSkewSeconds = 900;
 }
 
@@ -73,23 +74,27 @@ public sealed record MembershipPolicy
     public required ushort OfflineThreshold { get; init; }
     public required IReadOnlyList<ReadOnlyMemory<byte>> OfflineRootSignerIds { get; init; }
     public required ushort OnlineThreshold { get; init; }
-    public required IReadOnlyList<ReadOnlyMemory<byte>> OnlineSignerIds { get; init; }
+    public required ushort OnlineSignerCount { get; init; }
 
     public static MembershipPolicy Beta(
-        IReadOnlyList<ReadOnlyMemory<byte>> offlineRootSignerIds,
-        IReadOnlyList<ReadOnlyMemory<byte>> onlineSignerIds) =>
+        IReadOnlyList<ReadOnlyMemory<byte>> offlineRootSignerIds) =>
         new()
         {
             Version = 1,
             OfflineThreshold = 3,
             OfflineRootSignerIds = CopyIds(offlineRootSignerIds),
             OnlineThreshold = 2,
-            OnlineSignerIds = CopyIds(onlineSignerIds)
+            OnlineSignerCount = 3
         };
 
     private static IReadOnlyList<ReadOnlyMemory<byte>> CopyIds(
         IReadOnlyList<ReadOnlyMemory<byte>> values) =>
         values.Select(static value => (ReadOnlyMemory<byte>)value.ToArray()).ToArray();
+}
+
+public static class MembershipContractVersion
+{
+    public const string Identifier = "Deep.Protocol/P04-canonical-v1";
 }
 
 public sealed record MembershipSignerDescriptor

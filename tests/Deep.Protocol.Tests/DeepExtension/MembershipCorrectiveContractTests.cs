@@ -81,9 +81,7 @@ public sealed class MembershipCorrectiveContractTests
     {
         var invalid = MembershipPolicy.Beta(
             offlineRootSignerIds: Enumerable.Range(0, 4)
-                .Select(index => (ReadOnlyMemory<byte>)MembershipFixtures.Range(index, 16)).ToArray(),
-            onlineSignerIds: Enumerable.Range(0, 3)
-                .Select(index => (ReadOnlyMemory<byte>)MembershipFixtures.Range(0x40 + index, 16)).ToArray());
+                .Select(index => (ReadOnlyMemory<byte>)MembershipFixtures.Range(index, 16)).ToArray());
         Assert.Throws<MembershipContractException>(() =>
             MembershipContractCodec.EncodeGenesis(
                 MembershipFixtures.Genesis() with { Policy = invalid }));
@@ -122,6 +120,28 @@ public sealed class MembershipCorrectiveContractTests
             MembershipContractCodec.EncodeForkWitness(witness), vectors);
         AssertVector("deep-extension/membership/v1/inclusion-proof",
             MembershipContractCodec.EncodeInclusionProof(proof), vectors);
+        foreach (var (id, canonical) in new (string, byte[])[]
+                 {
+                     ("deep-extension/membership/v1/network-genesis",
+                         MembershipContractCodec.EncodeGenesis(MembershipFixtures.Genesis())),
+                     ("deep-extension/membership/v1/signer-delegation",
+                         MembershipContractCodec.GetDelegationSigningBytes(delegation)),
+                     ("deep-extension/membership/v1/signer-revocation",
+                         MembershipContractCodec.GetRevocationSigningBytes(revocation)),
+                     ("deep-extension/membership/v1/bridge-snapshot",
+                         MembershipContractCodec.GetBridgeSigningBytes(MembershipFixtures.BridgeSnapshot())),
+                     ("deep-extension/membership/v1/node-membership",
+                         MembershipContractCodec.GetMembershipSigningBytes(commitment)),
+                     ("deep-extension/membership/v1/fork-witness",
+                         MembershipContractCodec.EncodeForkWitness(witness)),
+                     ("deep-extension/membership/v1/inclusion-proof",
+                         MembershipContractCodec.EncodeInclusionProof(proof))
+                 })
+        {
+            Assert.Equal(
+                vectors.GetRequired(id).Message,
+                $"sha256:{Convert.ToHexString(MembershipContractHash.Sha256(canonical)).ToLowerInvariant()}");
+        }
 
         Assert.Equal(delegation.Sequence,
             MembershipContractCodec.DecodeDelegationSigningBytes(

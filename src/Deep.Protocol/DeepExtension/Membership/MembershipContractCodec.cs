@@ -15,11 +15,14 @@ public static class MembershipContractCodec
     private static ReadOnlySpan<byte> InclusionProofMagic => "MIP1"u8;
     private static ReadOnlySpan<byte> SignedMembershipMagic => "MSM1"u8;
     private static ReadOnlySpan<byte> SignedBridgeMagic => "MSB1"u8;
+    private static ReadOnlySpan<byte> SignedDelegationMagic => "MSD1"u8;
+    private static ReadOnlySpan<byte> SignedRevocationMagic => "MSR1"u8;
 
     public static byte[] EncodeGenesis(NetworkGenesis genesis)
     {
-        ArgumentNullException.ThrowIfNull(genesis);
-        ValidateGenesis(genesis);
+        if (genesis is null)
+            throw Error(MembershipContractError.InvalidField, "Network genesis is missing.");
+        ValidateGenesisForVerification(genesis);
         var writer = new CanonicalWriter(128 + genesis.OfflineRoots.Count * 52);
         writer.Magic(GenesisMagic);
         writer.Byte(Version);
@@ -75,7 +78,7 @@ public static class MembershipContractCodec
             Policy = policy,
             OfflineRoots = roots
         };
-        ValidateGenesis(result);
+        ValidateGenesisForVerification(result);
         RequireCanonical(encoded, EncodeGenesis(result));
         return result;
     }
@@ -89,8 +92,11 @@ public static class MembershipContractCodec
     public static byte[] GetDelegationSigningBytes(SignerDelegation delegation) =>
         EncodeDelegationStatement(delegation);
 
-    public static byte[] GetRevocationSigningBytes(SignerRevocation revocation) =>
-        EncodeAuthorityStatement(
+    public static byte[] GetRevocationSigningBytes(SignerRevocation revocation)
+    {
+        if (revocation is null)
+            throw Error(MembershipContractError.InvalidField, "Revocation is missing.");
+        return EncodeAuthorityStatement(
             RevocationMagic,
             revocation.NetworkId,
             revocation.Sequence,
@@ -103,6 +109,7 @@ public static class MembershipContractCodec
             revocation.PolicyVersion,
             [],
             revocation.DelegationHash);
+    }
 
     public static SignerDelegation DecodeDelegationSigningBytes(ReadOnlySpan<byte> encoded)
     {
@@ -178,12 +185,15 @@ public static class MembershipContractCodec
 
     public static byte[] GetBridgeCandidateBytes(BridgeSnapshot snapshot)
     {
-        ArgumentNullException.ThrowIfNull(snapshot);
+        if (snapshot is null || snapshot.EntryContacts is null || snapshot.ForkWitness is null)
+            throw Error(MembershipContractError.InvalidField, "Bridge snapshot is incomplete.");
         ValidateCommon(snapshot.NetworkId, snapshot.Sequence, snapshot.PreviousHash,
             snapshot.IssuedAtUnixSeconds, snapshot.ValidFromUnixSeconds, snapshot.ValidUntilUnixSeconds,
             snapshot.MinimumProtocol, snapshot.MaximumProtocol, snapshot.PolicyVersion);
         if (snapshot.EntryContacts.Count is 0 or > MembershipLimits.MaximumBridgeContacts)
             throw Error(MembershipContractError.InvalidField, "Bridge contact count is outside canonical bounds.");
+        if (snapshot.EntryContacts.Any(static contact => contact is null))
+            throw Error(MembershipContractError.InvalidField, "Bridge contact is missing.");
         ValidateDistinctMemories(
             snapshot.EntryContacts.Select(static contact => contact.EntryId).ToArray(),
             MembershipLimits.SignerIdLength,
@@ -244,7 +254,8 @@ public static class MembershipContractCodec
 
     public static byte[] GetMembershipSigningBytes(NodeMembershipCommitment commitment)
     {
-        ArgumentNullException.ThrowIfNull(commitment);
+        if (commitment is null)
+            throw Error(MembershipContractError.InvalidField, "Membership commitment is missing.");
         ValidateCommon(commitment.NetworkId, commitment.Sequence, commitment.PreviousHash,
             commitment.IssuedAtUnixSeconds, commitment.ValidFromUnixSeconds, commitment.ValidUntilUnixSeconds,
             commitment.MinimumProtocol, commitment.MaximumProtocol, commitment.PolicyVersion);
@@ -283,7 +294,8 @@ public static class MembershipContractCodec
 
     public static byte[] EncodeForkWitness(ForkWitnessRecord witness)
     {
-        ArgumentNullException.ThrowIfNull(witness);
+        if (witness is null)
+            throw Error(MembershipContractError.InvalidField, "Fork witness is missing.");
         if (witness.CandidateDomain is not (
                 MembershipSignatureDomain.Bridge or MembershipSignatureDomain.Membership) ||
             witness.Sequence == 0 ||
@@ -319,7 +331,8 @@ public static class MembershipContractCodec
 
     public static byte[] EncodeInclusionProof(MembershipInclusionProof proof)
     {
-        ArgumentNullException.ThrowIfNull(proof);
+        if (proof is null || proof.SiblingHashes is null)
+            throw Error(MembershipContractError.InvalidField, "Membership inclusion proof is incomplete.");
         if (proof.NetworkId.Length != MembershipLimits.NetworkIdLength ||
             proof.Sequence == 0 ||
             proof.MemberCommitment.Length != MembershipLimits.HashLength ||
@@ -377,21 +390,58 @@ public static class MembershipContractCodec
         return reader.UInt64();
     }
 
-    public static byte[] EncodeSignedMembership(SignedMembershipCommitment signed) =>
-        EncodeSignedContainer(
+    public static byte[] EncodeSignedMembership(SignedMembershipCommitment signed)
+    {
+        if (signed is null || signed.Statement is null)
+            throw Error(MembershipContractError.InvalidField, "Signed membership statement is incomplete.");
+        return EncodeSignedContainer(
             SignedMembershipMagic,
             GetMembershipSigningBytes(signed.Statement),
-            signed.Signatures);
+            signed.Signatures,
+            MembershipSignatureDomain.Membership);
+    }
 
-    public static byte[] EncodeSignedBridge(SignedBridgeSnapshot signed) =>
-        EncodeSignedContainer(
+    public static byte[] EncodeSignedBridge(SignedBridgeSnapshot signed)
+    {
+        if (signed is null || signed.Statement is null)
+            throw Error(MembershipContractError.InvalidField, "Signed bridge statement is incomplete.");
+        return EncodeSignedContainer(
             SignedBridgeMagic,
             GetBridgeSigningBytes(signed.Statement),
-            signed.Signatures);
+            signed.Signatures,
+            MembershipSignatureDomain.Bridge);
+    }
+
+    public static byte[] EncodeSignedDelegation(SignerDelegation signed)
+    {
+        if (signed is null)
+            throw Error(MembershipContractError.InvalidDelegation, "Signed delegation is missing.");
+        return EncodeSignedContainer(
+            SignedDelegationMagic,
+            GetDelegationSigningBytes(signed),
+            signed.Signatures,
+            MembershipSignatureDomain.OfflineDelegation);
+    }
+
+    public static byte[] EncodeSignedRevocation(SignerRevocation signed)
+    {
+        if (signed is null)
+            throw Error(MembershipContractError.InvalidField, "Signed revocation is missing.");
+        return EncodeSignedContainer(
+            SignedRevocationMagic,
+            GetRevocationSigningBytes(signed),
+            signed.Signatures,
+            MembershipSignatureDomain.OfflineRevocation);
+    }
 
     public static SignedMembershipCommitment DecodeSignedMembership(ReadOnlySpan<byte> encoded)
     {
-        DecodeSignedContainer(encoded, SignedMembershipMagic, out var statement, out var signatures);
+        DecodeSignedContainer(
+            encoded,
+            SignedMembershipMagic,
+            MembershipSignatureDomain.Membership,
+            out var statement,
+            out var signatures);
         return new SignedMembershipCommitment
         {
             Statement = DecodeMembershipSigningBytes(statement),
@@ -401,7 +451,12 @@ public static class MembershipContractCodec
 
     public static SignedBridgeSnapshot DecodeSignedBridge(ReadOnlySpan<byte> encoded)
     {
-        DecodeSignedContainer(encoded, SignedBridgeMagic, out var statement, out var signatures);
+        DecodeSignedContainer(
+            encoded,
+            SignedBridgeMagic,
+            MembershipSignatureDomain.Bridge,
+            out var statement,
+            out var signatures);
         return new SignedBridgeSnapshot
         {
             Statement = DecodeBridgeSigningBytes(statement),
@@ -409,9 +464,32 @@ public static class MembershipContractCodec
         };
     }
 
+    public static SignerDelegation DecodeSignedDelegation(ReadOnlySpan<byte> encoded)
+    {
+        DecodeSignedContainer(
+            encoded,
+            SignedDelegationMagic,
+            MembershipSignatureDomain.OfflineDelegation,
+            out var statement,
+            out var signatures);
+        return DecodeDelegationSigningBytes(statement) with { Signatures = signatures };
+    }
+
+    public static SignerRevocation DecodeSignedRevocation(ReadOnlySpan<byte> encoded)
+    {
+        DecodeSignedContainer(
+            encoded,
+            SignedRevocationMagic,
+            MembershipSignatureDomain.OfflineRevocation,
+            out var statement,
+            out var signatures);
+        return DecodeRevocationSigningBytes(statement) with { Signatures = signatures };
+    }
+
     private static byte[] EncodeDelegationStatement(SignerDelegation delegation)
     {
-        ArgumentNullException.ThrowIfNull(delegation);
+        if (delegation is null || delegation.OnlineSigners is null)
+            throw Error(MembershipContractError.InvalidDelegation, "Delegation is incomplete.");
         ValidateCommon(delegation.NetworkId, delegation.Sequence, delegation.PreviousHash,
             delegation.IssuedAtUnixSeconds, delegation.ValidFromUnixSeconds,
             delegation.ValidUntilUnixSeconds, delegation.MinimumProtocol,
@@ -507,9 +585,14 @@ public static class MembershipContractCodec
             throw Error(MembershipContractError.InvalidField, "Common membership statement fields are invalid.");
     }
 
-    private static void ValidateGenesis(NetworkGenesis genesis)
+    internal static void ValidateGenesisForVerification(NetworkGenesis? genesis)
     {
+        if (genesis is null ||
+            genesis.Policy is null ||
+            genesis.OfflineRoots is null)
+            throw Error(MembershipContractError.InvalidField, "Network genesis is incomplete.");
         ValidatePolicy(genesis.Policy);
+        ValidateDescriptors(genesis.OfflineRoots, MembershipSignerRole.OfflineRoot, expectedCount: 5);
         if (genesis.NetworkId.Length != MembershipLimits.NetworkIdLength ||
             genesis.GenesisSequence == 0 ||
             genesis.PolicyVersion != genesis.Policy.Version ||
@@ -520,17 +603,16 @@ public static class MembershipContractCodec
             !SetEquals(genesis.OfflineRoots.Select(static root => root.SignerId),
                 genesis.Policy.OfflineRootSignerIds))
             throw Error(MembershipContractError.InvalidField, "Network genesis is invalid.");
-        ValidateDescriptors(genesis.OfflineRoots, MembershipSignerRole.OfflineRoot, expectedCount: 5);
     }
 
     internal static void ValidatePolicy(MembershipPolicy policy)
     {
-        ArgumentNullException.ThrowIfNull(policy);
+        if (policy is null || policy.OfflineRootSignerIds is null)
+            throw Error(MembershipContractError.InvalidPolicy, "Membership policy is incomplete.");
         ValidateIdSet(policy.OfflineRootSignerIds);
-        ValidateIdSet(policy.OnlineSignerIds);
         if (policy.Version != 1 ||
             policy.OfflineThreshold != 3 || policy.OfflineRootSignerIds.Count != 5 ||
-            policy.OnlineThreshold != 2 || policy.OnlineSignerIds.Count != 3)
+            policy.OnlineThreshold != 2 || policy.OnlineSignerCount != 3)
             throw Error(MembershipContractError.InvalidPolicy, "Membership threshold policy is invalid.");
     }
 
@@ -541,11 +623,9 @@ public static class MembershipContractCodec
         writer.UInt16(policy.OfflineThreshold);
         writer.UInt16(policy.OnlineThreshold);
         writer.UInt16(checked((ushort)policy.OfflineRootSignerIds.Count));
-        writer.UInt16(checked((ushort)policy.OnlineSignerIds.Count));
+        writer.UInt16(policy.OnlineSignerCount);
         foreach (var value in OrderIds(policy.OfflineRootSignerIds))
             writer.Fixed(value, MembershipLimits.SignerIdLength, "offline signer ID");
-        foreach (var value in OrderIds(policy.OnlineSignerIds))
-            writer.Fixed(value, MembershipLimits.SignerIdLength, "online signer ID");
     }
 
     private static MembershipPolicy ReadPolicy(ref CanonicalReader reader)
@@ -558,26 +638,36 @@ public static class MembershipContractCodec
         var offline = new ReadOnlyMemory<byte>[offlineCount];
         for (var index = 0; index < offlineCount; index++)
             offline[index] = reader.Fixed(MembershipLimits.SignerIdLength);
-        var online = new ReadOnlyMemory<byte>[onlineCount];
-        for (var index = 0; index < onlineCount; index++)
-            online[index] = reader.Fixed(MembershipLimits.SignerIdLength);
         return new MembershipPolicy
         {
             Version = version,
             OfflineThreshold = offlineThreshold,
             OnlineThreshold = onlineThreshold,
             OfflineRootSignerIds = offline,
-            OnlineSignerIds = online
+            OnlineSignerCount = checked((ushort)onlineCount)
         };
     }
 
     private static byte[] EncodeSignedContainer(
         ReadOnlySpan<byte> magic,
         byte[] statement,
-        IReadOnlyList<MembershipSignature> signatures)
+        IReadOnlyList<MembershipSignature> signatures,
+        MembershipSignatureDomain expectedDomain)
     {
-        if (signatures.Count is 0 or > MembershipLimits.MaximumSigners)
+        if (signatures is null ||
+            signatures.Count is 0 or > MembershipLimits.MaximumSigners ||
+            signatures.Any(signature =>
+                signature is null ||
+                signature.Domain != expectedDomain ||
+                signature.SignerId.Length != MembershipLimits.SignerIdLength ||
+                signature.Signature.Length is
+                    < MembershipLimits.MinimumSignatureLength or
+                    > MembershipLimits.MaximumSignatureLength))
             throw Error(MembershipContractError.InvalidSignature, "Signature count is invalid.");
+        ValidateDistinctMemories(
+            signatures.Select(static signature => signature.SignerId).ToArray(),
+            MembershipLimits.SignerIdLength,
+            "Signature signer IDs");
         if (statement.Length > ushort.MaxValue)
             throw Error(MembershipContractError.InvalidLength, "Signed statement is too large.");
         var writer = new CanonicalWriter(
@@ -594,8 +684,6 @@ public static class MembershipContractCodec
             writer.Fixed(signature.SignerId, MembershipLimits.SignerIdLength, "signer ID");
             writer.Byte((byte)signature.Domain);
             writer.Byte(0);
-            if (signature.Signature.Length is < MembershipLimits.MinimumSignatureLength or > MembershipLimits.MaximumSignatureLength)
-                throw Error(MembershipContractError.InvalidSignature, "Signature length is invalid.");
             writer.UInt16(checked((ushort)signature.Signature.Length));
             writer.Bytes(signature.Signature.Span);
         }
@@ -605,6 +693,7 @@ public static class MembershipContractCodec
     private static void DecodeSignedContainer(
         ReadOnlySpan<byte> encoded,
         ReadOnlySpan<byte> magic,
+        MembershipSignatureDomain expectedDomain,
         out byte[] statement,
         out IReadOnlyList<MembershipSignature> signatures)
     {
@@ -618,6 +707,8 @@ public static class MembershipContractCodec
         {
             var signerId = reader.Fixed(MembershipLimits.SignerIdLength);
             var domain = reader.Enum<MembershipSignatureDomain>();
+            if (domain != expectedDomain)
+                throw Error(MembershipContractError.WrongSignatureDomain, "Signed envelope domain is invalid.");
             reader.Zero(1);
             var signatureLength = reader.UInt16();
             if (signatureLength is < MembershipLimits.MinimumSignatureLength or > MembershipLimits.MaximumSignatureLength)
@@ -667,8 +758,10 @@ public static class MembershipContractCodec
         MembershipSignerRole role,
         int expectedCount)
     {
-        if (descriptors.Count != expectedCount ||
+        if (descriptors is null ||
+            descriptors.Count != expectedCount ||
             descriptors.Any(value =>
+                value is null ||
                 value.Role != role ||
                 value.SignerId.Length != MembershipLimits.SignerIdLength ||
                 value.PublicKey.Length != MembershipLimits.PublicKeyLength))
@@ -712,7 +805,8 @@ public static class MembershipContractCodec
 
     private static void ValidateIdSet(IReadOnlyList<ReadOnlyMemory<byte>> values)
     {
-        if (values.Count is 0 or > MembershipLimits.MaximumSigners ||
+        if (values is null ||
+            values.Count is 0 or > MembershipLimits.MaximumSigners ||
             values.Any(static value => value.Length != MembershipLimits.SignerIdLength))
             throw Error(MembershipContractError.InvalidField, "Signer identifiers are invalid.");
         var keys = values.Select(static value => Convert.ToHexString(value.Span)).ToArray();

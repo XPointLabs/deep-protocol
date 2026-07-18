@@ -31,13 +31,12 @@ public sealed class MembershipContractTests
     public void ApprovedPolicy_IsCanonicalData_NotPrivateKeyMaterial()
     {
         var policy = MembershipPolicy.Beta(
-            offlineRootSignerIds: Signers(0x10, 5),
-            onlineSignerIds: Signers(0x40, 3));
+            offlineRootSignerIds: Signers(0x10, 5));
 
         Assert.Equal(3, policy.OfflineThreshold);
         Assert.Equal(5, policy.OfflineRootSignerIds.Count);
         Assert.Equal(2, policy.OnlineThreshold);
-        Assert.Equal(3, policy.OnlineSignerIds.Count);
+        Assert.Equal(3, policy.OnlineSignerCount);
         Assert.DoesNotContain(policy.GetType().GetProperties(), property =>
             property.Name.Contains("private", StringComparison.OrdinalIgnoreCase) ||
             property.Name.Contains("secret", StringComparison.OrdinalIgnoreCase));
@@ -195,24 +194,20 @@ public sealed class MembershipContractTests
             NetworkId = MembershipFixtures.Range(0x20, MembershipLimits.NetworkIdLength)
         };
         var canonical = MembershipContractCodec.EncodeGenesis(genesis);
-        var signatures = genesis.OfflineRoots.Take(3).Select(root => new MembershipSignature
-        {
-            SignerId = root.SignerId,
-            Domain = MembershipSignatureDomain.Genesis,
-            Signature = verifier.Sign(
-                root.SignerId.Span,
-                root.PublicKey.Span,
-                MembershipSignatureDomain.Genesis,
-                canonical)
-        }).ToArray();
+        var signatures = MembershipFixtures.GenesisSignatures(genesis, verifier);
+        var hash = MembershipContractHash.Sha256(canonical);
 
         var imported = MembershipContractVerifier.ImportSelfHostedGenesis(
-            canonical, signatures, verifier);
+            canonical, genesis.NetworkId.Span, hash, signatures, verifier);
         Assert.Equal(genesis.NetworkId.ToArray(), imported.NetworkId.ToArray());
 
         Assert.Throws<MembershipContractException>(() =>
             MembershipContractVerifier.ImportSelfHostedGenesis(
-                canonical, signatures.Take(2).ToArray(), verifier));
+                canonical,
+                genesis.NetworkId.Span,
+                hash,
+                signatures.Take(2).ToArray(),
+                verifier));
     }
 
     [Fact]

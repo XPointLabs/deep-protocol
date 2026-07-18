@@ -181,7 +181,7 @@ internal static class MembershipFixtures
             MinimumProtocol = 1,
             MaximumProtocol = 3,
             IssuedAtUnixSeconds = 800,
-            Policy = MembershipPolicy.Beta(OfflineSignerIds, OnlineSignerIds),
+            Policy = MembershipPolicy.Beta(OfflineSignerIds),
             OfflineRoots = OfflineSigners.Select(static value => value with
             {
                 SignerId = value.SignerId.ToArray(),
@@ -286,9 +286,24 @@ internal static class MembershipFixtures
     public static SignerDelegation SignedDelegation(
         DeterministicMembershipVerifier verifier,
         bool alternateKey = false,
-        bool expired = false)
+        bool expired = false,
+        bool rotatedIdentity = false)
     {
         var delegation = UnsignedDelegation(expired);
+        if (rotatedIdentity)
+        {
+            delegation = delegation with
+            {
+                OnlineSigners = Enumerable.Range(0, 3)
+                    .Select(index => new MembershipSignerDescriptor
+                    {
+                        SignerId = Range(0xb0 + index * 16, MembershipLimits.SignerIdLength),
+                        Role = MembershipSignerRole.Online,
+                        PublicKey = Range(0x30 + index * 3, MembershipLimits.PublicKeyLength)
+                    })
+                    .ToArray()
+            };
+        }
         if (alternateKey)
         {
             delegation = delegation with
@@ -307,6 +322,23 @@ internal static class MembershipFixtures
                     signer, MembershipSignatureDomain.OfflineDelegation, bytes, verifier))
                 .ToArray()
         };
+    }
+
+    public static IReadOnlyList<MembershipSignature> GenesisSignatures(
+        NetworkGenesis genesis,
+        DeterministicMembershipVerifier verifier)
+    {
+        var canonical = MembershipContractCodec.EncodeGenesis(genesis);
+        return genesis.OfflineRoots.Take(3).Select(root => new MembershipSignature
+        {
+            SignerId = root.SignerId.ToArray(),
+            Domain = MembershipSignatureDomain.Genesis,
+            Signature = verifier.Sign(
+                root.SignerId.Span,
+                root.PublicKey.Span,
+                MembershipSignatureDomain.Genesis,
+                canonical)
+        }).ToArray();
     }
 
     public static SignerRevocation SignedRevocation(

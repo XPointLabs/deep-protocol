@@ -7,7 +7,9 @@ public static class MembershipContractVerifier
         MembershipVerificationContext context,
         IMembershipSignatureVerifier verifier)
     {
-        ArgumentNullException.ThrowIfNull(signed);
+        if (signed is null || signed.Statement is null || signed.Signatures is null)
+            throw Error(MembershipContractError.InvalidField, "Signed membership statement is incomplete.");
+        ValidateVerificationContext(context);
         var statement = MembershipContractCodec.GetMembershipSigningBytes(signed.Statement);
         VerifyOnlineStatement(
             signed.Statement.NetworkId, signed.Statement.Sequence, signed.Statement.PreviousHash,
@@ -29,7 +31,9 @@ public static class MembershipContractVerifier
         MembershipVerificationContext context,
         IMembershipSignatureVerifier verifier)
     {
-        ArgumentNullException.ThrowIfNull(signed);
+        if (signed is null || signed.Statement is null || signed.Signatures is null)
+            throw Error(MembershipContractError.InvalidField, "Signed bridge statement is incomplete.");
+        ValidateVerificationContext(context);
         var statement = MembershipContractCodec.GetBridgeSigningBytes(signed.Statement);
         VerifyOnlineStatement(
             signed.Statement.NetworkId, signed.Statement.Sequence, signed.Statement.PreviousHash,
@@ -63,7 +67,10 @@ public static class MembershipContractVerifier
         ushort protocol,
         IMembershipSignatureVerifier verifier)
     {
-        ArgumentNullException.ThrowIfNull(delegation);
+        if (delegation is null)
+            throw Error(MembershipContractError.InvalidDelegation, "Delegation is missing.");
+        MembershipContractCodec.ValidateGenesisForVerification(genesis);
+        ValidateLastKnownGood(authorityLastKnownGood);
         ValidateAuthoritySuccessor(
             delegation.NetworkId,
             delegation.PolicyVersion,
@@ -94,7 +101,10 @@ public static class MembershipContractVerifier
         ushort protocol,
         IMembershipSignatureVerifier verifier)
     {
-        ArgumentNullException.ThrowIfNull(revocation);
+        if (revocation is null)
+            throw Error(MembershipContractError.InvalidField, "Revocation is missing.");
+        MembershipContractCodec.ValidateGenesisForVerification(genesis);
+        ValidateLastKnownGood(authorityLastKnownGood);
         ValidateAuthoritySuccessor(
             revocation.NetworkId,
             revocation.PolicyVersion,
@@ -131,10 +141,10 @@ public static class MembershipContractVerifier
         MembershipVerificationContext context,
         IMembershipSignatureVerifier verifier)
     {
-        var firstBytes = MembershipContractCodec.GetMembershipSigningBytes(first.Statement);
-        var secondBytes = MembershipContractCodec.GetMembershipSigningBytes(second.Statement);
         _ = VerifyMembership(first, context, verifier);
         _ = VerifyMembership(second, context, verifier);
+        var firstBytes = MembershipContractCodec.GetMembershipSigningBytes(first.Statement);
+        var secondBytes = MembershipContractCodec.GetMembershipSigningBytes(second.Statement);
         return CreateEvidence(
             MembershipSignatureDomain.Membership,
             first.Statement.NetworkId,
@@ -209,10 +219,19 @@ public static class MembershipContractVerifier
 
     public static NetworkGenesis ImportSelfHostedGenesis(
         ReadOnlySpan<byte> canonicalGenesis,
+        ReadOnlySpan<byte> expectedNetworkId,
+        ReadOnlySpan<byte> expectedCanonicalGenesisSha256,
         IReadOnlyList<MembershipSignature> signatures,
         IMembershipSignatureVerifier verifier)
     {
+        if (expectedNetworkId.Length != MembershipLimits.NetworkIdLength ||
+            expectedCanonicalGenesisSha256.Length != MembershipLimits.HashLength)
+            throw Error(MembershipContractError.InvalidLength, "Self-hosted genesis pins have invalid lengths.");
         var genesis = MembershipContractCodec.DecodeGenesis(canonicalGenesis);
+        var canonicalHash = MembershipContractHash.Sha256(canonicalGenesis);
+        if (!genesis.NetworkId.Span.SequenceEqual(expectedNetworkId) ||
+            !canonicalHash.AsSpan().SequenceEqual(expectedCanonicalGenesisSha256))
+            throw Error(MembershipContractError.AuthorityMismatch, "Self-hosted genesis does not match caller pins.");
         VerifySignatures(
             canonicalGenesis.ToArray(),
             signatures,
@@ -238,9 +257,7 @@ public static class MembershipContractVerifier
         MembershipVerificationContext context,
         IMembershipSignatureVerifier verifier)
     {
-        ArgumentNullException.ThrowIfNull(context);
-        ArgumentNullException.ThrowIfNull(verifier);
-        MembershipContractCodec.ValidatePolicy(context.Genesis.Policy);
+        ValidateVerificationContext(context);
         ValidateSkew(context.AllowedClockSkewSeconds);
         ValidateSuccessor(
             networkId, policyVersion, sequence, previousHash,
@@ -281,6 +298,7 @@ public static class MembershipContractVerifier
             context.AllowedClockSkewSeconds,
             context.ClientProtocol,
             verifier);
+        ValidateRevokedDelegationHashes(context.RevokedDelegationHashes);
         if (context.RevokedDelegationHashes.Any(value => value.Span.SequenceEqual(hash)))
             throw Error(MembershipContractError.RevokedDelegation, "Online signer delegation is revoked.");
     }
@@ -294,13 +312,12 @@ public static class MembershipContractVerifier
         IMembershipSignatureVerifier verifier)
     {
         ValidateSkew(allowedClockSkewSeconds);
-        MembershipContractCodec.ValidatePolicy(genesis.Policy);
+        MembershipContractCodec.ValidateGenesisForVerification(genesis);
         if (!delegation.NetworkId.Span.SequenceEqual(genesis.NetworkId.Span))
             throw Error(MembershipContractError.NetworkMismatch, "Delegation network does not match genesis.");
         if (delegation.PolicyVersion != genesis.PolicyVersion ||
-            !SetEquals(
-                delegation.OnlineSigners.Select(static signer => signer.SignerId),
-                genesis.Policy.OnlineSignerIds))
+            delegation.OnlineSigners is null ||
+            delegation.OnlineSigners.Count != genesis.Policy.OnlineSignerCount)
             throw Error(MembershipContractError.PolicyMismatch, "Delegation policy does not match genesis.");
         VerifyTimeAndProtocol(
             delegation.ValidFromUnixSeconds, delegation.ValidUntilUnixSeconds,
@@ -323,11 +340,21 @@ public static class MembershipContractVerifier
         int threshold,
         IMembershipSignatureVerifier verifier)
     {
-        if (signatures.Count == 0)
+        if (signatures is null ||
+            signatures.Count is 0 or > MembershipLimits.MaximumSigners ||
+            signatures.Any(static signature => signature is null))
             throw Error(MembershipContractError.InsufficientQuorum, "No signatures were supplied.");
-        var authorized = authorizedSigners.ToDictionary(
-            static signer => Convert.ToHexString(signer.SignerId.Span),
-            StringComparer.Ordinal);
+        if (authorizedSigners is null ||
+            authorizedSigners.Count is 0 or > MembershipLimits.MaximumSigners ||
+            authorizedSigners.Any(static signer => signer is null))
+            throw Error(MembershipContractError.InvalidField, "Authorized signer descriptors are invalid.");
+        var authorized = new Dictionary<string, MembershipSignerDescriptor>(StringComparer.Ordinal);
+        foreach (var signer in authorizedSigners)
+        {
+            var key = Convert.ToHexString(signer.SignerId.Span);
+            if (!authorized.TryAdd(key, signer))
+                throw Error(MembershipContractError.DuplicateSigner, "Authorized signer IDs must be distinct.");
+        }
         var framed = MembershipSigningDomains.Frame(expectedDomain, canonicalStatement);
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var accepted = 0;
@@ -376,6 +403,8 @@ public static class MembershipContractVerifier
         NetworkGenesis genesis,
         MembershipLastKnownGood lastKnownGood)
     {
+        MembershipContractCodec.ValidateGenesisForVerification(genesis);
+        ValidateLastKnownGood(lastKnownGood);
         if (!networkId.Span.SequenceEqual(genesis.NetworkId.Span) ||
             !networkId.Span.SequenceEqual(lastKnownGood.NetworkId.Span))
             throw Error(MembershipContractError.NetworkMismatch, "Statement is for another network.");
@@ -451,11 +480,44 @@ public static class MembershipContractVerifier
             CanonicalHash = hash.ToArray()
         };
 
-    private static bool SetEquals(
-        IEnumerable<ReadOnlyMemory<byte>> first,
-        IEnumerable<ReadOnlyMemory<byte>> second) =>
-        first.Select(static value => Convert.ToHexString(value.Span)).ToHashSet(StringComparer.Ordinal)
-            .SetEquals(second.Select(static value => Convert.ToHexString(value.Span)));
+    private static void ValidateVerificationContext(MembershipVerificationContext context)
+    {
+        if (context is null ||
+            context.Genesis is null ||
+            context.ActiveDelegation is null ||
+            context.AuthorityLastKnownGood is null ||
+            context.LastKnownGood is null)
+            throw Error(MembershipContractError.InvalidField, "Membership verification context is incomplete.");
+        MembershipContractCodec.ValidateGenesisForVerification(context.Genesis);
+        ValidateLastKnownGood(context.AuthorityLastKnownGood);
+        ValidateLastKnownGood(context.LastKnownGood);
+        ValidateRevokedDelegationHashes(context.RevokedDelegationHashes);
+    }
+
+    private static void ValidateLastKnownGood(MembershipLastKnownGood value)
+    {
+        if (value is null ||
+            value.NetworkId.Length != MembershipLimits.NetworkIdLength ||
+            value.CanonicalHash.Length != MembershipLimits.HashLength ||
+            value.PolicyVersion == 0 ||
+            value.Sequence == 0)
+            throw Error(MembershipContractError.InvalidField, "Last-known-good state is invalid.");
+    }
+
+    private static void ValidateRevokedDelegationHashes(
+        IReadOnlyList<ReadOnlyMemory<byte>> values)
+    {
+        if (values is null ||
+            values.Count > MembershipLimits.MaximumRevokedDelegationHashes ||
+            values.Any(static value => value.Length != MembershipLimits.HashLength))
+            throw Error(MembershipContractError.InvalidField, "Revoked delegation hashes are invalid.");
+        var distinct = values
+            .Select(static value => Convert.ToHexString(value.Span))
+            .Distinct(StringComparer.Ordinal)
+            .Count();
+        if (distinct != values.Count)
+            throw Error(MembershipContractError.InvalidField, "Revoked delegation hashes must be distinct.");
+    }
 
     private static MembershipContractException Error(MembershipContractError error, string message) =>
         new(error, message);

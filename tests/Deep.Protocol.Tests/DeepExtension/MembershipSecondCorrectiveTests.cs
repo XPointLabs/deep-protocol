@@ -85,6 +85,14 @@ public sealed class MembershipSecondCorrectiveTests
         Assert.Equal(
             vectors.GetRequired("deep-extension/membership/v1/signed-revocation").Hex,
             Convert.ToHexString(encodedRevocation).ToLowerInvariant());
+        Assert.Equal(
+            vectors.GetRequired("deep-extension/membership/v1/signed-membership").Hex,
+            Convert.ToHexString(MembershipContractCodec.EncodeSignedMembership(
+                MembershipFixtures.SignedCommitment(7, verifier))).ToLowerInvariant());
+        Assert.Equal(
+            vectors.GetRequired("deep-extension/membership/v1/signed-bridge").Hex,
+            Convert.ToHexString(MembershipContractCodec.EncodeSignedBridge(
+                MembershipFixtures.SignedBridge(verifier, [0, 1]))).ToLowerInvariant());
         Assert.Equal(3, MembershipContractCodec.DecodeSignedDelegation(encodedDelegation).Signatures.Count);
         Assert.Equal(3, MembershipContractCodec.DecodeSignedRevocation(encodedRevocation).Signatures.Count);
 
