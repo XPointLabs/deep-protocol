@@ -1,0 +1,17 @@
+{
+  "name": "P03C nearby handshake V1 contract vectors",
+  "sourceRepository": "XPointLabs/deep-protocol",
+  "sourceCommit": "P03C deterministic test adapter only; no production AKE",
+  "vectors": [
+    {
+      "id": "deep-extension/nearby/v1/advertisement",
+      "kind": "contact-scoped-rendezvous-advertisement",
+      "hex": "00"
+    },
+    {
+      "id": "deep-extension/nearby/v1/initiator",
+      "kind": "nearby-initiator-frame-test-adapter",
+      "hex": "00"
+    }
+  ]
+}
