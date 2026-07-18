@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
 using Deep.Protocol.DeepExtension.OpaqueBundles;
+using Deep.Protocol.GoldenVectors;
 
 namespace Deep.Protocol.Tests.DeepExtension;
 
@@ -21,9 +22,11 @@ public sealed class OpaqueBundleCodecTests
         var encoded = OpaqueBundleCodec.Encode(request, StrictV1Profile());
 
         Assert.Equal(256, encoded.Length);
-        Assert.Equal(
-            "4450423101010101010000000007000000000001e240101112131415161718191a1b1c1d1e1f303132333435363738393a3b3c3d3e3f00200010000000110000404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f7365616c65642d6865616465722d76316f70617175652d7061796c6f61642d7631" +
-            new string('0', 286),
+        var vector = GoldenVectorLoader.Load("opaque-bundle-v1.json")
+            .GetRequired("deep-extension/opaque-bundle/v1/deposit-256");
+        VectorDiffs.AssertHex(
+            vector.Id,
+            vector.Hex + new string('0', 254),
             Convert.ToHexString(encoded).ToLowerInvariant());
 
         var decoded = OpaqueBundleCodec.Decode(encoded, StrictV1Policy());
@@ -108,6 +111,18 @@ public sealed class OpaqueBundleCodecTests
     }
 
     [Fact]
+    public void NonCanonicalMinimumReaderVersion_FailsClosed()
+    {
+        var encoded = OpaqueBundleCodec.Encode(CreateDepositRequest([0xaa], [0xbb]), StrictV1Profile());
+        encoded[5] = 0;
+
+        var exception = Assert.Throws<OpaqueBundleFormatException>(() =>
+            OpaqueBundleCodec.Decode(encoded, StrictV1Policy()));
+
+        Assert.Equal(OpaqueBundleDecodeError.DowngradeRejected, exception.Error);
+    }
+
+    [Fact]
     public void UnknownCriticalFeature_FailsClosed_ButUnknownOptionalFeatureIsCarried()
     {
         var encoded = OpaqueBundleCodec.Encode(CreateDepositRequest([0xaa], [0xbb]), StrictV1Profile());
@@ -152,7 +167,10 @@ public sealed class OpaqueBundleCodecTests
         Assert.Throws<OpaqueBundleNegotiationException>(() =>
             OpaqueBundleNegotiator.Negotiate(
                 local,
-                peer with { MaximumVersion = (OpaqueBundleWireVersion)0 },
+                new OpaqueBundleNegotiationOffer(
+                    (OpaqueBundleWireVersion)0,
+                    (OpaqueBundleWireVersion)0,
+                    OpaqueBundleFeatures.V1Required),
                 minimumSafeVersion: OpaqueBundleWireVersion.V1));
         Assert.Throws<OpaqueBundleNegotiationException>(() =>
             OpaqueBundleNegotiator.Negotiate(
@@ -172,8 +190,8 @@ public sealed class OpaqueBundleCodecTests
             ExpiryBucket = 123456,
             PaddingClass = OpaqueBundlePaddingClass.Bytes256,
             ReplayMaterial = ReplayMaterial,
-            EncryptedHeader = [0xaa],
-            EncryptedPayload = [0xbb],
+            EncryptedHeader = new byte[] { 0xaa },
+            EncryptedPayload = new byte[] { 0xbb },
             PayloadKind = OpaqueBundlePayloadKind.NativeOpaque,
             CriticalFeatures = OpaqueBundleFeatures.V1Required
         };

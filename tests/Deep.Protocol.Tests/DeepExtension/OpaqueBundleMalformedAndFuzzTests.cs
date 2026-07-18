@@ -81,8 +81,8 @@ public sealed class OpaqueBundleMalformedAndFuzzTests
             ExpiryBucket = 10,
             PaddingClass = OpaqueBundlePaddingClass.Bytes256,
             ReplayMaterial = Enumerable.Repeat((byte)0x52, 16).ToArray(),
-            EncryptedHeader = [0x01],
-            EncryptedPayload = [0x02],
+            EncryptedHeader = new byte[] { 0x01 },
+            EncryptedPayload = new byte[] { 0x02 },
             CriticalFeatures = OpaqueBundleFeatures.V1Required,
             PayloadKind = OpaqueBundlePayloadKind.NativeOpaque
         };

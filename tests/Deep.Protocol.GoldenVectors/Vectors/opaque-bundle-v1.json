@@ -1,0 +1,13 @@
+{
+  "name": "Deep extension opaque bundle V1 canonical vectors",
+  "sourceRepository": "XPointLabs/deep-protocol",
+  "sourceCommit": "P03 local contract; independent review required before production enablement",
+  "vectors": [
+    {
+      "id": "deep-extension/opaque-bundle/v1/deposit-256",
+      "kind": "deep-extension-opaque-bundle-v1",
+      "message": "Canonical 129-byte header/body prefix; test verifies required 127-byte zero padding to the 256-byte class.",
+      "hex": "4450423101010101010000000007000000000001e240101112131415161718191a1b1c1d1e1f303132333435363738393a3b3c3d3e3f00200010000000110000404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f7365616c65642d6865616465722d76316f70617175652d7061796c6f61642d7631"
+    }
+  ]
+}

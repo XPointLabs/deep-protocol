@@ -90,3 +90,20 @@ to its runtime behavior; no custom unknown-field policy has been added.
 
 Current fixtures are deterministic managed fixtures. Cross-language crypto vectors should be added
 when native bindings are available. Failing vector tests write diffs under `artifacts/vector-diffs`.
+
+## Deep opaque bundle producer gaps
+
+The Deep extension opaque bundle V1 codec and canonical vector are implemented, but the following
+security-sensitive producer semantics remain deliberately unsupported:
+
+- cryptographic derivation and domain separation for deposit/retrieve capabilities;
+- sender authentication and abuse controls without a stable storage-visible sender identity;
+- authenticated expiry, rotation epoch, bounded replay, durable revocation and failure proofs;
+- multi-device/offline recovery and bounded rotation overlap;
+- rotating push handles and unlinkability across accounts, epochs and transports;
+- a reviewed sender-sealed-header encryption construction.
+
+The codec only carries caller-provided opaque/encrypted bytes. It is not a ratchet, MLS, sealed
+sender implementation or proof of forward secrecy. P01 privacy findings therefore remain unresolved
+until the producer/verifier and downstream storage/push contracts exist and receive external
+cryptographic review.

@@ -21,6 +21,7 @@
 | Onion request support | `include/session/onionreq`, `src/onionreq`, `ENABLE_ONIONREQ` tests | Partial | Onion request build/decrypt crypto path is implemented in `SodiumOnionRequestCrypto`, including v3/v4 response envelope parsing edge-cases. Remaining gaps: router path management, repair/strike logic, and cache persistence. |
 | Network routers/snode pool | `include/session/network`, `src/network` | Not ported | Out of scope for the protocol library except onion abstractions. |
 | Config namespaces/merge logic | `include/session/config`, `src/config`, `docs/api` | Partial | `SharedConfigMessage` parsing and per-namespace seqno merge semantics (applied/duplicate/stale/invalid) are implemented. Remaining gaps: full upstream namespace families and key lifecycle integration. |
+| Deep opaque bundle V1 | Deep extension; not a Session wire format | Implemented, disabled by default | Canonical allocation-bounded codec, explicit negotiation, separate opaque deposit/retrieve capability types and exact opt-in DPE1 compatibility payload. Capability derivation/authentication is not implemented and requires external review. |
 
 Golden vectors currently cover deterministic managed protocol surfaces: padding, protobuf
 serialization, and known upstream identity fixtures. Crypto parity vectors should be added alongside

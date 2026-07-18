@@ -40,6 +40,8 @@ Primary upstream areas reviewed:
 - onion request encryption name mapping and adapter handoff
 - sodium-backed onion request build/decrypt + response envelope parsing
 - shared config envelope parsing and namespace seqno-based merge state machine
+- opt-in Deep-extension opaque bundle V1 encoding/decoding and version negotiation, isolated in
+  `Deep.Protocol.DeepExtension.OpaqueBundles`
 
 ## Wire Semantics Preserved
 
@@ -68,5 +70,11 @@ Custom hosts may provide:
 - onion request build/decrypt behavior
 
 Remaining upstream parity gaps are documented in `unsupported-or-unspecified.md`.
+
+## Deep extension isolation
+
+The opaque bundle V1 contract is not Session-compatible wire behavior and does not modify generated
+protobufs, Session namespaces or existing vectors. It is disabled unless a host completes explicit
+feature negotiation. See `deep-extension-opaque-bundle-v1.md`.
 
 Tests use an explicit fake adapter only to verify managed state and wire container behavior.
