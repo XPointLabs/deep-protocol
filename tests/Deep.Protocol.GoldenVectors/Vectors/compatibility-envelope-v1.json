@@ -1,0 +1,14 @@
+{
+  "name": "P03A compatibility envelope V1 test-adapter vectors",
+  "sourceRepository": "XPointLabs/deep-protocol",
+  "sourceCommit": "P03A deterministic test adapter only; not a production cryptographic vector",
+  "vectors": [
+    {
+      "id": "deep-extension/compatibility-envelope/v1/deposit-512",
+      "kind": "deep-extension-compatibility-envelope-v1-test-adapter",
+      "message": "Recipient material a0..bf, sender authentication c0..df, capability 40..5f, attempt 10..1f, dedup 20..2f, replay 30..3f, header nonce 60..7f, payload nonce 80..9f, expiry 123456, padding 256.",
+      "plaintextHex": "44504531000065786163742d6c65676163792d7061796c6f6164",
+      "hex": "00"
+    }
+  ]
+}
