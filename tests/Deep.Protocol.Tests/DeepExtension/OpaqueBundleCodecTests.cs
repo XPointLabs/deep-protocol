@@ -138,6 +138,82 @@ public sealed class OpaqueBundleCodecTests
         Assert.Equal((OpaqueBundleFeatures)0x8000_0000, decoded.OptionalFeatures);
     }
 
+    [Fact]
+    public void CallerSuppliedProfileAndPolicy_CannotExtendImplementationCriticalFeatures()
+    {
+        const OpaqueBundleFeatures maliciousUnknownFeature = (OpaqueBundleFeatures)0x8000_0000;
+        var request = CreateDepositRequest([0xaa], [0xbb]) with
+        {
+            CriticalFeatures = OpaqueBundleFeatures.V1Required | maliciousUnknownFeature
+        };
+        var maliciousProfile = StrictV1Profile() with
+        {
+            SupportedCriticalFeatures = OpaqueBundleFeatures.V1Required |
+                OpaqueBundleFeatures.LegacyDpe1Compatibility |
+                maliciousUnknownFeature
+        };
+
+        var encode = Assert.Throws<OpaqueBundlePolicyException>(() =>
+            OpaqueBundleCodec.Encode(request, maliciousProfile));
+        Assert.Equal(OpaqueBundleDecodeError.UnknownCriticalFeature, encode.Error);
+
+        var encoded = OpaqueBundleCodec.Encode(
+            CreateDepositRequest([0xaa], [0xbb]),
+            StrictV1Profile());
+        BinaryPrimitives.WriteUInt32BigEndian(
+            encoded.AsSpan(10, 4),
+            (uint)(OpaqueBundleFeatures.V1Required | maliciousUnknownFeature));
+        var maliciousPolicy = StrictV1Policy() with
+        {
+            SupportedCriticalFeatures = OpaqueBundleFeatures.V1Required |
+                OpaqueBundleFeatures.LegacyDpe1Compatibility |
+                maliciousUnknownFeature
+        };
+
+        var decode = Assert.Throws<OpaqueBundlePolicyException>(() =>
+            OpaqueBundleCodec.Decode(encoded, maliciousPolicy));
+        Assert.Equal(OpaqueBundleDecodeError.UnknownCriticalFeature, decode.Error);
+    }
+
+    [Fact]
+    public void NegotiationOffers_CannotExtendImplementationCriticalFeatures()
+    {
+        const OpaqueBundleFeatures maliciousUnknownFeature = (OpaqueBundleFeatures)0x8000_0000;
+        var malicious = new OpaqueBundleNegotiationOffer(
+            OpaqueBundleWireVersion.V1,
+            OpaqueBundleWireVersion.V1,
+            OpaqueBundleFeatures.V1Required | maliciousUnknownFeature);
+        var normal = new OpaqueBundleNegotiationOffer(
+            OpaqueBundleWireVersion.V1,
+            OpaqueBundleWireVersion.V1,
+            OpaqueBundleFeatures.V1Required);
+
+        Assert.Throws<OpaqueBundleNegotiationException>(() =>
+            OpaqueBundleNegotiator.Negotiate(
+                malicious,
+                normal,
+                minimumSafeVersion: OpaqueBundleWireVersion.V1));
+        Assert.Throws<OpaqueBundleNegotiationException>(() =>
+            OpaqueBundleNegotiator.Negotiate(
+                normal,
+                malicious,
+                minimumSafeVersion: OpaqueBundleWireVersion.V1));
+    }
+
+    [Fact]
+    public void Encode_RejectsUndefinedPayloadKindBeforeWriting()
+    {
+        var request = CreateDepositRequest([0xaa], [0xbb]) with
+        {
+            PayloadKind = (OpaqueBundlePayloadKind)0xff
+        };
+
+        var exception = Assert.Throws<OpaqueBundleFormatException>(() =>
+            OpaqueBundleCodec.Encode(request, StrictV1Profile()));
+
+        Assert.Equal(OpaqueBundleDecodeError.InvalidEnumValue, exception.Error);
+    }
+
     [Theory]
     [InlineData(123455u)]
     [InlineData(123461u)]

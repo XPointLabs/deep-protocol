@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using Deep.Protocol.DeepExtension.OpaqueBundles;
 
 namespace Deep.Protocol.Tests.DeepExtension;
@@ -57,6 +58,118 @@ public sealed class OpaqueBundleMalformedAndFuzzTests
             Assert.Equal(success, bundle is not null);
             Assert.Equal(success, error == OpaqueBundleDecodeError.None);
         }
+    }
+
+    public static TheoryData<string, Func<byte[], byte[]>, OpaqueBundleDecodeError> StructuredMutations =>
+        new()
+        {
+            {
+                "declared-payload-length-over-maximum",
+                bytes => Mutate(bytes, value =>
+                    BinaryPrimitives.WriteUInt32BigEndian(value.AsSpan(58, 4), uint.MaxValue)),
+                OpaqueBundleDecodeError.MalformedLength
+            },
+            {
+                "trailing-byte-breaks-canonical-length",
+                bytes => [.. bytes, (byte)0],
+                OpaqueBundleDecodeError.MalformedLength
+            },
+            {
+                "non-zero-padding",
+                bytes => Mutate(bytes, value => value[^1] = 0x01),
+                OpaqueBundleDecodeError.NonCanonicalPadding
+            },
+            {
+                "unknown-critical-feature",
+                bytes => Mutate(bytes, value =>
+                    BinaryPrimitives.WriteUInt32BigEndian(value.AsSpan(10, 4), 0x8000_0007)),
+                OpaqueBundleDecodeError.UnknownCriticalFeature
+            },
+            {
+                "missing-required-feature",
+                bytes => Mutate(bytes, value =>
+                    BinaryPrimitives.WriteUInt32BigEndian(value.AsSpan(10, 4), 0x0000_0003)),
+                OpaqueBundleDecodeError.MissingRequiredFeature
+            },
+            {
+                "undefined-payload-kind",
+                bytes => Mutate(bytes, value => value[6] = 0xff),
+                OpaqueBundleDecodeError.InvalidEnumValue
+            },
+            {
+                "legacy-kind-without-opt-in",
+                bytes => Mutate(bytes, value =>
+                    value[6] = (byte)OpaqueBundlePayloadKind.LegacyDpe1),
+                OpaqueBundleDecodeError.LegacyPayloadNotAllowed
+            }
+        };
+
+    [Theory]
+    [MemberData(nameof(StructuredMutations))]
+    public void DeterministicStructuredMutations_ReachNamedFailureBranches(
+        string name,
+        Func<byte[], byte[]> mutate,
+        OpaqueBundleDecodeError expectedError)
+    {
+        var encoded = OpaqueBundleCodec.Encode(CreateRequest(), Profile());
+        encoded = mutate(encoded);
+
+        var success = OpaqueBundleCodec.TryDecode(
+            encoded,
+            PermissivePolicy() with { AllowLegacyDpe1 = false },
+            out var bundle,
+            out var error);
+
+        Assert.False(success);
+        Assert.Null(bundle);
+        Assert.Equal(expectedError, error);
+        Assert.False(string.IsNullOrWhiteSpace(name));
+    }
+
+    [Fact]
+    public void DeterministicStructuredTruncations_ReachBodyAndHeaderBoundaries()
+    {
+        var encoded = OpaqueBundleCodec.Encode(CreateRequest(), Profile());
+        var boundaries = new[]
+        {
+            OpaqueBundleLimits.FixedHeaderLength - 1,
+            OpaqueBundleLimits.FixedHeaderLength,
+            encoded.Length - 1
+        };
+
+        foreach (var length in boundaries)
+        {
+            var success = OpaqueBundleCodec.TryDecode(
+                encoded.AsSpan(0, length),
+                PermissivePolicy(),
+                out var bundle,
+                out var error);
+
+            Assert.False(success);
+            Assert.Null(bundle);
+            Assert.NotEqual(OpaqueBundleDecodeError.None, error);
+        }
+    }
+
+    [Fact]
+    public void EncoderStructuredMutation_SeparatesAttemptFromDedup()
+    {
+        var request = CreateRequest() with
+        {
+            EndToEndDedupId = new EndToEndDedupId(
+                CreateRequest().TransportAttemptId.Bytes.Span)
+        };
+
+        var exception = Assert.Throws<OpaqueBundlePolicyException>(() =>
+            OpaqueBundleCodec.Encode(request, Profile()));
+
+        Assert.Equal(OpaqueBundleDecodeError.TransportAttemptEqualsDedup, exception.Error);
+    }
+
+    private static byte[] Mutate(byte[] bytes, Action<byte[]> mutation)
+    {
+        mutation(bytes);
+        return bytes;
     }
 
     [Fact]
