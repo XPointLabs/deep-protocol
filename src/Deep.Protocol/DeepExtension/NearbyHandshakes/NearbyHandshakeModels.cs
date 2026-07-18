@@ -1,4 +1,12 @@
+using Deep.Protocol.DeepExtension.OpaqueBundles;
+
 namespace Deep.Protocol.DeepExtension.NearbyHandshakes;
+
+public static class NearbyHandshakeDomains
+{
+    public static ReadOnlySpan<byte> RendezvousHint => "Deep/P03C/RendezvousHint/v1"u8;
+    public static ReadOnlySpan<byte> AuthenticatedKeyExchange => "Deep/P03C/AuthenticatedAKE/v1"u8;
+}
 
 public static class NearbyHandshakeLimits
 {
@@ -85,6 +93,32 @@ public sealed record NearbyRendezvousPolicy
     public required byte FuturePeriods { get; init; }
 }
 
+public sealed record NearbyHandshakePeriodPolicy
+{
+    public required ulong CurrentPeriod { get; init; }
+    public required byte PreviousPeriods { get; init; }
+    public required byte FuturePeriods { get; init; }
+}
+
+public sealed class ContactDiscoverySecret
+{
+    private ContactDiscoverySecret(ReadOnlySpan<byte> bytes) => Bytes = bytes.ToArray();
+
+    public ReadOnlyMemory<byte> Bytes { get; }
+
+    public static ContactDiscoverySecret FromReviewedProducer(ReadOnlySpan<byte> bytes)
+    {
+        if (bytes.Length != NearbyHandshakeLimits.ContactDiscoverySecretLength)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(bytes),
+                "A reviewed contact discovery producer must supply exactly 32 secret bytes.");
+        }
+
+        return new ContactDiscoverySecret(bytes);
+    }
+}
+
 public sealed record NearbyRendezvousMatch(
     ulong Period,
     byte BundleVersion,
@@ -94,7 +128,7 @@ public sealed record NearbyHandshakeBinding
 {
     public required byte BundleVersion { get; init; }
     public required ulong Period { get; init; }
-    public required ReadOnlyMemory<byte> TransportAttemptId { get; init; }
+    public required TransportAttemptId TransportAttemptId { get; init; }
     public required ReadOnlyMemory<byte> SimultaneousOpenToken { get; init; }
     public required NearbyHandshakeMode Mode { get; init; }
     public required ulong ResumeCounter { get; init; }
@@ -123,34 +157,46 @@ public sealed record NearbyHandshakeReplayScope(
     ulong ResumeCounter,
     ReadOnlyMemory<byte> CanonicalTranscript);
 
+public enum NearbyHandshakeReplayDecision
+{
+    AcceptedFresh = 1,
+    AcceptedResumption = 2,
+    Rejected = 3
+}
+
 public interface INearbyHandshakeReplayGuard
 {
-    bool TryAccept(NearbyHandshakeReplayScope scope);
+    NearbyHandshakeReplayDecision Evaluate(NearbyHandshakeReplayScope scope);
 }
 
 public interface INearbyAuthenticatedKeyExchange
 {
     byte[] DeriveRendezvousHint(
+        ReadOnlySpan<byte> domain,
         ReadOnlySpan<byte> contactSecret,
         ulong period,
         byte bundleVersion);
 
     byte[] CreateInitiatorPayload(
+        ReadOnlySpan<byte> domain,
         NearbyHandshakeBinding binding,
         ReadOnlySpan<byte> expectedPeerIdentity);
 
     byte[] CreateResponderPayload(
+        ReadOnlySpan<byte> domain,
         NearbyHandshakeBinding binding,
         ReadOnlySpan<byte> canonicalInitiatorFrame,
         ReadOnlySpan<byte> expectedPeerIdentity);
 
     NearbyEstablishedSession CompleteResponder(
+        ReadOnlySpan<byte> domain,
         NearbyHandshakeBinding binding,
         ReadOnlySpan<byte> canonicalInitiatorFrame,
         ReadOnlySpan<byte> canonicalResponderFrame,
         ReadOnlySpan<byte> expectedPeerIdentity);
 
     NearbyEstablishedSession CompleteInitiator(
+        ReadOnlySpan<byte> domain,
         NearbyHandshakeBinding binding,
         ReadOnlySpan<byte> canonicalInitiatorFrame,
         ReadOnlySpan<byte> canonicalResponderFrame,

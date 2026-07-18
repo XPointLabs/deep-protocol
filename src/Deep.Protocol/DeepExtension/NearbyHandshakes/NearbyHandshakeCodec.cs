@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using Deep.Protocol.DeepExtension.OpaqueBundles;
 
 namespace Deep.Protocol.DeepExtension.NearbyHandshakes;
 
@@ -75,7 +76,7 @@ public static class NearbyHandshakeCodec
         encoded[7] = (byte)binding.Mode;
         BinaryPrimitives.WriteUInt64BigEndian(encoded.AsSpan(8, 8), binding.Period);
         BinaryPrimitives.WriteUInt64BigEndian(encoded.AsSpan(16, 8), binding.ResumeCounter);
-        binding.TransportAttemptId.Span.CopyTo(encoded.AsSpan(24, 16));
+        binding.TransportAttemptId.Bytes.Span.CopyTo(encoded.AsSpan(24, 16));
         binding.SimultaneousOpenToken.Span.CopyTo(encoded.AsSpan(40, 16));
         BinaryPrimitives.WriteUInt16BigEndian(
             encoded.AsSpan(56, 2), checked((ushort)adapterPayload.Length));
@@ -129,7 +130,7 @@ public static class NearbyHandshakeCodec
             Mode = (NearbyHandshakeMode)encoded[7],
             Period = BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(8, 8)),
             ResumeCounter = BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(16, 8)),
-            TransportAttemptId = encoded.Slice(24, 16).ToArray(),
+            TransportAttemptId = new TransportAttemptId(encoded.Slice(24, 16)),
             SimultaneousOpenToken = encoded.Slice(40, 16).ToArray()
         };
         ValidateBinding(binding);
@@ -151,7 +152,7 @@ public static class NearbyHandshakeCodec
         encoded[6] = (byte)binding.Mode;
         BinaryPrimitives.WriteUInt64BigEndian(encoded.AsSpan(8, 8), binding.Period);
         BinaryPrimitives.WriteUInt64BigEndian(encoded.AsSpan(16, 8), binding.ResumeCounter);
-        binding.TransportAttemptId.Span.CopyTo(encoded.AsSpan(24, 16));
+        binding.TransportAttemptId.Bytes.Span.CopyTo(encoded.AsSpan(24, 16));
         binding.SimultaneousOpenToken.Span.CopyTo(encoded.AsSpan(40, 16));
         return encoded;
     }
@@ -161,8 +162,8 @@ public static class NearbyHandshakeCodec
         ArgumentNullException.ThrowIfNull(binding);
         if (binding.BundleVersion == 0 ||
             binding.Period == 0 ||
-            binding.TransportAttemptId.Length != NearbyHandshakeLimits.IdentifierLength ||
-            binding.TransportAttemptId.Span.IndexOfAnyExcept((byte)0) < 0 ||
+            binding.TransportAttemptId is null ||
+            binding.TransportAttemptId.Bytes.Span.IndexOfAnyExcept((byte)0) < 0 ||
             binding.SimultaneousOpenToken.Length != NearbyHandshakeLimits.IdentifierLength ||
             binding.SimultaneousOpenToken.Span.IndexOfAnyExcept((byte)0) < 0 ||
             binding.Mode is not (NearbyHandshakeMode.Fresh or NearbyHandshakeMode.Resumption))

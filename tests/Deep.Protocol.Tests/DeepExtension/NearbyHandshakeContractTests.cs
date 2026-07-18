@@ -59,12 +59,13 @@ public sealed class NearbyHandshakeContractTests
     {
         var alice = new TestAdapter(Alice, ContactSecret);
         var bob = new TestAdapter(Bob, ContactSecret);
-        var replay = new AcceptOnceReplayGuard();
+        var responderReplay = new AcceptOnceReplayGuard();
+        var initiatorReplay = new AcceptOnceReplayGuard();
         var initiator = NearbyHandshakeProtocol.CreateInitiator(Binding(), PeriodPolicy(), Bob, alice);
         var response = NearbyHandshakeProtocol.Respond(
-            initiator, PeriodPolicy(), Alice, bob, replay);
+            initiator, PeriodPolicy(), Alice, bob, responderReplay);
         var established = NearbyHandshakeProtocol.CompleteInitiator(
-            initiator, response.Frame, PeriodPolicy(), Bob, alice, replay);
+            initiator, response.Frame, PeriodPolicy(), Bob, alice, initiatorReplay);
 
         Assert.Equal(Bob, established.PeerIdentity.ToArray());
         Assert.Equal(32, established.SessionKey.Length);
@@ -79,8 +80,10 @@ public sealed class NearbyHandshakeContractTests
                 initiator, response.Frame, PeriodPolicy(), Alice, alice, new AcceptOnceReplayGuard()));
         Assert.Throws<NearbyHandshakeException>(() =>
             NearbyHandshakeProtocol.CompleteInitiator(
-                initiator, response.Frame, PeriodPolicy(), Bob, alice, replay));
-        Assert.Contains(replay.Scopes, scope =>
+                initiator, response.Frame, PeriodPolicy(), Bob, alice, initiatorReplay));
+        Assert.Contains(responderReplay.Scopes, scope =>
+            scope.CanonicalTranscript.Length == initiator.Length + response.Frame.Length);
+        Assert.Contains(initiatorReplay.Scopes, scope =>
             scope.CanonicalTranscript.Length == initiator.Length + response.Frame.Length);
     }
 

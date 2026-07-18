@@ -21,11 +21,14 @@ foreground availability or a background discovery SLA.
 A future reviewed adapter derives a 16-byte hint from a contact discovery secret, the fixed
 `Deep/P03C/RendezvousHint/v1` domain, bundle version and unsigned period number. The managed
 contract never derives one contact secret from another and never accepts a raw Session ID as the
-secret.
+secret. Public rendezvous APIs require the explicit `ContactDiscoverySecret` handle created by a
+reviewed producer, not a byte-span identity parameter; raw Session-ID-shaped input is rejected by
+that factory boundary.
 
 The platform supplies a monotonic/wall-clock mapping and period number. The default policy accepts
 the current and immediately previous period, with at most one future period for configured clock
-skew. Overlap is bounded to that candidate set. Hints outside the set fail before handshake state
+skew. Every create/respond/complete handshake call requires this period policy, so bypassing
+advertisement matching cannot bypass the window. Hints/frames outside the set fail before adapter
 or replay state changes. Period length and scanner scheduling are host policy, not wire promises.
 
 ## Canonical wire messages
@@ -48,7 +51,8 @@ downgraded after authentication.
 ## AKE and identity timing
 
 `INearbyAuthenticatedKeyExchange` is a high-level boundary for an approved existing AKE. The
-adapter receives fixed domain bytes and exact canonical initiator/responder transcript bytes,
+adapter receives codec-owned fixed domain bytes
+`Deep/P03C/AuthenticatedAKE/v1` and exact canonical initiator/responder transcript bytes,
 expected contact identity, negotiated bundle version, period and hop-local attempt ID. It must
 authenticate both peers, derive session keys, bind the transcript and reject wrong-contact,
 tamper, role reflection and downgrade.
@@ -67,7 +71,8 @@ prove them.
 Fresh and resumed handshakes are different canonical markers. A durable replay guard sees the
 contact scope, period, hop-local attempt, simultaneous-open token and exact transcript. Resumption
 requires an adapter-authenticated opaque ticket and a strictly advancing resume counter; it is
-never inferred from cached transport state.
+never inferred from cached transport state. Its decision must explicitly match `AcceptedFresh` or
+`AcceptedResumption`; a mode/decision mismatch and repeated/non-advancing resumption fail closed.
 
 Simultaneous initiators compare their random 16-byte tokens lexicographically. The lower token
 continues as initiator and the higher switches to responder; equality fails and restarts with new
