@@ -5,7 +5,8 @@ Status: contract implemented; production runtime BLOCKED. Human owner: Mr. X.
 Enforced by the contract:
 
 - contact-scoped discovery only; no open-discovery type/default;
-- 32-byte caller-provided contact secret and 16-byte rotating hint adapter boundary;
+- opaque, non-exportable contact secret issued only through the reviewed-provider interface,
+  plus a 16-byte rotating hint adapter boundary;
 - bounded current/previous/future candidate periods;
 - no clear stable identity in fixed advertisement or managed frame headers;
 - exact canonical initiator/responder transcript and expected peer passed to the AKE adapter;
