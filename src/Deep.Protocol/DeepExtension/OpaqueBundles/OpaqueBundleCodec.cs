@@ -210,8 +210,6 @@ public static class OpaqueBundleCodec
         var capabilityLength = BinaryPrimitives.ReadUInt16BigEndian(encoded.Slice(54, 2));
         var encryptedHeaderLength = BinaryPrimitives.ReadUInt16BigEndian(encoded.Slice(56, 2));
         var encryptedPayloadLength = BinaryPrimitives.ReadUInt32BigEndian(encoded.Slice(58, 4));
-        ValidateDecodedLengths(capabilityLength, encryptedHeaderLength, encryptedPayloadLength);
-
         var unpaddedLength64 =
             (long)OpaqueBundleLimits.FixedHeaderLength +
             capabilityLength +
@@ -221,6 +219,8 @@ public static class OpaqueBundleCodec
         {
             throw Format(OpaqueBundleDecodeError.MalformedLength, "The declared body length overflows the parser range.");
         }
+
+        ValidateDecodedLengths(capabilityLength, encryptedHeaderLength, encryptedPayloadLength);
 
         var unpaddedLength = (int)unpaddedLength64;
         var canonicalLength = RoundUp(unpaddedLength, paddingBlock);
