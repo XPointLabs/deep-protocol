@@ -13,6 +13,7 @@ public sealed class NearbyHandshakeContractTests
     private static readonly byte[] Token = Range(0x50, 16);
     private static readonly byte[] Alice = Encoding.ASCII.GetBytes("alice-contact");
     private static readonly byte[] Bob = Encoding.ASCII.GetBytes("bob-contact");
+    private static readonly TestSecretProvider SecretProvider = new(ContactSecret);
 
     [Fact]
     public void AdvertisementAndInitiator_MatchGoldenVectors()
@@ -45,7 +46,7 @@ public sealed class NearbyHandshakeContractTests
 
         Assert.Throws<NearbyHandshakeException>(() =>
             NearbyHandshakeProtocol.MatchAdvertisement(
-                previous, ContactDiscoverySecret.FromReviewedProducer(Range(0x80, 32)), 100,
+                previous, new TestSecretProvider(Range(0x80, 32)).GetContactScopedSecret(), 100,
                 new NearbyRendezvousPolicy { PreviousPeriods = 1, FuturePeriods = 1 }, crypto));
         Assert.Throws<NearbyHandshakeException>(() =>
             NearbyHandshakeProtocol.MatchAdvertisement(
@@ -108,9 +109,17 @@ public sealed class NearbyHandshakeContractTests
         var guard = new MonotonicResumptionGuard();
         _ = NearbyHandshakeProtocol.Respond(
             initiator, PeriodPolicy(), Alice, bob, guard);
+        var advanced = binding with { ResumeCounter = 6 };
+        var advancedFrame = NearbyHandshakeProtocol.CreateInitiator(
+            advanced, PeriodPolicy(), Bob, alice);
+        _ = NearbyHandshakeProtocol.Respond(
+            advancedFrame, PeriodPolicy(), Alice, bob, guard);
         Assert.Throws<NearbyHandshakeException>(() =>
             NearbyHandshakeProtocol.Respond(
                 initiator, PeriodPolicy(), Alice, bob, guard));
+        Assert.Throws<NearbyHandshakeException>(() =>
+            NearbyHandshakeProtocol.Respond(
+                advancedFrame, PeriodPolicy(), Alice, bob, guard));
     }
 
     [Fact]
@@ -152,7 +161,7 @@ public sealed class NearbyHandshakeContractTests
         };
 
     private static ContactDiscoverySecret Secret() =>
-        ContactDiscoverySecret.FromReviewedProducer(ContactSecret);
+        SecretProvider.GetContactScopedSecret();
 
     private static NearbyHandshakePeriodPolicy PeriodPolicy() =>
         new() { CurrentPeriod = 100, PreviousPeriods = 1, FuturePeriods = 1 };
@@ -194,12 +203,12 @@ public sealed class NearbyHandshakeContractTests
     {
         public byte[] DeriveRendezvousHint(
             ReadOnlySpan<byte> domain,
-            ReadOnlySpan<byte> contactSecret,
+            ContactDiscoverySecret contactSecret,
             ulong period,
             byte bundleVersion)
         {
             Assert.Equal(NearbyHandshakeDomains.RendezvousHint.ToArray(), domain.ToArray());
-            var material = domain.ToArray().Concat(contactSecret.ToArray())
+            var material = domain.ToArray().Concat(SecretProvider.Resolve(contactSecret))
                 .Concat(BitConverter.GetBytes(period).Reverse())
                 .Append(bundleVersion)
                 .ToArray();
@@ -281,5 +290,24 @@ public sealed class NearbyHandshakeContractTests
                 .ToArray();
             return HMACSHA256.HashData(sharedSecret, bytes);
         }
+    }
+
+    private sealed class TestSecretProvider(byte[] secret) : ContactDiscoverySecretProviderBase
+    {
+        private readonly Dictionary<ContactDiscoverySecret, byte[]> _secrets = [];
+
+        public override ContactDiscoverySecret GetContactScopedSecret()
+        {
+            var handle = CreateOpaqueSecretHandle();
+            _secrets[handle] = secret.ToArray();
+            return handle;
+        }
+
+        public byte[] Resolve(ContactDiscoverySecret handle) =>
+            _secrets.TryGetValue(handle, out var bytes)
+                ? bytes
+                : throw new NearbyHandshakeException(
+                    NearbyHandshakeError.InvalidIdentifier,
+                    "Unknown test secret handle.");
     }
 }
