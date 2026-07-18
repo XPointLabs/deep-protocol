@@ -1,0 +1,63 @@
+{
+  "schema": "deep-survival-work-package-report.v1",
+  "workPackage": "P03B",
+  "title": "Mailbox capability and durable receipt contract",
+  "status": "implemented-runtime-blocked-pending-independent-review",
+  "humanOwner": "Mr. X",
+  "repository": "deep-protocol",
+  "branch": "survival/w01-p03b-mailbox-capabilities",
+  "baseEvidenceCommit": "0bb1d484408b0ad673f51e67673dce1ac34b6b12",
+  "adrCommit": "e4aecd7df4dc16d14d81363f9edeaa6e6c922f03",
+  "redCommit": "902f8064bd67d871a01c9fddb839caea6cc4e986",
+  "implementationCommit": "312bda8e147dd1ee2be3d6a1c0f343171488b97a",
+  "packageVersion": "0.3.0-p03b.312bda8",
+  "pins": {
+    "promptSha256": "bfee5e57ee02ac2a46e22ef23320b7e7fa96e8420407b6a412e2740346e62413",
+    "p01ObserverMatrixSha256": "ffcfe4e6df8bbd63b04c1c590e5a47935b8e7504a4c39cf1256b322aeea5a4df",
+    "p01ProducerContractSha256": "ec67df8a697a3527fe1875789e64566d109ab422272946b98af2f8d9d6312063",
+    "p03WorkPackageReportSha256": "e691516691d85b0c34850430e7f5f493615658c8577344a7d8a8293b675ee0a2",
+    "p03aWorkPackageReportSha256": "b08be0a0f7b047689356b1ade02a23abd47f53f49d16a3da13874af5e6e8f6a3",
+    "p03aPackageManifestSha256": "6b6493677f244e07077bcfb60faf6a43b1c994946e60f8c91324e888ee7e316d"
+  },
+  "tests": {
+    "fullRelease": {
+      "passed": 130,
+      "failed": 0,
+      "skipped": 0
+    },
+    "focusedP03B": {
+      "passed": 31,
+      "failed": 0,
+      "skipped": 0
+    },
+    "fixedSeedMalformedSmoke": 4000,
+    "coverageGuidedFuzzing": "not-run-not-claimed"
+  },
+  "acceptance": {
+    "threeDistinctDomains": "pass-runtime-and-wire-types",
+    "lifecycleGenerationOverlapRecovery": "pass-contract-only",
+    "replayAndIdempotency": "pass-codec-and-guard-interface",
+    "twoReplicaDurableQuorum": "pass-test-crypto-contract",
+    "acceptedNotDurable": "pass",
+    "cursorTombstoneAndPayloadAgreement": "pass",
+    "coordinatorEquivocationEvidence": "pass",
+    "freeAdmissionPaymentOrthogonality": "pass-schema-and-reflection-test",
+    "productionRuntime": "blocked-not-registered",
+    "externalCryptoReview": "blocked-not-run"
+  },
+  "blockers": [
+    "No reviewed capability producer or lifecycle persistence.",
+    "No durable atomic replay/idempotency implementation.",
+    "No approved production replica/coordinator crypto or key distribution.",
+    "No storage executor, repair, mobile/Windows integration or production E2E.",
+    "No cross-language vectors or external security review."
+  ],
+  "publication": {
+    "gitPush": false,
+    "packagePublished": false,
+    "localPackagesOnly": true,
+    "networkServiceChanged": false,
+    "dockerChanged": false,
+    "productionCredentialsAccessed": false
+  }
+}
