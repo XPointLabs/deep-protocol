@@ -152,6 +152,19 @@ public sealed class OpaqueBundleMalformedAndFuzzTests
     }
 
     [Fact]
+    public void DeclaredPayloadLengthOverflow_ReachesParserOverflowGuard()
+    {
+        var encoded = OpaqueBundleCodec.Encode(CreateRequest(), Profile());
+        BinaryPrimitives.WriteUInt32BigEndian(encoded.AsSpan(58, 4), uint.MaxValue);
+
+        var exception = Assert.Throws<OpaqueBundleFormatException>(() =>
+            OpaqueBundleCodec.Decode(encoded, PermissivePolicy()));
+
+        Assert.Equal(OpaqueBundleDecodeError.MalformedLength, exception.Error);
+        Assert.Contains("overflows the parser range", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void EncoderStructuredMutation_SeparatesAttemptFromDedup()
     {
         var request = CreateRequest() with
