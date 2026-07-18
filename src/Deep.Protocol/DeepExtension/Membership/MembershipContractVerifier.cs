@@ -340,6 +340,8 @@ public static class MembershipContractVerifier
         int threshold,
         IMembershipSignatureVerifier verifier)
     {
+        if (verifier is null)
+            throw Error(MembershipContractError.InvalidField, "Signature verifier is missing.");
         if (signatures is null ||
             signatures.Count is 0 or > MembershipLimits.MaximumSigners ||
             signatures.Any(static signature => signature is null))
