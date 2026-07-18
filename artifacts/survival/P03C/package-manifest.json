@@ -1,0 +1,24 @@
+{
+  "schema": "deep-local-package-manifest.v1",
+  "packageVersion": "0.3.0-p03c.86581be",
+  "sourceCommit": "86581beb69ce0ed8084a31e4aa4e08ac7675c60c",
+  "publication": "local-only-not-published",
+  "runtimeActivation": "blocked-no-approved-ake-adapter",
+  "packages": [
+    {
+      "file": "packages/Deep.Protocol.0.3.0-p03c.86581be.nupkg",
+      "bytes": 62010,
+      "sha256": "38df280f5956189bcdc74a00e8c3ffa8a0886c2cf8f98dff281adcb1cd176042"
+    },
+    {
+      "file": "packages/Deep.Protocol.Abstractions.0.3.0-p03c.86581be.nupkg",
+      "bytes": 25668,
+      "sha256": "43521c0e8ef01555cf1050146806cd1879069ed45e5f3f4d928528e30f5894b9"
+    },
+    {
+      "file": "packages/Deep.Protocol.Protobuf.0.3.0-p03c.86581be.nupkg",
+      "bytes": 51187,
+      "sha256": "0b0f63f17759cd0e81fe1aa62fb12bb85e8b4bed025a1dc2d0cc3dbd0c82a2f3"
+    }
+  ]
+}
