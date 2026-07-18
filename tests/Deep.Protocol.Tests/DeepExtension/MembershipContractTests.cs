@@ -214,6 +214,27 @@ public sealed class MembershipContractTests
                 canonical, signatures.Take(2).ToArray(), verifier));
     }
 
+    [Fact]
+    public void FixedSeedMalformedInputs_StayInsideExpectedExceptionSurface()
+    {
+        var random = new Random(0x504);
+        for (var iteration = 0; iteration < 2_000; iteration++)
+        {
+            var bytes = new byte[random.Next(0, 8_192)];
+            random.NextBytes(bytes);
+            try
+            {
+                _ = MembershipContractCodec.DecodeGenesis(bytes);
+            }
+            catch (MembershipContractException)
+            {
+                continue;
+            }
+
+            Assert.Fail("Random malformed membership input unexpectedly decoded.");
+        }
+    }
+
     private static IReadOnlyList<ReadOnlyMemory<byte>> Signers(int start, int count) =>
         Enumerable.Range(0, count)
             .Select(index => (ReadOnlyMemory<byte>)Enumerable.Range(start + index * 16, 16)
