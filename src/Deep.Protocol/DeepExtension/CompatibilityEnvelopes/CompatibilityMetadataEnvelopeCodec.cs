@@ -167,6 +167,14 @@ public static class CompatibilityMetadataEnvelopeCodec
                 exception);
         }
 
+        ValidateOpenedCiphertextOverhead(
+            headerCiphertext.Length,
+            openedHeader.Plaintext.Length,
+            "header");
+        ValidateOpenedCiphertextOverhead(
+            payloadCiphertext.Length,
+            openedPayload.Plaintext.Length,
+            "payload");
         ValidateOpenedResults(openedHeader, openedPayload);
 
         var replayScope = new CompatibilityEnvelopeReplayScope(
@@ -379,6 +387,20 @@ public static class CompatibilityMetadataEnvelopeCodec
             throw Error(
                 CompatibilityEnvelopeError.InvalidLegacyDpe1,
                 "The decrypted compatibility payload is not exact bounded DPE1 data.");
+        }
+    }
+
+    private static void ValidateOpenedCiphertextOverhead(
+        int ciphertextLength,
+        int plaintextLength,
+        string part)
+    {
+        var overhead = (long)ciphertextLength - plaintextLength;
+        if (overhead is < 1 or > CompatibilityEnvelopeLimits.MaximumCryptoOverhead)
+        {
+            throw Error(
+                CompatibilityEnvelopeError.InvalidCryptoResult,
+                $"The authenticated {part} ciphertext overhead is outside strict bounds.");
         }
     }
 
