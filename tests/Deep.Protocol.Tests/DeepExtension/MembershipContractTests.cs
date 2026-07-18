@@ -1,9 +1,32 @@
 using Deep.Protocol.DeepExtension.Membership;
+using Deep.Protocol.GoldenVectors;
 
 namespace Deep.Protocol.Tests.DeepExtension;
 
 public sealed class MembershipContractTests
 {
+    [Fact]
+    public void GenesisAndBridge_MatchCanonicalGoldenVectors()
+    {
+        var genesisBytes = MembershipContractCodec.EncodeGenesis(MembershipFixtures.Genesis());
+        var bridgeBytes = MembershipContractCodec.GetBridgeSigningBytes(
+            MembershipFixtures.BridgeSnapshot());
+        var vectors = GoldenVectorLoader.Load("membership-contract-v1.json");
+
+        Assert.Equal(
+            vectors.GetRequired("deep-extension/membership/v1/network-genesis").Hex,
+            Convert.ToHexString(genesisBytes).ToLowerInvariant());
+        Assert.Equal(
+            vectors.GetRequired("deep-extension/membership/v1/bridge-snapshot").Hex,
+            Convert.ToHexString(bridgeBytes).ToLowerInvariant());
+
+        var decodedGenesis = MembershipContractCodec.DecodeGenesis(genesisBytes);
+        var decodedBridge = MembershipContractCodec.DecodeBridgeSigningBytes(bridgeBytes);
+        Assert.Equal(5, decodedGenesis.OfflineRoots.Count);
+        Assert.Single(decodedBridge.EntryContacts);
+        Assert.Equal("https://bridge.example.invalid/v1", decodedBridge.EntryContacts[0].Contact);
+    }
+
     [Fact]
     public void ApprovedPolicy_IsCanonicalData_NotPrivateKeyMaterial()
     {
@@ -37,6 +60,40 @@ public sealed class MembershipContractTests
     }
 
     [Fact]
+    public void BridgeSnapshot_RequiresTwoOnlineSignersAndBoundForkWitness()
+    {
+        var verifier = new DeterministicMembershipVerifier();
+        Assert.Throws<MembershipContractException>(() =>
+            MembershipContractVerifier.VerifyBridge(
+                MembershipFixtures.SignedBridge(verifier, [0]),
+                MembershipFixtures.Context(),
+                verifier));
+
+        var verified = MembershipContractVerifier.VerifyBridge(
+            MembershipFixtures.SignedBridge(verifier, [0, 1]),
+            MembershipFixtures.Context(),
+            verifier);
+        Assert.Equal(7UL, verified.NextLastKnownGood.Sequence);
+
+        var signed = MembershipFixtures.SignedBridge(verifier, [0, 1]);
+        var invalidWitness = signed with
+        {
+            Statement = signed.Statement with
+            {
+                ForkWitness = signed.Statement.ForkWitness with
+                {
+                    CandidateHash = MembershipFixtures.Range(0, MembershipLimits.HashLength)
+                }
+            }
+        };
+        Assert.Throws<MembershipContractException>(() =>
+            MembershipContractVerifier.VerifyBridge(
+                invalidWitness,
+                MembershipFixtures.Context(),
+                verifier));
+    }
+
+    [Fact]
     public void SequencePreviousHashExpiryRevocationAndFork_FailClosed()
     {
         var verifier = new DeterministicMembershipVerifier();
@@ -50,8 +107,8 @@ public sealed class MembershipContractTests
                 context, verifier));
         Assert.Throws<MembershipContractException>(() =>
             MembershipContractVerifier.VerifyMembership(
-                MembershipFixtures.SignedCommitment(sequence: 7, verifier, expiredDelegation: true),
-                context, verifier));
+                MembershipFixtures.SignedCommitment(sequence: 7, verifier),
+                MembershipFixtures.Context(lastSequence: 6, expiredDelegation: true), verifier));
 
         var evidence = MembershipContractVerifier.CreateForkEvidence(
             MembershipFixtures.SignedCommitment(sequence: 7, verifier),
@@ -69,6 +126,92 @@ public sealed class MembershipContractTests
             name.Contains("storage", StringComparison.OrdinalIgnoreCase) ||
             name.Contains("core", StringComparison.OrdinalIgnoreCase) ||
             name.Contains("membership", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void CanonicalParsers_RejectEveryTruncationTrailingReservedAndInvalidUtf8()
+    {
+        var genesis = MembershipContractCodec.EncodeGenesis(MembershipFixtures.Genesis());
+        for (var length = 0; length < genesis.Length; length++)
+        {
+            Assert.Throws<MembershipContractException>(() =>
+                MembershipContractCodec.DecodeGenesis(genesis.AsSpan(0, length)));
+        }
+        Assert.Throws<MembershipContractException>(() =>
+            MembershipContractCodec.DecodeGenesis([.. genesis, (byte)0]));
+        var reserved = genesis.ToArray();
+        reserved[5] = 1;
+        Assert.Throws<MembershipContractException>(() =>
+            MembershipContractCodec.DecodeGenesis(reserved));
+
+        var bridge = MembershipContractCodec.GetBridgeSigningBytes(
+            MembershipFixtures.BridgeSnapshot());
+        for (var length = 0; length < bridge.Length; length++)
+        {
+            Assert.Throws<MembershipContractException>(() =>
+                MembershipContractCodec.DecodeBridgeSigningBytes(bridge.AsSpan(0, length)));
+        }
+        var invalidUtf8 = bridge.ToArray();
+        // The single contact starts after the 98-byte common/count prefix and 16-byte entry ID.
+        invalidUtf8[116] = 0xff;
+        Assert.Throws<MembershipContractException>(() =>
+            MembershipContractCodec.DecodeBridgeSigningBytes(invalidUtf8));
+    }
+
+    [Fact]
+    public void VerificationClockSkew_IsCallerSuppliedBoundedAndFailClosed()
+    {
+        var verifier = new DeterministicMembershipVerifier();
+        var signed = MembershipFixtures.SignedCommitment(7, verifier);
+
+        _ = MembershipContractVerifier.VerifyMembership(
+            signed,
+            MembershipFixtures.Context(verificationTime: 970, allowedClockSkew: 30),
+            verifier);
+
+        var tooEarly = Assert.Throws<MembershipContractException>(() =>
+            MembershipContractVerifier.VerifyMembership(
+                signed,
+                MembershipFixtures.Context(verificationTime: 969, allowedClockSkew: 30),
+                verifier));
+        Assert.Equal(MembershipContractError.NotYetValid, tooEarly.Error);
+
+        var excessiveSkew = Assert.Throws<MembershipContractException>(() =>
+            MembershipContractVerifier.VerifyMembership(
+                signed,
+                MembershipFixtures.Context(
+                    verificationTime: 970,
+                    allowedClockSkew: MembershipLimits.MaximumClockSkewSeconds + 1),
+                verifier));
+        Assert.Equal(MembershipContractError.ClockSkewOutOfRange, excessiveSkew.Error);
+    }
+
+    [Fact]
+    public void SelfHostedGenesis_RequiresItsOwnOfflineRootQuorum()
+    {
+        var verifier = new DeterministicMembershipVerifier();
+        var genesis = MembershipFixtures.Genesis() with
+        {
+            NetworkId = MembershipFixtures.Range(0x20, MembershipLimits.NetworkIdLength)
+        };
+        var canonical = MembershipContractCodec.EncodeGenesis(genesis);
+        var signatures = genesis.OfflineRoots.Take(3).Select(root => new MembershipSignature
+        {
+            SignerId = root.SignerId,
+            Domain = MembershipSignatureDomain.Genesis,
+            Signature = verifier.Sign(
+                root.SignerId.Span,
+                MembershipSignatureDomain.Genesis,
+                canonical)
+        }).ToArray();
+
+        var imported = MembershipContractVerifier.ImportSelfHostedGenesis(
+            canonical, signatures, verifier);
+        Assert.Equal(genesis.NetworkId.ToArray(), imported.NetworkId.ToArray());
+
+        Assert.Throws<MembershipContractException>(() =>
+            MembershipContractVerifier.ImportSelfHostedGenesis(
+                canonical, signatures.Take(2).ToArray(), verifier));
     }
 
     private static IReadOnlyList<ReadOnlyMemory<byte>> Signers(int start, int count) =>
