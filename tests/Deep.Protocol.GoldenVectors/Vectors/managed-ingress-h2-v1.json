@@ -1,0 +1,12 @@
+{
+  "name": "Deep managed ingress H2 V1",
+  "sourceRepository": "local-contract-only",
+  "sourceCommit": "RED-PENDING-SOURCE",
+  "vectors": [
+    {
+      "id": "deep-extension/managed-ingress/v1/die1-saturated",
+      "kind": "deep-extension-managed-ingress-error-v1",
+      "hex": "4449453101010701010000110000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ]
+}
