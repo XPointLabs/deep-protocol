@@ -1,24 +1,24 @@
 {
   "schema": "deep-local-package-manifest.v1",
-  "packageVersion": "0.3.0-p03b.312bda8",
-  "sourceCommit": "312bda8e147dd1ee2be3d6a1c0f343171488b97a",
+  "packageVersion": "0.3.0-p03b.6e2c709",
+  "sourceCommit": "6e2c709a378ffac40c441e97e2e4da40aac9a104",
   "publication": "local-only-not-published",
   "runtimeActivation": "blocked-contract-only",
   "packages": [
     {
-      "file": "packages/Deep.Protocol.0.3.0-p03b.312bda8.nupkg",
-      "bytes": 52314,
-      "sha256": "4ac90530fa396751b45231d9d8e8d42378212075d1cbdd9d3874a60eac94855b"
+      "file": "packages/Deep.Protocol.0.3.0-p03b.6e2c709.nupkg",
+      "bytes": 54567,
+      "sha256": "50ef6b9b7e1cc65de2a64929d3353dfb7b8e1eead66efb66142cf254b9caa05a"
     },
     {
-      "file": "packages/Deep.Protocol.Abstractions.0.3.0-p03b.312bda8.nupkg",
-      "bytes": 25672,
-      "sha256": "2287f9acec99dda0b2df17fcd5cfd8b0f74779091b27c0cd36237e43d0ee9591"
+      "file": "packages/Deep.Protocol.Abstractions.0.3.0-p03b.6e2c709.nupkg",
+      "bytes": 25665,
+      "sha256": "a31b0bb501d65cd422ab592e4a6543b17f62c569aabbcb04d12e4a3cd8333349"
     },
     {
-      "file": "packages/Deep.Protocol.Protobuf.0.3.0-p03b.312bda8.nupkg",
-      "bytes": 51193,
-      "sha256": "f64349a53dc1d7c66190461d767c315c03d4667ffbc3b9855fa4b799f5669e02"
+      "file": "packages/Deep.Protocol.Protobuf.0.3.0-p03b.6e2c709.nupkg",
+      "bytes": 51184,
+      "sha256": "2da9ef63459f14cdc621e4168fb1e0e3bc90ded846309dd1ae47d20eab3ffbd5"
     }
   ]
 }

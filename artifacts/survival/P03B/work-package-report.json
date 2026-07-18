@@ -2,7 +2,7 @@
   "schema": "deep-survival-work-package-report.v1",
   "workPackage": "P03B",
   "title": "Mailbox capability and durable receipt contract",
-  "status": "implemented-runtime-blocked-pending-independent-review",
+  "status": "corrected-runtime-blocked-pending-independent-rereview",
   "humanOwner": "Mr. X",
   "repository": "deep-protocol",
   "branch": "survival/w01-p03b-mailbox-capabilities",
@@ -10,7 +10,9 @@
   "adrCommit": "e4aecd7df4dc16d14d81363f9edeaa6e6c922f03",
   "redCommit": "902f8064bd67d871a01c9fddb839caea6cc4e986",
   "implementationCommit": "312bda8e147dd1ee2be3d6a1c0f343171488b97a",
-  "packageVersion": "0.3.0-p03b.312bda8",
+  "correctiveRedCommit": "4150a8d2b5e10e10a57e1784dc05dd030462cd87",
+  "correctiveImplementationCommit": "6e2c709a378ffac40c441e97e2e4da40aac9a104",
+  "packageVersion": "0.3.0-p03b.6e2c709",
   "pins": {
     "promptSha256": "bfee5e57ee02ac2a46e22ef23320b7e7fa96e8420407b6a412e2740346e62413",
     "p01ObserverMatrixSha256": "ffcfe4e6df8bbd63b04c1c590e5a47935b8e7504a4c39cf1256b322aeea5a4df",
@@ -21,12 +23,12 @@
   },
   "tests": {
     "fullRelease": {
-      "passed": 130,
+      "passed": 133,
       "failed": 0,
       "skipped": 0
     },
     "focusedP03B": {
-      "passed": 31,
+      "passed": 34,
       "failed": 0,
       "skipped": 0
     },
@@ -36,12 +38,13 @@
   "acceptance": {
     "threeDistinctDomains": "pass-runtime-and-wire-types",
     "lifecycleGenerationOverlapRecovery": "pass-contract-only",
-    "replayAndIdempotency": "pass-codec-and-guard-interface",
+    "replayAndIdempotency": "pass-explicit-new-idempotent-replay-conflict-contract",
     "twoReplicaDurableQuorum": "pass-test-crypto-contract",
     "acceptedNotDurable": "pass",
     "cursorTombstoneAndPayloadAgreement": "pass",
-    "coordinatorEquivocationEvidence": "pass",
-    "freeAdmissionPaymentOrthogonality": "pass-schema-and-reflection-test",
+    "coordinatorEquivocationEvidence": "pass-signing-bytes-not-signature-bytes",
+    "expectedRequestBinding": "pass-operation-generation-payload-tombstone",
+    "freeAdmissionPaymentOrthogonality": "pass-schema-reflection-and-nested-current-window",
     "productionRuntime": "blocked-not-registered",
     "externalCryptoReview": "blocked-not-run"
   },

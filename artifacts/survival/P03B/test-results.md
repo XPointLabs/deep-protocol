@@ -6,28 +6,29 @@ Environment: Windows, .NET SDK 10.0.301, target `net10.0`, Release.
 | --- | --- |
 | Locked restore | pass |
 | Release build | pass; 0 warnings, 0 errors |
-| Full Release tests with XPlat coverage | pass; 130/130, 0 skipped |
-| Focused P03B mailbox tests | pass; 31/31, 0 skipped |
+| Full Release tests with XPlat coverage | pass; 133/133, 0 skipped |
+| Focused P03B mailbox tests | pass; 34/34, 0 skipped |
 | Capability truncations | every prefix shorter than the canonical vector rejected |
 | Replica/quorum/error truncations | every prefix shorter than each canonical statement rejected |
 | Fixed-seed malformed smoke | pass; 2,000 capability plus 2,000 quorum inputs |
 | Structured mutations | version/domain/lifecycle/reserved/length/trailing/signature rejected |
-| Coverage | 2,638/6,228 lines (42.35%); 1,090/3,285 branches (33.18%) |
+| Review corrections | false equivocation, admission time, idempotent retry/conflict and expected-context substitution tests pass |
+| Coverage | 2,710/6,305 lines (42.98%); 1,124/3,326 branches (33.79%) |
 
 Evidence SHA-256:
 
 - full TRX:
-  `3fce642fd791b8e3bf01f492b5474da88cf9545ca8065ff47c208140f2fde27e`;
+  `c212d25757738011ed37c0edcb0c6fc2ff0bf8a3a44866d8ae57ee46e6189b7a`;
 - focused TRX:
-  `d70a55abdf03bc8523d535192372835997d0a745981311aa2e66193b8626206f`;
+  `a88250007cd5bf3c2bc0af5cc59f358154c1380dfd8488edf6999fea27e24f16`;
 - full Cobertura:
-  `4dddffc56bcaa362fe114116bb32f9dfa5b6b6ae3e52c595994c94fb9e6080a1`;
+  `8fa41893bde29ff4c5a2df65f08daaf8717af694e5283e7c592385e244ec4178`;
 - capability vector:
   `6090cf6d4e97db1e08e1eb988a8276bfd38ab72c962702708d93a2d136e23b90`;
 - receipt vectors:
   `ca3a385d7ae07fdccc37d2d5661387a1deed102a542752889db5307b7ff9b20e`;
 - ADR:
-  `909d3ea771e83cd7b8dbbe694f51cc2897487499ff44a3bf81d3fff73b693464`.
+  `68bbc876c50a8f7edd1d85db6f1b25719ff0de3d9e8679e5178fb2a16113bf36`.
 
 The deterministic test signatures are framing/verifier fixtures, not production cryptographic
 vectors. Fixed-seed random suites are deterministic regression smoke, not coverage-guided fuzzing.

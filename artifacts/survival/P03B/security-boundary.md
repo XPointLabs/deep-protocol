@@ -9,14 +9,21 @@ Status: contract implemented; production activation blocked. Human owner: Mr. X.
 - There is no production derive/convert method between mailbox domains.
 - Generation, validity, overlap, mixed-version, replay and idempotency fields are bounded and
   canonical.
+- Replay evaluation explicitly distinguishes a new presentation, exact idempotent retry with a
+  bounded cached outcome, stale replay and idempotency conflict; the guard receives exact
+  canonical bytes.
 - Revoked, recovery and legacy overlap require explicit policy.
 - Free admission is separately framed and has no payer, wallet, account, plan or payment field.
+- Free admission must be current and its validity window must be nested in the capability window.
 - Durable verification requires two different replica IDs, two valid replica signatures, durable
   status, matching operation/generation/cursor/tombstone/payload digest and a valid coordinator
   signature.
 - Coordinator signing bytes bind verifier-provided digests of canonical ordered replica receipts.
+- Public quorum verification binds the authenticated result to caller-expected operation,
+  generation, payload digest and tombstone state.
 - Coordinator equivocation evidence requires two different fully verified statements with the
-  same coordinator ID and sequence.
+  same coordinator ID and sequence; alternate valid signatures over the same signing bytes are
+  rejected as non-equivocation.
 - Parsers reject trailing bytes, unknown markers, nonzero reserved bytes and malformed lengths.
 
 ## What is not claimed

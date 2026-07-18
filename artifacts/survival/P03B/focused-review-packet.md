@@ -1,7 +1,7 @@
 # P03B independent review packet
 
 Review exact branch and source commit
-`312bda8e147dd1ee2be3d6a1c0f343171488b97a`, plus the subsequent evidence-only commit.
+`6e2c709a378ffac40c441e97e2e4da40aac9a104`, plus the subsequent evidence-only commit.
 
 Review priorities:
 
@@ -14,6 +14,7 @@ Review priorities:
 6. coordinator signing-byte binding, canonical replica order and equivocation evidence;
 7. golden, truncation, structured mutation and deterministic malformed tests;
 8. documentation consistency, non-claims, production blockers and absence of default registration.
+9. closure of the initial NO-GO findings recorded in `independent-review.md`.
 
 Return `GO` or `NO-GO`, findings grouped P0/P1/P2/P3 with file/line evidence, and explicitly report
 counts for P0/P1/P2. Review is read-only: do not modify files, publish packages, push or activate.
