@@ -1,8 +1,9 @@
 # P03 handoff to P11
 
-Use local package `Deep.Protocol` version `0.3.0-p03.c854dbe` with the matching
+Use local package `Deep.Protocol` version `0.3.0-p03.372c5f1` with the matching
 `Deep.Protocol.Abstractions` and `Deep.Protocol.Protobuf` packages from `packages/`. Verify hashes
-against `package-manifest.json`. The packages were not published.
+against `package-manifest.json`. The older `0.3.0-p03.c854dbe` package files are superseded and
+must not be selected. No package was published.
 
 Namespace: `Deep.Protocol.DeepExtension.OpaqueBundles`.
 
@@ -16,6 +17,10 @@ Consumer sequence:
 5. call `OpaqueBundleCodec.Encode`;
 6. decode with an explicit bounded `OpaqueBundleDecodePolicy`;
 7. fail closed on every `OpaqueBundleException` and expose only aggregate error counters.
+
+Offers, profiles and decode policies may only narrow
+`OpaqueBundleFeatureSet.KnownCriticalFeatures`; attempts to extend that implementation-owned mask
+fail closed.
 
 Do not use the codec as a capability derivation, authentication, replay database, ratchet, MLS or
 forward-secrecy implementation. Do not enable production negotiation before the unresolved producer

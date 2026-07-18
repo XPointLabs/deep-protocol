@@ -8,6 +8,9 @@ Implemented and testable:
 - transport-attempt versus local E2E-dedup separation at encoding;
 - expiry-bucket policy, padding classes and opaque replay-material carriage;
 - explicit negotiation, minimum safe version, downgrade rejection and unknown-critical fail-closed;
+- implementation-owned known-critical-feature mask: caller offers, profiles and policies may
+  narrow it but cannot extend it;
+- undefined payload-kind values rejected by the encoder before allocation/wire writing;
 - exact opt-in legacy DPE1 compatibility payload.
 
 Not implemented and release-blocking:
