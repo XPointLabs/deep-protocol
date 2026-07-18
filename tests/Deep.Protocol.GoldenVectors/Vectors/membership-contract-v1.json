@@ -1,0 +1,17 @@
+{
+  "name": "P04 membership and bridge contract V1 vectors",
+  "sourceRepository": "XPointLabs/deep-protocol",
+  "sourceCommit": "P04 deterministic test verifier only; no production keys",
+  "vectors": [
+    {
+      "id": "deep-extension/membership/v1/network-genesis",
+      "kind": "network-genesis-v1",
+      "hex": "00"
+    },
+    {
+      "id": "deep-extension/membership/v1/bridge-snapshot",
+      "kind": "bridge-snapshot-v1",
+      "hex": "00"
+    }
+  ]
+}
