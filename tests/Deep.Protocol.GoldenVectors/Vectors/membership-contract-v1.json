@@ -37,6 +37,46 @@
       "id": "deep-extension/membership/v1/inclusion-proof",
       "kind": "membership-inclusion-proof-v1",
       "hex": "4d49503101000000707172737475767778797a7b7c7d7e7f0000000000000007606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f0000000200020000202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f"
+    },
+    {
+      "id": "deep-extension/membership/v1/signed-delegation",
+      "kind": "signed-delegation-v1",
+      "hex": "00"
+    },
+    {
+      "id": "deep-extension/membership/v1/signed-revocation",
+      "kind": "signed-revocation-v1",
+      "hex": "00"
+    },
+    {
+      "id": "deep-extension/membership/v1/domain-tag/update",
+      "kind": "domain-tag-v1",
+      "hex": "00"
+    },
+    {
+      "id": "deep-extension/membership/v1/domain-tag/membership",
+      "kind": "domain-tag-v1",
+      "hex": "00"
+    },
+    {
+      "id": "deep-extension/membership/v1/domain-tag/bridge",
+      "kind": "domain-tag-v1",
+      "hex": "00"
+    },
+    {
+      "id": "deep-extension/membership/v1/domain-tag/reward",
+      "kind": "domain-tag-v1",
+      "hex": "00"
+    },
+    {
+      "id": "deep-extension/membership/v1/domain-tag/billing",
+      "kind": "domain-tag-v1",
+      "hex": "00"
+    },
+    {
+      "id": "deep-extension/membership/v1/framed-membership",
+      "kind": "domain-framed-preimage-v1",
+      "hex": "00"
     }
   ]
 }
