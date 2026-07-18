@@ -81,6 +81,13 @@ public sealed class MailboxCapabilityContractTests
             Lifecycle = lifecycle,
             OverlapUntilBucket = overlapUntil
         };
+        if (lifecycle == MailboxCapabilityLifecycle.Overlap && overlapUntil == 0)
+        {
+            Assert.Throws<MailboxCapabilityException>(() =>
+                MailboxCapabilityCodec.Encode(presentation));
+            return;
+        }
+
         var encoded = MailboxCapabilityCodec.Encode(presentation);
 
         if (strictAccepted)
@@ -174,7 +181,7 @@ public sealed class MailboxCapabilityContractTests
             StrictPolicy(),
             new AcceptOnceCapabilityReplayGuard());
 
-        Assert.Equal(4, decoded.FreeAdmission?.UseLimit);
+        Assert.Equal((ushort)4, decoded.FreeAdmission?.UseLimit);
         var propertyNames = typeof(MailboxFreeAdmissionSlot)
             .GetProperties()
             .Select(static property => property.Name)

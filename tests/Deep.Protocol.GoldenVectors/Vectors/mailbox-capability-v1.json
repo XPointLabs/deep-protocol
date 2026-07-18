@@ -7,7 +7,7 @@
       "id": "deep-extension/mailbox-capability/v1/deposit-active",
       "kind": "mailbox-capability-presentation-v1",
       "message": "Deposit 40..5f, generation 7, not-before 1000, expiry 1100, replay 9, idempotency 10..1f, no admission.",
-      "hex": "00"
+      "hex": "4d435031010101010000000000000007000003e80000044c00000000000000000000000000000009101112131415161718191a1b1c1d1e1f0020000000000000404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f"
     }
   ]
 }

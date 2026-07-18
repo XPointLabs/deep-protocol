@@ -45,6 +45,9 @@ Primary upstream areas reviewed:
 - P03A authenticated compatibility-envelope orchestration and production crypto/replay interfaces,
   isolated in `Deep.Protocol.DeepExtension.CompatibilityEnvelopes`; no production crypto
   implementation or runtime registration is shipped
+- P03B canonical mailbox capability, free-admission and accepted/durable receipt contracts,
+  isolated in `Deep.Protocol.DeepExtension.MailboxCapabilities`; crypto, replay and capability
+  production remain host-provided interfaces with no production registration
 
 ## Wire Semantics Preserved
 
@@ -84,5 +87,12 @@ P03A adds an explicitly negotiated payload kind that can carry exact DPE1 bytes 
 sender-authenticated recipient-encryption adapter seals them. Current sodium sealed-box adapters do
 not prove control of the claimed application sender key, so they are not registered for P03A.
 Production activation remains blocked by `docs/adr/0001-p03a-compatibility-metadata-envelope.md`.
+
+P03B adds three non-convertible runtime/wire domains (deposit, retrieve and placement), bounded
+generation/lifecycle/overlap/replay/idempotency fields, and canonical `MRR1`/`MQR1`/`MBE1`
+receipts. A durable quorum verifies two different replica identifiers and signatures plus a
+coordinator signature over ordered receipt digests. The library does not claim opaque bytes are
+secret or unlinkable and does not create keys, persist lifecycle/replay state, execute storage,
+choose a signature/digest primitive, apply billing, or enable a runtime feature.
 
 Tests use an explicit fake adapter only to verify managed state and wire container behavior.

@@ -61,7 +61,9 @@ Canonical receipt schemas are Deep extensions:
   generation, monotonic cursor, accepted/durable buckets, tombstone marker, payload digest and
   bounded signature;
 - `MQR1`: coordinator durable-quorum statement containing exactly two canonical replica receipts,
-  their digests, coordinator ID/sequence and bounded coordinator signature;
+  coordinator ID/sequence and bounded coordinator signature; its signing bytes bind the
+  verifier-provided digests of both ordered replica receipts, while the corresponding wire-header
+  region remains reserved zero so the codec does not select a digest primitive;
 - `MBE1`: accepted-stage or durable-stage error with a stable error class, retryable flag,
   generation and bounded retry-after.
 
@@ -94,4 +96,3 @@ converts retrieve/deposit/placement values or falls back to raw identity.
 
 Production activation remains disabled until a reviewed producer, lifecycle persistence, replay
 guard, replica/coordinator signature implementation and storage/client E2E evidence exist.
-

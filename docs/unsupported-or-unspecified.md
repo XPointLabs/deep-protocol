@@ -121,3 +121,21 @@ The codec only carries caller-provided opaque/encrypted bytes. It is not a ratch
 sender implementation or proof of forward secrecy. P01 privacy findings therefore remain unresolved
 until the producer/verifier and downstream storage/push contracts exist and receive external
 cryptographic review.
+
+## P03B mailbox contract gaps
+
+P03B defines canonical capability and receipt bytes plus strict client-side verification behavior.
+It deliberately does not implement:
+
+- deposit/retrieve/placement value generation, derivation, rotation or recovery;
+- secrecy, unlinkability, entropy or unforgeability of caller-provided opaque bytes;
+- durable replay/idempotency/lifecycle state;
+- replica/coordinator key distribution, signature or digest primitives;
+- replica write/storage execution, cursor allocation, tombstone persistence or repair;
+- free-admission issuance/accounting or any paid quota, wallet, payer or subscription identity;
+- legacy migration execution, production registration, service defaults or deployment.
+
+`IMailboxReceiptCrypto` and `IMailboxCapabilityReplayGuard` are trust boundaries. Test fixtures use
+deterministic SHA-256-based signatures only to make codec and verifier vectors reproducible; they
+are not production cryptography. Production activation remains blocked until later producer,
+storage, client integration and external security work supplies and verifies those dependencies.
