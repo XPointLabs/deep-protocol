@@ -1,9 +1,9 @@
 # P03 handoff to P11
 
-Use local package `Deep.Protocol` version `0.3.0-p03.372c5f1` with the matching
+Use local package `Deep.Protocol` version `0.3.0-p03.814f15d` with the matching
 `Deep.Protocol.Abstractions` and `Deep.Protocol.Protobuf` packages from `packages/`. Verify hashes
-against `package-manifest.json`. The older `0.3.0-p03.c854dbe` package files are superseded and
-must not be selected. No package was published.
+against `package-manifest.json`. The older `0.3.0-p03.c854dbe` and `0.3.0-p03.372c5f1` package
+files are superseded and must not be selected. No package was published.
 
 Namespace: `Deep.Protocol.DeepExtension.OpaqueBundles`.
 
