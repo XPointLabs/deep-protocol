@@ -160,3 +160,22 @@ The existing Session sealed-box and onion-request adapters do not satisfy the co
 transcript-bound mutually authenticated AKE contract and are not registered for P03C. The
 deterministic adapter exists only in tests. Production activation requires selection and external
 review of an established AKE, cross-language vectors, durable state and mobile/Windows E2E.
+
+## P04 membership and bridge contract gaps
+
+P04 defines canonical trust documents and fail-closed verifier decisions. It deliberately does not
+implement:
+
+- live offline-root or online-signer generation, custody, ceremony, rotation or recovery;
+- a production signature implementation, key resolver or dependency-injection registration;
+- durable atomic last-known-good, delegation-revocation or equivocation state;
+- registry persistence, bridge publication, endpoint crawling resistance or client bootstrap UI;
+- core/storage topology distribution, storage execution, reward, billing or update authorization;
+- production/self-hosted deployment, migration from current bootstrap DTOs or P06/P07 integration;
+- cross-language crypto verification or external cryptographic review.
+
+The deterministic signature verifier and key material exist only in the test assembly. Canonical
+bridge contacts are public discovery data and do not provide anonymity against a network observer.
+Fork witnesses record candidate ancestry but do not select a winning branch. Production activation
+remains blocked until the verifier/key lifecycle and durable state are supplied, independently
+reviewed, and exercised by registry/client E2E work.

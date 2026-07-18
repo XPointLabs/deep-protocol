@@ -107,4 +107,12 @@ resumption counter, bundle version and hop-local attempt ID through
 adapter authentication and replay acceptance. No radio transport, permission, UI, background
 scheduler, production AKE adapter or runtime registration is included.
 
+P04 separates canonical network genesis, offline-root delegation/revocation, public bridge
+discovery, node-only membership commitments and fork witnesses. The approved Beta policy is
+canonical policy data: three of five offline roots authorize a time-bounded three-signer online
+set, and two distinct active online signers authorize bridge or membership statements. Bridge
+snapshots contain public entry contacts, not full core/storage membership. Signature verification,
+durable last-known-good state, registry/client integration and production keys remain outside this
+library.
+
 Tests use an explicit fake adapter only to verify managed state and wire container behavior.
