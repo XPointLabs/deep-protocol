@@ -10,10 +10,14 @@ Branch `survival/w01-p04-membership-contract`.
 - Public docs: `03a46dd`.
 - Corrective red after independent NO-GO: `3edb42b40925b2383051edc008e53417a1aa3824`.
 - Corrective green: `388e482823c8e5d0844c0468ad48d76958d6065e`.
-- Accepted local package: `0.3.0-p04.388e482`.
+- Second corrective red after rereview NO-GO: `1a41a3c709635adc00bac9f823a67650948dd22a`.
+- Second corrective green: `47f2802e3b448fd3afba70d104bf6d2c0419b9f7`.
+- Final verifier-edge red: `5c6a80a`.
+- Accepted source with verifier-edge correction: `b887fa088f486390be182cac4cbcb59b60ce8931`.
+- Accepted local package: `0.3.0-p04.b887fa0`.
 
-The earlier `0.3.0-p04.ab40f70` build was rejected by independent review and is not an accepted
-consumer artifact. Consumers must verify the three accepted package hashes against
+The earlier `0.3.0-p04.ab40f70` and `0.3.0-p04.388e482` builds were rejected by independent review
+and are not accepted consumer artifacts. Consumers must verify the three accepted package hashes against
 `package-manifest.json` and confirm the embedded repository commit.
 
 P06/P07 receive the canonical codecs, fixed SHA-256/domain framing,

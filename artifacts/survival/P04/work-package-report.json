@@ -2,7 +2,7 @@
   "schema": "deep-survival-work-package-report.v1",
   "workPackage": "P04",
   "title": "Membership, bridge and key-hierarchy contracts",
-  "status": "corrected-runtime-blocked-pending-independent-rereview",
+  "status": "twice-corrected-runtime-blocked-pending-independent-rereview",
   "humanOwner": "Mr. X",
   "repository": "deep-protocol",
   "branch": "survival/w01-p04-membership-contract",
@@ -13,17 +13,22 @@
   "malformedSmokeCommit": "ab40f70621a89ac8dbc2b15428a9ac71530975e9",
   "correctiveRedCommit": "3edb42b40925b2383051edc008e53417a1aa3824",
   "correctiveGreenCommit": "388e482823c8e5d0844c0468ad48d76958d6065e",
-  "packageVersion": "0.3.0-p04.388e482",
+  "secondCorrectiveRedCommit": "1a41a3c709635adc00bac9f823a67650948dd22a",
+  "secondCorrectiveGreenCommit": "47f2802e3b448fd3afba70d104bf6d2c0419b9f7",
+  "finalVerifierEdgeRedCommit": "5c6a80a",
+  "finalSourceCommit": "b887fa088f486390be182cac4cbcb59b60ce8931",
+  "packageVersion": "0.3.0-p04.b887fa0",
   "pins": {
     "promptSha256": "bca6ce21e2caa3d16bab0756505c3ad0e6896db4e0c29f0c50433cf91b5fb5e7",
     "p03cPackageManifestGitBlobSha256": "e59202f21028545c40cf0933688dbf7e43e1b1e4b40eef0436cdf3f7c0280235",
     "p03cWorkPackageReportGitBlobSha256": "43e064e828585fd1172996eb54130c2be522f7cf315171e40e38049138acf056",
     "canonicalHash": "SHA-256",
-    "signatureDomainTagBytes": 16
+    "signatureDomainTagBytes": 16,
+    "contractVersionOrSha": "Deep.Protocol/P04-canonical-v1"
   },
   "tests": {
-    "fullRelease": { "passed": 166, "failed": 0, "skipped": 0 },
-    "focusedP04": { "passed": 19, "failed": 0, "skipped": 0 },
+    "fullRelease": { "passed": 173, "failed": 0, "skipped": 0 },
+    "focusedP04": { "passed": 26, "failed": 0, "skipped": 0 },
     "legacyFixedSeedMalformedSmoke": 2000,
     "structuredMalformedSmoke": { "decoders": 9, "inputsPerDecoder": 300 },
     "coverageGuidedFuzzing": "not-run-not-claimed"
@@ -32,13 +37,15 @@
     "offlineRootDelegation3Of5": "pass",
     "onlineAuthorization2Of3": "pass",
     "oneSignerRejected": "pass",
-    "publicKeyProvenanceAndRotation": "pass-contract",
+    "publicKeyProvenanceAndIdKeyRotation": "pass-contract",
     "authorityAndContentLkg": "pass",
     "revocationAndExpiry": "pass",
     "domainSeparation": "pass",
     "bridgeTopologyMinimization": "pass",
     "forkEvidence": "pass",
     "selfHostedGenesis": "pass-contract",
+    "signedAuthorityWireEnvelopes": "pass",
+    "directModelTrustBoundary": "pass",
     "productionRuntime": "blocked-not-implemented-not-registered"
   },
   "blockers": [
