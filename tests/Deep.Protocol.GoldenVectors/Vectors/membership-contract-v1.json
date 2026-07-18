@@ -12,6 +12,31 @@
       "id": "deep-extension/membership/v1/bridge-snapshot",
       "kind": "bridge-snapshot-v1",
       "hex": "4d42533101000000707172737475767778797a7b7c7d7e7f0000000000000007a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf00000000000003e800000000000003e800000000000004b0000100030000000100010102030405060708090a0b0c0d0e0f10002168747470733a2f2f6272696467652e6578616d706c652e696e76616c69642f76314d46573101000000030000000000000000000007a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf40c484c8e603a81ce174c764fc0d20c5eec6ab8de785137e9084d8e1d355309f"
+    },
+    {
+      "id": "deep-extension/membership/v1/signer-delegation",
+      "kind": "signer-delegation-v1",
+      "hex": "00"
+    },
+    {
+      "id": "deep-extension/membership/v1/signer-revocation",
+      "kind": "signer-revocation-v1",
+      "hex": "00"
+    },
+    {
+      "id": "deep-extension/membership/v1/node-membership",
+      "kind": "node-membership-v1",
+      "hex": "00"
+    },
+    {
+      "id": "deep-extension/membership/v1/fork-witness",
+      "kind": "fork-witness-v1",
+      "hex": "00"
+    },
+    {
+      "id": "deep-extension/membership/v1/inclusion-proof",
+      "kind": "membership-inclusion-proof-v1",
+      "hex": "00"
     }
   ]
 }
