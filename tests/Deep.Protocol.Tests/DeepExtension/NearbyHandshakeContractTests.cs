@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Deep.Protocol.DeepExtension.NearbyHandshakes;
+using Deep.Protocol.DeepExtension.OpaqueBundles;
 using Deep.Protocol.GoldenVectors;
 
 namespace Deep.Protocol.Tests.DeepExtension;
@@ -18,9 +19,9 @@ public sealed class NearbyHandshakeContractTests
     {
         var crypto = new TestAdapter(Alice, ContactSecret);
         var advertisement = NearbyHandshakeProtocol.CreateAdvertisement(
-            ContactSecret, 100, 1, crypto);
+            Secret(), 100, 1, crypto);
         var binding = Binding();
-        var initiator = NearbyHandshakeProtocol.CreateInitiator(binding, Bob, crypto);
+        var initiator = NearbyHandshakeProtocol.CreateInitiator(binding, PeriodPolicy(), Bob, crypto);
         var vectors = GoldenVectorLoader.Load("nearby-handshake-v1.json");
 
         Assert.Equal(vectors.GetRequired("deep-extension/nearby/v1/advertisement").Hex,
@@ -36,20 +37,20 @@ public sealed class NearbyHandshakeContractTests
     {
         var crypto = new TestAdapter(Alice, ContactSecret);
         var previous = NearbyHandshakeProtocol.CreateAdvertisement(
-            ContactSecret, 99, 1, crypto);
+            Secret(), 99, 1, crypto);
         var match = NearbyHandshakeProtocol.MatchAdvertisement(
-            previous, ContactSecret, 100,
+            previous, Secret(), 100,
             new NearbyRendezvousPolicy { PreviousPeriods = 1, FuturePeriods = 1 }, crypto);
         Assert.Equal(99UL, match.Period);
 
         Assert.Throws<NearbyHandshakeException>(() =>
             NearbyHandshakeProtocol.MatchAdvertisement(
-                previous, Range(0x80, 32), 100,
+                previous, ContactDiscoverySecret.FromReviewedProducer(Range(0x80, 32)), 100,
                 new NearbyRendezvousPolicy { PreviousPeriods = 1, FuturePeriods = 1 }, crypto));
         Assert.Throws<NearbyHandshakeException>(() =>
             NearbyHandshakeProtocol.MatchAdvertisement(
-                NearbyHandshakeProtocol.CreateAdvertisement(ContactSecret, 98, 1, crypto),
-                ContactSecret, 100,
+                NearbyHandshakeProtocol.CreateAdvertisement(Secret(), 98, 1, crypto),
+                Secret(), 100,
                 new NearbyRendezvousPolicy { PreviousPeriods = 1, FuturePeriods = 1 }, crypto));
     }
 
@@ -59,10 +60,11 @@ public sealed class NearbyHandshakeContractTests
         var alice = new TestAdapter(Alice, ContactSecret);
         var bob = new TestAdapter(Bob, ContactSecret);
         var replay = new AcceptOnceReplayGuard();
-        var initiator = NearbyHandshakeProtocol.CreateInitiator(Binding(), Bob, alice);
-        var response = NearbyHandshakeProtocol.Respond(initiator, Alice, bob, replay);
+        var initiator = NearbyHandshakeProtocol.CreateInitiator(Binding(), PeriodPolicy(), Bob, alice);
+        var response = NearbyHandshakeProtocol.Respond(
+            initiator, PeriodPolicy(), Alice, bob, replay);
         var established = NearbyHandshakeProtocol.CompleteInitiator(
-            initiator, response.Frame, Bob, alice, replay);
+            initiator, response.Frame, PeriodPolicy(), Bob, alice, replay);
 
         Assert.Equal(Bob, established.PeerIdentity.ToArray());
         Assert.Equal(32, established.SessionKey.Length);
@@ -71,13 +73,41 @@ public sealed class NearbyHandshakeContractTests
         tampered[^1] ^= 1;
         Assert.Throws<NearbyHandshakeException>(() =>
             NearbyHandshakeProtocol.CompleteInitiator(
-                initiator, tampered, Bob, alice, new AcceptOnceReplayGuard()));
+                initiator, tampered, PeriodPolicy(), Bob, alice, new AcceptOnceReplayGuard()));
         Assert.Throws<NearbyHandshakeException>(() =>
             NearbyHandshakeProtocol.CompleteInitiator(
-                initiator, response.Frame, Alice, alice, new AcceptOnceReplayGuard()));
+                initiator, response.Frame, PeriodPolicy(), Alice, alice, new AcceptOnceReplayGuard()));
         Assert.Throws<NearbyHandshakeException>(() =>
             NearbyHandshakeProtocol.CompleteInitiator(
-                initiator, response.Frame, Bob, alice, replay));
+                initiator, response.Frame, PeriodPolicy(), Bob, alice, replay));
+        Assert.Contains(replay.Scopes, scope =>
+            scope.CanonicalTranscript.Length == initiator.Length + response.Frame.Length);
+    }
+
+    [Fact]
+    public void StalePeriodAndNonAdvancingResumption_FailBeforeAdapter()
+    {
+        var alice = new TestAdapter(Alice, ContactSecret);
+        var staleBinding = Binding() with { Period = 97 };
+        Assert.Throws<NearbyHandshakeException>(() =>
+            NearbyHandshakeProtocol.CreateInitiator(
+                staleBinding, PeriodPolicy(), Bob, alice));
+        Assert.Equal(0, alice.InitiatorCalls);
+
+        var binding = Binding() with
+        {
+            Mode = NearbyHandshakeMode.Resumption,
+            ResumeCounter = 5
+        };
+        var initiator = NearbyHandshakeProtocol.CreateInitiator(
+            binding, PeriodPolicy(), Bob, alice);
+        var bob = new TestAdapter(Bob, ContactSecret);
+        var guard = new MonotonicResumptionGuard();
+        _ = NearbyHandshakeProtocol.Respond(
+            initiator, PeriodPolicy(), Alice, bob, guard);
+        Assert.Throws<NearbyHandshakeException>(() =>
+            NearbyHandshakeProtocol.Respond(
+                initiator, PeriodPolicy(), Alice, bob, guard));
     }
 
     [Fact]
@@ -112,11 +142,17 @@ public sealed class NearbyHandshakeContractTests
         {
             BundleVersion = 1,
             Period = 100,
-            TransportAttemptId = Attempt,
+            TransportAttemptId = new TransportAttemptId(Attempt),
             SimultaneousOpenToken = Token,
             Mode = NearbyHandshakeMode.Fresh,
             ResumeCounter = 0
         };
+
+    private static ContactDiscoverySecret Secret() =>
+        ContactDiscoverySecret.FromReviewedProducer(ContactSecret);
+
+    private static NearbyHandshakePeriodPolicy PeriodPolicy() =>
+        new() { CurrentPeriod = 100, PreviousPeriods = 1, FuturePeriods = 1 };
 
     private static byte[] Range(int start, int length) =>
         Enumerable.Range(start, length).Select(static value => (byte)value).ToArray();
@@ -124,20 +160,43 @@ public sealed class NearbyHandshakeContractTests
     private sealed class AcceptOnceReplayGuard : INearbyHandshakeReplayGuard
     {
         private readonly HashSet<string> _seen = [];
+        public List<NearbyHandshakeReplayScope> Scopes { get; } = [];
 
-        public bool TryAccept(NearbyHandshakeReplayScope scope) =>
-            _seen.Add(Convert.ToHexString(SHA256.HashData(scope.CanonicalTranscript.Span)));
+        public NearbyHandshakeReplayDecision Evaluate(NearbyHandshakeReplayScope scope)
+        {
+            Scopes.Add(scope);
+            return _seen.Add(Convert.ToHexString(SHA256.HashData(scope.CanonicalTranscript.Span)))
+                ? scope.Mode == NearbyHandshakeMode.Fresh
+                    ? NearbyHandshakeReplayDecision.AcceptedFresh
+                    : NearbyHandshakeReplayDecision.AcceptedResumption
+                : NearbyHandshakeReplayDecision.Rejected;
+        }
+    }
+
+    private sealed class MonotonicResumptionGuard : INearbyHandshakeReplayGuard
+    {
+        private ulong _last;
+        public NearbyHandshakeReplayDecision Evaluate(NearbyHandshakeReplayScope scope)
+        {
+            if (scope.Mode != NearbyHandshakeMode.Resumption ||
+                scope.ResumeCounter <= _last)
+                return NearbyHandshakeReplayDecision.Rejected;
+            _last = scope.ResumeCounter;
+            return NearbyHandshakeReplayDecision.AcceptedResumption;
+        }
     }
 
     private sealed class TestAdapter(byte[] localIdentity, byte[] sharedSecret)
         : INearbyAuthenticatedKeyExchange
     {
         public byte[] DeriveRendezvousHint(
+            ReadOnlySpan<byte> domain,
             ReadOnlySpan<byte> contactSecret,
             ulong period,
             byte bundleVersion)
         {
-            var material = contactSecret.ToArray()
+            Assert.Equal(NearbyHandshakeDomains.RendezvousHint.ToArray(), domain.ToArray());
+            var material = domain.ToArray().Concat(contactSecret.ToArray())
                 .Concat(BitConverter.GetBytes(period).Reverse())
                 .Append(bundleVersion)
                 .ToArray();
@@ -145,33 +204,48 @@ public sealed class NearbyHandshakeContractTests
         }
 
         public byte[] CreateInitiatorPayload(
+            ReadOnlySpan<byte> domain,
             NearbyHandshakeBinding binding,
             ReadOnlySpan<byte> expectedPeerIdentity) =>
-            Mac("I", NearbyHandshakeCodec.GetBindingBytes(binding), localIdentity,
-                expectedPeerIdentity.ToArray());
+            CreateInitiator(domain, binding, expectedPeerIdentity);
+
+        public int InitiatorCalls { get; private set; }
+
+        private byte[] CreateInitiator(
+            ReadOnlySpan<byte> domain,
+            NearbyHandshakeBinding binding,
+            ReadOnlySpan<byte> expectedPeerIdentity)
+        {
+            Assert.Equal(NearbyHandshakeDomains.AuthenticatedKeyExchange.ToArray(), domain.ToArray());
+            InitiatorCalls++;
+            return Mac("I", domain.ToArray(), NearbyHandshakeCodec.GetBindingBytes(binding),
+                localIdentity, expectedPeerIdentity.ToArray());
+        }
 
         public byte[] CreateResponderPayload(
+            ReadOnlySpan<byte> domain,
             NearbyHandshakeBinding binding,
             ReadOnlySpan<byte> canonicalInitiatorFrame,
             ReadOnlySpan<byte> expectedPeerIdentity)
         {
-            var expected = Mac("I", NearbyHandshakeCodec.GetBindingBytes(binding),
+            var expected = Mac("I", domain.ToArray(), NearbyHandshakeCodec.GetBindingBytes(binding),
                 expectedPeerIdentity.ToArray(), localIdentity);
             var decoded = NearbyHandshakeCodec.DecodeFrame(canonicalInitiatorFrame);
             if (!CryptographicOperations.FixedTimeEquals(expected, decoded.AdapterPayload.Span))
                 throw new NearbyHandshakeException(NearbyHandshakeError.AuthenticationFailed, "wrong contact");
-            return Mac("R", canonicalInitiatorFrame.ToArray(), localIdentity,
+            return Mac("R", domain.ToArray(), canonicalInitiatorFrame.ToArray(), localIdentity,
                 expectedPeerIdentity.ToArray());
         }
 
         public NearbyEstablishedSession CompleteResponder(
+            ReadOnlySpan<byte> domain,
             NearbyHandshakeBinding binding,
             ReadOnlySpan<byte> canonicalInitiatorFrame,
             ReadOnlySpan<byte> canonicalResponderFrame,
             ReadOnlySpan<byte> expectedPeerIdentity)
         {
             var response = NearbyHandshakeCodec.DecodeFrame(canonicalResponderFrame);
-            var expected = Mac("R", canonicalInitiatorFrame.ToArray(), localIdentity,
+            var expected = Mac("R", domain.ToArray(), canonicalInitiatorFrame.ToArray(), localIdentity,
                 expectedPeerIdentity.ToArray());
             if (!CryptographicOperations.FixedTimeEquals(expected, response.AdapterPayload.Span))
                 throw new NearbyHandshakeException(NearbyHandshakeError.AuthenticationFailed, "tamper");
@@ -181,13 +255,14 @@ public sealed class NearbyHandshakeContractTests
         }
 
         public NearbyEstablishedSession CompleteInitiator(
+            ReadOnlySpan<byte> domain,
             NearbyHandshakeBinding binding,
             ReadOnlySpan<byte> canonicalInitiatorFrame,
             ReadOnlySpan<byte> canonicalResponderFrame,
             ReadOnlySpan<byte> expectedPeerIdentity)
         {
             var response = NearbyHandshakeCodec.DecodeFrame(canonicalResponderFrame);
-            var expected = Mac("R", canonicalInitiatorFrame.ToArray(),
+            var expected = Mac("R", domain.ToArray(), canonicalInitiatorFrame.ToArray(),
                 expectedPeerIdentity.ToArray(), localIdentity);
             if (!CryptographicOperations.FixedTimeEquals(expected, response.AdapterPayload.Span))
                 throw new NearbyHandshakeException(NearbyHandshakeError.AuthenticationFailed, "tamper");

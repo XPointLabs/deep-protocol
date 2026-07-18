@@ -1,4 +1,5 @@
 using Deep.Protocol.DeepExtension.NearbyHandshakes;
+using Deep.Protocol.DeepExtension.OpaqueBundles;
 
 namespace Deep.Protocol.Tests.DeepExtension;
 
@@ -76,7 +77,7 @@ public sealed class NearbyHandshakeMalformedAndFuzzTests
             {
                 BundleVersion = 1,
                 Period = 100,
-                TransportAttemptId = Range(0x40, 16),
+                TransportAttemptId = new TransportAttemptId(Range(0x40, 16)),
                 SimultaneousOpenToken = Range(0x50, 16),
                 Mode = NearbyHandshakeMode.Fresh,
                 ResumeCounter = 0
