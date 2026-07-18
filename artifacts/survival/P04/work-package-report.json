@@ -2,7 +2,7 @@
   "schema": "deep-survival-work-package-report.v1",
   "workPackage": "P04",
   "title": "Membership, bridge and key-hierarchy contracts",
-  "status": "twice-corrected-runtime-blocked-pending-independent-rereview",
+  "status": "contract-go-runtime-blocked",
   "humanOwner": "Mr. X",
   "repository": "deep-protocol",
   "branch": "survival/w01-p04-membership-contract",
@@ -47,6 +47,16 @@
     "signedAuthorityWireEnvelopes": "pass",
     "directModelTrustBoundary": "pass",
     "productionRuntime": "blocked-not-implemented-not-registered"
+  },
+  "independentReview": {
+    "verdict": "GO",
+    "reviewedSourceCommit": "b887fa088f486390be182cac4cbcb59b60ce8931",
+    "reviewedEvidenceCommit": "68da52aaf6768ee2cb41f88ae42db102eeaf1ad6",
+    "p0": 0,
+    "p1": 0,
+    "p2": 0,
+    "p3": 1,
+    "p3Disposition": "closed-local-obsolete-ignored-packages-removed"
   },
   "blockers": [
     "No approved production signature adapter, algorithm profile or external cryptographic review.",
