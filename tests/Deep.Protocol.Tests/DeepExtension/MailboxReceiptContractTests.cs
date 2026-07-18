@@ -30,7 +30,8 @@ public sealed class MailboxReceiptContractTests
 
         var verified = MailboxReceiptVerifier.VerifyDurableQuorum(
             MailboxReceiptCodec.EncodeDurableQuorum(quorum),
-            crypto);
+            crypto,
+            Expectation());
 
         Assert.Equal(2, verified.ReplicaReceipts.Count);
         Assert.Equal(42UL, verified.Cursor);
@@ -48,7 +49,8 @@ public sealed class MailboxReceiptContractTests
         var exception = Assert.Throws<MailboxReceiptException>(() =>
             MailboxReceiptVerifier.VerifyDurableQuorum(
                 MailboxReceiptCodec.EncodeDurableQuorum(duplicateQuorum),
-                crypto));
+                crypto,
+                Expectation()));
         Assert.Equal(MailboxReceiptError.DuplicateReplica, exception.Error);
 
         var second = SignReplica(CreateReplica(ReplicaB), crypto);
@@ -56,7 +58,7 @@ public sealed class MailboxReceiptContractTests
         var encoded = MailboxReceiptCodec.EncodeDurableQuorum(quorum);
         encoded[^1] ^= 1;
         var invalid = Assert.Throws<MailboxReceiptException>(() =>
-            MailboxReceiptVerifier.VerifyDurableQuorum(encoded, crypto));
+            MailboxReceiptVerifier.VerifyDurableQuorum(encoded, crypto, Expectation()));
         Assert.Equal(MailboxReceiptError.InvalidCoordinatorSignature, invalid.Error);
     }
 
@@ -75,7 +77,8 @@ public sealed class MailboxReceiptContractTests
         var exception = Assert.Throws<MailboxReceiptException>(() =>
             MailboxReceiptVerifier.VerifyDurableQuorum(
                 MailboxReceiptCodec.EncodeDurableQuorum(quorum),
-                crypto));
+                crypto,
+                Expectation()));
 
         Assert.Equal(MailboxReceiptError.NotDurable, exception.Error);
     }
@@ -91,9 +94,52 @@ public sealed class MailboxReceiptContractTests
         var exception = Assert.Throws<MailboxReceiptException>(() =>
             MailboxReceiptVerifier.VerifyDurableQuorum(
                 MailboxReceiptCodec.EncodeDurableQuorum(quorum),
-                crypto));
+                crypto,
+                Expectation()));
 
         Assert.Equal(MailboxReceiptError.ReplicaDisagreement, exception.Error);
+    }
+
+    [Fact]
+    public void VerificationRequiresExpectedOperationGenerationPayloadAndTombstone()
+    {
+        var crypto = new DeterministicTestReceiptCrypto();
+        var quorum = CreateVerifiedQuorum(42, crypto);
+        var encoded = MailboxReceiptCodec.EncodeDurableQuorum(quorum);
+
+        foreach (var expectation in new[]
+        {
+            Expectation() with { OperationId = Range(0x20, 16) },
+            Expectation() with { Generation = 8 },
+            Expectation() with { PayloadDigest = Range(0x50, 32) },
+            Expectation() with { IsTombstone = true }
+        })
+        {
+            var exception = Assert.Throws<MailboxReceiptException>(() =>
+                MailboxReceiptVerifier.VerifyDurableQuorum(encoded, crypto, expectation));
+            Assert.Equal(MailboxReceiptError.UnexpectedStatement, exception.Error);
+        }
+    }
+
+    [Fact]
+    public void AlternateValidSignatureOfSameStatement_IsNotEquivocation()
+    {
+        var crypto = new AlternateCoordinatorSignatureCrypto();
+        var first = SignReplica(CreateReplica(ReplicaA), crypto.Inner);
+        var second = SignReplica(CreateReplica(ReplicaB), crypto.Inner);
+        var quorum = SignQuorum(CreateQuorum(first, second), crypto.Inner);
+        var alternativeSignature = quorum.Signature.ToArray();
+        alternativeSignature[^1] ^= 1;
+        var firstBytes = MailboxReceiptCodec.EncodeDurableQuorum(quorum);
+        var secondBytes = MailboxReceiptCodec.EncodeDurableQuorum(
+            quorum with { Signature = alternativeSignature });
+
+        var exception = Assert.Throws<MailboxReceiptException>(() =>
+            MailboxReceiptVerifier.CreateCoordinatorEquivocationEvidence(
+                firstBytes,
+                secondBytes,
+                crypto));
+        Assert.Equal(MailboxReceiptError.NotEquivocation, exception.Error);
     }
 
     [Fact]
@@ -205,6 +251,15 @@ public sealed class MailboxReceiptContractTests
         return SignQuorum(CreateQuorum(first, second), crypto);
     }
 
+    private static MailboxDurableQuorumExpectation Expectation() =>
+        new()
+        {
+            OperationId = OperationId,
+            Generation = 7,
+            PayloadDigest = PayloadDigest,
+            IsTombstone = false
+        };
+
     private static byte[] Range(int start, int length) =>
         Enumerable.Range(start, length).Select(static value => (byte)value).ToArray();
 
@@ -234,6 +289,34 @@ public sealed class MailboxReceiptContractTests
             signerId.CopyTo(input);
             statement.CopyTo(input.AsSpan(signerId.Length));
             return SHA256.HashData(input);
+        }
+    }
+
+    private sealed class AlternateCoordinatorSignatureCrypto : IMailboxReceiptCrypto
+    {
+        public DeterministicTestReceiptCrypto Inner { get; } = new();
+
+        public byte[] Digest(ReadOnlySpan<byte> statement) => Inner.Digest(statement);
+
+        public bool VerifyReplica(
+            ReadOnlySpan<byte> replicaId,
+            ReadOnlySpan<byte> signingBytes,
+            ReadOnlySpan<byte> signature) =>
+            Inner.VerifyReplica(replicaId, signingBytes, signature);
+
+        public bool VerifyCoordinator(
+            ReadOnlySpan<byte> coordinatorId,
+            ReadOnlySpan<byte> signingBytes,
+            ReadOnlySpan<byte> signature)
+        {
+            var expected = Inner.Sign(coordinatorId, signingBytes);
+            if (CryptographicOperations.FixedTimeEquals(expected, signature))
+            {
+                return true;
+            }
+
+            expected[^1] ^= 1;
+            return CryptographicOperations.FixedTimeEquals(expected, signature);
         }
     }
 }

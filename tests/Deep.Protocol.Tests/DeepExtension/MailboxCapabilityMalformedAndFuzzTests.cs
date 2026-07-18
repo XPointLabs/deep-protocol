@@ -110,6 +110,11 @@ public sealed class MailboxCapabilityMalformedAndFuzzTests
 
     private sealed class AcceptAllReplayGuard : IMailboxCapabilityReplayGuard
     {
-        public bool TryAccept(MailboxCapabilityReplayScope scope) => true;
+        public MailboxCapabilityReplayEvaluation Evaluate(MailboxCapabilityReplayScope scope) =>
+            new()
+            {
+                Decision = MailboxCapabilityReplayDecision.AcceptedNew,
+                CachedOutcome = ReadOnlyMemory<byte>.Empty
+            };
     }
 }

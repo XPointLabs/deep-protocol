@@ -24,9 +24,11 @@ public sealed class MailboxCapabilityContractTests
             StrictPolicy(),
             new AcceptOnceCapabilityReplayGuard());
 
-        Assert.IsType<RotatingDepositCapability>(decoded.DomainValue);
-        Assert.Equal(7UL, decoded.Generation);
-        Assert.Equal(DomainValue, decoded.DomainValue.Bytes.ToArray());
+        Assert.Equal(MailboxCapabilityReplayDisposition.New, decoded.ReplayDisposition);
+        Assert.Empty(decoded.CachedOutcome.ToArray());
+        Assert.IsType<RotatingDepositCapability>(decoded.Presentation.DomainValue);
+        Assert.Equal(7UL, decoded.Presentation.Generation);
+        Assert.Equal(DomainValue, decoded.Presentation.DomainValue.Bytes.ToArray());
     }
 
     [Fact]
@@ -133,30 +135,64 @@ public sealed class MailboxCapabilityContractTests
             MailboxCapabilityDomain.Deposit,
             StrictPolicy() with { AllowLegacyMirrorOverlap = true },
             new AcceptOnceCapabilityReplayGuard());
-        Assert.Equal(MailboxMixedVersionMarker.LegacyMirrorOverlap, accepted.MixedVersion);
+        Assert.Equal(
+            MailboxMixedVersionMarker.LegacyMirrorOverlap,
+            accepted.Presentation.MixedVersion);
     }
 
     [Fact]
-    public void ReplayAndIdempotency_AreScopedAndFailClosed()
+    public void ReplayAndIdempotency_DistinguishNewRetryConflictAndReplay()
     {
         var encoded = MailboxCapabilityCodec.Encode(CreatePresentation(
             new RotatingDepositCapability(DomainValue)));
-        var replay = new AcceptOnceCapabilityReplayGuard();
+        var replay = new StatefulCapabilityReplayGuard();
 
-        _ = MailboxCapabilityCodec.Decode(
+        var first = MailboxCapabilityCodec.Decode(
             encoded,
             MailboxCapabilityDomain.Deposit,
             StrictPolicy(),
             replay);
-        var repeated = Assert.Throws<MailboxCapabilityException>(() =>
+        Assert.Equal(MailboxCapabilityReplayDisposition.New, first.ReplayDisposition);
+
+        replay.Next = new MailboxCapabilityReplayEvaluation
+        {
+            Decision = MailboxCapabilityReplayDecision.IdempotentReplay,
+            CachedOutcome = Range(0xc0, 32)
+        };
+        var retry = MailboxCapabilityCodec.Decode(
+            encoded,
+            MailboxCapabilityDomain.Deposit,
+            StrictPolicy(),
+            replay);
+        Assert.Equal(MailboxCapabilityReplayDisposition.IdempotentReplay, retry.ReplayDisposition);
+        Assert.Equal(Range(0xc0, 32), retry.CachedOutcome.ToArray());
+
+        replay.Next = new MailboxCapabilityReplayEvaluation
+        {
+            Decision = MailboxCapabilityReplayDecision.IdempotencyConflict,
+            CachedOutcome = ReadOnlyMemory<byte>.Empty
+        };
+        var conflict = Assert.Throws<MailboxCapabilityException>(() =>
             MailboxCapabilityCodec.Decode(
                 encoded,
                 MailboxCapabilityDomain.Deposit,
                 StrictPolicy(),
                 replay));
+        Assert.Equal(MailboxCapabilityError.IdempotencyConflict, conflict.Error);
 
-        Assert.Equal(MailboxCapabilityError.ReplayRejected, repeated.Error);
-        Assert.Equal(2, replay.Calls);
+        replay.Next = new MailboxCapabilityReplayEvaluation
+        {
+            Decision = MailboxCapabilityReplayDecision.ReplayRejected,
+            CachedOutcome = ReadOnlyMemory<byte>.Empty
+        };
+        var stale = Assert.Throws<MailboxCapabilityException>(() =>
+            MailboxCapabilityCodec.Decode(
+                encoded,
+                MailboxCapabilityDomain.Deposit,
+                StrictPolicy(),
+                replay));
+        Assert.Equal(MailboxCapabilityError.ReplayRejected, stale.Error);
+        Assert.All(replay.Scopes, scope => Assert.Equal(encoded, scope.CanonicalPresentation));
     }
 
     [Fact]
@@ -181,7 +217,7 @@ public sealed class MailboxCapabilityContractTests
             StrictPolicy(),
             new AcceptOnceCapabilityReplayGuard());
 
-        Assert.Equal((ushort)4, decoded.FreeAdmission?.UseLimit);
+        Assert.Equal((ushort)4, decoded.Presentation.FreeAdmission?.UseLimit);
         var propertyNames = typeof(MailboxFreeAdmissionSlot)
             .GetProperties()
             .Select(static property => property.Name)
@@ -194,6 +230,39 @@ public sealed class MailboxCapabilityContractTests
         var ascii = Encoding.ASCII.GetString(encoded);
         Assert.DoesNotContain("payer", ascii, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("wallet", ascii, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void FreeAdmission_MustBeCurrentAndNestedInsideCapabilityWindow()
+    {
+        var outside = CreatePresentation(new RotatingDepositCapability(DomainValue)) with
+        {
+            FreeAdmission = new MailboxFreeAdmissionSlot
+            {
+                SlotId = Range(0x90, 16),
+                ValidFromBucket = 999,
+                ValidUntilBucket = 1020,
+                UseLimit = 1,
+                Authorization = Range(0xa0, 32)
+            }
+        };
+        Assert.Throws<MailboxCapabilityException>(() => MailboxCapabilityCodec.Encode(outside));
+
+        var encoded = MailboxCapabilityCodec.Encode(outside with
+        {
+            FreeAdmission = outside.FreeAdmission! with
+            {
+                ValidFromBucket = 1000,
+                ValidUntilBucket = 1020
+            }
+        });
+        var expired = Assert.Throws<MailboxCapabilityException>(() =>
+            MailboxCapabilityCodec.Decode(
+                encoded,
+                MailboxCapabilityDomain.Deposit,
+                StrictPolicy() with { CurrentBucket = 1021 },
+                new AcceptOnceCapabilityReplayGuard()));
+        Assert.Equal(MailboxCapabilityError.InvalidAdmission, expired.Error);
     }
 
     [Fact]
@@ -252,12 +321,37 @@ public sealed class MailboxCapabilityContractTests
 
         public int Calls { get; private set; }
 
-        public bool TryAccept(MailboxCapabilityReplayScope scope)
+        public MailboxCapabilityReplayEvaluation Evaluate(MailboxCapabilityReplayScope scope)
         {
             Calls++;
-            return _seen.Add(
+            var accepted = _seen.Add(
                 $"{scope.Domain}:{scope.Generation}:{scope.ReplayCounter}:" +
                 Convert.ToHexString(scope.IdempotencyKey.Span));
+            return new MailboxCapabilityReplayEvaluation
+            {
+                Decision = accepted
+                    ? MailboxCapabilityReplayDecision.AcceptedNew
+                    : MailboxCapabilityReplayDecision.ReplayRejected,
+                CachedOutcome = ReadOnlyMemory<byte>.Empty
+            };
+        }
+    }
+
+    private sealed class StatefulCapabilityReplayGuard : IMailboxCapabilityReplayGuard
+    {
+        public MailboxCapabilityReplayEvaluation Next { get; set; } =
+            new()
+            {
+                Decision = MailboxCapabilityReplayDecision.AcceptedNew,
+                CachedOutcome = ReadOnlyMemory<byte>.Empty
+            };
+
+        public List<MailboxCapabilityReplayScope> Scopes { get; } = [];
+
+        public MailboxCapabilityReplayEvaluation Evaluate(MailboxCapabilityReplayScope scope)
+        {
+            Scopes.Add(scope);
+            return Next;
         }
     }
 }

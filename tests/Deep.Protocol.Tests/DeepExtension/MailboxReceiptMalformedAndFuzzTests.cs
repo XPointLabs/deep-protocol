@@ -73,7 +73,10 @@ public sealed class MailboxReceiptMalformedAndFuzzTests
         badReplicaSignature[MailboxReceiptLimits.QuorumFixedHeaderLength +
                             MailboxReceiptLimits.ReplicaFixedHeaderLength] ^= 1;
         var exception = Assert.Throws<MailboxReceiptException>(() =>
-            MailboxReceiptVerifier.VerifyDurableQuorum(badReplicaSignature, Crypto));
+            MailboxReceiptVerifier.VerifyDurableQuorum(
+                badReplicaSignature,
+                Crypto,
+                Expectation()));
         Assert.Equal(MailboxReceiptError.InvalidReplicaSignature, exception.Error);
     }
 
@@ -154,6 +157,15 @@ public sealed class MailboxReceiptMalformedAndFuzzTests
 
     private static byte[] Range(int start, int length) =>
         Enumerable.Range(start, length).Select(static value => (byte)value).ToArray();
+
+    private static MailboxDurableQuorumExpectation Expectation() =>
+        new()
+        {
+            OperationId = Range(0x10, 16),
+            Generation = 7,
+            PayloadDigest = Range(0x40, 32),
+            IsTombstone = false
+        };
 
     private sealed class TestCrypto : IMailboxReceiptCrypto
     {
