@@ -1,0 +1,66 @@
+{
+  "schema": "deep-survival-work-package-report.v1",
+  "workPackage": "P03A",
+  "title": "Compatibility metadata envelope",
+  "status": "contract-implemented-runtime-blocked-pending-independent-review",
+  "humanOwner": "Mr. X",
+  "repository": "deep-protocol",
+  "branch": "survival/w01-p03a-compat-envelope",
+  "baseEvidenceCommit": "90e306ebf9d4ce722b95f128f5ff4bebcaddcde3",
+  "adrCommit": "0d797edf58f133932cedd6e1f9bde855244bf2e0",
+  "redCommit": "225b0f131d80f851cf76cd2a7d7c9543bbcd7fc3",
+  "implementationCommit": "a3f70363cf8aa2eef4f5a8d80be50bc638911201",
+  "packageVersion": "0.3.0-p03a.a3f7036",
+  "pins": {
+    "promptSha256": "02cec87cb749283bb1ac4e128a8985c497bae23572ed9a43a0f4bdfcfa1cf8fa",
+    "p01ObserverMatrixSha256": "ffcfe4e6df8bbd63b04c1c590e5a47935b8e7504a4c39cf1256b322aeea5a4df",
+    "p01ProducerContractSha256": "ec67df8a697a3527fe1875789e64566d109ab422272946b98af2f8d9d6312063",
+    "p03PackageManifestSha256": "87b6bafd6f3f065a720f078cee3cbad41b76492fa2c2bceb607da1ddb32b7b77",
+    "p03WorkPackageReportSha256": "df5ca700aac035a22857246957c373b61888a92ffd8a0706df16fa530ebea100"
+  },
+  "productionCryptoAdapter": {
+    "implemented": false,
+    "registered": false,
+    "status": "blocked",
+    "reason": "Existing sealed-box adapters do not cryptographically authenticate control of the claimed application sender key."
+  },
+  "tests": {
+    "fullRelease": {
+      "passed": 95,
+      "failed": 0,
+      "skipped": 0
+    },
+    "focusedP03A": {
+      "passed": 16,
+      "failed": 0,
+      "skipped": 0
+    },
+    "singleBitMutationsRejected": 4096,
+    "truncationsRejected": 512,
+    "fixedSeedMalformedSmoke": 2048,
+    "coverageGuidedFuzzing": "not-run-not-claimed"
+  },
+  "acceptance": {
+    "exactLegacyDpe1Recovered": "pass-via-test-adapter-contract-vector",
+    "senderAuthOnlyPostDecrypt": "pass-via-interface-and-test-adapter",
+    "managedOuterIdentityBytesAbsent": "pass-by-vector",
+    "hopLocalAttemptNoE2eDedupSerialized": "pass-by-contract-and-vector",
+    "nonceAndKeyDomainSeparation": "pass-at-interface-contract; production-adapter-proof-blocked",
+    "tamperWrongRecipientReplayDowngrade": "pass-via-test-adapter-contract",
+    "productionRuntime": "blocked-not-registered",
+    "externalCryptoReview": "blocked-not-run"
+  },
+  "blockers": [
+    "No approved production sender-authenticated recipient-encryption adapter.",
+    "No upstream differential crypto vectors or external cryptographic review.",
+    "No durable atomic replay implementation.",
+    "Capability lifecycle, revocation, epoch and recovery remain future work.",
+    "Storage/client production E2E has not run."
+  ],
+  "publication": {
+    "gitPush": false,
+    "packagePublished": false,
+    "localPackagesOnly": true,
+    "networkUsed": false
+  }
+}
