@@ -871,6 +871,63 @@ public sealed class LoRaFragmentReassemblerTests
                 retentionExpiryBucket: 99));
     }
 
+    [Fact]
+    public void SnapshotRejectsOverlongShardEnumerableAtAuthenticatedBound()
+    {
+        var fixture = new Fixture(LoRaFragmentFecMode.None);
+        var header = LoRaFragmentCodec.Decode(
+            fixture.Plan.Frames[0].Span,
+            fixture.FragmentPolicy,
+            fixture.AuthenticationHandle,
+            LoRaFragmentDirection.Forward,
+            fixture.Authenticator).Header;
+        var key = new LoRaFragmentReplayKey(
+            fixture.ReplayScope,
+            LoRaFragmentDirection.Forward,
+            header.MessageId.Span);
+        var overlong = new OverlongShardEnumerable(
+            new byte[header.ShardSize],
+            throwAfter: 100);
+
+        Assert.Throws<ArgumentException>(() =>
+            new LoRaFragmentReassemblySnapshot(
+                key,
+                header,
+                generation: 1,
+                expiryBucket: 100,
+                overlong,
+                Array.Empty<ReadOnlyMemory<byte>?>()));
+        Assert.True(
+            overlong.MoveNextCalls <= header.DataShardCount + 1,
+            $"The constructor consumed {overlong.MoveNextCalls} elements.");
+    }
+
+    private sealed class OverlongShardEnumerable(
+        ReadOnlyMemory<byte> shard,
+        int throwAfter)
+        : IEnumerable<ReadOnlyMemory<byte>?>
+    {
+        public int MoveNextCalls { get; private set; }
+
+        public IEnumerator<ReadOnlyMemory<byte>?> GetEnumerator()
+        {
+            while (true)
+            {
+                MoveNextCalls++;
+                if (MoveNextCalls > throwAfter)
+                {
+                    throw new InvalidOperationException(
+                        "The bounded consumer read a pathological tail.");
+                }
+
+                yield return shard;
+            }
+        }
+
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() =>
+            GetEnumerator();
+    }
+
     private sealed class Fixture
     {
         private static readonly byte[] MessageId = [1, 2, 3, 4, 5, 6, 7, 8];
