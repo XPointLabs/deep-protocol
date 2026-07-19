@@ -1,5 +1,6 @@
 using System.Text;
 using System.Net;
+using System.Globalization;
 
 namespace Deep.Protocol.DeepExtension.ManagedIngress;
 
@@ -26,7 +27,37 @@ public static class ManagedIngressH2Contract
             "baggage",
             "content-encoding",
             "x-request-id",
-            "x-correlation-id"
+            "x-correlation-id",
+            "x-account",
+            "x-plan",
+            "x-payer",
+            "x-wallet",
+            "x-operation-id",
+            "x-attempt-id",
+            "x-session-id",
+            "x-capability",
+            "x-receipt",
+            "connection",
+            "keep-alive",
+            "proxy-connection",
+            "te",
+            "trailer",
+            "transfer-encoding",
+            "upgrade",
+            "forwarded",
+            "via",
+            "user-agent",
+            "referer",
+            "origin"
+        };
+
+    private static readonly HashSet<string> FrameMetadataHeaders =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            "content-type",
+            "accept",
+            "content-length",
+            "host"
         };
 
     public static ManagedIngressOpaqueFrame ValidateOpaqueFrame(ReadOnlySpan<byte> bytes)
@@ -60,6 +91,8 @@ public static class ManagedIngressH2Contract
             throw Error(ManagedIngressContractError.Http2Required, "HTTP/2 is required.");
         }
 
+        ValidateRoutingMetadata(request);
+
         if (!MediaTypeEquals(request.ContentType, OpaqueMediaType))
         {
             throw Error(
@@ -89,7 +122,7 @@ public static class ManagedIngressH2Contract
         }
 
         CheckFrameLength(request.BodyLength);
-        ValidateHeaders(request.Headers);
+        ValidateRequestHeaders(request, includeContentType: true);
         return ManagedIngressTransportResult.TransitRequestValidated;
     }
 
@@ -105,17 +138,150 @@ public static class ManagedIngressH2Contract
                 < ManagedIngressLimits.MinimumOpaqueFrameBytes or
                 > ManagedIngressLimits.MaximumOpaqueFrameBytes)
         {
-            return ManagedIngressTransportResult.InvalidResponse;
+            return ManagedIngressTransportResult.OutcomeUnknown;
         }
 
         try
         {
-            ValidateHeaders(response.Headers);
+            ValidateResponseHeaders(response.Headers, allowRetryAfter: false);
             return ManagedIngressTransportResult.TransitCompleted;
         }
         catch (ManagedIngressContractException)
         {
-            return ManagedIngressTransportResult.InvalidResponse;
+            return ManagedIngressTransportResult.OutcomeUnknown;
+        }
+    }
+
+    public static void ValidateCapabilityRequest(ManagedIngressRequestMetadata request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (!StringComparer.Ordinal.Equals(request.Method, "GET"))
+        {
+            throw Error(ManagedIngressContractError.WrongMethod, "The capability method must be GET.");
+        }
+
+        if (!StringComparer.Ordinal.Equals(request.Path, CapabilitiesPath))
+        {
+            throw Error(ManagedIngressContractError.WrongPath, "The capability path is not canonical.");
+        }
+
+        if (!string.IsNullOrEmpty(request.Query))
+        {
+            throw Error(ManagedIngressContractError.QueryForbidden, "Queries are forbidden.");
+        }
+
+        if (request.HttpVersion != HttpVersion.Version20)
+        {
+            throw Error(ManagedIngressContractError.Http2Required, "HTTP/2 is required.");
+        }
+
+        ValidateRoutingMetadata(request);
+        if (!string.IsNullOrEmpty(request.ContentType) ||
+            !StringComparer.Ordinal.Equals(request.Accept, CapabilitiesMediaType))
+        {
+            throw Error(
+                ManagedIngressContractError.UnsupportedMediaType,
+                "The capability media contract is not canonical.");
+        }
+
+        if (!string.IsNullOrEmpty(request.ContentEncoding) ||
+            request.BodyLength != 0 ||
+            request.IsEarlyData)
+        {
+            throw Error(
+                ManagedIngressContractError.ContentCodingForbidden,
+                "Capability requests have no body, coding, or early data.");
+        }
+
+        ValidateRequestHeaders(request, includeContentType: false);
+    }
+
+    public static ManagedIngressCapabilityDocument ValidateCapabilityResponse(
+        ManagedIngressResponseMetadata response,
+        ReadOnlySpan<byte> body,
+        IReadOnlySet<string> supportedCriticalFeatures)
+    {
+        ArgumentNullException.ThrowIfNull(response);
+        ArgumentNullException.ThrowIfNull(supportedCriticalFeatures);
+        if (response.StatusCode != 200 ||
+            response.HttpVersion != HttpVersion.Version20 ||
+            !StringComparer.Ordinal.Equals(response.ContentType, CapabilitiesMediaType) ||
+            !string.IsNullOrEmpty(response.ContentEncoding) ||
+            response.BodyLength != body.Length ||
+            body.IsEmpty ||
+            body.Length > ManagedIngressLimits.MaximumCapabilityDocumentBytes)
+        {
+            throw Error(
+                ManagedIngressContractError.MalformedCapabilityDocument,
+                "The capability response is not canonical.");
+        }
+
+        ValidateResponseHeaders(response.Headers, allowRetryAfter: false);
+        return ManagedIngressCapabilityDocumentCodec.Decode(body, supportedCriticalFeatures);
+    }
+
+    public static ManagedIngressErrorClassification ClassifyErrorResponse(
+        ManagedIngressResponseMetadata response,
+        ReadOnlySpan<byte> body)
+    {
+        ArgumentNullException.ThrowIfNull(response);
+        try
+        {
+            if (response.HttpVersion != HttpVersion.Version20 ||
+                !StringComparer.Ordinal.Equals(response.ContentType, ErrorMediaType) ||
+                !string.IsNullOrEmpty(response.ContentEncoding) ||
+                response.BodyLength != ManagedIngressLimits.ErrorFrameBytes ||
+                body.Length != ManagedIngressLimits.ErrorFrameBytes)
+            {
+                return UnknownError();
+            }
+
+            ValidateResponseHeaders(response.Headers, allowRetryAfter: true);
+            var retryHeaders = response.Headers
+                .Where(header => StringComparer.OrdinalIgnoreCase.Equals(
+                    header.Name,
+                    "retry-after"))
+                .ToArray();
+            if (retryHeaders.Length > 1)
+            {
+                return UnknownError();
+            }
+
+            var frame = ManagedIngressErrorCodec.Decode(body);
+            if (!IsCanonicalErrorMapping(response.StatusCode, frame))
+            {
+                return UnknownError();
+            }
+
+            if (frame.RetryAfterSeconds == 0)
+            {
+                if (retryHeaders.Length != 0)
+                {
+                    return UnknownError();
+                }
+            }
+            else
+            {
+                if (retryHeaders.Length != 1 ||
+                    !TryParseCanonicalRetryAfter(retryHeaders[0].Value, out var retryAfter) ||
+                    retryAfter != frame.RetryAfterSeconds)
+                {
+                    return UnknownError();
+                }
+            }
+
+            return new ManagedIngressErrorClassification(
+                frame.Certainty == ManagedIngressOutcomeCertainty.BeforeForward
+                    ? ManagedIngressTransportResult.RejectedBeforeForward
+                    : ManagedIngressTransportResult.OutcomeUnknown,
+                frame);
+        }
+        catch (Exception exception) when (
+            exception is ManagedIngressContractException or
+                ArgumentException or
+                OverflowException)
+        {
+            return UnknownError();
         }
     }
 
@@ -134,6 +300,7 @@ public static class ManagedIngressH2Contract
                 "The decoded header count exceeds the contract limit.");
         }
 
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var header in headers)
         {
             if (header is null ||
@@ -143,6 +310,7 @@ public static class ManagedIngressH2Contract
                     character > 0x7f ||
                     char.IsUpper(character) ||
                     char.IsWhiteSpace(character)) ||
+                header.Name[0] == ':' ||
                 header.Value.Contains('\r', StringComparison.Ordinal) ||
                 header.Value.Contains('\n', StringComparison.Ordinal))
             {
@@ -151,9 +319,23 @@ public static class ManagedIngressH2Contract
                     "A decoded header is malformed.");
             }
 
+            if (!names.Add(header.Name))
+            {
+                throw Error(
+                    ManagedIngressContractError.MalformedHeader,
+                    "Duplicate decoded header fields are forbidden.");
+            }
+
             if (ForbiddenHeaders.Contains(header.Name) ||
+                header.Name.StartsWith("x-", StringComparison.OrdinalIgnoreCase) ||
+                header.Name.StartsWith("cf-", StringComparison.OrdinalIgnoreCase) ||
+                header.Name.StartsWith("sec-", StringComparison.OrdinalIgnoreCase) ||
                 header.Name.StartsWith("x-request-", StringComparison.OrdinalIgnoreCase) ||
-                header.Name.StartsWith("x-correlation-", StringComparison.OrdinalIgnoreCase))
+                header.Name.StartsWith("x-correlation-", StringComparison.OrdinalIgnoreCase) ||
+                header.Name.StartsWith("x-account-", StringComparison.OrdinalIgnoreCase) ||
+                header.Name.StartsWith("x-plan-", StringComparison.OrdinalIgnoreCase) ||
+                header.Name.StartsWith("x-payer-", StringComparison.OrdinalIgnoreCase) ||
+                header.Name.StartsWith("x-wallet-", StringComparison.OrdinalIgnoreCase))
             {
                 throw Error(
                     ManagedIngressContractError.ForbiddenHeader,
@@ -192,6 +374,14 @@ public static class ManagedIngressH2Contract
         }
 
         return total;
+    }
+
+    public static int ComputeEffectiveFrameRequestHeaderBytes(
+        ManagedIngressRequestMetadata request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var mandatory = EffectiveRequestHeaders(request, includeContentType: true);
+        return ComputeDecodedHeaderListBytes(mandatory);
     }
 
     public static bool IsCanonicalErrorMapping(
@@ -243,7 +433,106 @@ public static class ManagedIngressH2Contract
 
     private static bool MediaTypeEquals(string? actual, string expected) =>
         actual is not null &&
-        StringComparer.OrdinalIgnoreCase.Equals(actual.Trim(), expected);
+        StringComparer.Ordinal.Equals(actual, expected);
+
+    private static void ValidateRoutingMetadata(ManagedIngressRequestMetadata request)
+    {
+        if (!StringComparer.Ordinal.Equals(request.Scheme, "https") ||
+            string.IsNullOrEmpty(request.Authority) ||
+            request.Authority.Length > 253 ||
+            request.Authority.Any(character =>
+                character > 0x7f ||
+                char.IsUpper(character) ||
+                char.IsWhiteSpace(character) ||
+                character is '/' or '\\' or '@'))
+        {
+            throw Error(
+                ManagedIngressContractError.MalformedHeader,
+                "The HTTP/2 scheme or authority is not canonical.");
+        }
+    }
+
+    private static void ValidateRequestHeaders(
+        ManagedIngressRequestMetadata request,
+        bool includeContentType)
+    {
+        ValidateHeaders(request.Headers);
+        if (request.Headers.Any(header => FrameMetadataHeaders.Contains(header.Name)))
+        {
+            throw Error(
+                ManagedIngressContractError.ForbiddenHeader,
+                "Mandatory request metadata cannot be duplicated in the header collection.");
+        }
+
+        var effective = EffectiveRequestHeaders(request, includeContentType);
+        if (effective.Count > ManagedIngressLimits.MaximumHeaderFields)
+        {
+            throw Error(
+                ManagedIngressContractError.HeaderCountExceeded,
+                "The effective decoded header count exceeds the contract limit.");
+        }
+
+        if (ComputeDecodedHeaderListBytes(effective) >
+            ManagedIngressLimits.MaximumDecodedHeaderListBytes)
+        {
+            throw Error(
+                ManagedIngressContractError.HeaderListTooLarge,
+                "The effective decoded header list exceeds the contract limit.");
+        }
+    }
+
+    private static void ValidateResponseHeaders(
+        IReadOnlyList<ManagedIngressHeader> headers,
+        bool allowRetryAfter)
+    {
+        ValidateHeaders(headers);
+        if (headers.Any(header =>
+                FrameMetadataHeaders.Contains(header.Name) ||
+                (!allowRetryAfter &&
+                 StringComparer.OrdinalIgnoreCase.Equals(header.Name, "retry-after"))))
+        {
+            throw Error(
+                ManagedIngressContractError.ForbiddenHeader,
+                "Response metadata cannot be duplicated in the header collection.");
+        }
+    }
+
+    private static IReadOnlyList<ManagedIngressHeader> EffectiveRequestHeaders(
+        ManagedIngressRequestMetadata request,
+        bool includeContentType)
+    {
+        var headers = new List<ManagedIngressHeader>
+        {
+            new(":method", request.Method),
+            new(":scheme", request.Scheme),
+            new(":authority", request.Authority),
+            new(":path", request.Path),
+            new("accept", request.Accept),
+            new("content-length", request.BodyLength.ToString(CultureInfo.InvariantCulture))
+        };
+        if (includeContentType)
+        {
+            headers.Add(new ManagedIngressHeader("content-type", request.ContentType));
+        }
+
+        headers.AddRange(request.Headers);
+        return headers;
+    }
+
+    private static bool TryParseCanonicalRetryAfter(string value, out int seconds)
+    {
+        seconds = 0;
+        return value.Length is >= 1 and <= 2 &&
+               value.All(character => character is >= '0' and <= '9') &&
+               value[0] != '0' &&
+               int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out seconds) &&
+               seconds is
+                   >= ManagedIngressLimits.MinimumRetryAfterSeconds and
+                   <= ManagedIngressLimits.MaximumRetryAfterSeconds;
+    }
+
+    private static ManagedIngressErrorClassification UnknownError() =>
+        new(ManagedIngressTransportResult.OutcomeUnknown, null);
 
     private static void CheckFrameLength(long length)
     {

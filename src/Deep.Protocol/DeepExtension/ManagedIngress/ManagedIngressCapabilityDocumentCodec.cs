@@ -156,6 +156,13 @@ public static class ManagedIngressCapabilityDocumentCodec
                         "The capability document contains an unknown critical feature.");
                 }
 
+                if (!encoded.SequenceEqual(Encode(document)))
+                {
+                    throw Error(
+                        ManagedIngressContractError.MalformedCapabilityDocument,
+                        "The capability document is not in its canonical byte representation.");
+                }
+
                 return document;
             }
             catch (InvalidOperationException)
@@ -210,6 +217,9 @@ public static class ManagedIngressCapabilityDocumentCodec
                 document.CriticalFeatures.Count ||
             document.OptionalFeatures.Distinct(StringComparer.Ordinal).Count() !=
                 document.OptionalFeatures.Count ||
+            document.CriticalFeatures.Intersect(
+                document.OptionalFeatures,
+                StringComparer.Ordinal).Any() ||
             document.CriticalFeatures.Any(feature => !ValidFeature(feature)) ||
             document.OptionalFeatures.Any(feature => !ValidFeature(feature)) ||
             !document.CriticalFeatures.Contains(

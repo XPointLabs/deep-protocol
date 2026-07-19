@@ -18,7 +18,8 @@ public enum ManagedIngressTransportResult
     TransitCompleted = 2,
     CancelledBeforeForward = 3,
     OutcomeUnknown = 4,
-    InvalidResponse = 5
+    InvalidResponse = 5,
+    RejectedBeforeForward = 6
 }
 
 public enum ManagedIngressOutcomeCertainty : byte
@@ -110,7 +111,9 @@ public sealed record ManagedIngressRequestMetadata
         string? contentEncoding,
         long bodyLength,
         bool isEarlyData,
-        IReadOnlyList<ManagedIngressHeader> headers)
+        IReadOnlyList<ManagedIngressHeader> headers,
+        string scheme,
+        string authority)
     {
         Method = method;
         Path = path;
@@ -122,6 +125,8 @@ public sealed record ManagedIngressRequestMetadata
         BodyLength = bodyLength;
         IsEarlyData = isEarlyData;
         Headers = headers;
+        Scheme = scheme;
+        Authority = authority;
     }
 
     public string Method { get; init; }
@@ -143,6 +148,10 @@ public sealed record ManagedIngressRequestMetadata
     public bool IsEarlyData { get; init; }
 
     public IReadOnlyList<ManagedIngressHeader> Headers { get; init; }
+
+    public string Scheme { get; init; }
+
+    public string Authority { get; init; }
 }
 
 public sealed record ManagedIngressResponseMetadata
@@ -197,6 +206,94 @@ public sealed record ManagedIngressErrorFrame
     public bool Retryable { get; init; }
 
     public int RetryAfterSeconds { get; init; }
+}
+
+public sealed record ManagedIngressErrorClassification(
+    ManagedIngressTransportResult Result,
+    ManagedIngressErrorFrame? Error);
+
+public sealed class ManagedIngressStreamingAdmission
+{
+    private readonly long _declaredLength;
+    private bool _completed;
+    private bool _forwardStarted;
+    private bool _cancelled;
+
+    public ManagedIngressStreamingAdmission(long declaredLength)
+    {
+        if (declaredLength is
+            < ManagedIngressLimits.MinimumOpaqueFrameBytes or
+            > ManagedIngressLimits.MaximumOpaqueFrameBytes)
+        {
+            throw new ManagedIngressContractException(
+                ManagedIngressContractError.FrameLengthOutOfRange,
+                "The declared opaque frame length is outside strict bounds.");
+        }
+
+        _declaredLength = declaredLength;
+    }
+
+    public long ReceivedBytes { get; private set; }
+
+    public void Append(ReadOnlySpan<byte> chunk)
+    {
+        EnsureReceiving();
+        if (chunk.Length == 0)
+        {
+            return;
+        }
+
+        var next = checked(ReceivedBytes + chunk.Length);
+        if (next > _declaredLength ||
+            next > ManagedIngressLimits.MaximumOpaqueFrameBytes)
+        {
+            throw new ManagedIngressContractException(
+                ManagedIngressContractError.FrameLengthOutOfRange,
+                "The streamed opaque frame exceeds its declared or maximum length.");
+        }
+
+        ReceivedBytes = next;
+    }
+
+    public void Complete()
+    {
+        EnsureReceiving();
+        if (ReceivedBytes != _declaredLength)
+        {
+            throw new ManagedIngressContractException(
+                ManagedIngressContractError.FrameLengthOutOfRange,
+                "The streamed opaque frame is truncated.");
+        }
+
+        _completed = true;
+    }
+
+    public void MarkForwardStarted()
+    {
+        if (!_completed || _cancelled || _forwardStarted)
+        {
+            throw new InvalidOperationException(
+                "Forwarding may start exactly once after bounded admission completes.");
+        }
+
+        _forwardStarted = true;
+    }
+
+    public ManagedIngressTransportResult Cancel()
+    {
+        _cancelled = true;
+        return _forwardStarted
+            ? ManagedIngressTransportResult.OutcomeUnknown
+            : ManagedIngressTransportResult.CancelledBeforeForward;
+    }
+
+    private void EnsureReceiving()
+    {
+        if (_completed || _cancelled || _forwardStarted)
+        {
+            throw new InvalidOperationException("The admission body is no longer writable.");
+        }
+    }
 }
 
 public static class ManagedIngressCapabilityFeatures
