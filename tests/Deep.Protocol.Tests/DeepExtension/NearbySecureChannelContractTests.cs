@@ -215,6 +215,21 @@ public sealed class NearbySecureChannelContractTests
     }
 
     [Fact]
+    public async Task PendingSession_RejectsHandshakeHashDifferentFromReplayTranscript()
+    {
+        var (_, peer, handle) = await Capabilities();
+        var exception = Assert.Throws<NearbySecureChannelException>(() =>
+            new TestPendingSession(
+                Context(NearbySessionRole.Initiator, handle, peer),
+                ValidationTime,
+                Claim(peer: peer.DeviceKeyId),
+                new TestSecureSession(NearbySessionRole.Initiator, peer, ValidationTime),
+                new NearbyTranscriptDigest(Range(0xd0, 32))));
+
+        Assert.Equal(NearbySecureChannelError.InvalidCredential, exception.Error);
+    }
+
+    [Fact]
     public async Task PendingSession_CommitsItsOwnedClaimAndActivatesOnlyOnce()
     {
         var (_, peer, handle) = await Capabilities();
@@ -360,6 +375,45 @@ public sealed class NearbySecureChannelContractTests
     }
 
     [Fact]
+    public async Task PendingSession_RejectsActivatedChannelWithSameDeviceButDifferentAccount()
+    {
+        var (_, peer, handle) = await Capabilities();
+        var alternatePeer = await new TestCredentialVerifier().VerifyAsync(
+            Descriptor(
+                Account(0x50),
+                peer.DeviceKeyId,
+                7,
+                NearbyDeviceCredentialStatus.Active,
+                ValidFrom,
+                ValidUntil),
+            Expectation(Account(0x50), peer.DeviceKeyId, 7, ValidationTime));
+        var pending = new TestPendingSession(
+            Context(NearbySessionRole.Initiator, handle, peer),
+            ValidationTime,
+            Claim(peer: peer.DeviceKeyId),
+            new TestSecureSession(NearbySessionRole.Initiator, alternatePeer, ValidationTime));
+
+        var exception = await Assert.ThrowsAsync<NearbySecureChannelException>(
+            async () => await pending.ActivateAsync(TestReplayCommitter.Immediate(
+                NearbyReplayClaimClassification.AcceptedFresh)));
+
+        Assert.Equal(NearbySecureChannelError.DirectionReflection, exception.Error);
+        Assert.Equal(1, pending.PendingDisposeCount);
+    }
+
+    [Fact]
+    public async Task LocalKeyProvider_RejectsMismatchedReturnedCredential()
+    {
+        var (local, peer, _) = await Capabilities();
+        var exception = await Assert.ThrowsAsync<NearbySecureChannelException>(
+            async () => await new MismatchedLocalKeyProvider(
+                new NearbyLocalKeyReference(Range(0x71, 16)),
+                peer).GetLocalKeyAsync(local));
+
+        Assert.Equal(NearbySecureChannelError.InvalidCredential, exception.Error);
+    }
+
+    [Fact]
     public async Task FlightWrappers_TransferOrDisposeOwnedStateExactlyOnce()
     {
         var payload = new NearbyHandshakePayload(Range(0x10, 16));
@@ -441,6 +495,41 @@ public sealed class NearbySecureChannelContractTests
         Assert.Equal(
             NearbyRecordDirection.InitiatorToResponder,
             NearbyRecordDirectionPolicy.ReceiveFor(NearbySessionRole.Responder));
+    }
+
+    [Fact]
+    public async Task Records_RejectOversizedEncodedInputAndAdapterOutput()
+    {
+        var (_, peer, _) = await Capabilities();
+        using var oversizedOpen = new OversizedRecordSession(peer);
+        var oversized = new byte[OpaqueBundleLimits.MaximumEncodedLength + 4_097];
+
+        var open = Assert.Throws<NearbySecureChannelException>(() => oversizedOpen.Open(oversized));
+        Assert.Equal(NearbySecureChannelError.InvalidRecord, open.Error);
+        Assert.Equal(0, oversizedOpen.OpenCoreCount);
+
+        using var oversizedSeal = new OversizedRecordSession(peer);
+        var seal = Assert.Throws<NearbySecureChannelException>(() =>
+            oversizedSeal.Seal(NearbyRecordKind.Control, Range(1, 16)));
+        Assert.Equal(NearbySecureChannelError.InvalidRecord, seal.Error);
+    }
+
+    [Fact]
+    public async Task PendingSession_DisposesReturnedChannelWhenInspectionThrows()
+    {
+        var (_, peer, handle) = await Capabilities();
+        var channel = new ThrowingInspectionSession(peer);
+        var pending = new TestPendingSession(
+            Context(NearbySessionRole.Initiator, handle, peer),
+            ValidationTime,
+            Claim(peer: peer.DeviceKeyId),
+            channel);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await pending.ActivateAsync(TestReplayCommitter.Immediate(
+                NearbyReplayClaimClassification.AcceptedFresh)));
+        Assert.Equal(1, channel.DisposeCount);
+        Assert.Equal(1, pending.PendingDisposeCount);
     }
 
     [Fact]
@@ -645,6 +734,21 @@ public sealed class NearbySecureChannelContractTests
         }
     }
 
+    private sealed class MismatchedLocalKeyProvider(
+        NearbyLocalKeyReference keyReference,
+        NearbyVerifiedDeviceCredential returnedCredential)
+        : NearbyLocalDeviceKeyProviderBase
+    {
+        public override ValueTask<NearbyLocalDeviceKeyHandle> GetLocalKeyAsync(
+            NearbyVerifiedDeviceCredential credential,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.FromResult(
+                CreateOpaqueLocalKeyHandle(returnedCredential, keyReference));
+        }
+    }
+
     private sealed class TestInitiatorState : INearbyInitiatorState
     {
         private int disposed;
@@ -664,11 +768,12 @@ public sealed class NearbySecureChannelContractTests
             NearbyAkeContext context,
             DateTimeOffset authenticatedAt,
             NearbyFreshReplayClaim replayClaim,
-            INearbySecureSession channel)
+            INearbySecureSession channel,
+            NearbyTranscriptDigest? handshakeHash = null)
             : base(
                 context,
                 authenticatedAt,
-                new NearbyTranscriptDigest(Range(0xd0, 32)),
+                handshakeHash ?? replayClaim.TranscriptDigest,
                 replayClaim)
         {
             this.channel = channel;
@@ -791,5 +896,63 @@ public sealed class NearbySecureChannelContractTests
                 NearbyRecordKind.Control,
                 1,
                 record.ToArray());
+    }
+
+    private sealed class OversizedRecordSession(NearbyVerifiedDeviceCredential peer)
+        : TestSecureSession(NearbySessionRole.Initiator, peer, ValidationTime)
+    {
+        public int OpenCoreCount { get; private set; }
+
+        protected override byte[] SealCore(
+            NearbyRecordDirection direction,
+            NearbyRecordKind kind,
+            ReadOnlySpan<byte> plaintext)
+        {
+            _ = direction;
+            _ = kind;
+            _ = plaintext;
+            return new byte[OpaqueBundleLimits.MaximumEncodedLength + 4_097];
+        }
+
+        protected override NearbyOpenedRecord OpenCore(
+            NearbyRecordDirection expectedDirection,
+            ReadOnlySpan<byte> record)
+        {
+            OpenCoreCount++;
+            _ = record;
+            return new NearbyOpenedRecord(
+                expectedDirection,
+                NearbyRecordKind.Control,
+                1,
+                Range(1, 16));
+        }
+    }
+
+    private sealed class ThrowingInspectionSession(NearbyVerifiedDeviceCredential peer)
+        : INearbySecureSession
+    {
+        private readonly NearbyAuthenticatedPeer authenticatedPeer = new TestSecureSession(
+            NearbySessionRole.Initiator,
+            peer,
+            ValidationTime).Peer;
+        private int disposeCount;
+
+        public int DisposeCount => Volatile.Read(ref disposeCount);
+
+        public NearbyAuthenticatedPeer Peer => authenticatedPeer;
+
+        public NearbySessionRole LocalRole => throw new InvalidOperationException("test inspection failure");
+
+        public NearbyRecordDirection SendDirection => NearbyRecordDirection.InitiatorToResponder;
+
+        public NearbyRecordDirection ReceiveDirection => NearbyRecordDirection.ResponderToInitiator;
+
+        public byte[] Seal(NearbyRecordKind kind, ReadOnlySpan<byte> plaintext) =>
+            throw new NotSupportedException();
+
+        public NearbyOpenedRecord Open(ReadOnlySpan<byte> record) =>
+            throw new NotSupportedException();
+
+        public void Dispose() => Interlocked.Increment(ref disposeCount);
     }
 }
