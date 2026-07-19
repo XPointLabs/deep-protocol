@@ -193,6 +193,36 @@ public sealed class LoRaFragmentCodecAndPlannerTests
     }
 
     [Fact]
+    public void ShardMutationAfterFirstVerificationCannotChangeRetainedBytes()
+    {
+        var provider = new TestAuthenticationProvider();
+        var handle = provider.Create(Range(0x40, 32));
+        var stable = new TestAuthenticator(provider);
+        var encoded = LoRaFragmentCodec.Encode(
+            new LoRaFragmentUnsignedFrame(
+                new LoRaFragmentHeader(
+                    MessageId, 0, 2, 0, 64, LoRaFragmentFecMode.None),
+                Range(0x10, 64)),
+            handle,
+            LoRaFragmentDirection.Forward,
+            stable);
+        var mutating = new MutatingVerifier(
+            stable,
+            () => encoded[LoRaFragmentLimits.HeaderLength] ^= 1);
+
+        var exception = Assert.Throws<LoRaFragmentException>(() =>
+            LoRaFragmentCodec.Decode(
+                encoded,
+                Policy(),
+                handle,
+                LoRaFragmentDirection.Forward,
+                mutating));
+
+        Assert.Equal(LoRaFragmentError.AuthenticationFailed, exception.Error);
+        Assert.Equal(2, mutating.VerifyCalls);
+    }
+
+    [Fact]
     public void EveryTruncationAndAnOverlongFrameFailBeforeAcceptance()
     {
         var provider = new TestAuthenticationProvider();
@@ -376,6 +406,50 @@ public sealed class LoRaFragmentCodecAndPlannerTests
                 canonicalTranscript);
             return authenticationTag.Length == expected.Length &&
                    CryptographicOperations.FixedTimeEquals(expected, authenticationTag);
+        }
+    }
+
+    private sealed class MutatingVerifier(
+        ILoRaFragmentAuthenticator inner,
+        Action mutateOnce)
+        : ILoRaFragmentAuthenticator
+    {
+        private bool _mutated;
+
+        public int VerifyCalls { get; private set; }
+
+        public byte[] CreateTag(
+            ReadOnlySpan<byte> domain,
+            LoRaFragmentAuthenticationHandle authenticationHandle,
+            LoRaFragmentDirection direction,
+            ReadOnlySpan<byte> canonicalTranscript) =>
+            inner.CreateTag(
+                domain,
+                authenticationHandle,
+                direction,
+                canonicalTranscript);
+
+        public bool VerifyTag(
+            ReadOnlySpan<byte> domain,
+            LoRaFragmentAuthenticationHandle authenticationHandle,
+            LoRaFragmentDirection direction,
+            ReadOnlySpan<byte> canonicalTranscript,
+            ReadOnlySpan<byte> authenticationTag)
+        {
+            VerifyCalls++;
+            var accepted = inner.VerifyTag(
+                domain,
+                authenticationHandle,
+                direction,
+                canonicalTranscript,
+                authenticationTag);
+            if (!_mutated)
+            {
+                _mutated = true;
+                mutateOnce();
+            }
+
+            return accepted;
         }
     }
 }
