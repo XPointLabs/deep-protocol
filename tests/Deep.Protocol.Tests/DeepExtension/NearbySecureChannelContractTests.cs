@@ -1,383 +1,711 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
 using Deep.Protocol.DeepExtension.NearbyHandshakes;
+using Deep.Protocol.DeepExtension.NearbySecureChannels;
 using Deep.Protocol.DeepExtension.OpaqueBundles;
 
 namespace Deep.Protocol.Tests.DeepExtension;
 
 public sealed class NearbySecureChannelContractTests
 {
-    private const string ContractNamespace =
-        "Deep.Protocol.DeepExtension.NearbySecureChannels";
-
-    private static readonly Assembly ProtocolAssembly = typeof(NearbyHandshakeProtocol).Assembly;
+    private static readonly DateTimeOffset ValidFrom = DateTimeOffset.UnixEpoch;
+    private static readonly DateTimeOffset ValidUntil = DateTimeOffset.UnixEpoch.AddDays(2);
+    private static readonly DateTimeOffset ValidationTime = DateTimeOffset.UnixEpoch.AddDays(1);
 
     [Fact]
-    public void PublicSurface_IsTypedOpaqueAndFreshOnly()
+    public void Topology_HasOwnedReplayCommitWithoutReusableAcceptance()
     {
-        var ake = RequiredType("INearbyFreshAke");
-        var pending = RequiredType("INearbyPendingSession");
-        var channel = RequiredType("INearbySecureSession");
-        var replay = RequiredType("INearbyReplayCommitter");
+        var assembly = typeof(NearbyAkeContext).Assembly;
+        Assert.Null(assembly.GetType(
+            "Deep.Protocol.DeepExtension.NearbySecureChannels.NearbyReplayAcceptance"));
+        Assert.Null(assembly.GetType(
+            "Deep.Protocol.DeepExtension.NearbySecureChannels.NearbyReplayCommitterBase"));
 
-        Assert.True(ake.IsInterface);
-        Assert.True(pending.IsInterface);
-        Assert.True(channel.IsInterface);
-        Assert.True(replay.IsInterface);
+        var activation = typeof(INearbyPendingSession).GetMethod("ActivateAsync");
+        Assert.NotNull(activation);
+        Assert.Equal(typeof(ValueTask<INearbySecureSession>), activation.ReturnType);
+        Assert.Equal(
+            [typeof(INearbyReplayCommitter), typeof(CancellationToken)],
+            activation.GetParameters().Select(static parameter => parameter.ParameterType).ToArray());
+        Assert.DoesNotContain(
+            activation.GetParameters(),
+            parameter => parameter.ParameterType.Name.Contains(
+                "Acceptance",
+                StringComparison.OrdinalIgnoreCase));
 
         Assert.Equal(
-            ["AcceptInitiator", "AcceptResponder", "BeginInitiator"],
-            ake.GetMethods().Select(static method => method.Name).Order().ToArray());
-        Assert.Contains(pending.GetMethods(), method =>
-            method.Name == "Activate" && method.ReturnType == channel);
-        Assert.Contains(pending.GetProperties(), property =>
-            property.Name == "HandshakeHash" &&
-            property.PropertyType == RequiredType("NearbyTranscriptDigest"));
-        Assert.Contains(channel.GetMethods(), method => method.Name == "Seal");
-        Assert.Contains(channel.GetMethods(), method => method.Name == "Open");
+            typeof(NearbyFreshReplayClaim),
+            typeof(INearbyPendingSession).GetProperty("ReplayClaim")!.PropertyType);
 
-        var profile = RequiredType("NearbySecureChannelProfileId");
-        Assert.True(profile.IsEnum);
-        Assert.Equal(
-            ["UnassignedPendingExternalCryptoReview"],
-            Enum.GetNames(profile));
-
-        var context = RequiredType("NearbyAkeContext");
-        Assert.Contains(context.GetProperties(), property =>
-            property.Name == "Binding" &&
-            property.PropertyType == typeof(NearbyHandshakeBinding));
-        Assert.Contains(context.GetProperties(), property =>
-            property.Name == "LocalKeyHandle" &&
-            property.PropertyType == RequiredType("NearbyLocalDeviceKeyHandle"));
-        Assert.Contains(context.GetProperties(), property =>
-            property.Name == "ExpectedPeerCredential" &&
-            property.PropertyType == RequiredType("NearbyDeviceCredential"));
+        var outcomeProperties = typeof(NearbyReplayCommitOutcome).GetProperties();
+        Assert.Single(outcomeProperties);
+        Assert.Equal("Classification", outcomeProperties[0].Name);
     }
 
     [Fact]
-    public void IdentifiersAndDigests_RejectInvalidValuesCopyBuffersAndRedact()
+    public void OpaqueValues_HaveValueEqualityStableHashesCopyingAndRedaction()
     {
-        AssertOpaqueValue("NearbyAccountIdentity", 1, 512);
-        AssertOpaqueValue("NearbyDeviceKeyId", 16, 64);
-        AssertOpaqueValue("NearbyTranscriptDigest", 32, 64);
+        AssertOpaqueValueEquality(
+            bytes => new NearbyAccountIdentity(bytes),
+            minimumLength: 1,
+            maximumLength: 512);
+        AssertOpaqueValueEquality(
+            bytes => new NearbyDeviceKeyId(bytes),
+            minimumLength: 16,
+            maximumLength: 64);
+        AssertOpaqueValueEquality(
+            bytes => new NearbyTranscriptDigest(bytes),
+            minimumLength: 32,
+            maximumLength: 64);
+        AssertOpaqueValueEquality(
+            bytes => new NearbyLocalKeyReference(bytes),
+            minimumLength: 16,
+            maximumLength: 64);
     }
 
     [Fact]
-    public void Context_RejectsResumptionAndInvalidCredentialState()
+    public async Task VerifiedCredential_IsOpaqueVerifierIssuedAndReadOnly()
     {
-        var active = Credential(
+        Assert.Empty(typeof(NearbyVerifiedDeviceCredential).GetConstructors());
+
+        var descriptor = Descriptor(
+            Account(0x10),
+            Device(0x20),
             epoch: 7,
-            validFrom: DateTimeOffset.UnixEpoch,
-            validUntil: DateTimeOffset.UnixEpoch.AddDays(2),
-            status: "Active");
+            NearbyDeviceCredentialStatus.Active,
+            ValidFrom,
+            ValidUntil);
+        var expectation = Expectation(
+            Account(0x10),
+            Device(0x20),
+            epoch: 7,
+            ValidationTime);
 
-        _ = CreateContext(
-            Binding(NearbyHandshakeMode.Fresh, resumeCounter: 0),
-            active,
+        var verified = await new TestCredentialVerifier()
+            .VerifyAsync(descriptor, expectation);
+
+        Assert.Equal(descriptor.AccountIdentity, verified.AccountIdentity);
+        Assert.Equal(descriptor.DeviceKeyId, verified.DeviceKeyId);
+        Assert.Equal(7UL, verified.RosterEpoch);
+        Assert.Equal(ValidFrom, verified.ValidFrom);
+        Assert.Equal(ValidUntil, verified.ValidUntil);
+        Assert.Equal(NearbyDeviceCredentialStatus.Active, verified.Status);
+        Assert.Contains("redacted", verified.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("wrong-account", NearbySecureChannelError.InvalidCredential)]
+    [InlineData("same-account-wrong-device", NearbySecureChannelError.InvalidCredential)]
+    [InlineData("revoked", NearbySecureChannelError.CredentialRevoked)]
+    [InlineData("not-yet-valid", NearbySecureChannelError.CredentialNotYetValid)]
+    [InlineData("expired", NearbySecureChannelError.CredentialExpired)]
+    [InlineData("roster-rollback", NearbySecureChannelError.RosterRollback)]
+    public async Task CredentialVerification_FailsClosed(
+        string scenario,
+        NearbySecureChannelError expectedError)
+    {
+        var account = Account(0x10);
+        var device = Device(0x20);
+        var descriptor = Descriptor(
+            account,
+            device,
+            epoch: scenario == "roster-rollback" ? 6UL : 7UL,
+            scenario == "revoked"
+                ? NearbyDeviceCredentialStatus.Revoked
+                : NearbyDeviceCredentialStatus.Active,
+            scenario == "not-yet-valid" ? ValidationTime.AddMinutes(1) : ValidFrom,
+            scenario == "expired" ? ValidationTime : ValidUntil);
+        var expectedAccount = scenario == "wrong-account" ? Account(0x30) : account;
+        var expectedDevice = scenario == "same-account-wrong-device" ? Device(0x40) : device;
+        var expectation = Expectation(expectedAccount, expectedDevice, 7, ValidationTime);
+
+        var exception = await Assert.ThrowsAsync<NearbySecureChannelException>(
+            async () => await new TestCredentialVerifier()
+                .VerifyAsync(descriptor, expectation));
+        Assert.Equal(expectedError, exception.Error);
+    }
+
+    [Fact]
+    public async Task Context_BindsProviderIssuedLocalKeyAndVerifiedCredentials()
+    {
+        var verifier = new TestCredentialVerifier();
+        var localDescriptor = Descriptor(
+            Account(0x10),
+            Device(0x20),
+            7,
+            NearbyDeviceCredentialStatus.Active,
+            ValidFrom,
+            ValidUntil);
+        var peerDescriptor = Descriptor(
+            Account(0x30),
+            Device(0x40),
+            7,
+            NearbyDeviceCredentialStatus.Active,
+            ValidFrom,
+            ValidUntil);
+        var local = await verifier.VerifyAsync(
+            localDescriptor,
+            Expectation(localDescriptor.AccountIdentity, localDescriptor.DeviceKeyId, 7, ValidationTime));
+        var peer = await verifier.VerifyAsync(
+            peerDescriptor,
+            Expectation(peerDescriptor.AccountIdentity, peerDescriptor.DeviceKeyId, 7, ValidationTime));
+        var keyReference = new NearbyLocalKeyReference(Range(0x70, 16));
+        var handle = await new TestLocalKeyProvider(keyReference)
+            .GetLocalKeyAsync(local);
+        var binding = Binding();
+
+        var context = new NearbyAkeContext(
+            NearbySecureChannelProfileId.UnassignedPendingExternalCryptoReview,
+            binding,
+            NearbySessionRole.Initiator,
+            handle,
+            peer,
             rosterEpoch: 7,
-            validationTime: DateTimeOffset.UnixEpoch.AddDays(1));
+            ValidationTime);
 
-        AssertContractError(
-            "ResumptionNotSupported",
-            () => CreateContext(
-                Binding(NearbyHandshakeMode.Resumption, resumeCounter: 1),
-                active,
+        Assert.Same(handle, context.LocalKeyHandle);
+        Assert.Same(local, context.LocalCredential);
+        Assert.Equal(local.AccountIdentity, context.LocalCredential.AccountIdentity);
+        Assert.Equal(local.DeviceKeyId, context.LocalCredential.DeviceKeyId);
+        Assert.Equal(keyReference, context.LocalKeyHandle.KeyReference);
+        Assert.Same(peer, context.ExpectedPeerCredential);
+        Assert.Equal(NearbySessionRole.Initiator, context.LocalRole);
+
+        var token = binding.SimultaneousOpenToken.ToArray();
+        Assert.True(MemoryMarshal.TryGetArray(binding.SimultaneousOpenToken, out var segment));
+        segment.Array![segment.Offset] ^= 0xff;
+        Assert.Equal(token, context.Binding.SimultaneousOpenToken.ToArray());
+
+        Assert.Empty(typeof(NearbyLocalDeviceKeyHandle).GetConstructors());
+    }
+
+    [Fact]
+    public async Task Context_RejectsResumptionEvenWithVerifiedCapabilities()
+    {
+        var (local, peer, handle) = await Capabilities();
+        var exception = Assert.Throws<NearbySecureChannelException>(() =>
+            new NearbyAkeContext(
+                NearbySecureChannelProfileId.UnassignedPendingExternalCryptoReview,
+                Binding(NearbyHandshakeMode.Resumption, 1),
+                NearbySessionRole.Initiator,
+                handle,
+                peer,
                 rosterEpoch: 7,
-                validationTime: DateTimeOffset.UnixEpoch.AddDays(1)));
+                ValidationTime));
 
-        foreach (var scenario in new[]
-                 {
-                     (Epoch: 7UL, From: DateTimeOffset.UnixEpoch.AddDays(2),
-                         Until: DateTimeOffset.UnixEpoch.AddDays(3), Status: "Active",
-                         Error: "CredentialNotYetValid"),
-                     (Epoch: 7UL, From: DateTimeOffset.UnixEpoch,
-                         Until: DateTimeOffset.UnixEpoch.AddHours(1), Status: "Active",
-                         Error: "CredentialExpired"),
-                     (Epoch: 7UL, From: DateTimeOffset.UnixEpoch,
-                         Until: DateTimeOffset.UnixEpoch.AddDays(3), Status: "Revoked",
-                         Error: "CredentialRevoked"),
-                     (Epoch: 6UL, From: DateTimeOffset.UnixEpoch,
-                         Until: DateTimeOffset.UnixEpoch.AddDays(3), Status: "Active",
-                         Error: "RosterRollback")
-                 })
-        {
-            var credential = Credential(
-                scenario.Epoch,
-                scenario.From,
-                scenario.Until,
-                scenario.Status);
-            AssertContractError(
-                scenario.Error,
-                () => CreateContext(
-                    Binding(NearbyHandshakeMode.Fresh, 0),
-                    credential,
-                    rosterEpoch: 7,
-                    validationTime: DateTimeOffset.UnixEpoch.AddDays(1)));
-        }
+        Assert.Equal(NearbySecureChannelError.ResumptionNotSupported, exception.Error);
+        Assert.Same(local, handle.Credential);
     }
 
     [Fact]
-    public void HandshakeFlights_AreBoundedAndHaveNoApplicationPayloadSurface()
+    public void ReplayClaim_HasExactValueEqualityAndHashing()
     {
-        var payloadType = RequiredType("NearbyHandshakePayload");
-        var payloadPurpose = RequiredType("NearbyHandshakePayloadPurpose");
-        Assert.Equal(
-            ["AuthenticatedKeyExchangeOnly"],
-            Enum.GetNames(payloadPurpose));
+        var left = Claim();
+        var same = Claim();
+        Assert.Equal(left, same);
+        Assert.Equal(left.GetHashCode(), same.GetHashCode());
 
-        Assert.ThrowsAny<Exception>(() => Create(payloadType, Memory(new byte[15])));
-        Assert.ThrowsAny<Exception>(() => Create(payloadType, Memory(new byte[1025])));
-
-        var input = Enumerable.Range(0, 16).Select(static value => (byte)value).ToArray();
-        var payload = Create(payloadType, Memory(input));
-        input[0] ^= 0xff;
-        Assert.Equal(0, ReadBytes(payload, "Bytes")[0]);
-        Assert.Equal(
-            "AuthenticatedKeyExchangeOnly",
-            ReadProperty(payload, "Purpose").ToString());
-        Assert.Contains("redacted", payload.ToString(), StringComparison.OrdinalIgnoreCase);
-
-        foreach (var typeName in new[] { "NearbyInitiatorFlight", "NearbyResponderFlight" })
-        {
-            var type = RequiredType(typeName);
-            var publicNames = type.GetMembers(BindingFlags.Instance | BindingFlags.Public)
-                .Select(static member => member.Name)
-                .Concat(type.GetConstructors()
-                    .SelectMany(static constructor => constructor.GetParameters())
-                    .Select(static parameter => parameter.Name ?? string.Empty));
-            Assert.DoesNotContain(publicNames, name =>
-                name.Contains("application", StringComparison.OrdinalIgnoreCase) ||
-                name.Contains("bundle", StringComparison.OrdinalIgnoreCase) ||
-                name.Contains("plaintext", StringComparison.OrdinalIgnoreCase));
-        }
+        Assert.NotEqual(left, Claim(local: Device(0x21)));
+        Assert.NotEqual(left, Claim(peer: Device(0x41)));
+        Assert.NotEqual(left, Claim(attemptStart: 0x91));
+        Assert.NotEqual(left, Claim(digest: new NearbyTranscriptDigest(Range(0xb1, 32))));
+        Assert.NotEqual(left, Claim(rosterEpoch: 8));
+        Assert.Contains("redacted", left.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public void ReplayAcceptance_BindsDurableFreshScopeAndRejectsCollisions()
+    public async Task PendingSession_CommitsItsOwnedClaimAndActivatesOnlyOnce()
     {
-        var claimType = RequiredType("NearbyFreshReplayClaim");
-        var acceptanceType = RequiredType("NearbyReplayAcceptance");
-        var classificationType = RequiredType("NearbyReplayClaimClassification");
-        Assert.Contains("AcceptedFresh", Enum.GetNames(classificationType));
-        Assert.Contains("CollisionDifferentTranscript", Enum.GetNames(classificationType));
-        Assert.DoesNotContain(Enum.GetNames(classificationType), name =>
-            name.Contains("Resumption", StringComparison.OrdinalIgnoreCase));
-
-        var local = Opaque("NearbyDeviceKeyId", 0x20, 32);
-        var peer = Opaque("NearbyDeviceKeyId", 0x60, 32);
-        var attemptBytes = Range(0xa0, 16);
-        var attempt = new TransportAttemptId(attemptBytes);
-        var digest = Opaque("NearbyTranscriptDigest", 0xc0, 32);
-        var claim = Create(claimType, local, peer, attempt, digest, 9UL);
-
-        attemptBytes[0] ^= 0xff;
-        var storedAttempt = ReadProperty(claim, "TransportAttemptId");
-        Assert.Equal(0xa0, ReadBytes(storedAttempt, "Bytes")[0]);
-        Assert.Equal(9UL, ReadProperty(claim, "RosterEpoch"));
-
-        var accepted = Enum.Parse(classificationType, "AcceptedFresh");
-        var collision = Enum.Parse(classificationType, "CollisionDifferentTranscript");
-        var acceptance = CreateNonPublic(
-            acceptanceType,
-            local,
+        var (_, peer, _) = await Capabilities();
+        var claim = Claim(peer: peer.DeviceKeyId);
+        var channel = new TestSecureSession(
+            NearbySessionRole.Initiator,
             peer,
-            attempt,
-            digest,
-            9UL,
-            accepted);
-        Assert.Equal("AcceptedFresh", ReadProperty(acceptance, "Classification").ToString());
-        Assert.Contains("redacted", acceptance.ToString(), StringComparison.OrdinalIgnoreCase);
-
-        Assert.ThrowsAny<Exception>(() => CreateNonPublic(
-            acceptanceType,
-            local,
+            ValidationTime);
+        var pending = new TestPendingSession(
+            NearbySessionRole.Initiator,
             peer,
-            attempt,
-            digest,
-            9UL,
-            collision));
+            ValidationTime,
+            claim,
+            channel);
+        var committer = TestReplayCommitter.Immediate(
+            NearbyReplayClaimClassification.AcceptedFresh);
+
+        var activated = await pending.ActivateAsync(committer);
+
+        Assert.Same(channel, activated);
+        Assert.Equal(1, committer.CallCount);
+        Assert.Equal(claim, committer.Claims.Single());
+        Assert.Equal(1, pending.ActivationCount);
+        Assert.Equal(0, pending.PendingDisposeCount);
+
+        var reuse = await Assert.ThrowsAsync<NearbySecureChannelException>(
+            async () => await pending.ActivateAsync(committer));
+        Assert.Equal(NearbySecureChannelError.InvalidState, reuse.Error);
+        Assert.Equal(1, committer.CallCount);
     }
 
     [Fact]
-    public void OpenedRecords_AreBoundedDefensivelyCopiedAndDirectional()
+    public async Task PendingSession_RejectsConcurrentDoubleActivationBeforeSecondCommit()
     {
-        var recordType = RequiredType("NearbyOpenedRecord");
-        var kindType = RequiredType("NearbyRecordKind");
-        Assert.Equal(["Control", "OpaqueBundle"], Enum.GetNames(kindType));
+        var (_, peer, _) = await Capabilities();
+        var claim = Claim(peer: peer.DeviceKeyId);
+        var committer = TestReplayCommitter.Blocked();
+        var pending = new TestPendingSession(
+            NearbySessionRole.Responder,
+            peer,
+            ValidationTime,
+            claim,
+            new TestSecureSession(NearbySessionRole.Responder, peer, ValidationTime));
 
-        var kind = Enum.Parse(kindType, "OpaqueBundle");
-        Assert.ThrowsAny<Exception>(() => Create(recordType, kind, 0UL, ReadOnlyMemory<byte>.Empty));
+        var first = pending.ActivateAsync(committer).AsTask();
+        await committer.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
-        var bytes = Range(0x10, 32);
-        var record = Create(recordType, kind, 4UL, Memory(bytes));
-        bytes[0] ^= 0xff;
-        Assert.Equal(0x10, ReadBytes(record, "Plaintext")[0]);
-        Assert.Equal(4UL, ReadProperty(record, "Counter"));
+        var concurrent = await Assert.ThrowsAsync<NearbySecureChannelException>(
+            async () => await pending.ActivateAsync(committer));
+        Assert.Equal(NearbySecureChannelError.InvalidState, concurrent.Error);
+        Assert.Equal(1, committer.CallCount);
+
+        committer.Release.TrySetResult(
+            new NearbyReplayCommitOutcome(NearbyReplayClaimClassification.AcceptedFresh));
+        _ = await first;
+        Assert.Equal(claim, committer.Claims.Single());
+    }
+
+    [Theory]
+    [InlineData(
+        NearbyReplayClaimClassification.DuplicateSameTranscript,
+        NearbySecureChannelError.ReplayRejected)]
+    [InlineData(
+        NearbyReplayClaimClassification.CollisionDifferentTranscript,
+        NearbySecureChannelError.ReplayCollision)]
+    [InlineData(
+        NearbyReplayClaimClassification.Rejected,
+        NearbySecureChannelError.ReplayRejected)]
+    public async Task PendingSession_NonFreshOutcomeConsumesAndDisposes(
+        NearbyReplayClaimClassification classification,
+        NearbySecureChannelError expectedError)
+    {
+        var (_, peer, _) = await Capabilities();
+        var pending = new TestPendingSession(
+            NearbySessionRole.Initiator,
+            peer,
+            ValidationTime,
+            Claim(peer: peer.DeviceKeyId),
+            new TestSecureSession(NearbySessionRole.Initiator, peer, ValidationTime));
+        var committer = TestReplayCommitter.Immediate(classification);
+
+        var rejected = await Assert.ThrowsAsync<NearbySecureChannelException>(
+            async () => await pending.ActivateAsync(committer));
+        Assert.Equal(expectedError, rejected.Error);
+        Assert.Equal(0, pending.ActivationCount);
+        Assert.Equal(1, pending.PendingDisposeCount);
+
+        var retry = await Assert.ThrowsAsync<NearbySecureChannelException>(
+            async () => await pending.ActivateAsync(committer));
+        Assert.Equal(NearbySecureChannelError.InvalidState, retry.Error);
+        Assert.Equal(1, committer.CallCount);
     }
 
     [Fact]
-    public void ContractAssembly_HasNoRawKeySurfaceOrProductionImplementation()
+    public async Task FlightWrappers_TransferOrDisposeOwnedStateExactlyOnce()
     {
-        var contractTypes = ProtocolAssembly.GetTypes()
-            .Where(type => type.Namespace == ContractNamespace)
+        var payload = new NearbyHandshakePayload(Range(0x10, 16));
+        var transferredState = new TestInitiatorState();
+        var initiator = new NearbyInitiatorFlight(payload, transferredState);
+
+        Assert.Same(transferredState, initiator.TakeState());
+        Assert.Throws<NearbySecureChannelException>(() => initiator.TakeState());
+        initiator.Dispose();
+        initiator.Dispose();
+        Assert.Equal(0, transferredState.DisposeCount);
+        transferredState.Dispose();
+        Assert.Equal(1, transferredState.DisposeCount);
+
+        var abandonedState = new TestInitiatorState();
+        var abandonedInitiator = new NearbyInitiatorFlight(payload, abandonedState);
+        abandonedInitiator.Dispose();
+        abandonedInitiator.Dispose();
+        Assert.Equal(1, abandonedState.DisposeCount);
+        Assert.Throws<NearbySecureChannelException>(() => abandonedInitiator.TakeState());
+
+        var (_, peer, _) = await Capabilities();
+        var transferredPending = Pending(peer);
+        var responder = new NearbyResponderFlight(payload, transferredPending);
+        Assert.Same(transferredPending, responder.TakePendingSession());
+        Assert.Throws<NearbySecureChannelException>(() => responder.TakePendingSession());
+        responder.Dispose();
+        Assert.Equal(0, transferredPending.PendingDisposeCount);
+        transferredPending.Dispose();
+        Assert.Equal(1, transferredPending.PendingDisposeCount);
+
+        var abandonedPending = Pending(peer);
+        var abandonedResponder = new NearbyResponderFlight(payload, abandonedPending);
+        abandonedResponder.Dispose();
+        abandonedResponder.Dispose();
+        Assert.Equal(1, abandonedPending.PendingDisposeCount);
+        Assert.Throws<NearbySecureChannelException>(() => abandonedResponder.TakePendingSession());
+    }
+
+    [Fact]
+    public async Task RecordDirection_IsRoleBoundAndCannotBeSelectedBySealCaller()
+    {
+        var seal = typeof(INearbySecureSession).GetMethod("Seal")!;
+        Assert.Equal(
+            [typeof(NearbyRecordKind), typeof(ReadOnlySpan<byte>)],
+            seal.GetParameters().Select(static parameter => parameter.ParameterType).ToArray());
+        Assert.DoesNotContain(
+            seal.GetParameters(),
+            parameter => parameter.ParameterType == typeof(NearbyRecordDirection));
+
+        var (_, peer, _) = await Capabilities();
+        using var initiator = new TestSecureSession(
+            NearbySessionRole.Initiator,
+            peer,
+            ValidationTime);
+        Assert.Equal(
+            NearbyRecordDirection.InitiatorToResponder,
+            initiator.SendDirection);
+        Assert.Equal(
+            NearbyRecordDirection.ResponderToInitiator,
+            initiator.ReceiveDirection);
+
+        _ = initiator.Seal(NearbyRecordKind.Control, Range(1, 16));
+        var opened = initiator.Open(Range(2, 16));
+        Assert.Equal(initiator.ReceiveDirection, opened.Direction);
+        Assert.Equal(1UL, opened.Counter);
+
+        Assert.Equal(
+            NearbyRecordDirection.ResponderToInitiator,
+            NearbyRecordDirectionPolicy.SendFor(NearbySessionRole.Responder));
+        Assert.Equal(
+            NearbyRecordDirection.InitiatorToResponder,
+            NearbyRecordDirectionPolicy.ReceiveFor(NearbySessionRole.Responder));
+    }
+
+    [Fact]
+    public void ContractAssembly_HasNoRawKeyCryptoOrRuntimeImplementation()
+    {
+        var contractTypes = typeof(NearbyAkeContext).Assembly.GetTypes()
+            .Where(type => type.Namespace ==
+                "Deep.Protocol.DeepExtension.NearbySecureChannels")
             .ToArray();
-        Assert.NotEmpty(contractTypes);
-
-        var forbiddenCryptoNames = new[]
+        var forbiddenNames = new[]
         {
-            "Noise", "Hmac", "Aes", "ChaCha", "Authenticator", "Prf"
+            "Noise", "Hmac", "Aes", "ChaCha", "Scalar", "Prf",
+            "PrivateKey", "SecretKey", "TrafficKey", "SessionKey", "RawKey"
         };
-        Assert.DoesNotContain(contractTypes, type =>
-            forbiddenCryptoNames.Any(name =>
-                type.Name.Contains(name, StringComparison.OrdinalIgnoreCase)));
 
-        var forbiddenKeySurface = new[]
-        {
-            "PrivateKey", "SecretKey", "StaticKey", "EphemeralKey",
-            "TrafficKey", "SessionKey", "RawKey"
-        };
         foreach (var type in contractTypes)
         {
-            var publicSurface = type.GetMembers(BindingFlags.Instance | BindingFlags.Public)
+            var surface = type.GetMembers(BindingFlags.Instance | BindingFlags.Public)
                 .Select(static member => member.Name)
                 .Concat(type.GetMethods().Select(static method => method.ReturnType.Name))
-                .Concat(type.GetMethods().SelectMany(static method => method.GetParameters())
+                .Concat(type.GetMethods()
+                    .SelectMany(static method => method.GetParameters())
                     .Select(static parameter => parameter.ParameterType.Name));
-            Assert.DoesNotContain(publicSurface, name =>
-                forbiddenKeySurface.Any(forbidden =>
+            Assert.DoesNotContain(surface, name =>
+                forbiddenNames.Any(forbidden =>
                     name.Contains(forbidden, StringComparison.OrdinalIgnoreCase)));
         }
 
-        foreach (var interfaceName in new[]
+        foreach (var contract in new[]
                  {
-                     "INearbyFreshAke",
-                     "INearbyPendingSession",
-                     "INearbySecureSession",
-                     "INearbyReplayCommitter"
+                     typeof(INearbyFreshAke),
+                     typeof(INearbyPendingSession),
+                     typeof(INearbySecureSession),
+                     typeof(INearbyReplayCommitter),
+                     typeof(INearbyDeviceCredentialVerifier),
+                     typeof(INearbyLocalDeviceKeyProvider)
                  })
         {
-            var contract = RequiredType(interfaceName);
             Assert.DoesNotContain(contractTypes, type =>
                 type is { IsInterface: false, IsAbstract: false } &&
                 contract.IsAssignableFrom(type));
         }
     }
 
-    private static object CreateContext(
-        NearbyHandshakeBinding binding,
-        object expectedPeerCredential,
-        ulong rosterEpoch,
-        DateTimeOffset validationTime)
+    private static async ValueTask<(
+        NearbyVerifiedDeviceCredential Local,
+        NearbyVerifiedDeviceCredential Peer,
+        NearbyLocalDeviceKeyHandle Handle)> Capabilities()
     {
-        var profileType = RequiredType("NearbySecureChannelProfileId");
-        var profile = Enum.Parse(profileType, "UnassignedPendingExternalCryptoReview");
-        var context = Create(
-            RequiredType("NearbyAkeContext"),
-            profile,
-            binding,
-            Opaque("NearbyAccountIdentity", 0x05, 33),
-            Opaque("NearbyDeviceKeyId", 0x20, 32),
-            Activator.CreateInstance(RequiredType("NearbyLocalDeviceKeyHandle"), nonPublic: true)!,
-            expectedPeerCredential,
-            rosterEpoch,
-            validationTime);
-        var originalToken = binding.SimultaneousOpenToken.ToArray();
-        if (MemoryMarshal.TryGetArray(binding.SimultaneousOpenToken, out var segment))
-        {
-            segment.Array![segment.Offset] ^= 0xff;
-        }
-
-        var storedBinding = (NearbyHandshakeBinding)ReadProperty(context, "Binding");
-        Assert.Equal(originalToken, storedBinding.SimultaneousOpenToken.ToArray());
-        return context;
+        var verifier = new TestCredentialVerifier();
+        var localDescriptor = Descriptor(
+            Account(0x10),
+            Device(0x20),
+            7,
+            NearbyDeviceCredentialStatus.Active,
+            ValidFrom,
+            ValidUntil);
+        var peerDescriptor = Descriptor(
+            Account(0x30),
+            Device(0x40),
+            7,
+            NearbyDeviceCredentialStatus.Active,
+            ValidFrom,
+            ValidUntil);
+        var local = await verifier.VerifyAsync(
+            localDescriptor,
+            Expectation(localDescriptor.AccountIdentity, localDescriptor.DeviceKeyId, 7, ValidationTime));
+        var peer = await verifier.VerifyAsync(
+            peerDescriptor,
+            Expectation(peerDescriptor.AccountIdentity, peerDescriptor.DeviceKeyId, 7, ValidationTime));
+        var handle = await new TestLocalKeyProvider(
+            new NearbyLocalKeyReference(Range(0x70, 16)))
+            .GetLocalKeyAsync(local);
+        return (local, peer, handle);
     }
 
-    private static object Credential(
+    private static TestPendingSession Pending(NearbyVerifiedDeviceCredential peer) =>
+        new(
+            NearbySessionRole.Initiator,
+            peer,
+            ValidationTime,
+            Claim(peer: peer.DeviceKeyId),
+            new TestSecureSession(NearbySessionRole.Initiator, peer, ValidationTime));
+
+    private static NearbyDeviceCredentialDescriptor Descriptor(
+        NearbyAccountIdentity account,
+        NearbyDeviceKeyId device,
         ulong epoch,
+        NearbyDeviceCredentialStatus status,
         DateTimeOffset validFrom,
-        DateTimeOffset validUntil,
-        string status)
-    {
-        var statusType = RequiredType("NearbyDeviceCredentialStatus");
-        return Create(
-            RequiredType("NearbyDeviceCredential"),
-            Opaque("NearbyAccountIdentity", 0x45, 33),
-            Opaque("NearbyDeviceKeyId", 0x60, 32),
-            epoch,
-            validFrom,
-            validUntil,
-            Enum.Parse(statusType, status));
-    }
+        DateTimeOffset validUntil) =>
+        new(account, device, epoch, validFrom, validUntil, status);
+
+    private static NearbyCredentialVerificationExpectation Expectation(
+        NearbyAccountIdentity account,
+        NearbyDeviceKeyId device,
+        ulong epoch,
+        DateTimeOffset validationTime) =>
+        new(account, device, epoch, validationTime);
+
+    private static NearbyFreshReplayClaim Claim(
+        NearbyDeviceKeyId? local = null,
+        NearbyDeviceKeyId? peer = null,
+        int attemptStart = 0x90,
+        NearbyTranscriptDigest? digest = null,
+        ulong rosterEpoch = 7) =>
+        new(
+            local ?? Device(0x20),
+            peer ?? Device(0x40),
+            new TransportAttemptId(Range(attemptStart, 16)),
+            digest ?? new NearbyTranscriptDigest(Range(0xb0, 32)),
+            rosterEpoch);
 
     private static NearbyHandshakeBinding Binding(
-        NearbyHandshakeMode mode,
-        ulong resumeCounter) =>
+        NearbyHandshakeMode mode = NearbyHandshakeMode.Fresh,
+        ulong resumeCounter = 0) =>
         new()
         {
             BundleVersion = 1,
             Period = 100,
             TransportAttemptId = new TransportAttemptId(Range(0x80, 16)),
-            SimultaneousOpenToken = Range(0x90, 16),
+            SimultaneousOpenToken = Range(0xa0, 16),
             Mode = mode,
             ResumeCounter = resumeCounter
         };
 
-    private static void AssertOpaqueValue(string typeName, int minimum, int maximum)
-    {
-        var type = RequiredType(typeName);
-        Assert.ThrowsAny<Exception>(() => Create(type, ReadOnlyMemory<byte>.Empty));
-        Assert.ThrowsAny<Exception>(() => Create(type, Memory(new byte[minimum - 1])));
-        Assert.ThrowsAny<Exception>(() => Create(type, Memory(new byte[maximum + 1])));
-        Assert.ThrowsAny<Exception>(() => Create(type, Memory(new byte[minimum])));
+    private static NearbyAccountIdentity Account(int start) =>
+        new(Range(start, 33));
 
-        var input = Range(1, minimum);
-        var instance = Create(type, Memory(input));
+    private static NearbyDeviceKeyId Device(int start) =>
+        new(Range(start, 32));
+
+    private static void AssertOpaqueValueEquality<T>(
+        Func<ReadOnlyMemory<byte>, T> create,
+        int minimumLength,
+        int maximumLength)
+        where T : notnull
+    {
+        Assert.ThrowsAny<Exception>(() => create(ReadOnlyMemory<byte>.Empty));
+        Assert.ThrowsAny<Exception>(() => create(new byte[minimumLength - 1]));
+        Assert.ThrowsAny<Exception>(() => create(new byte[maximumLength + 1]));
+        Assert.ThrowsAny<Exception>(() => create(new byte[minimumLength]));
+
+        var input = Range(1, minimumLength);
+        var left = create(input);
+        var same = create(Range(1, minimumLength));
+        var different = create(Range(2, minimumLength));
         input[0] ^= 0xff;
-        Assert.Equal(1, ReadBytes(instance, "Bytes")[0]);
 
-        var exposed = ReadProperty(instance, "Bytes");
-        Assert.True(MemoryMarshal.TryGetArray((ReadOnlyMemory<byte>)exposed, out var segment));
+        Assert.Equal(left, same);
+        Assert.Equal(left.GetHashCode(), same.GetHashCode());
+        Assert.NotEqual(left, different);
+        Assert.Contains("redacted", left.ToString(), StringComparison.OrdinalIgnoreCase);
+
+        var bytes = (ReadOnlyMemory<byte>)left.GetType().GetProperty("Bytes")!.GetValue(left)!;
+        Assert.True(MemoryMarshal.TryGetArray(bytes, out var segment));
         segment.Array![segment.Offset] ^= 0xff;
-        Assert.Equal(1, ReadBytes(instance, "Bytes")[0]);
-        Assert.Contains("redacted", instance.ToString(), StringComparison.OrdinalIgnoreCase);
+        var reread = (ReadOnlyMemory<byte>)left.GetType().GetProperty("Bytes")!.GetValue(left)!;
+        Assert.Equal(1, reread.Span[0]);
     }
-
-    private static void AssertContractError(string error, Action action)
-    {
-        var exception = Assert.ThrowsAny<Exception>(action);
-        var current = exception;
-        while (current is TargetInvocationException { InnerException: not null })
-        {
-            current = current.InnerException;
-        }
-
-        Assert.Equal("NearbySecureChannelException", current.GetType().Name);
-        Assert.Equal(error, ReadProperty(current, "Error").ToString());
-    }
-
-    private static object Opaque(string typeName, int start, int length) =>
-        Create(RequiredType(typeName), Memory(Range(start, length)));
-
-    private static ReadOnlyMemory<byte> Memory(byte[] bytes) => bytes;
-
-    private static Type RequiredType(string name) =>
-        ProtocolAssembly.GetType($"{ContractNamespace}.{name}", throwOnError: true)!;
-
-    private static object Create(Type type, params object?[] arguments) =>
-        Activator.CreateInstance(type, arguments)
-        ?? throw new InvalidOperationException($"Could not create {type.FullName}.");
-
-    private static object CreateNonPublic(Type type, params object?[] arguments) =>
-        type.GetConstructors(BindingFlags.Instance | BindingFlags.NonPublic)
-            .Single(constructor => constructor.GetParameters().Length == arguments.Length)
-            .Invoke(arguments);
-
-    private static object ReadProperty(object instance, string name) =>
-        instance.GetType().GetProperty(name)!.GetValue(instance)!;
-
-    private static byte[] ReadBytes(object instance, string propertyName) =>
-        ((ReadOnlyMemory<byte>)ReadProperty(instance, propertyName)).ToArray();
 
     private static byte[] Range(int start, int length) =>
         Enumerable.Range(start, length).Select(static value => (byte)value).ToArray();
+
+    private sealed class TestCredentialVerifier : NearbyDeviceCredentialVerifierBase
+    {
+        public override ValueTask<NearbyVerifiedDeviceCredential> VerifyAsync(
+            NearbyDeviceCredentialDescriptor descriptor,
+            NearbyCredentialVerificationExpectation expectation,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.FromResult(
+                CreateVerifiedCredential(descriptor, expectation));
+        }
+    }
+
+    private sealed class TestLocalKeyProvider(NearbyLocalKeyReference keyReference)
+        : NearbyLocalDeviceKeyProviderBase
+    {
+        public override ValueTask<NearbyLocalDeviceKeyHandle> GetLocalKeyAsync(
+            NearbyVerifiedDeviceCredential credential,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.FromResult(
+                CreateOpaqueLocalKeyHandle(credential, keyReference));
+        }
+    }
+
+    private sealed class TestInitiatorState : INearbyInitiatorState
+    {
+        private int disposed;
+
+        public int DisposeCount => Volatile.Read(ref disposed);
+
+        public void Dispose() => Interlocked.CompareExchange(ref disposed, 1, 0);
+    }
+
+    private sealed class TestPendingSession : NearbyPendingSessionBase
+    {
+        private readonly INearbySecureSession channel;
+        private int activationCount;
+        private int pendingDisposeCount;
+
+        public TestPendingSession(
+            NearbySessionRole localRole,
+            NearbyVerifiedDeviceCredential peerCredential,
+            DateTimeOffset authenticatedAt,
+            NearbyFreshReplayClaim replayClaim,
+            INearbySecureSession channel)
+            : base(
+                localRole,
+                peerCredential,
+                authenticatedAt,
+                new NearbyTranscriptDigest(Range(0xd0, 32)),
+                replayClaim)
+        {
+            this.channel = channel;
+        }
+
+        public int ActivationCount => Volatile.Read(ref activationCount);
+
+        public int PendingDisposeCount => Volatile.Read(ref pendingDisposeCount);
+
+        protected override INearbySecureSession ActivateAfterReplayCommit()
+        {
+            Interlocked.Increment(ref activationCount);
+            return channel;
+        }
+
+        protected override void DisposePendingState() =>
+            Interlocked.Increment(ref pendingDisposeCount);
+    }
+
+    private sealed class TestReplayCommitter : INearbyReplayCommitter
+    {
+        private readonly NearbyReplayClaimClassification? immediate;
+        private int callCount;
+
+        private TestReplayCommitter(NearbyReplayClaimClassification? immediate)
+        {
+            this.immediate = immediate;
+        }
+
+        public List<NearbyFreshReplayClaim> Claims { get; } = [];
+
+        public int CallCount => Volatile.Read(ref callCount);
+
+        public TaskCompletionSource Started { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource<NearbyReplayCommitOutcome> Release { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public static TestReplayCommitter Immediate(
+            NearbyReplayClaimClassification classification) =>
+            new(classification);
+
+        public static TestReplayCommitter Blocked() => new(null);
+
+        public async ValueTask<NearbyReplayCommitOutcome> CommitFreshAsync(
+            NearbyFreshReplayClaim claim,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Interlocked.Increment(ref callCount);
+            lock (Claims)
+            {
+                Claims.Add(claim);
+            }
+
+            Started.TrySetResult();
+            if (immediate is { } classification)
+            {
+                return new NearbyReplayCommitOutcome(classification);
+            }
+
+            return await Release.Task.WaitAsync(cancellationToken);
+        }
+    }
+
+    private sealed class TestSecureSession : INearbySecureSession
+    {
+        private ulong sendCounter;
+        private ulong receiveCounter;
+
+        public TestSecureSession(
+            NearbySessionRole localRole,
+            NearbyVerifiedDeviceCredential peerCredential,
+            DateTimeOffset authenticatedAt)
+        {
+            LocalRole = localRole;
+            Peer = new NearbyAuthenticatedPeer(
+                peerCredential,
+                peerCredential.RosterEpoch,
+                authenticatedAt);
+        }
+
+        public NearbyAuthenticatedPeer Peer { get; }
+
+        public NearbySessionRole LocalRole { get; }
+
+        public NearbyRecordDirection SendDirection =>
+            NearbyRecordDirectionPolicy.SendFor(LocalRole);
+
+        public NearbyRecordDirection ReceiveDirection =>
+            NearbyRecordDirectionPolicy.ReceiveFor(LocalRole);
+
+        public byte[] Seal(NearbyRecordKind kind, ReadOnlySpan<byte> plaintext)
+        {
+            _ = kind;
+            _ = checked(++sendCounter);
+            return plaintext.ToArray();
+        }
+
+        public NearbyOpenedRecord Open(ReadOnlySpan<byte> record) =>
+            new(
+                ReceiveDirection,
+                NearbyRecordKind.Control,
+                checked(++receiveCounter),
+                record.ToArray());
+
+        public void Dispose()
+        {
+        }
+    }
 }
