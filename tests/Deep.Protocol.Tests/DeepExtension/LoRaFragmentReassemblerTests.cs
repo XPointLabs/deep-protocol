@@ -31,6 +31,36 @@ public sealed class LoRaFragmentReassemblerTests
         Assert.Null(replay.EncodedOpaqueBundle);
     }
 
+    [Theory]
+    [InlineData(17)]
+    [InlineData(41)]
+    [InlineData(73)]
+    public async Task FixedSeedPermutationsReassembleExactly(int seed)
+    {
+        var fixture = new Fixture(LoRaFragmentFecMode.None);
+        var random = new Random(seed);
+        var order = fixture.Plan.Frames
+            .Select(frame => (Frame: frame, Rank: random.Next()))
+            .OrderBy(static item => item.Rank)
+            .Select(static item => item.Frame)
+            .ToArray();
+        var reassembler = fixture.Reassembler(new MemoryReplayStore());
+        LoRaFragmentReassemblyResult? result = null;
+
+        foreach (var frame in order)
+        {
+            result = await reassembler.ProcessAsync(fixture.Request(frame));
+            if (result.Outcome == LoRaFragmentReassemblyOutcome.Completed)
+            {
+                break;
+            }
+        }
+
+        Assert.NotNull(result);
+        Assert.Equal(LoRaFragmentReassemblyOutcome.Completed, result.Outcome);
+        Assert.Equal(fixture.Bundle, result.EncodedOpaqueBundle!.Value.ToArray());
+    }
+
     [Fact]
     public async Task ExactDuplicateIsIdempotentButAuthenticatedConflictPoisonsAcrossRestart()
     {
@@ -209,7 +239,11 @@ public sealed class LoRaFragmentReassemblerTests
     }
 
     [Theory]
+    [InlineData(0, 0x02)]
+    [InlineData(1, 0x02)]
+    [InlineData(2, 0x02)]
     [InlineData(3, 0x11)]
+    [InlineData(4, 0x00)]
     [InlineData(6, 101)]
     public async Task AuthenticatedDescriptorBoundaryViolationPoisons(
         int descriptorOffset,
@@ -250,6 +284,120 @@ public sealed class LoRaFragmentReassemblerTests
         Assert.NotNull(result);
         Assert.Equal(LoRaFragmentReassemblyOutcome.Rejected, result.Outcome);
         Assert.Equal(1, store.PoisonedCount);
+    }
+
+    [Fact]
+    public async Task AuthenticatedNoncanonicalPaddingPoisons()
+    {
+        var fixture = new Fixture(LoRaFragmentFecMode.None);
+        var store = new MemoryReplayStore();
+        var reassembler = fixture.Reassembler(store);
+        var lastIndex = fixture.Plan.DataShardCount - 1;
+        var last = LoRaFragmentCodec.Decode(
+            fixture.Plan.Frames[lastIndex].Span,
+            fixture.FragmentPolicy,
+            fixture.AuthenticationHandle,
+            LoRaFragmentDirection.Forward,
+            fixture.Authenticator);
+        var changedShard = last.Shard.ToArray();
+        changedShard[^1] = 1;
+        var changedLast = LoRaFragmentCodec.Encode(
+            new LoRaFragmentUnsignedFrame(last.Header, changedShard),
+            fixture.AuthenticationHandle,
+            LoRaFragmentDirection.Forward,
+            fixture.Authenticator);
+
+        LoRaFragmentReassemblyResult? result = null;
+        foreach (var frame in fixture.Plan.Frames
+                     .Take(lastIndex)
+                     .Append(changedLast))
+        {
+            result = await reassembler.ProcessAsync(fixture.Request(frame));
+        }
+
+        Assert.NotNull(result);
+        Assert.Equal(LoRaFragmentReassemblyOutcome.Rejected, result.Outcome);
+        Assert.Equal(1, store.PoisonedCount);
+    }
+
+    [Fact]
+    public async Task AuthenticatedNoncanonicalDataCountPoisons()
+    {
+        var fixture = new Fixture(LoRaFragmentFecMode.None);
+        var store = new MemoryReplayStore();
+        var reassembler = fixture.Reassembler(store);
+        var expandedFrames = new List<byte[]>();
+        foreach (var encoded in fixture.Plan.Frames)
+        {
+            var decoded = LoRaFragmentCodec.Decode(
+                encoded.Span,
+                fixture.FragmentPolicy,
+                fixture.AuthenticationHandle,
+                LoRaFragmentDirection.Forward,
+                fixture.Authenticator);
+            var expandedHeader = new LoRaFragmentHeader(
+                decoded.Header.MessageId.Span,
+                decoded.Header.Ordinal,
+                checked((byte)(fixture.Plan.DataShardCount + 1)),
+                parityShardCount: 0,
+                fixture.ShardSize,
+                LoRaFragmentFecMode.None);
+            expandedFrames.Add(LoRaFragmentCodec.Encode(
+                new LoRaFragmentUnsignedFrame(expandedHeader, decoded.Shard.Span),
+                fixture.AuthenticationHandle,
+                LoRaFragmentDirection.Forward,
+                fixture.Authenticator));
+        }
+
+        var finalHeader = new LoRaFragmentHeader(
+            fixture.Plan.Frames[0].Span.Slice(4, LoRaFragmentLimits.MessageIdLength),
+            checked((byte)fixture.Plan.DataShardCount),
+            checked((byte)(fixture.Plan.DataShardCount + 1)),
+            parityShardCount: 0,
+            fixture.ShardSize,
+            LoRaFragmentFecMode.None);
+        expandedFrames.Add(LoRaFragmentCodec.Encode(
+            new LoRaFragmentUnsignedFrame(finalHeader, new byte[fixture.ShardSize]),
+            fixture.AuthenticationHandle,
+            LoRaFragmentDirection.Forward,
+            fixture.Authenticator));
+
+        LoRaFragmentReassemblyResult? result = null;
+        foreach (var frame in expandedFrames)
+        {
+            result = await reassembler.ProcessAsync(fixture.Request(frame));
+        }
+
+        Assert.NotNull(result);
+        Assert.Equal(LoRaFragmentReassemblyOutcome.Rejected, result.Outcome);
+        Assert.Equal(1, store.PoisonedCount);
+    }
+
+    [Theory]
+    [InlineData(0, 1)]
+    [InlineData(14, 15)]
+    public void PlannerAcceptsExactHopBoundaries(byte currentHop, byte hopLimit)
+    {
+        var fixture = new Fixture(LoRaFragmentFecMode.None);
+        var plan = fixture.CreatePlan(
+            new byte[] { 8, 7, 6, 5, 4, 3, 2, 1 },
+            currentHop,
+            hopLimit);
+
+        Assert.Equal(currentHop, plan.Descriptor.CurrentHop);
+        Assert.Equal(hopLimit, plan.Descriptor.HopLimit);
+    }
+
+    [Fact]
+    public void PlannerRejectsEqualMaximumHopAndLimit()
+    {
+        var fixture = new Fixture(LoRaFragmentFecMode.None);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            fixture.CreatePlan(
+                new byte[] { 8, 7, 6, 5, 4, 3, 2, 1 },
+                currentHop: 15,
+                hopLimit: 15));
     }
 
     [Fact]
@@ -634,13 +782,16 @@ public sealed class LoRaFragmentReassemblerTests
         public byte ShardSize { get; }
         public LoRaFragmentPlan Plan { get; }
 
-        public LoRaFragmentPlan CreatePlan(byte[] messageId) =>
+        public LoRaFragmentPlan CreatePlan(
+            byte[] messageId,
+            byte currentHop = 0,
+            byte hopLimit = 3) =>
             LoRaFragmentPlanner.Plan(
                 new LoRaFragmentPlanRequest(
                     Bundle,
                     messageId,
-                    currentHop: 0,
-                    hopLimit: 3,
+                    currentHop,
+                    hopLimit,
                     ShardSize,
                     FecMode,
                     LoRaFragmentDirection.Forward,

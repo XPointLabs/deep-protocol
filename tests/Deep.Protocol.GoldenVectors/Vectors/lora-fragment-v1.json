@@ -1,7 +1,7 @@
 {
   "name": "P18A LoRa compact fragment V1 canonical vectors",
   "sourceRepository": "XPointLabs/deep-protocol",
-  "sourceCommit": "P18A local contract; production authenticator unavailable",
+  "sourceCommit": "d21270ebd0c72c5e1854632a0f4fa0d01db0e10c",
   "authentication": {
     "domainAscii": "Deep/P18A/LoRaFragmentAuth/v1",
     "direction": 1,
@@ -16,7 +16,15 @@
     "maximumBundleBytes": 4096,
     "maximumDataShards": 64,
     "maximumParityShards": 8,
-    "maximumReservedDataShardBytes": 4352
+    "maximumTotalFragments": 72,
+    "maximumReservedDataShardBytes": 4352,
+    "maximumIncompleteMessagesPerReplayScope": 4,
+    "maximumIncompleteMessagesGlobal": 16,
+    "maximumReservedReassemblyBytesGlobal": 65536,
+    "reservationMetadataBytesPerMessage": 256,
+    "maximumTombstonesPerReplayScope": 256,
+    "maximumTombstonesGlobal": 1024,
+    "maximumTombstoneBytesGlobal": 131072
   },
   "bundleHex": "44504231010101010100000000070000000000000064303132333435363738393a3b3c3d3e3f707172737475767778797a7b7c7d7e7f00200001000000010000101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2faabb0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
   "bundleSha256": "b722f5db3feda41435c007d9e870abae132b66c48189e122ba142901bf8bcfae",
