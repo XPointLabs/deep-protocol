@@ -854,15 +854,12 @@ public sealed class LoRaFragmentReassembler
         }
 
         s_observeLateFaultRaceHook?.Invoke();
-        if (!task.IsCompleted)
-        {
-            _ = task.ContinueWith(
-                static completed => ObserveFault(completed),
-                CancellationToken.None,
-                TaskContinuationOptions.ExecuteSynchronously |
-                TaskContinuationOptions.OnlyOnFaulted,
-                TaskScheduler.Default);
-        }
+        _ = task.ContinueWith(
+            static completed => ObserveFault(completed),
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously |
+            TaskContinuationOptions.OnlyOnFaulted,
+            TaskScheduler.Default);
     }
 
     private static void ObserveFault(Task task)
