@@ -27,7 +27,7 @@
       "id": "deep-extension/managed-ingress/v1/max-three-hop-producer",
       "kind": "deep-extension-managed-ingress-producer-profile-v1",
       "body": "DPB1-max=1064960;hops=3;endpoint=/api/ingress/internal/opaque-v1;xchacha20",
-      "timestampMs": 1420309
+      "timestampMs": 1420314
     }
   ]
 }

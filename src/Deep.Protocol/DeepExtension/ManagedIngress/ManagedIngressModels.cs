@@ -218,6 +218,7 @@ public sealed class ManagedIngressStreamingAdmission
     private bool _completed;
     private bool _forwardStarted;
     private bool _cancelled;
+    private bool _faulted;
 
     public ManagedIngressStreamingAdmission(long declaredLength)
     {
@@ -247,6 +248,7 @@ public sealed class ManagedIngressStreamingAdmission
         if (next > _declaredLength ||
             next > ManagedIngressLimits.MaximumOpaqueFrameBytes)
         {
+            _faulted = true;
             throw new ManagedIngressContractException(
                 ManagedIngressContractError.FrameLengthOutOfRange,
                 "The streamed opaque frame exceeds its declared or maximum length.");
@@ -260,6 +262,7 @@ public sealed class ManagedIngressStreamingAdmission
         EnsureReceiving();
         if (ReceivedBytes != _declaredLength)
         {
+            _faulted = true;
             throw new ManagedIngressContractException(
                 ManagedIngressContractError.FrameLengthOutOfRange,
                 "The streamed opaque frame is truncated.");
@@ -289,7 +292,7 @@ public sealed class ManagedIngressStreamingAdmission
 
     private void EnsureReceiving()
     {
-        if (_completed || _cancelled || _forwardStarted)
+        if (_completed || _cancelled || _forwardStarted || _faulted)
         {
             throw new InvalidOperationException("The admission body is no longer writable.");
         }

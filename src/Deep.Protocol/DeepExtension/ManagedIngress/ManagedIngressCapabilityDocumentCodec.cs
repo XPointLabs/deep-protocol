@@ -217,6 +217,12 @@ public static class ManagedIngressCapabilityDocumentCodec
                 document.CriticalFeatures.Count ||
             document.OptionalFeatures.Distinct(StringComparer.Ordinal).Count() !=
                 document.OptionalFeatures.Count ||
+            !document.CriticalFeatures.SequenceEqual(
+                document.CriticalFeatures.OrderBy(feature => feature, StringComparer.Ordinal),
+                StringComparer.Ordinal) ||
+            !document.OptionalFeatures.SequenceEqual(
+                document.OptionalFeatures.OrderBy(feature => feature, StringComparer.Ordinal),
+                StringComparer.Ordinal) ||
             document.CriticalFeatures.Intersect(
                 document.OptionalFeatures,
                 StringComparer.Ordinal).Any() ||

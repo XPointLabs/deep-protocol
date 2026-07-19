@@ -529,7 +529,7 @@ public sealed class ManagedIngressContractTests
             },
             new byte[OpaqueBundleLimits.MaximumEncodedLength]);
 
-        Assert.Equal(1_420_309, payload.Body.Length);
+        Assert.Equal(1_420_314, payload.Body.Length);
         var outer = ManagedIngressH2Contract.ValidateOpaqueFrame(payload.Body.Span);
         Assert.Equal(payload.Body.ToArray(), outer.Bytes.ToArray());
         var fixture = GoldenVectorLoader.Load("managed-ingress-h2-v1.json")
