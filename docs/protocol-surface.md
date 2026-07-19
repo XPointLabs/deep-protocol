@@ -51,6 +51,9 @@ Primary upstream areas reviewed:
 - P03C contact-scoped nearby rendezvous, canonical handshake framing, replay scope and
   platform-neutral lifecycle, isolated in `Deep.Protocol.DeepExtension.NearbyHandshakes`; the
   mutually authenticated AKE remains a blocked host adapter with no production implementation
+- P18A compact authenticated fragmentation/planning and durable replay-store orchestration for
+  exact DPB1 bytes, isolated in `Deep.Protocol.DeepExtension.LoRaFragments`; no production
+  authenticator, replay store, radio runtime or DI registration is shipped
 
 ## Wire Semantics Preserved
 
@@ -114,5 +117,11 @@ set, and two distinct active online signers authorize bridge or membership state
 snapshots contain public entry contacts, not full core/storage membership. Signature verification,
 durable last-known-good state, registry/client integration and production keys remain outside this
 library.
+
+P18A adds fixed `LF` V1 frames, a canonical ten-byte DPB1 descriptor and optional one-XOR-shard
+groups. Authentication and replay scopes are provider-issued opaque handles. The coordinator
+returns bundle bytes only after strict DPB1 validation and a durable generation-CAS completion
+tombstone. It includes no link-key implementation, BLE/USB, radio, region defaults, billing,
+rewards or battery/background behavior.
 
 Tests use an explicit fake adapter only to verify managed state and wire container behavior.

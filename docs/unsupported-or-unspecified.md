@@ -179,3 +179,24 @@ bridge contacts are public discovery data and do not provide anonymity against a
 Fork witnesses record candidate ancestry but do not select a winning branch. Production activation
 remains blocked until the verifier/key lifecycle and durable state are supplied, independently
 reviewed, and exercised by registry/client E2E work.
+
+## P18A compact fragment gaps
+
+P18A defines a Deep-extension compact fragment codec, deterministic planner,
+bounded reassembly coordinator and durable replay/quota interfaces. It
+deliberately does not implement:
+
+- production fragment authentication, link/network/profile key binding,
+  derivation, rotation, custody or recovery;
+- a production durable replay/quota store or runtime registration;
+- BLE/USB framing, pairing, permissions, reconnect or gateway queue behavior;
+- LoRa/LoRaWAN radio, simulator, driver, frequency, region, power, duty-cycle
+  or legal configuration;
+- mesh routing, discovery, attachments, calls, presence or background delivery;
+- wallet, XPNT, subscriptions, entitlements, rewards or managed-node billing.
+
+The deterministic HMAC adapter and memory replay store exist only in tests.
+Fragment authentication is not link encryption or traffic-flow
+confidentiality. Runtime activation requires P18B/P18C, approved hardware and
+region profile, external cryptographic/privacy review, two-device E2E and
+real-device battery evidence.

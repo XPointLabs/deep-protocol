@@ -35,6 +35,8 @@ Any regression in these suites fails CI.
 | Onion layered request build/decrypt parity vs direct sodium sealed-box operations | `CrossLanguageDifferentialTests.OnionBuildLayeringAndResponseDecryptMatchDirectSodium` | Covered |
 | Robustness on malformed/random protocol payloads | `ProtocolFuzzSmokeTests`, `ProtocolParserCodecFuzzTests` | Covered |
 | DPB1 structured failure branches | `OpaqueBundleMalformedAndFuzzTests.DeterministicStructuredMutations_ReachNamedFailureBranches`, truncation and encoder separation tests | Covered by deterministic structural mutations |
+| P18A LF V1 canonical None/Xor1 frames | `LoRaFragmentCodecAndPlannerTests.PlannerMatchesEveryFrameInGoldenVector` and `lora-fragment-v1.json` | Covered with deterministic test-only authentication |
+| P18A malformed/auth/reassembly behavior | `LoRaFragmentMalformedAndFuzzTests`, `LoRaFragmentReassemblerTests` | Covered for strict parsing, auth-before-store, reorder, duplicate poison, one-loss XOR and durable terminal ordering |
 
 ## Remaining Risk Areas
 
@@ -50,6 +52,12 @@ trailing bytes, non-canonical padding, unknown/missing critical features, undefi
 transport-attempt/dedup equality and legacy opt-in. This suite is branch-targeted regression
 testing, not coverage-guided fuzzing. The separate fixed-seed random malformed-input loop is also a
 smoke test, not a claim of fuzz-engine exploration or corpus minimization.
+
+P18A adds complete byte-for-byte `None` and `Xor1` frame vectors, every-frame
+authentication checks, fixed-seed malformed smoke, truncation, single-byte
+mutation, 4096-byte planning, replay restart and FEC recovery regressions.
+These prove the managed contract and test adapter only. They are not
+cross-language crypto, radio, battery, regulatory or hardware evidence.
 
 ## Suggested Next Verification Hardening
 
