@@ -150,9 +150,10 @@ public static class LoRaFragmentCodec
             LoRaFragmentDomains.Authentication.Length +
             1 +
             LoRaFragmentLimits.HeaderLength;
-        return new LoRaFragmentFrame(
+        return LoRaFragmentFrame.FromAuthenticatedTranscript(
             header,
-            transcript.AsSpan(retainedShardOffset, shardSize),
+            transcript,
+            retainedShardOffset,
             retainedAuthenticationTag);
     }
 

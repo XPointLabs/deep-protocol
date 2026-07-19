@@ -331,7 +331,8 @@ public sealed class LoRaFragmentUnsignedFrame
 
 public sealed class LoRaFragmentFrame
 {
-    private readonly byte[] _shard;
+    private readonly byte[] _shardStorage;
+    private readonly int _shardOffset;
     private readonly byte[] _authenticationTag;
 
     public LoRaFragmentFrame(
@@ -355,15 +356,52 @@ public sealed class LoRaFragmentFrame
         }
 
         Header = header;
-        _shard = shard.ToArray();
+        _shardStorage = shard.ToArray();
+        _shardOffset = 0;
         _authenticationTag = authenticationTag.ToArray();
     }
 
+    private LoRaFragmentFrame(
+        LoRaFragmentHeader header,
+        byte[] authenticatedTranscript,
+        int shardOffset,
+        byte[] authenticationTag)
+    {
+        ArgumentNullException.ThrowIfNull(header);
+        ArgumentNullException.ThrowIfNull(authenticatedTranscript);
+        ArgumentNullException.ThrowIfNull(authenticationTag);
+        if (shardOffset < 0 ||
+            shardOffset > authenticatedTranscript.Length - header.ShardSize)
+        {
+            throw new ArgumentOutOfRangeException(nameof(shardOffset));
+        }
+
+        if (authenticationTag.Length != LoRaFragmentLimits.AuthenticationTagLength)
+        {
+            throw new ArgumentException(
+                "The authentication tag must contain exactly sixteen bytes.",
+                nameof(authenticationTag));
+        }
+
+        Header = header;
+        _shardStorage = authenticatedTranscript;
+        _shardOffset = shardOffset;
+        _authenticationTag = authenticationTag;
+    }
+
+    internal static LoRaFragmentFrame FromAuthenticatedTranscript(
+        LoRaFragmentHeader header,
+        byte[] authenticatedTranscript,
+        int shardOffset,
+        byte[] authenticationTag) =>
+        new(header, authenticatedTranscript, shardOffset, authenticationTag);
+
     public LoRaFragmentHeader Header { get; }
-    public ReadOnlyMemory<byte> Shard => _shard.ToArray();
+    public ReadOnlyMemory<byte> Shard => ShardSpan.ToArray();
     public ReadOnlyMemory<byte> AuthenticationTag => _authenticationTag.ToArray();
 
-    internal ReadOnlySpan<byte> ShardSpan => _shard;
+    internal ReadOnlySpan<byte> ShardSpan =>
+        _shardStorage.AsSpan(_shardOffset, Header.ShardSize);
     internal ReadOnlySpan<byte> AuthenticationTagSpan => _authenticationTag;
 }
 

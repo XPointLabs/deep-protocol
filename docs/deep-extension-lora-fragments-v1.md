@@ -94,6 +94,11 @@ No production authenticator, key derivation, secret store or DI registration
 is shipped. The golden vectors use truncated HMAC-SHA-256 only as an explicitly
 test-only deterministic adapter.
 
+Decode uses one bounded ephemeral authentication transcript and reuses that
+same buffer as the pre-admission frame view. No second shard copy is made
+between tag verification and the store call. Persistent reassembly bytes are
+copied only by a durable store after atomic quota admission.
+
 ## Durable replay and quotas
 
 `ILoRaFragmentReplayStore` has two atomic mutation boundaries:

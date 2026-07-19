@@ -90,6 +90,13 @@ Processing order is fixed:
 4. atomically reserve bounded capacity;
 5. only then copy/store a shard and evaluate reassembly.
 
+Authentication uses one absolute-bounded ephemeral transcript snapshot so
+the bytes retained after verification are exactly the bytes that were
+authenticated even if caller-owned input is mutable. The decoded frame takes
+ownership of that same buffer and does not make a second shard copy. This
+transient authentication object is not admitted reassembly state. The durable
+store performs the first persistent shard copy only after atomic admission.
+
 One message may reserve at most 4352 data-shard bytes. A replay scope admits
 at most four incomplete messages; the process admits at most sixteen and
 64 KiB total. Policy may lower but not raise those ceilings. Expired state is
