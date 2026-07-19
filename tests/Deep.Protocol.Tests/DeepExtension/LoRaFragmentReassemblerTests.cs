@@ -641,6 +641,98 @@ public sealed class LoRaFragmentReassemblerTests
     }
 
     [Fact]
+    public async Task ReconciliationTimeoutBoundsStoreThatIgnoresCancellation()
+    {
+        var fixture = new Fixture(LoRaFragmentFecMode.None);
+        var store = new MemoryReplayStore
+        {
+            CommitStatus = LoRaFragmentStoreCommitStatus.OutcomeUnknown,
+            NeverCompleteRead = true
+        };
+        var policy = fixture.CreateReassemblyPolicy(
+            reconciliationTimeout: TimeSpan.FromMilliseconds(50));
+        var reassembler = fixture.Reassembler(store, policy);
+        LoRaFragmentReassemblyResult? result = null;
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+        foreach (var frame in fixture.Plan.Frames)
+        {
+            result = await reassembler.ProcessAsync(fixture.Request(frame))
+                .AsTask()
+                .WaitAsync(TimeSpan.FromSeconds(2));
+        }
+
+        stopwatch.Stop();
+        Assert.NotNull(result);
+        Assert.Equal(LoRaFragmentReassemblyOutcome.OutcomeUnknown, result.Outcome);
+        Assert.Null(result.EncodedOpaqueBundle);
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(1));
+    }
+
+    [Fact]
+    public async Task WrappedFatalCancellationIsNeverNormalized()
+    {
+        var fixture = new Fixture(LoRaFragmentFecMode.None);
+        var fatal = new OutOfMemoryException("wrapped fragment fatal canary");
+        var wrapped = new OperationCanceledException("wrapper", fatal);
+        var authentication = new LoRaFragmentReassembler(
+            new MemoryReplayStore(),
+            fixture.ReassemblyPolicy,
+            new ThrowingAuthenticator(wrapped));
+
+        var authThrown = await Assert.ThrowsAsync<OperationCanceledException>(
+            async () => await authentication.ProcessAsync(
+                fixture.Request(fixture.Plan.Frames[0])));
+        Assert.Same(fatal, authThrown.InnerException);
+
+        var applyStore = new MemoryReplayStore
+        {
+            ApplyException = wrapped
+        };
+        var applyThrown = await Assert.ThrowsAsync<OperationCanceledException>(
+            async () => await fixture.Reassembler(applyStore).ProcessAsync(
+                fixture.Request(fixture.Plan.Frames[0])));
+        Assert.Same(fatal, applyThrown.InnerException);
+
+        var commitStore = new MemoryReplayStore
+        {
+            CommitException = wrapped
+        };
+        var terminal = fixture.Reassembler(commitStore);
+        OperationCanceledException? commitThrown = null;
+        foreach (var frame in fixture.Plan.Frames)
+        {
+            try
+            {
+                _ = await terminal.ProcessAsync(fixture.Request(frame));
+            }
+            catch (OperationCanceledException exception)
+            {
+                commitThrown = exception;
+                break;
+            }
+        }
+
+        Assert.NotNull(commitThrown);
+        Assert.Same(fatal, commitThrown.InnerException);
+    }
+
+    [Fact]
+    public async Task CallerCancellationBeforeAuthenticationNeverMutatesStore()
+    {
+        var fixture = new Fixture(LoRaFragmentFecMode.None);
+        var store = new MemoryReplayStore();
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            async () => await fixture.Reassembler(store).ProcessAsync(
+                fixture.Request(fixture.Plan.Frames[0]),
+                cancellation.Token));
+        Assert.Equal(0, store.ApplyCalls);
+    }
+
+    [Fact]
     public async Task LoweredGlobalAdmissionLimitRejectsWithoutEvictingLiveState()
     {
         var fixture = new Fixture(
@@ -1008,7 +1100,8 @@ public sealed class LoRaFragmentReassemblerTests
             int maximumTombstonesGlobal =
                 LoRaFragmentReassemblyLimits.MaximumTombstonesGlobal,
             int maximumTombstoneBytesGlobal =
-                LoRaFragmentReassemblyLimits.MaximumTombstoneBytesGlobal) =>
+                LoRaFragmentReassemblyLimits.MaximumTombstoneBytesGlobal,
+            TimeSpan reconciliationTimeout = default) =>
             new(
                 FragmentPolicy,
                 currentExpiryBucket,
@@ -1019,7 +1112,8 @@ public sealed class LoRaFragmentReassemblerTests
                 maximumReservedBytesGlobal,
                 maximumTombstonesPerReplayScope,
                 maximumTombstonesGlobal,
-                maximumTombstoneBytesGlobal);
+                maximumTombstoneBytesGlobal,
+                reconciliationTimeout);
 
         public LoRaFragmentReassembler Reassembler(
             ILoRaFragmentReplayStore store,
@@ -1073,6 +1167,9 @@ public sealed class LoRaFragmentReassemblerTests
         public long? SnapshotGenerationOverride { get; set; }
         public bool RequireAllDataForReady { get; set; }
         public bool ThrowAfterCommit { get; set; }
+        public bool NeverCompleteRead { get; set; }
+        public Exception? ApplyException { get; set; }
+        public Exception? CommitException { get; set; }
         public int ApplyCalls { get; private set; }
         public int ReadCalls { get; private set; }
         public bool LastReadTokenCanBeCanceled { get; private set; }
@@ -1125,6 +1222,8 @@ public sealed class LoRaFragmentReassemblerTests
             lock (_gate)
             {
                 ApplyCalls++;
+                if (ApplyException is not null)
+                    throw ApplyException;
                 EvictExpiredNoLock(policy);
                 var key = Key.From(fragment.Key);
                 if (_states.TryGetValue(key, out var state))
@@ -1236,6 +1335,8 @@ public sealed class LoRaFragmentReassemblerTests
             cancellationToken.ThrowIfCancellationRequested();
             lock (_gate)
             {
+                if (CommitException is not null)
+                    throw CommitException;
                 EvictExpiredNoLock(policy);
                 var key = Key.From(terminal.Key);
                 if (!_states.TryGetValue(key, out var state) ||
@@ -1273,6 +1374,14 @@ public sealed class LoRaFragmentReassemblerTests
             CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (NeverCompleteRead)
+            {
+                var pending =
+                    new TaskCompletionSource<LoRaFragmentReplayRecord>(
+                        TaskCreationOptions.RunContinuationsAsynchronously);
+                return new ValueTask<LoRaFragmentReplayRecord>(pending.Task);
+            }
+
             lock (_gate)
             {
                 ReadCalls++;
