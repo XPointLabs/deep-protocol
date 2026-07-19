@@ -72,6 +72,58 @@ public sealed class ProfileCarrierTrustRedTests
         Assert.Null(invalidOptions.InnerException);
     }
 
+    [Theory]
+    [InlineData("network")]
+    [InlineData("policy")]
+    [InlineData("previous-hash")]
+    [InlineData("sequence")]
+    public void ResignedDelegationContextMismatchMatrixFailsClosed(string mismatch)
+    {
+        var parts = SyntheticProfileFixture.PartsWithDelegationMutation(
+            delegation => mismatch switch
+            {
+                "network" => delegation with
+                {
+                    NetworkId = Mutate(delegation.NetworkId.Span)
+                },
+                "policy" => delegation with
+                {
+                    PolicyVersion = delegation.PolicyVersion + 1
+                },
+                "previous-hash" => delegation with
+                {
+                    PreviousHash = Mutate(delegation.PreviousHash.Span)
+                },
+                "sequence" => delegation with
+                {
+                    Sequence = delegation.Sequence + 1
+                },
+                _ => throw new ArgumentOutOfRangeException(nameof(mismatch))
+            });
+        AssertVerification(parts, SyntheticProfileFixture.Verifier());
+    }
+
+    [Theory]
+    [InlineData(900UL, 2)]
+    [InlineData(2_100UL, 2)]
+    [InlineData(1_100UL, 4)]
+    public void TimeAndProtocolContextMismatchMatrixFailsClosed(
+        ulong verificationTime,
+        ushort protocol)
+    {
+        var parts = SyntheticProfileFixture.Parts();
+        var exception = Assert.Throws<ProfileCarrierException>(() =>
+            ProfileCarrierComposer.ComposeExact(
+                ProfileCarrierContractRedTests.Input(parts),
+                new ProfileCarrierVerificationOptions(
+                    verificationTime,
+                    30,
+                    protocol),
+                SyntheticProfileFixture.Verifier()));
+        Assert.Equal(ProfileCarrierError.VerificationRejected, exception.Error);
+        Assert.Null(exception.InnerException);
+    }
+
     private static void AssertVerification(
         SyntheticProfileParts parts,
         IMembershipSignatureVerifier verifier)
@@ -116,5 +168,12 @@ public sealed class ProfileCarrierTrustRedTests
             ReadOnlySpan<byte> signingBytes,
             ReadOnlySpan<byte> signature) =>
             false;
+    }
+
+    private static byte[] Mutate(ReadOnlySpan<byte> source)
+    {
+        var result = source.ToArray();
+        result[0] ^= 0x80;
+        return result;
     }
 }

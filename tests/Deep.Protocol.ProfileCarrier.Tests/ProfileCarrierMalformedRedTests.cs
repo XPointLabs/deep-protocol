@@ -5,6 +5,33 @@ namespace Deep.Protocol.ProfileCarrier.Tests;
 public sealed class ProfileCarrierMalformedRedTests
 {
     [Fact]
+    public void RejectsZeroAndOverMaximumCountsAndAllInvalidUInt32Encodings()
+    {
+        var canonical = Compose().FilePayload.ToArray();
+        AssertFraming(Mutate(canonical, 5, 0));
+        AssertFraming(Mutate(
+            canonical,
+            5,
+            checked((byte)(ProfileCarrierLimits.MaximumComponents + 1))));
+
+        AssertFraming(
+        [
+            (byte)'D', (byte)'P', (byte)'F', (byte)'1', 1, 4,
+            0x80, 0x00
+        ]);
+        AssertFraming(
+        [
+            (byte)'D', (byte)'P', (byte)'F', (byte)'1', 1, 4,
+            0xff, 0xff, 0xff, 0xff, 0x10
+        ]);
+        AssertFraming(
+        [
+            (byte)'D', (byte)'P', (byte)'F', (byte)'1', 1, 4,
+            0x80, 0x80, 0x80, 0x80, 0x80, 0x00
+        ]);
+    }
+
+    [Fact]
     public void RejectsUnknownVersionTrailingReorderingAndNonMinimalLengths()
     {
         var canonical = Compose().FilePayload.ToArray();
@@ -90,6 +117,40 @@ public sealed class ProfileCarrierMalformedRedTests
                 [],
                 new byte[] { 1 },
                 [(ReadOnlyMemory<byte>)new byte[] { 1 }]));
+    }
+
+    [Fact]
+    public void DuplicateSignedBridgesAndWireOrderChangesFailClosed()
+    {
+        var parts = SyntheticProfileFixture.Parts(bridgeCount: 2);
+        var duplicated = parts with
+        {
+            CanonicalSignedBridges =
+            [
+                parts.CanonicalSignedBridges[0],
+                parts.CanonicalSignedBridges[0]
+            ]
+        };
+        var duplicateError = Assert.Throws<ProfileCarrierException>(() =>
+            Compose(duplicated));
+        Assert.Equal(ProfileCarrierError.VerificationRejected, duplicateError.Error);
+
+        var canonical = Compose(parts).FilePayload.ToArray();
+        var offsets = ComponentOffsets(canonical);
+        var firstBridge = offsets[3];
+        var secondBridge = offsets[4];
+        var firstBytes = canonical.AsSpan(
+            firstBridge.TypeOffset,
+            secondBridge.TypeOffset - firstBridge.TypeOffset).ToArray();
+        var secondBytes = canonical.AsSpan(
+            secondBridge.TypeOffset,
+            canonical.Length - secondBridge.TypeOffset).ToArray();
+        var reordered = canonical.AsSpan(0, firstBridge.TypeOffset)
+            .ToArray()
+            .Concat(secondBytes)
+            .Concat(firstBytes)
+            .ToArray();
+        AssertFraming(reordered);
     }
 
     private static ProfileCarrierDocument Compose(SyntheticProfileParts? parts = null) =>

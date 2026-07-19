@@ -97,6 +97,51 @@ internal static class SyntheticProfileFixture
             bridges);
     }
 
+    public static SyntheticProfileParts PartsWithDelegationMutation(
+        Func<SignerDelegation, SignerDelegation> mutation)
+    {
+        var verifier = Verifier();
+        var genesis = Genesis();
+        var canonicalGenesis = MembershipContractCodec.EncodeGenesis(genesis);
+        var approvals = Signatures(
+            genesis.OfflineRoots,
+            MembershipSignatureDomain.Genesis,
+            canonicalGenesis,
+            3,
+            verifier);
+        var unsigned = mutation(
+            SignedDelegation(genesis, canonicalGenesis, verifier)) with
+        {
+            Signatures = []
+        };
+        var signingBytes = MembershipContractCodec.GetDelegationSigningBytes(unsigned);
+        var delegation = unsigned with
+        {
+            Signatures = Signatures(
+                genesis.OfflineRoots,
+                MembershipSignatureDomain.OfflineDelegation,
+                signingBytes,
+                3,
+                verifier)
+        };
+        var bridges = SignedBridges(
+                genesis,
+                canonicalGenesis,
+                delegation,
+                1,
+                48,
+                1,
+                null,
+                verifier)
+            .Select(static value => MembershipContractCodec.EncodeSignedBridge(value))
+            .ToArray();
+        return new(
+            canonicalGenesis,
+            approvals,
+            MembershipContractCodec.EncodeSignedDelegation(delegation),
+            bridges);
+    }
+
     public static NetworkGenesis Genesis() =>
         new()
         {

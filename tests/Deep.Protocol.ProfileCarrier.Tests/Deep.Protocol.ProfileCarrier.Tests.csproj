@@ -22,6 +22,8 @@
   <ItemGroup>
     <None Include="Vectors\dpf1-v1.golden.json"
           CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Vectors\xnode-eff4523.provenance.json"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

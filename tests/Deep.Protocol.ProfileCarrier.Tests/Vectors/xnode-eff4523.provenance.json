@@ -1,0 +1,20 @@
+{
+  "schema": "deep-p14-profile-carrier-provenance-v1",
+  "sourceCommit": "eff452368fa4cb1324c5b3c8ee06e2f10e96b835",
+  "sourceTree": "ee7a54e9eb0bc4c0803b9508627355eec75f0405",
+  "files": [
+    {
+      "path": "src/XNode.ProfileGenerator/DormantProfileComposer.cs",
+      "gitBlob": "dbd173d5d88ddf8da4e8976df91762ff55c6dcbc"
+    },
+    {
+      "path": "src/XNode.ProfileGenerator/ProfileFraming.cs",
+      "gitBlob": "4394e106d924e9c4b896df2f9caccf25e36989e8"
+    },
+    {
+      "path": "tests/XNode.ProfileGenerator.Tests/TestOnlyProfileFixture.cs",
+      "gitBlob": "c0f6030b98ac1d1696fd14b7df51b5598d72ae72"
+    }
+  ],
+  "goldenSha256": "cc8df0559b033ad7c70aa5d19134c06c58fb2dd6cfc10449525e1fb919679dbe"
+}
