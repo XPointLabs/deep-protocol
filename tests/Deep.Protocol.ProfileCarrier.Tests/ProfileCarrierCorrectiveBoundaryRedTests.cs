@@ -46,6 +46,44 @@ public sealed class ProfileCarrierCorrectiveBoundaryRedTests
             name.Contains("Endpoint", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void PublicApiAndAssemblyReferenceGraphStayNarrow()
+    {
+        var assembly = typeof(ProfileCarrierComposer).Assembly;
+        Assert.Equal(
+            new[]
+            {
+                "ProfileCarrierAssemblyInput",
+                "ProfileCarrierComposer",
+                "ProfileCarrierComposition",
+                "ProfileCarrierContract",
+                "ProfileCarrierError",
+                "ProfileCarrierException",
+                "ProfileCarrierLimits",
+                "ProfileCarrierVerificationOptions",
+                "ProfileCarrierVerificationResult",
+                "ProfileCarrierVerifier"
+            },
+            assembly.ExportedTypes
+                .Select(static type => type.Name)
+                .OrderBy(static value => value, StringComparer.Ordinal));
+        Assert.Equal(
+            new[] { "Deep.Protocol" },
+            assembly.GetReferencedAssemblies()
+                .Where(static reference => reference.Name!.StartsWith(
+                    "Deep.",
+                    StringComparison.Ordinal))
+                .Select(static reference => reference.Name)
+                .OrderBy(static value => value, StringComparer.Ordinal));
+        Assert.DoesNotContain(
+            assembly.ExportedTypes,
+            static type =>
+                type.Name.Contains("Signer", StringComparison.Ordinal) ||
+                type.Name.Contains("PrivateKey", StringComparison.Ordinal) ||
+                type.Name.Contains("Endpoint", StringComparison.Ordinal) ||
+                type.Name.Contains("NetworkClient", StringComparison.Ordinal));
+    }
+
     [Theory]
     [InlineData("genesis")]
     [InlineData("delegation")]
@@ -121,6 +159,31 @@ public sealed class ProfileCarrierCorrectiveBoundaryRedTests
             bridges));
     }
 
+    [Fact]
+    public void NullAndBelowMinimumApprovalFieldsFailBeforeCopy()
+    {
+        var parts = SyntheticProfileFixture.Parts();
+        var approvals = parts.GenesisApprovals.ToArray();
+
+        var nullValues = approvals.ToArray();
+        nullValues[1] = null!;
+        AssertInput(() => Create(parts, nullValues));
+
+        var shortSigner = approvals.ToArray();
+        shortSigner[1] = shortSigner[1] with
+        {
+            SignerId = new byte[MembershipLimits.SignerIdLength - 1]
+        };
+        AssertBounded(() => Create(parts, shortSigner));
+
+        var shortSignature = approvals.ToArray();
+        shortSignature[1] = shortSignature[1] with
+        {
+            Signature = new byte[MembershipLimits.MinimumSignatureLength - 1]
+        };
+        AssertBounded(() => Create(parts, shortSignature));
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -146,12 +209,46 @@ public sealed class ProfileCarrierCorrectiveBoundaryRedTests
         Assert.DoesNotContain(":\\", rendered, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ThrowingBridgeEnumerablesMapToOneSanitizedContractError(bool onGetEnumerator)
+    {
+        var parts = SyntheticProfileFixture.Parts();
+        var exception = Assert.Throws<ProfileCarrierException>(() =>
+            new ProfileCarrierAssemblyInput(
+                parts.CanonicalGenesis,
+                parts.GenesisApprovals,
+                parts.CanonicalSignedDelegation,
+                new ThrowingEnumerable<ReadOnlyMemory<byte>>(onGetEnumerator)));
+        Assert.Equal(ProfileCarrierError.InvalidInput, exception.Error);
+        Assert.Null(exception.InnerException);
+        Assert.Equal("[profile-carrier-error:InvalidInput]", exception.ToString());
+    }
+
     private static void AssertBounded(Action action)
     {
         var exception = Assert.Throws<ProfileCarrierException>(action);
         Assert.Equal(ProfileCarrierError.BoundsExceeded, exception.Error);
         Assert.Null(exception.InnerException);
     }
+
+    private static void AssertInput(Action action)
+    {
+        var exception = Assert.Throws<ProfileCarrierException>(action);
+        Assert.Equal(ProfileCarrierError.InvalidInput, exception.Error);
+        Assert.Null(exception.InnerException);
+    }
+
+    private static ProfileCarrierAssemblyInput Create(
+        SyntheticProfileParts parts,
+        IEnumerable<MembershipSignature> approvals) =>
+        new(
+            parts.CanonicalGenesis,
+            approvals,
+            parts.CanonicalSignedDelegation,
+            parts.CanonicalSignedBridges.Select(static value =>
+                (ReadOnlyMemory<byte>)value));
 
     private sealed class PoisonMemoryManager(int length) : MemoryManager<byte>
     {

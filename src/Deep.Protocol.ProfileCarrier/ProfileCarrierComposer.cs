@@ -6,7 +6,7 @@ namespace Deep.Protocol.DeepExtension.SelfHostedProfiles;
 
 public static class ProfileCarrierComposer
 {
-    public static ProfileCarrierDocument ComposeExact(
+    public static ProfileCarrierComposition ComposeExact(
         ProfileCarrierAssemblyInput input,
         ProfileCarrierVerificationOptions options,
         IMembershipSignatureVerifier verifier)
@@ -30,7 +30,7 @@ public static class ProfileCarrierComposer
         }
     }
 
-    private static ProfileCarrierDocument ComposeCore(
+    private static ProfileCarrierComposition ComposeCore(
         ProfileCarrierAssemblyInput input,
         ProfileCarrierVerificationOptions options,
         IMembershipSignatureVerifier verifier)

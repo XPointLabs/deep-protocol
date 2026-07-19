@@ -8,6 +8,7 @@
     <Description>Unsigned exact DPF1 carrier contract over the pinned P04 trust authority.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <Version>0.1.0-p14.local</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <RestoreAdditionalProjectSources>$(MSBuildThisFileDirectory)..\..\vendor\p14-profile-carrier\packages</RestoreAdditionalProjectSources>
   </PropertyGroup>

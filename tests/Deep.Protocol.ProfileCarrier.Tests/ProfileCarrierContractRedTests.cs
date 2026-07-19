@@ -37,9 +37,10 @@ public sealed class ProfileCarrierContractRedTests
             composed.FilePayload.Span,
             Options(),
             SyntheticProfileFixture.Verifier());
-        Assert.Equal(composed.FilePayload.ToArray(), verified.FilePayload.ToArray());
         Assert.Equal(composed.Fingerprint, verified.Fingerprint);
         Assert.Equal(composed.FilePayloadSha256.ToArray(), verified.FilePayloadSha256.ToArray());
+        Assert.Equal(composed.MinimumProtocol, verified.MinimumProtocol);
+        Assert.Equal(composed.MaximumProtocol, verified.MaximumProtocol);
         Assert.Equal(composed.ComponentCount, verified.ComponentCount);
         Assert.Equal(composed.BridgeCount, verified.BridgeCount);
     }
@@ -66,7 +67,7 @@ public sealed class ProfileCarrierContractRedTests
     }
 
     [Fact]
-    public void InputsAndVerifiedOutputsAreDefensiveCopies()
+    public void InputsAndCompositionOutputsAreDefensiveCopies()
     {
         var parts = SyntheticProfileFixture.Parts();
         var input = Input(parts);

@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Diagnostics;
 using Deep.Protocol.DeepExtension.Membership;
 
@@ -7,7 +8,7 @@ public static class ProfileCarrierContract
 {
     public const string Identifier = "Deep.Protocol/DPF1-v1";
     public const string Status =
-        "DORMANT-EXACT-CARRIER-GO / PRODUCTION-VERIFIER-NO-GO / " +
+        "REVIEW-PENDING / PRODUCTION-VERIFIER-NO-GO / " +
         "ACTIVATION-NO-GO";
 }
 
@@ -39,6 +40,8 @@ public sealed class ProfileCarrierException : Exception
     }
 
     public ProfileCarrierError Error { get; }
+
+    public override string ToString() => $"[profile-carrier-error:{Error}]";
 
     private static string MessageFor(ProfileCarrierError error) =>
         error switch
@@ -95,10 +98,21 @@ public sealed class ProfileCarrierAssemblyInput
         ReadOnlyMemory<byte> canonicalSignedDelegation,
         IEnumerable<ReadOnlyMemory<byte>> canonicalSignedBridges)
     {
-        this.canonicalGenesis = CopyComponent(canonicalGenesis);
-        this.canonicalSignedDelegation = CopyComponent(canonicalSignedDelegation);
-        this.genesisApprovals = CopyApprovals(genesisApprovals);
-        this.canonicalSignedBridges = CopyBridges(canonicalSignedBridges);
+        try
+        {
+            this.canonicalGenesis = CopyComponent(canonicalGenesis);
+            this.canonicalSignedDelegation = CopyComponent(canonicalSignedDelegation);
+            this.genesisApprovals = CopyApprovals(genesisApprovals);
+            this.canonicalSignedBridges = CopyBridges(canonicalSignedBridges);
+        }
+        catch (ProfileCarrierException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException)
+        {
+            throw ProfileCarrierErrors.InvalidInput();
+        }
     }
 
     internal ReadOnlySpan<byte> GenesisSpan => canonicalGenesis;
@@ -131,13 +145,30 @@ public sealed class ProfileCarrierAssemblyInput
         {
             throw ProfileCarrierErrors.InvalidInput();
         }
+        RejectKnownCountOver(
+            values,
+            MembershipLimits.MaximumSigners);
 
         var result = new List<MembershipSignature>(MembershipLimits.MaximumSigners);
         foreach (var value in values)
         {
-            if (value is null || result.Count == MembershipLimits.MaximumSigners)
+            if (value is null)
+            {
+                throw ProfileCarrierErrors.InvalidInput();
+            }
+            if (result.Count == MembershipLimits.MaximumSigners)
             {
                 throw ProfileCarrierErrors.Bounds();
+            }
+            if (value.SignerId.Length != MembershipLimits.SignerIdLength ||
+                value.Signature.Length is < MembershipLimits.MinimumSignatureLength
+                    or > MembershipLimits.MaximumSignatureLength)
+            {
+                throw ProfileCarrierErrors.Bounds();
+            }
+            if (!Enum.IsDefined(value.Domain))
+            {
+                throw ProfileCarrierErrors.InvalidInput();
             }
             result.Add(CopySignature(value));
         }
@@ -153,6 +184,7 @@ public sealed class ProfileCarrierAssemblyInput
 
         var maximum = ProfileCarrierLimits.MaximumComponents -
             ProfileCarrierLimits.RequiredNonBridgeComponents;
+        RejectKnownCountOver(values, maximum);
         var result = new List<byte[]>(maximum);
         foreach (var value in values)
         {
@@ -165,6 +197,23 @@ public sealed class ProfileCarrierAssemblyInput
         return result.ToArray();
     }
 
+    private static void RejectKnownCountOver<T>(
+        IEnumerable<T> values,
+        int maximum)
+    {
+        var count = values switch
+        {
+            ICollection<T> collection => collection.Count,
+            IReadOnlyCollection<T> collection => collection.Count,
+            ICollection collection => collection.Count,
+            _ => -1
+        };
+        if (count > maximum)
+        {
+            throw ProfileCarrierErrors.Bounds();
+        }
+    }
+
     internal static MembershipSignature CopySignature(MembershipSignature value) =>
         new()
         {
@@ -175,12 +224,12 @@ public sealed class ProfileCarrierAssemblyInput
 }
 
 [DebuggerDisplay("{ToString(),nq}")]
-public sealed class ProfileCarrierDocument
+public sealed class ProfileCarrierComposition
 {
     private readonly byte[] filePayload;
     private readonly byte[] filePayloadSha256;
 
-    internal ProfileCarrierDocument(
+    internal ProfileCarrierComposition(
         ReadOnlySpan<byte> filePayload,
         ReadOnlySpan<byte> filePayloadSha256,
         string fingerprint,
@@ -199,6 +248,42 @@ public sealed class ProfileCarrierDocument
     }
 
     public ReadOnlyMemory<byte> FilePayload => filePayload.ToArray();
+
+    public ReadOnlyMemory<byte> FilePayloadSha256 => filePayloadSha256.ToArray();
+
+    public string Fingerprint { get; }
+
+    public ushort MinimumProtocol { get; }
+
+    public ushort MaximumProtocol { get; }
+
+    public int ComponentCount { get; }
+
+    public int BridgeCount { get; }
+
+    public override string ToString() => "[verified-dormant-profile-carrier]";
+}
+
+[DebuggerDisplay("{ToString(),nq}")]
+public sealed class ProfileCarrierVerificationResult
+{
+    private readonly byte[] filePayloadSha256;
+
+    internal ProfileCarrierVerificationResult(
+        ReadOnlySpan<byte> filePayloadSha256,
+        string fingerprint,
+        ushort minimumProtocol,
+        ushort maximumProtocol,
+        int componentCount,
+        int bridgeCount)
+    {
+        this.filePayloadSha256 = filePayloadSha256.ToArray();
+        Fingerprint = fingerprint;
+        MinimumProtocol = minimumProtocol;
+        MaximumProtocol = maximumProtocol;
+        ComponentCount = componentCount;
+        BridgeCount = bridgeCount;
+    }
 
     public ReadOnlyMemory<byte> FilePayloadSha256 => filePayloadSha256.ToArray();
 

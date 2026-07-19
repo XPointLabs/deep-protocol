@@ -2,7 +2,7 @@
 
 Status:
 
-`DORMANT-EXACT-CARRIER-GO / PRODUCTION-VERIFIER-NO-GO / ACTIVATION-NO-GO`
+`REVIEW-PENDING / PRODUCTION-VERIFIER-NO-GO / ACTIVATION-NO-GO`
 
 `Deep.Protocol.ProfileCarrier` owns the unsigned `DPF1` carrier format shared
 by profile producers and clients. It is a Deep extension, not Session wire
@@ -54,13 +54,16 @@ golden vector in `tests/Deep.Protocol.ProfileCarrier.Tests/Vectors`.
 ## API and downstream use
 
 `ProfileCarrierComposer.ComposeExact` verifies caller-provided public P04
-artifacts and returns the deterministic exact carrier.
+artifacts and returns `ProfileCarrierComposition`, the deterministic exact
+carrier including its raw payload for an operator-controlled export path.
 
 `ProfileCarrierVerifier.VerifyExact` parses, verifies and recomposes an
 existing carrier. Success requires byte-for-byte equality with the canonical
-recomposition. The result exposes defensive copies of the exact payload and
-payload hash plus a genesis fingerprint, signed protocol range and component
-counts. It does not expose an activation handle.
+recomposition. Its least-privilege `ProfileCarrierVerificationResult` exposes
+only a bounded payload hash, genesis fingerprint, signed protocol range and
+component counts. It never returns the raw payload, canonical signed
+components, signatures, contacts or endpoints, and it does not expose an
+activation handle.
 
 The client must consume this package rather than implement another parser.
 The dormant client `DSIG` genesis-only envelope is not a `DPF1` format and
@@ -68,18 +71,22 @@ must not be converted into one or used as an activation path.
 
 ## Offline package source
 
-The project and its test project have exact lock files. Their package source
-is `vendor/p14-profile-carrier/packages`; its hashes and sizes are pinned by
-`offline-closure-manifest.json`. Reproduce a locked restore without network
-sources:
+Every solution project has an exact lock file. The package source is
+`vendor/p14-profile-carrier/packages`; the exact 21-file name, hash and size
+set is pinned by `eng/p14-profile-carrier.offline-packages.json`. The mandatory
+isolated restore/build/test/pack gate is:
 
 ```powershell
-dotnet restore tests/Deep.Protocol.ProfileCarrier.Tests/Deep.Protocol.ProfileCarrier.Tests.csproj `
-  --configfile eng/p14-profile-carrier.NuGet.Config `
-  --locked-mode
-dotnet test tests/Deep.Protocol.ProfileCarrier.Tests/Deep.Protocol.ProfileCarrier.Tests.csproj `
-  --no-restore --configuration Release
+eng/verify-p14-profile-carrier-offline.ps1
+eng/verify-p14-profile-carrier-provenance.ps1 -XNodeRoot C:\path\to\pinned\xnode
 ```
+
+The first gate uses isolated empty NuGet and CLI homes, an explicit cleared
+NuGet configuration, locked restore, a dead network proxy, exact dependency
+asset allowlisting and ancestor build/config injection checks. The second
+verifies the accepted XNode commit/tree/blob identities and executes the
+source-to-source differential oracle. Both gates are required for review;
+their existence is not a production approval.
 
 Production signature verification, signer custody and ceremony, client trust
 persistence, runtime registration, UI, networking and activation remain

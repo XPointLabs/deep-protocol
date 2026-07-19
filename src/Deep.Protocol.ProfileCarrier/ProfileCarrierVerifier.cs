@@ -4,7 +4,7 @@ namespace Deep.Protocol.DeepExtension.SelfHostedProfiles;
 
 public static class ProfileCarrierVerifier
 {
-    public static ProfileCarrierDocument VerifyExact(
+    public static ProfileCarrierVerificationResult VerifyExact(
         ReadOnlySpan<byte> filePayload,
         ProfileCarrierVerificationOptions options,
         IMembershipSignatureVerifier verifier)
@@ -30,7 +30,13 @@ public static class ProfileCarrierVerifier
             {
                 throw ProfileCarrierErrors.Framing();
             }
-            return recomposed;
+            return new ProfileCarrierVerificationResult(
+                recomposed.FilePayloadSha256.Span,
+                recomposed.Fingerprint,
+                recomposed.MinimumProtocol,
+                recomposed.MaximumProtocol,
+                recomposed.ComponentCount,
+                recomposed.BridgeCount);
         }
         catch (ProfileCarrierException)
         {

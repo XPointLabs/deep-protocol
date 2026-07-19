@@ -153,7 +153,7 @@ public sealed class ProfileCarrierMalformedRedTests
         AssertFraming(reordered);
     }
 
-    private static ProfileCarrierDocument Compose(SyntheticProfileParts? parts = null) =>
+    private static ProfileCarrierComposition Compose(SyntheticProfileParts? parts = null) =>
         ProfileCarrierComposer.ComposeExact(
             ProfileCarrierContractRedTests.Input(parts ?? SyntheticProfileFixture.Parts()),
             ProfileCarrierContractRedTests.Options(),
