@@ -117,8 +117,10 @@ the bundle is not emitted before that durable commit.
 `ReadAsync` is reconciliation-only and returns a bounded discriminated
 `Absent`/`Incomplete`/`Completed`/`Poisoned`/`Expired` record with generation,
 deadlines and only a completed digest. Reads use an explicit bounded timeout
-after unknown mutation outcomes; they never emit payload. There is no
-production store implementation or fallback. Incomplete state and
+after unknown mutation outcomes; the coordinator bounds its own wait even if
+a faulty store ignores cancellation and observes any later task fault.
+Wrapped fatal exceptions are not normalized as ordinary cancellation. Reads
+never emit payload. There is no production store implementation or fallback. Incomplete state and
 completed/poisoned/expired tombstones are durable through restart.
 
 Per scope there are at most four incomplete messages; globally at most 16.

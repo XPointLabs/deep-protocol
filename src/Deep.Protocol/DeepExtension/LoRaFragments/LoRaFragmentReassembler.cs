@@ -656,11 +656,14 @@ public sealed class LoRaFragmentReassembler
             cancellationToken.ThrowIfCancellationRequested();
             frame = LoRaFragmentCodec.Decode(request.EncodedFrame.Span, _policy.FragmentPolicy, request.AuthenticationHandle, request.Direction, _authenticator);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException exception)
+            when (cancellationToken.IsCancellationRequested &&
+                  IsRecoverable(exception))
         {
             throw new OperationCanceledException(cancellationToken);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException exception)
+            when (IsRecoverable(exception))
         {
             return Rejected(LoRaFragmentReassemblyError.FrameRejected);
         }
@@ -675,7 +678,8 @@ public sealed class LoRaFragmentReassembler
         {
             applied = await _store.ApplyAuthenticatedFragmentAsync(new LoRaFragmentAuthenticatedFragment(key, frame), _policy, cancellationToken).ConfigureAwait(false);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException exception)
+            when (IsRecoverable(exception))
         {
             await ReconcileAsync(key).ConfigureAwait(false);
             return Unknown();
@@ -757,7 +761,8 @@ public sealed class LoRaFragmentReassembler
         {
             committed = await _store.TryCommitTerminalAsync(terminal, _policy, cancellationToken).ConfigureAwait(false);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException exception)
+            when (IsRecoverable(exception))
         {
             await ReconcileAsync(key).ConfigureAwait(false);
             return Unknown();
@@ -815,15 +820,42 @@ public sealed class LoRaFragmentReassembler
         LoRaFragmentReplayKey key)
     {
         using var timeout = new CancellationTokenSource(_policy.ReconciliationTimeout);
+        Task<LoRaFragmentReplayRecord>? readTask = null;
         try
         {
-            var record = await _store.ReadAsync(key, timeout.Token).ConfigureAwait(false);
+            readTask = _store.ReadAsync(key, timeout.Token).AsTask();
+            var record = await readTask.WaitAsync(timeout.Token).ConfigureAwait(false);
             return ReplayKeyMatches(record.Key, key) ? record : null;
         }
         catch (Exception exception) when (IsRecoverable(exception))
         {
+            ObserveLateFault(readTask);
             // Read failure is deliberately indistinguishable from an unknown mutation outcome.
             return null;
+        }
+    }
+
+    private static void ObserveLateFault(Task? task)
+    {
+        if (task is null)
+        {
+            return;
+        }
+
+        if (task.IsFaulted)
+        {
+            _ = task.Exception;
+            return;
+        }
+
+        if (!task.IsCompleted)
+        {
+            _ = task.ContinueWith(
+                static completed => _ = completed.Exception,
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously |
+                TaskContinuationOptions.OnlyOnFaulted,
+                TaskScheduler.Default);
         }
     }
 

@@ -129,8 +129,11 @@ linearization points:
 `ReadAsync` returns a bounded discriminated durable record for `Absent`,
 `Incomplete`, `Completed`, `Poisoned` or `Expired`, including generation,
 expiry/retention and only the completed bundle digest. Reconciliation uses a
-caller-bounded timeout independent of a cancelled mutation token. A confirmed
-read never converts an uncertain mutation into payload emission.
+caller-bounded timeout independent of a cancelled mutation token. The
+coordinator bounds its own wait even if a faulty store ignores cancellation
+and observes any later task fault. A confirmed read never converts an
+uncertain mutation into payload emission. Wrapped fatal exceptions are never
+normalized as ordinary cancellation or store unavailability.
 
 The key is the provider-owned replay scope handle, direction and exact
 eight-byte message ID. The same logical scope may be reissued after restart,
