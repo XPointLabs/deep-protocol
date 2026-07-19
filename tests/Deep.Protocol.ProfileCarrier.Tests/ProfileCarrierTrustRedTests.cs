@@ -124,6 +124,109 @@ public sealed class ProfileCarrierTrustRedTests
         Assert.Null(exception.InnerException);
     }
 
+    [Theory]
+    [InlineData("delegation-missing")]
+    [InlineData("delegation-extra")]
+    [InlineData("delegation-wrong-role")]
+    [InlineData("bridge-missing")]
+    [InlineData("bridge-extra")]
+    [InlineData("bridge-wrong-role")]
+    public void SignedP04QuorumAndRoleMatrixFailsClosed(string mutation)
+    {
+        var parts = SyntheticProfileFixture.Parts();
+        var verifier = SyntheticProfileFixture.Verifier();
+
+        if (mutation.StartsWith("delegation", StringComparison.Ordinal))
+        {
+            var signed = MembershipContractCodec.DecodeSignedDelegation(
+                parts.CanonicalSignedDelegation);
+            var signingBytes = MembershipContractCodec.GetDelegationSigningBytes(
+                signed with { Signatures = [] });
+            var signatures = mutation switch
+            {
+                "delegation-missing" => signed.Signatures.Take(2).ToArray(),
+                "delegation-extra" => SyntheticProfileFixture.Signatures(
+                    SyntheticProfileFixture.OfflineRoots(),
+                    MembershipSignatureDomain.OfflineDelegation,
+                    signingBytes,
+                    4,
+                    verifier),
+                "delegation-wrong-role" => SyntheticProfileFixture.Signatures(
+                    SyntheticProfileFixture.OnlineSigners(),
+                    MembershipSignatureDomain.OfflineDelegation,
+                    signingBytes,
+                    3,
+                    verifier),
+                _ => throw new ArgumentOutOfRangeException(nameof(mutation))
+            };
+            parts = parts with
+            {
+                CanonicalSignedDelegation =
+                    MembershipContractCodec.EncodeSignedDelegation(
+                        signed with { Signatures = signatures })
+            };
+        }
+        else
+        {
+            var signed = MembershipContractCodec.DecodeSignedBridge(
+                parts.CanonicalSignedBridges[0]);
+            var signingBytes = MembershipContractCodec.GetBridgeSigningBytes(
+                signed.Statement);
+            var signatures = mutation switch
+            {
+                "bridge-missing" => signed.Signatures.Take(1).ToArray(),
+                "bridge-extra" => SyntheticProfileFixture.Signatures(
+                    SyntheticProfileFixture.OnlineSigners(),
+                    MembershipSignatureDomain.Bridge,
+                    signingBytes,
+                    3,
+                    verifier),
+                "bridge-wrong-role" => SyntheticProfileFixture.Signatures(
+                    SyntheticProfileFixture.OfflineRoots(),
+                    MembershipSignatureDomain.Bridge,
+                    signingBytes,
+                    2,
+                    verifier),
+                _ => throw new ArgumentOutOfRangeException(nameof(mutation))
+            };
+            parts = parts with
+            {
+                CanonicalSignedBridges =
+                [
+                    MembershipContractCodec.EncodeSignedBridge(
+                        signed with { Signatures = signatures })
+                ]
+            };
+        }
+
+        AssertVerification(parts, verifier);
+    }
+
+    [Theory]
+    [InlineData("delegation")]
+    [InlineData("bridge")]
+    public void NonCanonicalSignedP04BytesFailClosed(string artifact)
+    {
+        var parts = SyntheticProfileFixture.Parts();
+        parts = artifact switch
+        {
+            "delegation" => parts with
+            {
+                CanonicalSignedDelegation =
+                    [.. parts.CanonicalSignedDelegation, (byte)0]
+            },
+            "bridge" => parts with
+            {
+                CanonicalSignedBridges =
+                [
+                    [.. parts.CanonicalSignedBridges[0], (byte)0]
+                ]
+            },
+            _ => throw new ArgumentOutOfRangeException(nameof(artifact))
+        };
+        AssertVerification(parts, SyntheticProfileFixture.Verifier());
+    }
+
     private static void AssertVerification(
         SyntheticProfileParts parts,
         IMembershipSignatureVerifier verifier)

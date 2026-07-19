@@ -43,6 +43,12 @@ public sealed class ProfileCarrierContractRedTests
         Assert.Equal(composed.MaximumProtocol, verified.MaximumProtocol);
         Assert.Equal(composed.ComponentCount, verified.ComponentCount);
         Assert.Equal(composed.BridgeCount, verified.BridgeCount);
+
+        var exportedVerifiedHash = verified.FilePayloadSha256.ToArray();
+        exportedVerifiedHash.AsSpan().Fill(0xff);
+        Assert.Equal(
+            composed.FilePayloadSha256.ToArray(),
+            verified.FilePayloadSha256.ToArray());
     }
 
     [Fact]
