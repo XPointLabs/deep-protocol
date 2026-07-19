@@ -1,0 +1,35 @@
+{
+  "workPackage": "P10B",
+  "status": "contract-green-independent-review-pending-runtime-blocked",
+  "humanOwner": "Mr. X",
+  "promptSha256": "02bc3fa1b13adfc96a97d6553000a2d8f3fac4ad6b3e5b4ddb4c4ceab08ef2d4",
+  "w1w2EvidenceCommit": "1c01e24e24647a46b4f37622f3934dc2cc1284ef",
+  "w1w2ManifestSha256": "920b24bb5bcfcc8b4f91aef56ed210127246ec9fd2d49178ed9856c8555d0b93",
+  "baseCommit": "b887fa088f486390be182cac4cbcb59b60ce8931",
+  "redCommit": "91186d1",
+  "initialGreenCommit": "067f1d5",
+  "sourceCommit": "9815aa5b8c5f46f67977e955bf12df39e64b0ec4",
+  "tests": {
+    "focusedPassed": 71,
+    "fullPassed": 244,
+    "failed": 0,
+    "skipped": 0,
+    "malformedSmokeIterations": 512
+  },
+  "independentReview": {
+    "status": "pending",
+    "p0": null,
+    "p1": null,
+    "p2": null,
+    "p3": null
+  },
+  "claims": {
+    "gitPush": false,
+    "packagePublished": false,
+    "serverImplemented": false,
+    "dockerChanged": false,
+    "networkAccessed": false,
+    "productionCredentialsAccessed": false,
+    "runtimeActivation": "blocked"
+  }
+}

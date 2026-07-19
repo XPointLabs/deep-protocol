@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "contractId": "Deep.Protocol/P10B-managed-ingress-h2-v1",
+  "packageVersion": "0.3.0-p10b.9815aa5",
+  "sourceCommit": "9815aa5b8c5f46f67977e955bf12df39e64b0ec4",
+  "packages": [
+    {
+      "file": "Deep.Protocol.0.3.0-p10b.9815aa5.nupkg",
+      "sha256": "e588dbc44d8f1a47aeaf5393db726b69f4f5a7c95d7d2301c770f4459fcecd73"
+    },
+    {
+      "file": "Deep.Protocol.Abstractions.0.3.0-p10b.9815aa5.nupkg",
+      "sha256": "5cd60489dc4dcdcd63a6e90958ebb8a4589212f721faf27c62013c305436fb12"
+    },
+    {
+      "file": "Deep.Protocol.Protobuf.0.3.0-p10b.9815aa5.nupkg",
+      "sha256": "78c741b42ef8480a9452494469e1bfabfcbc83db13c3789211fc3d27759c61fe"
+    }
+  ],
+  "published": false
+}
