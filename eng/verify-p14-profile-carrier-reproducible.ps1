@@ -50,6 +50,10 @@ $runRoot = Join-Path $workBase "run-$([Guid]::NewGuid().ToString('N'))"
 New-Item -ItemType Directory -Path $runRoot | Out-Null
 $identityScript = Join-Path $RepositoryRoot `
     "eng\Get-P14ProfileCarrierNormalizedIdentity.ps1"
+& (Join-Path $RepositoryRoot `
+    "eng\Test-P14ProfileCarrierNormalizedIdentity.ps1") `
+    -RepositoryRoot $RepositoryRoot `
+    -WorkRoot (Join-Path $workBase "opc-identity-tests")
 $results = @()
 
 foreach ($label in @(

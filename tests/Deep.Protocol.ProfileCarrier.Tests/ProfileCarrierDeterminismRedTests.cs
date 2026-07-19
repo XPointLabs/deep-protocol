@@ -44,8 +44,16 @@ public sealed class ProfileCarrierDeterminismRedTests
             "Get-P14ProfileCarrierNormalizedIdentity.ps1");
         Assert.True(File.Exists(reproducible));
         Assert.True(File.Exists(identity));
+        Assert.True(File.Exists(Path.Combine(
+            root,
+            "eng",
+            "Test-P14ProfileCarrierNormalizedIdentity.ps1")));
 
         var gate = File.ReadAllText(reproducible);
+        Assert.Contains(
+            "Test-P14ProfileCarrierNormalizedIdentity.ps1",
+            gate,
+            StringComparison.Ordinal);
         Assert.Contains("RepositoryCommit=$head", gate, StringComparison.Ordinal);
         Assert.Contains("dll-sha256", gate, StringComparison.Ordinal);
         Assert.Contains("pdb-sha256", gate, StringComparison.Ordinal);
