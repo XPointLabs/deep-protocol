@@ -638,6 +638,8 @@ public sealed class NearbyInitiatorHelloFrame
 
     public NearbyHandshakeBinding Binding => value.Binding;
 
+    internal ReadOnlyMemory<byte> AdapterPayload => value.AdapterPayload;
+
     public override string ToString() => "NearbyInitiatorHelloFrame[redacted]";
 }
 
@@ -653,11 +655,11 @@ public sealed class NearbyResponderResponseFrame
         Context = context ?? throw new ArgumentNullException(nameof(context));
         InitiatorHello = initiatorHello ??
             throw new ArgumentNullException(nameof(initiatorHello));
-        if (!context.HasExactBinding(initiatorHello.Binding))
+        if (!ReferenceEquals(context, initiatorHello.Context))
         {
             throw new NearbySecureChannelException(
-                NearbySecureChannelError.InvalidHandshakePayload,
-                "Responder frame context does not match its initiator frame binding.");
+                NearbySecureChannelError.InvalidCredential,
+                "Responder frame does not own the exact initiator context capability.");
         }
 
         value = NearbyFreshAkeFrameValue.Create(
@@ -685,26 +687,93 @@ public sealed class NearbyInitiatorFlight : IDisposable
 {
     private INearbyInitiatorState? ownedState;
 
-    public NearbyInitiatorFlight(
+    internal NearbyInitiatorFlight(
+        NearbyAkeContext context,
         NearbyHandshakePayload handshakePayload,
         INearbyInitiatorState state)
     {
+        Context = context ?? throw new ArgumentNullException(nameof(context));
         ArgumentNullException.ThrowIfNull(handshakePayload);
         ArgumentNullException.ThrowIfNull(state);
         HandshakePayload = handshakePayload;
         ownedState = state;
     }
 
+    public NearbyAkeContext Context { get; }
+
     public NearbyHandshakePayload HandshakePayload { get; }
 
-    public INearbyInitiatorState TakeState() =>
-        Interlocked.Exchange(ref ownedState, null) ??
-        throw Error("Initiator state was already transferred or disposed.");
+    public NearbyInitiatorResponseFlight BindResponse(
+        NearbyInitiatorHelloFrame initiatorHello,
+        NearbyResponderResponseFrame responderResponse)
+    {
+        ArgumentNullException.ThrowIfNull(initiatorHello);
+        ArgumentNullException.ThrowIfNull(responderResponse);
+        if (!ReferenceEquals(Context, initiatorHello.Context) ||
+            !ReferenceEquals(Context, responderResponse.Context) ||
+            !ReferenceEquals(initiatorHello, responderResponse.InitiatorHello))
+        {
+            throw new NearbySecureChannelException(
+                NearbySecureChannelError.InvalidCredential,
+                "Initiator state and response do not share exact context/frame capabilities.");
+        }
+
+        if (!HandshakePayload.Bytes.Span.SequenceEqual(
+                initiatorHello.AdapterPayload.Span))
+        {
+            throw new NearbySecureChannelException(
+                NearbySecureChannelError.InvalidState,
+                "Initiator state payload does not match the exact initiator frame.");
+        }
+
+        var state = Interlocked.Exchange(ref ownedState, null) ??
+            throw Error("Initiator state was already bound or disposed.");
+        return new NearbyInitiatorResponseFlight(
+            Context,
+            initiatorHello,
+            responderResponse,
+            state);
+    }
 
     public void Dispose() =>
         Interlocked.Exchange(ref ownedState, null)?.Dispose();
 
     public override string ToString() => "NearbyInitiatorFlight[redacted]";
+
+    private static NearbySecureChannelException Error(string message) =>
+        new(NearbySecureChannelError.InvalidState, message);
+}
+
+public sealed class NearbyInitiatorResponseFlight : IDisposable
+{
+    private INearbyInitiatorState? ownedState;
+
+    internal NearbyInitiatorResponseFlight(
+        NearbyAkeContext context,
+        NearbyInitiatorHelloFrame initiatorHello,
+        NearbyResponderResponseFrame responderResponse,
+        INearbyInitiatorState state)
+    {
+        Context = context;
+        InitiatorHello = initiatorHello;
+        ResponderResponse = responderResponse;
+        ownedState = state;
+    }
+
+    public NearbyAkeContext Context { get; }
+
+    public NearbyInitiatorHelloFrame InitiatorHello { get; }
+
+    public NearbyResponderResponseFrame ResponderResponse { get; }
+
+    public INearbyInitiatorState TakeState() =>
+        Interlocked.Exchange(ref ownedState, null) ??
+        throw Error("Initiator response state was already transferred or disposed.");
+
+    public void Dispose() =>
+        Interlocked.Exchange(ref ownedState, null)?.Dispose();
+
+    public override string ToString() => "NearbyInitiatorResponseFlight[redacted]";
 
     private static NearbySecureChannelException Error(string message) =>
         new(NearbySecureChannelError.InvalidState, message);
@@ -774,8 +843,63 @@ public interface INearbyFreshAke
         NearbyInitiatorHelloFrame canonicalInitiatorFrame);
 
     INearbyPendingSession AcceptResponder(
-        INearbyInitiatorState state,
-        NearbyResponderResponseFrame canonicalResponderFrame);
+        NearbyInitiatorResponseFlight initiatorResponse);
+}
+
+public abstract class NearbyFreshAkeBase : INearbyFreshAke
+{
+    public NearbyInitiatorFlight BeginInitiator(NearbyAkeContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        var flight = BeginInitiatorCore(context) ??
+            throw new NearbySecureChannelException(
+                NearbySecureChannelError.InvalidState,
+                "AKE returned no initiator flight.");
+        if (!ReferenceEquals(context, flight.Context))
+        {
+            flight.Dispose();
+            throw new NearbySecureChannelException(
+                NearbySecureChannelError.InvalidCredential,
+                "AKE returned an initiator flight for a different context capability.");
+        }
+
+        return flight;
+    }
+
+    public NearbyResponderFlight AcceptInitiator(
+        NearbyInitiatorHelloFrame canonicalInitiatorFrame)
+    {
+        ArgumentNullException.ThrowIfNull(canonicalInitiatorFrame);
+        return AcceptInitiatorCore(canonicalInitiatorFrame) ??
+            throw new NearbySecureChannelException(
+                NearbySecureChannelError.InvalidState,
+                "AKE returned no responder flight.");
+    }
+
+    public INearbyPendingSession AcceptResponder(
+        NearbyInitiatorResponseFlight initiatorResponse)
+    {
+        ArgumentNullException.ThrowIfNull(initiatorResponse);
+        return AcceptResponderCore(initiatorResponse) ??
+            throw new NearbySecureChannelException(
+                NearbySecureChannelError.InvalidState,
+                "AKE returned no pending session.");
+    }
+
+    protected abstract NearbyInitiatorFlight BeginInitiatorCore(
+        NearbyAkeContext context);
+
+    protected abstract NearbyResponderFlight AcceptInitiatorCore(
+        NearbyInitiatorHelloFrame canonicalInitiatorFrame);
+
+    protected abstract INearbyPendingSession AcceptResponderCore(
+        NearbyInitiatorResponseFlight initiatorResponse);
+
+    protected static NearbyInitiatorFlight CreateInitiatorFlight(
+        NearbyAkeContext context,
+        NearbyHandshakePayload handshakePayload,
+        INearbyInitiatorState state) =>
+        new(context, handshakePayload, state);
 }
 
 public interface INearbyPendingSession : IDisposable
@@ -1299,18 +1423,23 @@ internal sealed class NearbyFreshAkeFrameValue
 {
     private readonly byte[] bytes;
     private readonly NearbyHandshakeBinding binding;
+    private readonly byte[] adapterPayload;
 
     private NearbyFreshAkeFrameValue(
         byte[] bytes,
-        NearbyHandshakeBinding binding)
+        NearbyHandshakeBinding binding,
+        ReadOnlySpan<byte> adapterPayload)
     {
         this.bytes = bytes;
         this.binding = CopyBinding(binding);
+        this.adapterPayload = adapterPayload.ToArray();
     }
 
     public ReadOnlyMemory<byte> Bytes => bytes.ToArray();
 
     public NearbyHandshakeBinding Binding => CopyBinding(binding);
+
+    public ReadOnlyMemory<byte> AdapterPayload => adapterPayload.ToArray();
 
     public static NearbyFreshAkeFrameValue Create(
         NearbyAkeContext context,
@@ -1363,7 +1492,10 @@ internal sealed class NearbyFreshAkeFrameValue
                 "Canonical AKE frame does not match its exact P03C context binding.");
         }
 
-        return new NearbyFreshAkeFrameValue(snapshot, decoded.Binding);
+        return new NearbyFreshAkeFrameValue(
+            snapshot,
+            decoded.Binding,
+            decoded.AdapterPayload.Span);
     }
 
     private static NearbyHandshakeBinding CopyBinding(NearbyHandshakeBinding value) =>

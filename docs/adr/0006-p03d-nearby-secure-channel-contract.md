@@ -33,12 +33,17 @@ The contract:
   `NearbyAkeContext`;
 - admits canonical frames only through role-specific
   `NearbyInitiatorHelloFrame` and `NearbyResponderResponseFrame` values whose
-  kind and complete P03C binding exactly match that context;
+  kind and complete P03C binding exactly match that context; a responder frame
+  must own the same context capability object as its initiator frame, not only
+  a context with equal values;
 - exposes a provider-issued opaque local device-key handle that binds the
   independently supplied verified local credential to a redacted platform-key
   reference, never key bytes or key operations;
 - makes initiator/responder flights disposable owners whose state or pending
   session can be transferred exactly once;
+- binds opaque initiator state to the exact context capability, canonical
+  initiator frame and adapter payload before producing an owned
+  `NearbyInitiatorResponseFlight`;
 - returns an opaque pending session after peer authentication;
 - makes that pending session own the exact immutable replay claim derived from
   its context and transcript;
@@ -86,6 +91,15 @@ of allowing a disposed session to be resurrected.
 Canonical AKE inputs are length-bounded, snapshot caller-owned memory, and
 decode only the snapshot before reaching an external AKE. The role-specific
 types reject reflected kinds, resumption, and any P03C binding/attempt mismatch.
+`AcceptResponder` accepts only one capability-issued
+`NearbyInitiatorResponseFlight`; raw `INearbyInitiatorState` and a separately
+selectable response frame are not parameters. The flight owns and transfers the
+state once, and rejects a different context capability or initiator payload with
+typed `InvalidCredential` or `InvalidState`. `NearbyInitiatorFlight` has no
+public constructor: an external implementation derives from
+`NearbyFreshAkeBase`, whose protected factory issues the flight and whose public
+`BeginInitiator` rejects and disposes any result carrying a different context
+capability.
 Encoded records are capped at the existing opaque-bundle maximum plus 4096
 bytes of format-agnostic envelope overhead; empty and oversized adapter output
 are rejected.
