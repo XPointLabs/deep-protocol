@@ -100,6 +100,36 @@ public sealed class LoRaFragmentReassemblerTests
     }
 
     [Fact]
+    public async Task Xor1RecoversOneLossInEachOfMultipleGroups()
+    {
+        var recoverable = new Fixture(LoRaFragmentFecMode.Xor1, shardSize: 32);
+        Assert.True(recoverable.Plan.DataShardCount > LoRaFragmentLimits.XorDataShardsPerGroup);
+        var reassembler = recoverable.Reassembler(new MemoryReplayStore());
+        LoRaFragmentReassemblyResult? recovered = null;
+        foreach (var frame in recoverable.Plan.Frames.Where(
+                     (_, index) => index is not 1 and not 8))
+        {
+            recovered = await reassembler.ProcessAsync(recoverable.Request(frame));
+        }
+
+        Assert.NotNull(recovered);
+        Assert.Equal(LoRaFragmentReassemblyOutcome.Completed, recovered.Outcome);
+        Assert.Equal(recoverable.Bundle, recovered.EncodedOpaqueBundle!.Value.ToArray());
+
+        var unrecoverable = new Fixture(LoRaFragmentFecMode.Xor1, shardSize: 32);
+        var second = unrecoverable.Reassembler(new MemoryReplayStore());
+        LoRaFragmentReassemblyResult? incomplete = null;
+        foreach (var frame in unrecoverable.Plan.Frames.Where(
+                     (_, index) => index is not 1 and not 2))
+        {
+            incomplete = await second.ProcessAsync(unrecoverable.Request(frame));
+        }
+
+        Assert.NotNull(incomplete);
+        Assert.Equal(LoRaFragmentReassemblyOutcome.Incomplete, incomplete.Outcome);
+    }
+
+    [Fact]
     public async Task AuthenticatedMalformedParityPoisonsAndRejectsAfterRestart()
     {
         var fixture = new Fixture(LoRaFragmentFecMode.Xor1);
@@ -378,6 +408,148 @@ public sealed class LoRaFragmentReassemblerTests
     }
 
     [Fact]
+    public async Task ReservationChargeBoundaryIsExactAndAdmissionIsAtomic()
+    {
+        var fixture = new Fixture(LoRaFragmentFecMode.Xor1);
+        var charge = checked(
+            fixture.Plan.Frames.Count * fixture.ShardSize +
+            LoRaFragmentReassemblyLimits.ReservationMetadataBytes);
+        var rejectedStore = new MemoryReplayStore();
+        var rejectedPolicy = fixture.CreateReassemblyPolicy(
+            maximumReservedBytesGlobal: charge - 1);
+
+        Assert.Equal(
+            LoRaFragmentReassemblyOutcome.Rejected,
+            (await fixture.Reassembler(rejectedStore, rejectedPolicy).ProcessAsync(
+                fixture.Request(fixture.Plan.Frames[0]))).Outcome);
+        Assert.Equal(0, rejectedStore.IncompleteCount);
+
+        var admittedStore = new MemoryReplayStore();
+        var admittedPolicy = fixture.CreateReassemblyPolicy(
+            maximumReservedBytesGlobal: charge);
+        Assert.Equal(
+            LoRaFragmentReassemblyOutcome.Incomplete,
+            (await fixture.Reassembler(admittedStore, admittedPolicy).ProcessAsync(
+                fixture.Request(fixture.Plan.Frames[0]))).Outcome);
+        Assert.Equal(1, admittedStore.IncompleteCount);
+    }
+
+    [Fact]
+    public async Task AbsoluteGlobalCountPressureRejectsSeventeenthLiveId()
+    {
+        var fixture = new Fixture(LoRaFragmentFecMode.None);
+        var store = new MemoryReplayStore();
+        var reassembler = fixture.Reassembler(store);
+        for (var index = 1;
+             index <= LoRaFragmentReassemblyLimits.MaximumIncompleteMessagesGlobal;
+             index++)
+        {
+            var plan = fixture.CreatePlan(Enumerable.Repeat((byte)index, 8).ToArray());
+            Assert.Equal(
+                LoRaFragmentReassemblyOutcome.Incomplete,
+                (await reassembler.ProcessAsync(
+                    fixture.Request(
+                        plan.Frames[0],
+                        fixture.ReplayProvider.Create()))).Outcome);
+        }
+
+        var overflowPlan = fixture.CreatePlan(
+            Enumerable.Repeat(
+                (byte)(LoRaFragmentReassemblyLimits.MaximumIncompleteMessagesGlobal + 1),
+                8).ToArray());
+        Assert.Equal(
+            LoRaFragmentReassemblyOutcome.Rejected,
+            (await reassembler.ProcessAsync(
+                fixture.Request(
+                    overflowPlan.Frames[0],
+                    fixture.ReplayProvider.Create()))).Outcome);
+        Assert.Equal(
+            LoRaFragmentReassemblyLimits.MaximumIncompleteMessagesGlobal,
+            store.IncompleteCount);
+    }
+
+    [Fact]
+    public async Task ExpiredStateRejectsReplayAcrossRestartThenPurgesBeforeAdmission()
+    {
+        var fixture = new Fixture(
+            LoRaFragmentFecMode.None,
+            maximumIncompleteMessagesGlobal: 1);
+        var store = new MemoryReplayStore();
+        Assert.Equal(
+            LoRaFragmentReassemblyOutcome.Incomplete,
+            (await fixture.Reassembler(store).ProcessAsync(
+                fixture.Request(fixture.Plan.Frames[0]))).Outcome);
+
+        var atRetention = fixture.CreateReassemblyPolicy(
+            currentExpiryBucket: 101,
+            provisionalExpiryBucket: 101,
+            maximumIncompleteMessagesGlobal: 1,
+            maximumTombstonesGlobal: 1);
+        Assert.Equal(
+            LoRaFragmentReassemblyOutcome.Rejected,
+            (await fixture.Reassembler(store, atRetention).ProcessAsync(
+                fixture.Request(fixture.Plan.Frames[0]))).Outcome);
+
+        var afterRetention = fixture.CreateReassemblyPolicy(
+            currentExpiryBucket: 102,
+            provisionalExpiryBucket: 102,
+            maximumIncompleteMessagesGlobal: 1,
+            maximumTombstonesGlobal: 1);
+        var replacement = fixture.CreatePlan(
+            new byte[] { 8, 7, 6, 5, 4, 3, 2, 1 });
+        Assert.Equal(
+            LoRaFragmentReassemblyOutcome.Incomplete,
+            (await fixture.Reassembler(store, afterRetention).ProcessAsync(
+                fixture.Request(replacement.Frames[1]))).Outcome);
+        Assert.Equal(1, store.IncompleteCount);
+    }
+
+    [Fact]
+    public async Task TombstoneScopeAndByteCeilingsBlockNewAdmission()
+    {
+        var fixture = new Fixture(LoRaFragmentFecMode.None);
+        var scopeStore = new MemoryReplayStore();
+        var scopePolicy = fixture.CreateReassemblyPolicy(
+            maximumTombstonesPerReplayScope: 1);
+        LoRaFragmentReassemblyResult? completed = null;
+        foreach (var frame in fixture.Plan.Frames)
+        {
+            completed = await fixture.Reassembler(scopeStore, scopePolicy)
+                .ProcessAsync(fixture.Request(frame));
+        }
+
+        Assert.Equal(LoRaFragmentReassemblyOutcome.Completed, completed!.Outcome);
+        var next = fixture.CreatePlan(new byte[] { 8, 7, 6, 5, 4, 3, 2, 1 });
+        Assert.Equal(
+            LoRaFragmentReassemblyOutcome.Rejected,
+            (await fixture.Reassembler(scopeStore, scopePolicy).ProcessAsync(
+                fixture.Request(next.Frames[0]))).Outcome);
+        Assert.Equal(
+            LoRaFragmentReassemblyOutcome.Incomplete,
+            (await fixture.Reassembler(scopeStore, scopePolicy).ProcessAsync(
+                fixture.Request(
+                    next.Frames[0],
+                    fixture.ReplayProvider.Create()))).Outcome);
+
+        var bytesStore = new MemoryReplayStore();
+        var bytesPolicy = fixture.CreateReassemblyPolicy(
+            maximumTombstoneBytesGlobal: 64);
+        foreach (var frame in fixture.Plan.Frames)
+        {
+            completed = await fixture.Reassembler(bytesStore, bytesPolicy)
+                .ProcessAsync(fixture.Request(frame));
+        }
+
+        Assert.Equal(LoRaFragmentReassemblyOutcome.Completed, completed!.Outcome);
+        Assert.Equal(
+            LoRaFragmentReassemblyOutcome.Rejected,
+            (await fixture.Reassembler(bytesStore, bytesPolicy).ProcessAsync(
+                fixture.Request(
+                    next.Frames[0],
+                    fixture.ReplayProvider.Create()))).Outcome);
+    }
+
+    [Fact]
     public void CompletedTerminalRequiresCanonicalSha256Digest()
     {
         var fixture = new Fixture(LoRaFragmentFecMode.None);
@@ -421,6 +593,7 @@ public sealed class LoRaFragmentReassemblerTests
 
         public Fixture(
             LoRaFragmentFecMode fecMode,
+            byte shardSize = 64,
             int maximumIncompleteMessagesPerReplayScope =
                 LoRaFragmentReassemblyLimits.MaximumIncompleteMessagesPerReplayScope,
             int maximumIncompleteMessagesGlobal =
@@ -438,18 +611,15 @@ public sealed class LoRaFragmentReassemblerTests
                     MaximumVersion = OpaqueBundleWireVersion.V1,
                     SupportedCriticalFeatures = OpaqueBundleFeatures.V1Required,
                     MinimumExpiryBucket = 99,
-                    MaximumExpiryBucket = 101
+                    MaximumExpiryBucket = 105
                 });
-            ReassemblyPolicy = new LoRaFragmentReassemblyPolicy(
-                FragmentPolicy,
-                currentExpiryBucket: 99,
-                provisionalExpiryBucket: 101,
-                acceptedExpirySkewBuckets: 1,
+            ReassemblyPolicy = CreateReassemblyPolicy(
                 maximumIncompleteMessagesPerReplayScope:
                     maximumIncompleteMessagesPerReplayScope,
                 maximumIncompleteMessagesGlobal: maximumIncompleteMessagesGlobal);
             Bundle = CreateBundle();
             FecMode = fecMode;
+            ShardSize = shardSize;
             Plan = CreatePlan(MessageId);
         }
 
@@ -461,6 +631,7 @@ public sealed class LoRaFragmentReassemblerTests
         public LoRaFragmentReassemblyPolicy ReassemblyPolicy { get; }
         public byte[] Bundle { get; }
         public LoRaFragmentFecMode FecMode { get; }
+        public byte ShardSize { get; }
         public LoRaFragmentPlan Plan { get; }
 
         public LoRaFragmentPlan CreatePlan(byte[] messageId) =>
@@ -470,15 +641,45 @@ public sealed class LoRaFragmentReassemblerTests
                     messageId,
                     currentHop: 0,
                     hopLimit: 3,
-                    shardSize: 64,
+                    ShardSize,
                     FecMode,
                     LoRaFragmentDirection.Forward,
                     AuthenticationHandle),
                 FragmentPolicy,
                 Authenticator);
 
-        public LoRaFragmentReassembler Reassembler(ILoRaFragmentReplayStore store) =>
-            new(store, ReassemblyPolicy, Authenticator);
+        public LoRaFragmentReassemblyPolicy CreateReassemblyPolicy(
+            uint currentExpiryBucket = 99,
+            uint provisionalExpiryBucket = 101,
+            uint acceptedExpirySkewBuckets = 1,
+            int maximumIncompleteMessagesPerReplayScope =
+                LoRaFragmentReassemblyLimits.MaximumIncompleteMessagesPerReplayScope,
+            int maximumIncompleteMessagesGlobal =
+                LoRaFragmentReassemblyLimits.MaximumIncompleteMessagesGlobal,
+            int maximumReservedBytesGlobal =
+                LoRaFragmentReassemblyLimits.MaximumReservedBytesGlobal,
+            int maximumTombstonesPerReplayScope =
+                LoRaFragmentReassemblyLimits.MaximumTombstonesPerReplayScope,
+            int maximumTombstonesGlobal =
+                LoRaFragmentReassemblyLimits.MaximumTombstonesGlobal,
+            int maximumTombstoneBytesGlobal =
+                LoRaFragmentReassemblyLimits.MaximumTombstoneBytesGlobal) =>
+            new(
+                FragmentPolicy,
+                currentExpiryBucket,
+                provisionalExpiryBucket,
+                acceptedExpirySkewBuckets,
+                maximumIncompleteMessagesPerReplayScope,
+                maximumIncompleteMessagesGlobal,
+                maximumReservedBytesGlobal,
+                maximumTombstonesPerReplayScope,
+                maximumTombstonesGlobal,
+                maximumTombstoneBytesGlobal);
+
+        public LoRaFragmentReassembler Reassembler(
+            ILoRaFragmentReplayStore store,
+            LoRaFragmentReassemblyPolicy? policy = null) =>
+            new(store, policy ?? ReassemblyPolicy, Authenticator);
 
         public LoRaFragmentReassemblyRequest Request(
             ReadOnlyMemory<byte> encoded,
@@ -517,6 +718,7 @@ public sealed class LoRaFragmentReassemblerTests
 
     private sealed class MemoryReplayStore : ILoRaFragmentReplayStore
     {
+        private const int TombstoneCharge = 64;
         private readonly object _gate = new();
         private readonly Dictionary<Key, State> _states = [];
 
@@ -531,7 +733,8 @@ public sealed class LoRaFragmentReassemblerTests
             {
                 lock (_gate)
                     return _states.Values.Count(state =>
-                        state.Terminal == LoRaFragmentTerminalStatus.Completed);
+                        state.Terminal == LoRaFragmentTerminalStatus.Completed &&
+                        !state.Expired);
             }
         }
         public int PoisonedCount
@@ -540,7 +743,8 @@ public sealed class LoRaFragmentReassemblerTests
             {
                 lock (_gate)
                     return _states.Values.Count(state =>
-                        state.Terminal == LoRaFragmentTerminalStatus.Poisoned);
+                        state.Terminal == LoRaFragmentTerminalStatus.Poisoned &&
+                        !state.Expired);
             }
         }
         public int IncompleteCount
@@ -548,7 +752,8 @@ public sealed class LoRaFragmentReassemblerTests
             get
             {
                 lock (_gate)
-                    return _states.Values.Count(state => state.Terminal is null);
+                    return _states.Values.Count(state =>
+                        state.Terminal is null && !state.Expired);
             }
         }
 
@@ -561,16 +766,19 @@ public sealed class LoRaFragmentReassemblerTests
             lock (_gate)
             {
                 ApplyCalls++;
+                EvictExpiredNoLock(policy);
                 var key = Key.From(fragment.Key);
                 if (_states.TryGetValue(key, out var state))
                 {
-                    if (state.Terminal is not null)
+                    if (state.Terminal is not null || state.Expired)
                         return ValueTask.FromResult(
                             new LoRaFragmentStoreApplyResult(
                                 LoRaFragmentStoreApplyStatus.Rejected));
                     if (!state.Matches(fragment.Frame.Header))
                     {
                         state.Terminal = LoRaFragmentTerminalStatus.Poisoned;
+                        state.RetentionExpiryBucket =
+                            policy.GetRetentionExpiryBucket(state.ExpiryBucket);
                         return ValueTask.FromResult(
                             new LoRaFragmentStoreApplyResult(
                                 LoRaFragmentStoreApplyStatus.Rejected));
@@ -582,7 +790,12 @@ public sealed class LoRaFragmentReassemblerTests
                         IncompleteCountForScopeNoLock(fragment.Key.ReplayScope) >=
                         policy.MaximumIncompleteMessagesPerReplayScope ||
                         ReservedBytesNoLock() + fragment.ReservationCharge >
-                        policy.MaximumReservedBytesGlobal)
+                        policy.MaximumReservedBytesGlobal ||
+                        TombstoneCountForScopeNoLock(fragment.Key.ReplayScope) >=
+                        policy.MaximumTombstonesPerReplayScope ||
+                        TombstoneCountNoLock() >= policy.MaximumTombstonesGlobal ||
+                        checked(TombstoneCountNoLock() * TombstoneCharge) >=
+                        policy.MaximumTombstoneBytesGlobal)
                     {
                         return ValueTask.FromResult(
                             new LoRaFragmentStoreApplyResult(
@@ -604,6 +817,8 @@ public sealed class LoRaFragmentReassemblerTests
                     if (!previous.AsSpan().SequenceEqual(canonical))
                     {
                         state.Terminal = LoRaFragmentTerminalStatus.Poisoned;
+                        state.RetentionExpiryBucket =
+                            policy.GetRetentionExpiryBucket(state.ExpiryBucket);
                         return ValueTask.FromResult(
                             new LoRaFragmentStoreApplyResult(
                                 LoRaFragmentStoreApplyStatus.Rejected));
@@ -621,8 +836,20 @@ public sealed class LoRaFragmentReassemblerTests
                     {
                         var expiry = BinaryPrimitives.ReadUInt32BigEndian(
                             fragment.Frame.Shard.Span.Slice(6, 4));
-                        if (expiry >= policy.CurrentExpiryBucket &&
-                            expiry <= state.ExpiryBucket)
+                        if (expiry < policy.CurrentExpiryBucket ||
+                            expiry > state.ExpiryBucket)
+                        {
+                            state.Expired = true;
+                            state.RetentionExpiryBucket = expiry > uint.MaxValue -
+                                policy.AcceptedExpirySkewBuckets
+                                    ? uint.MaxValue
+                                    : expiry + policy.AcceptedExpirySkewBuckets;
+                            return ValueTask.FromResult(
+                                new LoRaFragmentStoreApplyResult(
+                                    LoRaFragmentStoreApplyStatus.Rejected));
+                        }
+
+                        if (expiry <= state.ExpiryBucket)
                             state.ExpiryBucket = expiry;
                     }
                     state.Generation++;
@@ -648,10 +875,12 @@ public sealed class LoRaFragmentReassemblerTests
             cancellationToken.ThrowIfCancellationRequested();
             lock (_gate)
             {
+                EvictExpiredNoLock(policy);
                 var key = Key.From(terminal.Key);
                 if (!_states.TryGetValue(key, out var state) ||
                     state.Generation != terminal.Generation ||
-                    state.Terminal is not null)
+                    state.Terminal is not null ||
+                    state.Expired)
                 {
                     return ValueTask.FromResult(
                         new LoRaFragmentStoreCommitResult(
@@ -659,7 +888,10 @@ public sealed class LoRaFragmentReassemblerTests
                 }
 
                 if (CommitStatus == LoRaFragmentStoreCommitStatus.Committed)
+                {
                     state.Terminal = terminal.Status;
+                    state.RetentionExpiryBucket = terminal.RetentionExpiryBucket;
+                }
                 return ValueTask.FromResult(
                     new LoRaFragmentStoreCommitResult(CommitStatus));
             }
@@ -674,23 +906,66 @@ public sealed class LoRaFragmentReassemblerTests
             {
                 return ValueTask.FromResult(
                     _states.TryGetValue(Key.From(key), out var state) &&
-                    state.Terminal is null
+                    state.Terminal is null &&
+                    !state.Expired
                         ? state.Snapshot()
                         : null);
             }
         }
 
         private int IncompleteCountNoLock() =>
-            _states.Values.Count(state => state.Terminal is null);
+            _states.Values.Count(state =>
+                state.Terminal is null && !state.Expired);
 
         private int IncompleteCountForScopeNoLock(LoRaFragmentReplayScopeHandle scope) =>
             _states.Values.Count(state =>
                 state.Terminal is null &&
+                !state.Expired &&
                 ReferenceEquals(state.Key.ReplayScope, scope));
 
         private int ReservedBytesNoLock() =>
-            _states.Values.Where(state => state.Terminal is null)
+            _states.Values.Where(state =>
+                    state.Terminal is null && !state.Expired)
                 .Sum(state => state.ReservationCharge);
+
+        private int TombstoneCountNoLock() =>
+            _states.Values.Count(state =>
+                state.Terminal is not null || state.Expired);
+
+        private int TombstoneCountForScopeNoLock(
+            LoRaFragmentReplayScopeHandle scope) =>
+            _states.Values.Count(state =>
+                (state.Terminal is not null || state.Expired) &&
+                ReferenceEquals(state.Key.ReplayScope, scope));
+
+        private void EvictExpiredNoLock(LoRaFragmentReassemblyPolicy policy)
+        {
+            foreach (var state in _states.Values)
+            {
+                if (state.Terminal is null &&
+                    !state.Expired &&
+                    state.ExpiryBucket < policy.CurrentExpiryBucket)
+                {
+                    state.Expired = true;
+                    state.RetentionExpiryBucket =
+                        checked(
+                            state.ExpiryBucket +
+                            policy.AcceptedExpirySkewBuckets);
+                }
+            }
+
+            foreach (var key in _states
+                         .Where(pair =>
+                             (pair.Value.Terminal is not null ||
+                              pair.Value.Expired) &&
+                             pair.Value.RetentionExpiryBucket <
+                             policy.CurrentExpiryBucket)
+                         .Select(static pair => pair.Key)
+                         .ToArray())
+            {
+                _states.Remove(key);
+            }
+        }
 
         private sealed class State
         {
@@ -715,6 +990,8 @@ public sealed class LoRaFragmentReassemblerTests
             public int ReservationCharge { get; }
             public long Generation { get; set; }
             public LoRaFragmentTerminalStatus? Terminal { get; set; }
+            public bool Expired { get; set; }
+            public uint RetentionExpiryBucket { get; set; }
             public byte[]?[] CanonicalByOrdinal { get; }
             public byte[]?[] Data { get; }
             public byte[]?[] Parity { get; }
