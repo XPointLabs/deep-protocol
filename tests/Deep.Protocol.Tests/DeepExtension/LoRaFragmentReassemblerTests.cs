@@ -377,6 +377,43 @@ public sealed class LoRaFragmentReassemblerTests
         Assert.Equal(2, store.IncompleteCount);
     }
 
+    [Fact]
+    public void CompletedTerminalRequiresCanonicalSha256Digest()
+    {
+        var fixture = new Fixture(LoRaFragmentFecMode.None);
+        var key = new LoRaFragmentReplayKey(
+            fixture.ReplayScope,
+            LoRaFragmentDirection.Forward,
+            fixture.Plan.Frames[0].Span.Slice(4, LoRaFragmentLimits.MessageIdLength));
+
+        Assert.Throws<ArgumentException>(() =>
+            new LoRaFragmentTerminalCommit(
+                key,
+                generation: 1,
+                LoRaFragmentTerminalStatus.Completed,
+                expiryBucket: 100,
+                retentionExpiryBucket: 101,
+                bundleDigest: new byte[31]));
+    }
+
+    [Fact]
+    public void TerminalRetentionCannotPrecedeExpiry()
+    {
+        var fixture = new Fixture(LoRaFragmentFecMode.None);
+        var key = new LoRaFragmentReplayKey(
+            fixture.ReplayScope,
+            LoRaFragmentDirection.Forward,
+            fixture.Plan.Frames[0].Span.Slice(4, LoRaFragmentLimits.MessageIdLength));
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new LoRaFragmentTerminalCommit(
+                key,
+                generation: 1,
+                LoRaFragmentTerminalStatus.Poisoned,
+                expiryBucket: 100,
+                retentionExpiryBucket: 99));
+    }
+
     private sealed class Fixture
     {
         private static readonly byte[] MessageId = [1, 2, 3, 4, 5, 6, 7, 8];
