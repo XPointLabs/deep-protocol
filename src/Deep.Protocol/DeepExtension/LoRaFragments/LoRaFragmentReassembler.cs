@@ -328,9 +328,26 @@ public sealed class LoRaFragmentTerminalCommit
             throw new ArgumentOutOfRangeException(nameof(status));
         }
 
-        if (status == LoRaFragmentTerminalStatus.Completed && bundleDigest.Length == 0)
+        if (status == LoRaFragmentTerminalStatus.Completed &&
+            bundleDigest.Length != System.Security.Cryptography.SHA256.HashSizeInBytes)
         {
-            throw new ArgumentException("A completed record requires a canonical bundle digest.", nameof(bundleDigest));
+            throw new ArgumentException(
+                "A completed record requires exactly one canonical SHA-256 bundle digest.",
+                nameof(bundleDigest));
+        }
+
+        if (status == LoRaFragmentTerminalStatus.Poisoned && bundleDigest.Length != 0)
+        {
+            throw new ArgumentException(
+                "A poisoned record must not carry a bundle digest.",
+                nameof(bundleDigest));
+        }
+
+        if (retentionExpiryBucket < expiryBucket)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(retentionExpiryBucket),
+                "Terminal retention must not end before the authenticated expiry bucket.");
         }
 
         Key = key;
