@@ -138,6 +138,46 @@ public sealed class LoRaFragmentReassemblerTests
                 fixture.Request(fixture.Plan.Frames[0]))).Outcome);
     }
 
+    [Fact]
+    public async Task AuthenticatedMalformedParityCannotBeIgnoredWhenAllDataArrives()
+    {
+        var fixture = new Fixture(LoRaFragmentFecMode.Xor1);
+        var store = new MemoryReplayStore
+        {
+            RequireAllDataForReady = true
+        };
+        var reassembler = fixture.Reassembler(store);
+        var parityIndex = fixture.Plan.DataShardCount;
+        var parity = LoRaFragmentCodec.Decode(
+            fixture.Plan.Frames[parityIndex].Span,
+            fixture.FragmentPolicy,
+            fixture.AuthenticationHandle,
+            LoRaFragmentDirection.Forward,
+            fixture.Authenticator);
+        var malformedShard = parity.Shard.ToArray();
+        malformedShard[0] ^= 1;
+        var malformedParity = LoRaFragmentCodec.Encode(
+            new LoRaFragmentUnsignedFrame(parity.Header, malformedShard),
+            fixture.AuthenticationHandle,
+            LoRaFragmentDirection.Forward,
+            fixture.Authenticator);
+
+        Assert.Equal(
+            LoRaFragmentReassemblyOutcome.Incomplete,
+            (await reassembler.ProcessAsync(fixture.Request(malformedParity))).Outcome);
+
+        LoRaFragmentReassemblyResult? result = null;
+        foreach (var frame in fixture.Plan.Frames.Take(fixture.Plan.DataShardCount))
+        {
+            result = await reassembler.ProcessAsync(fixture.Request(frame));
+        }
+
+        Assert.NotNull(result);
+        Assert.Equal(LoRaFragmentReassemblyOutcome.Rejected, result.Outcome);
+        Assert.Null(result.EncodedOpaqueBundle);
+        Assert.Equal(1, store.PoisonedCount);
+    }
+
     [Theory]
     [InlineData(3, 0x11)]
     [InlineData(6, 101)]
@@ -446,6 +486,7 @@ public sealed class LoRaFragmentReassemblerTests
         public LoRaFragmentStoreCommitStatus CommitStatus { get; set; } =
             LoRaFragmentStoreCommitStatus.Committed;
         public LoRaFragmentReplayScopeHandle? SnapshotReplayScopeOverride { get; set; }
+        public bool RequireAllDataForReady { get; set; }
         public int ApplyCalls { get; private set; }
         public int CompletedCount
         {
@@ -550,7 +591,7 @@ public sealed class LoRaFragmentReassemblerTests
                     state.Generation++;
                 }
 
-                if (!state.IsReady())
+                if (!state.IsReady(RequireAllDataForReady))
                     return ValueTask.FromResult(
                         new LoRaFragmentStoreApplyResult(
                             LoRaFragmentStoreApplyStatus.Incomplete));
@@ -648,10 +689,12 @@ public sealed class LoRaFragmentReassemblerTests
                 Shape.ShardSize == header.ShardSize &&
                 Shape.FecMode == header.FecMode;
 
-            public bool IsReady()
+            public bool IsReady(bool requireAllData)
             {
                 if (Data.All(static shard => shard is not null))
                     return true;
+                if (requireAllData)
+                    return false;
                 if (Shape.FecMode != LoRaFragmentFecMode.Xor1)
                     return false;
                 for (var group = 0; group < Shape.ParityShardCount; group++)
