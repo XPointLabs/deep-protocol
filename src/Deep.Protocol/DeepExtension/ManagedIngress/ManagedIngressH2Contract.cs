@@ -210,17 +210,17 @@ public static class ManagedIngressH2Contract
             415 => (ManagedIngressErrorClass.UnsupportedMediaType,
                 ManagedIngressOutcomeCertainty.BeforeForward, false),
             421 => (ManagedIngressErrorClass.WrongOrigin,
-                ManagedIngressOutcomeCertainty.BeforeForward, false),
+                ManagedIngressOutcomeCertainty.BeforeForward, true),
             425 => (ManagedIngressErrorClass.EarlyDataRejected,
                 ManagedIngressOutcomeCertainty.BeforeForward, true),
             429 => (ManagedIngressErrorClass.Saturated,
                 ManagedIngressOutcomeCertainty.BeforeForward, true),
             502 => (ManagedIngressErrorClass.InvalidUpstreamResponse,
-                ManagedIngressOutcomeCertainty.UnknownAfterForward, false),
+                ManagedIngressOutcomeCertainty.UnknownAfterForward, true),
             503 => (ManagedIngressErrorClass.Unavailable,
                 ManagedIngressOutcomeCertainty.BeforeForward, true),
             504 => (ManagedIngressErrorClass.UpstreamOutcomeUnknown,
-                ManagedIngressOutcomeCertainty.UnknownAfterForward, false),
+                ManagedIngressOutcomeCertainty.UnknownAfterForward, true),
             _ => default
         };
 

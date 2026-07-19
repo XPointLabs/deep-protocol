@@ -1,7 +1,7 @@
 {
   "name": "Deep managed ingress H2 V1",
   "sourceRepository": "local-contract-only",
-  "sourceCommit": "RED-PENDING-SOURCE",
+  "sourceCommit": "P10B contract-only; no server/runtime",
   "vectors": [
     {
       "id": "deep-extension/managed-ingress/v1/die1-saturated",

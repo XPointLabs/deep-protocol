@@ -103,13 +103,27 @@ public static class ManagedIngressErrorCodec
                 "The outcome certainty is invalid.");
         }
 
-        var retryAfterAllowed = frame.ErrorClass is
+        var expectedCertainty = frame.ErrorClass is
+            ManagedIngressErrorClass.InvalidUpstreamResponse or
+            ManagedIngressErrorClass.UpstreamOutcomeUnknown
+                ? ManagedIngressOutcomeCertainty.UnknownAfterForward
+                : ManagedIngressOutcomeCertainty.BeforeForward;
+        var expectedRetryable = frame.ErrorClass is
+            ManagedIngressErrorClass.WrongOrigin or
+            ManagedIngressErrorClass.EarlyDataRejected or
+            ManagedIngressErrorClass.Saturated or
+            ManagedIngressErrorClass.InvalidUpstreamResponse or
+            ManagedIngressErrorClass.Unavailable or
+            ManagedIngressErrorClass.UpstreamOutcomeUnknown;
+        var retryAfterRequired = frame.ErrorClass is
             ManagedIngressErrorClass.Saturated or
             ManagedIngressErrorClass.Unavailable;
-        if (frame.RetryAfterSeconds < 0 ||
+        if (frame.Certainty != expectedCertainty ||
+            frame.Retryable != expectedRetryable ||
+            frame.RetryAfterSeconds < 0 ||
             frame.RetryAfterSeconds > ManagedIngressLimits.MaximumRetryAfterSeconds ||
-            (!retryAfterAllowed && frame.RetryAfterSeconds != 0) ||
-            (retryAfterAllowed && frame.Retryable &&
+            (!retryAfterRequired && frame.RetryAfterSeconds != 0) ||
+            (retryAfterRequired &&
              frame.RetryAfterSeconds < ManagedIngressLimits.MinimumRetryAfterSeconds) ||
             (!frame.Retryable && frame.RetryAfterSeconds != 0))
         {
