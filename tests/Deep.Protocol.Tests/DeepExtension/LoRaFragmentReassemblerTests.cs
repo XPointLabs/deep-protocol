@@ -480,6 +480,41 @@ public sealed class LoRaFragmentReassemblerTests
     }
 
     [Fact]
+    public async Task ForeignScopeSnapshotNeverPoisonsThatScope()
+    {
+        var fixture = new Fixture(LoRaFragmentFecMode.None);
+        var store = new MemoryReplayStore();
+        var alternateScope = fixture.ReplayProvider.Create();
+        var reassembler = fixture.Reassembler(store);
+        foreach (var frame in fixture.Plan.Frames.Take(4))
+        {
+            Assert.Equal(
+                LoRaFragmentReassemblyOutcome.Incomplete,
+                (await reassembler.ProcessAsync(
+                    fixture.Request(frame, alternateScope))).Outcome);
+        }
+
+        store.SnapshotReplayScopeOverride = alternateScope;
+        store.SnapshotGenerationOverride = 4;
+        LoRaFragmentReassemblyResult? foreign = null;
+        foreach (var frame in fixture.Plan.Frames)
+        {
+            foreign = await reassembler.ProcessAsync(fixture.Request(frame));
+        }
+
+        Assert.NotNull(foreign);
+        Assert.Equal(LoRaFragmentReassemblyOutcome.OutcomeUnknown, foreign.Outcome);
+        Assert.Equal(0, store.PoisonedCount);
+
+        store.SnapshotReplayScopeOverride = null;
+        store.SnapshotGenerationOverride = null;
+        var completed = await reassembler.ProcessAsync(
+            fixture.Request(fixture.Plan.Frames[4], alternateScope));
+        Assert.Equal(LoRaFragmentReassemblyOutcome.Completed, completed.Outcome);
+        Assert.Equal(fixture.Bundle, completed.EncodedOpaqueBundle!.Value.ToArray());
+    }
+
+    [Fact]
     public async Task CallerMutationBeforeProcessingIsAuthenticatedBeforeStoreCopy()
     {
         var fixture = new Fixture(LoRaFragmentFecMode.None);
@@ -978,6 +1013,7 @@ public sealed class LoRaFragmentReassemblerTests
         public LoRaFragmentStoreCommitStatus CommitStatus { get; set; } =
             LoRaFragmentStoreCommitStatus.Committed;
         public LoRaFragmentReplayScopeHandle? SnapshotReplayScopeOverride { get; set; }
+        public long? SnapshotGenerationOverride { get; set; }
         public bool RequireAllDataForReady { get; set; }
         public bool ThrowAfterCommit { get; set; }
         public int ApplyCalls { get; private set; }
@@ -1129,7 +1165,9 @@ public sealed class LoRaFragmentReassemblerTests
                 return ValueTask.FromResult(
                     new LoRaFragmentStoreApplyResult(
                         LoRaFragmentStoreApplyStatus.Ready,
-                        state.Snapshot(SnapshotReplayScopeOverride)));
+                        state.Snapshot(
+                            SnapshotReplayScopeOverride,
+                            SnapshotGenerationOverride)));
             }
         }
 
@@ -1308,7 +1346,8 @@ public sealed class LoRaFragmentReassemblerTests
             }
 
             public LoRaFragmentReassemblySnapshot Snapshot(
-                LoRaFragmentReplayScopeHandle? replayScopeOverride = null) =>
+                LoRaFragmentReplayScopeHandle? replayScopeOverride = null,
+                long? generationOverride = null) =>
                 new(
                     replayScopeOverride is null
                         ? Key
@@ -1317,7 +1356,7 @@ public sealed class LoRaFragmentReassemblerTests
                             Key.Direction,
                             Key.MessageId.Span),
                     Shape,
-                    Generation,
+                    generationOverride ?? Generation,
                     ExpiryBucket,
                     Data.Select(static shard =>
                         shard is null ? null : (ReadOnlyMemory<byte>?)shard),
