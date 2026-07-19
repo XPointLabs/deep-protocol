@@ -100,6 +100,89 @@ public sealed class LoRaFragmentReassemblerTests
     }
 
     [Fact]
+    public async Task AuthenticatedMalformedParityPoisonsAndRejectsAfterRestart()
+    {
+        var fixture = new Fixture(LoRaFragmentFecMode.Xor1);
+        var store = new MemoryReplayStore();
+        var reassembler = fixture.Reassembler(store);
+        var parityIndex = fixture.Plan.DataShardCount;
+        var parity = LoRaFragmentCodec.Decode(
+            fixture.Plan.Frames[parityIndex].Span,
+            fixture.FragmentPolicy,
+            fixture.AuthenticationHandle,
+            LoRaFragmentDirection.Forward,
+            fixture.Authenticator);
+        var malformedShard = parity.Shard.ToArray();
+        malformedShard[^1] ^= 1;
+        var malformedParity = LoRaFragmentCodec.Encode(
+            new LoRaFragmentUnsignedFrame(parity.Header, malformedShard),
+            fixture.AuthenticationHandle,
+            LoRaFragmentDirection.Forward,
+            fixture.Authenticator);
+
+        LoRaFragmentReassemblyResult? result = null;
+        foreach (var frame in fixture.Plan.Frames
+                     .Take(fixture.Plan.DataShardCount)
+                     .Where((_, index) => index != 1)
+                     .Append(malformedParity))
+        {
+            result = await reassembler.ProcessAsync(fixture.Request(frame));
+        }
+
+        Assert.NotNull(result);
+        Assert.Equal(LoRaFragmentReassemblyOutcome.Rejected, result.Outcome);
+        Assert.Equal(1, store.PoisonedCount);
+        Assert.Equal(
+            LoRaFragmentReassemblyOutcome.Rejected,
+            (await fixture.Reassembler(store).ProcessAsync(
+                fixture.Request(fixture.Plan.Frames[0]))).Outcome);
+    }
+
+    [Theory]
+    [InlineData(3, 0x11)]
+    [InlineData(6, 101)]
+    public async Task AuthenticatedDescriptorBoundaryViolationPoisons(
+        int descriptorOffset,
+        byte replacement)
+    {
+        var fixture = new Fixture(LoRaFragmentFecMode.None);
+        var store = new MemoryReplayStore();
+        var reassembler = fixture.Reassembler(store);
+        var first = LoRaFragmentCodec.Decode(
+            fixture.Plan.Frames[0].Span,
+            fixture.FragmentPolicy,
+            fixture.AuthenticationHandle,
+            LoRaFragmentDirection.Forward,
+            fixture.Authenticator);
+        var changedShard = first.Shard.ToArray();
+        if (descriptorOffset == 6)
+        {
+            BinaryPrimitives.WriteUInt32BigEndian(
+                changedShard.AsSpan(descriptorOffset, sizeof(uint)),
+                replacement);
+        }
+        else
+        {
+            changedShard[descriptorOffset] = replacement;
+        }
+
+        var changedFirst = LoRaFragmentCodec.Encode(
+            new LoRaFragmentUnsignedFrame(first.Header, changedShard),
+            fixture.AuthenticationHandle,
+            LoRaFragmentDirection.Forward,
+            fixture.Authenticator);
+        LoRaFragmentReassemblyResult? result = null;
+        foreach (var frame in fixture.Plan.Frames.Skip(1).Prepend(changedFirst))
+        {
+            result = await reassembler.ProcessAsync(fixture.Request(frame));
+        }
+
+        Assert.NotNull(result);
+        Assert.Equal(LoRaFragmentReassemblyOutcome.Rejected, result.Outcome);
+        Assert.Equal(1, store.PoisonedCount);
+    }
+
+    [Fact]
     public async Task DirectionAndReplayScopeNeverMix()
     {
         var fixture = new Fixture(LoRaFragmentFecMode.None);
@@ -203,6 +286,35 @@ public sealed class LoRaFragmentReassemblerTests
         Assert.Equal(1, store.IncompleteCount);
     }
 
+    [Fact]
+    public async Task LoweredPerScopeAdmissionLimitRejectsOnlyThatScope()
+    {
+        var fixture = new Fixture(
+            LoRaFragmentFecMode.None,
+            maximumIncompleteMessagesPerReplayScope: 1);
+        var store = new MemoryReplayStore();
+        var reassembler = fixture.Reassembler(store);
+
+        Assert.Equal(
+            LoRaFragmentReassemblyOutcome.Incomplete,
+            (await reassembler.ProcessAsync(
+                fixture.Request(fixture.Plan.Frames[0]))).Outcome);
+
+        var secondPlan = fixture.CreatePlan(
+            new byte[] { 8, 7, 6, 5, 4, 3, 2, 1 });
+        Assert.Equal(
+            LoRaFragmentReassemblyOutcome.Rejected,
+            (await reassembler.ProcessAsync(
+                fixture.Request(secondPlan.Frames[0]))).Outcome);
+
+        var alternateScope = fixture.ReplayProvider.Create();
+        Assert.Equal(
+            LoRaFragmentReassemblyOutcome.Incomplete,
+            (await reassembler.ProcessAsync(
+                fixture.Request(secondPlan.Frames[0], alternateScope))).Outcome);
+        Assert.Equal(2, store.IncompleteCount);
+    }
+
     private sealed class Fixture
     {
         private static readonly byte[] MessageId = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -210,6 +322,8 @@ public sealed class LoRaFragmentReassemblerTests
 
         public Fixture(
             LoRaFragmentFecMode fecMode,
+            int maximumIncompleteMessagesPerReplayScope =
+                LoRaFragmentReassemblyLimits.MaximumIncompleteMessagesPerReplayScope,
             int maximumIncompleteMessagesGlobal =
                 LoRaFragmentReassemblyLimits.MaximumIncompleteMessagesGlobal)
         {
@@ -232,6 +346,8 @@ public sealed class LoRaFragmentReassemblerTests
                 currentExpiryBucket: 99,
                 provisionalExpiryBucket: 101,
                 acceptedExpirySkewBuckets: 1,
+                maximumIncompleteMessagesPerReplayScope:
+                    maximumIncompleteMessagesPerReplayScope,
                 maximumIncompleteMessagesGlobal: maximumIncompleteMessagesGlobal);
             Bundle = CreateBundle();
             FecMode = fecMode;
