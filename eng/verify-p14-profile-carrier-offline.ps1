@@ -209,6 +209,7 @@ Invoke-Checked "dotnet" (@(
     "--output", $packageOutput,
     "-p:Version=$version",
     "-p:PackageVersion=$version",
+    "-p:RepositoryCommit=$head",
     "-p:ContinuousIntegrationBuild=true"
 ) + $isolationProperties) $sourceRoot
 
@@ -220,11 +221,35 @@ $extractRoot = Join-Path $resolvedWorkRoot "package-inspection"
 if ($packedNuspec.package.metadata.version -ne $version) {
     throw "The nuspec version does not match the exact commit-derived version."
 }
+if ($packedNuspec.package.metadata.repository.commit -ne $head) {
+    throw "The nuspec repository commit does not match the verified full HEAD."
+}
 $dll = Get-Item -LiteralPath (Join-Path $extractRoot "lib\net10.0\Deep.Protocol.ProfileCarrier.dll")
 $productVersion = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($dll.FullName).ProductVersion
 if ($productVersion -ne $version) {
     throw "The package DLL InformationalVersion does not match the nuspec version."
 }
 
+$identity = & (Join-Path $RepositoryRoot `
+    "eng\Get-P14ProfileCarrierNormalizedIdentity.ps1") `
+    -PackagePath $nupkg.FullName `
+    -ExpectedRepositoryCommit $head
 $packageHash = (Get-FileHash -LiteralPath $nupkg.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-Write-Output "PASS version=$version package=$($nupkg.FullName) sha256=$packageHash"
+
+$reproducibleOutput = & (Join-Path $RepositoryRoot `
+    "eng\verify-p14-profile-carrier-reproducible.ps1") `
+    -RepositoryRoot $RepositoryRoot `
+    -WorkRoot (Join-Path $workBase "two-clean-pack")
+$normalizedLine = $reproducibleOutput |
+    Where-Object { $_ -like "normalized-source-identity-sha256=*" } |
+    Select-Object -Last 1
+$reproducedIdentity = $normalizedLine -replace `
+    "^normalized-source-identity-sha256=", ""
+if ($reproducedIdentity -ne $identity.Hash) {
+    throw "The full offline pack and two-clean normalized identities differ."
+}
+
+Write-Output "PASS version=$version repository-commit=$head package=$($nupkg.FullName)"
+Write-Output "normalized-source-identity-sha256=$($identity.Hash)"
+Write-Output "exact-carrier-file-only-sha256=$packageHash"
+$reproducibleOutput | Write-Output

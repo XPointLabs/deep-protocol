@@ -78,6 +78,7 @@ isolated restore/build/test/pack gate is:
 
 ```powershell
 eng/verify-p14-profile-carrier-offline.ps1
+eng/verify-p14-profile-carrier-reproducible.ps1
 eng/verify-p14-profile-carrier-provenance.ps1 -XNodeRoot C:\path\to\pinned\xnode
 ```
 
@@ -87,6 +88,30 @@ asset allowlisting and ancestor build/config injection checks. The second
 verifies the accepted XNode commit/tree/blob identities and executes the
 source-to-source differential oracle. Both gates are required for review;
 their existence is not a production approval.
+
+## Deterministic source identity
+
+The carrier project maps every physical extraction root to the fixed logical
+source root `/_/Deep.Protocol.ProfileCarrier`. The reproducibility gate
+archives the exact clean commit into two independently randomized paths,
+restores each into an empty cache, and requires byte-identical release DLL and
+portable PDB outputs.
+
+NuGet packages are OPC/ZIP containers whose relationship and core-property
+parts may contain random identifiers. Therefore a raw `.nupkg` SHA-256 is
+reported only as `exact-carrier-file-only-sha256`; it is never a reproducible
+source identity. `Get-P14ProfileCarrierNormalizedIdentity.ps1` rejects entries
+outside the exact semantic/OPC allowlist, normalizes the nuspec metadata,
+requires its full 40-character verified repository commit, and hashes the
+normalized nuspec plus exact DLL and README contents. The two clean packs must
+produce the same `normalized-source-identity-sha256`.
+
+The provenance gate reads objects from the supplied XNode repository but does
+not build its current checkout. It materializes the exact accepted
+`eff452368fa4cb1324c5b3c8ee06e2f10e96b835` tree with `git archive`, verifies
+the complete 167-file materialized tree against every accepted Git blob,
+proves a deliberate source drift is rejected, and only then runs the
+differential build from that exact tree.
 
 Production signature verification, signer custody and ceremony, client trust
 persistence, runtime registration, UI, networking and activation remain

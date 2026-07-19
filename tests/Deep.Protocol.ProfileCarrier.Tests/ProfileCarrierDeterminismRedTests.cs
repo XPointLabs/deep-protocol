@@ -66,7 +66,7 @@ public sealed class ProfileCarrierDeterminismRedTests
             offline,
             StringComparison.Ordinal);
         Assert.DoesNotContain(
-            "sha256=$packageHash",
+            "PASS version=$version package=$($nupkg.FullName) sha256=",
             offline,
             StringComparison.Ordinal);
     }
