@@ -143,20 +143,38 @@ New-Item -ItemType Directory -Path $root -Force | Out-Null
 
 $first = Join-Path $root "first.nupkg"
 $second = Join-Path $root "second.nupkg"
+$third = Join-Path $root "third.nupkg"
+$fourth = Join-Path $root "fourth.nupkg"
 New-TestPackage `
     -Path $first `
     -RelationshipSuffix "111111" `
     -CoreSuffix "11111111111111111111111111111111" `
-    -Created "2026-07-19T20:00:00.0000000Z"
+    -Created "2026-07-19T20:00:00Z"
 New-TestPackage `
     -Path $second `
     -RelationshipSuffix "999999" `
     -CoreSuffix "99999999999999999999999999999999" `
+    -Created "2026-07-20T01:59:59.9Z"
+New-TestPackage `
+    -Path $third `
+    -RelationshipSuffix "777777" `
+    -CoreSuffix "77777777777777777777777777777777" `
+    -Created "2026-07-20T01:59:59.999Z"
+New-TestPackage `
+    -Path $fourth `
+    -RelationshipSuffix "888888" `
+    -CoreSuffix "88888888888888888888888888888888" `
     -Created "2026-07-20T01:59:59.9999999Z"
 $firstIdentity = Get-Identity $first
 $secondIdentity = Get-Identity $second
+$thirdIdentity = Get-Identity $third
+$fourthIdentity = Get-Identity $fourth
 if ($firstIdentity.Hash -ne $secondIdentity.Hash -or
-    $firstIdentity.Manifest -ne $secondIdentity.Manifest) {
+    $firstIdentity.Hash -ne $thirdIdentity.Hash -or
+    $firstIdentity.Hash -ne $fourthIdentity.Hash -or
+    $firstIdentity.Manifest -ne $secondIdentity.Manifest -or
+    $firstIdentity.Manifest -ne $thirdIdentity.Manifest -or
+    $firstIdentity.Manifest -ne $fourthIdentity.Manifest) {
     throw "Proven OPC nondeterminism changed the normalized package identity."
 }
 
@@ -196,5 +214,67 @@ New-TestPackage `
     -Creator "Benign creator drift"
 Assert-Rejected $wrongCore "Core-property semantic drift"
 
-Write-Output "PASS normalized-opc-positive-randomization=2"
-Write-Output "PASS normalized-opc-negative-drift=4"
+$invalidTimestamps = @(
+    @{
+        Name = "text-date"
+        RelationshipSuffix = "600001"
+        CoreSuffix = "60000160000160000160000160000160"
+        Value = "July 20, 2026Z"
+        Label = "Text creation timestamp"
+    },
+    @{
+        Name = "offset"
+        RelationshipSuffix = "600002"
+        CoreSuffix = "60000260000260000260000260000260"
+        Value = "2026-07-20T01:59:59+00:00"
+        Label = "Offset creation timestamp"
+    },
+    @{
+        Name = "lowercase-z"
+        RelationshipSuffix = "600003"
+        CoreSuffix = "60000360000360000360000360000360"
+        Value = "2026-07-20T01:59:59z"
+        Label = "Lowercase-Z creation timestamp"
+    },
+    @{
+        Name = "space"
+        RelationshipSuffix = "600004"
+        CoreSuffix = "60000460000460000460000460000460"
+        Value = "2026-07-20 01:59:59Z"
+        Label = "Space-separated creation timestamp"
+    },
+    @{
+        Name = "eight-fractions"
+        RelationshipSuffix = "600005"
+        CoreSuffix = "60000560000560000560000560000560"
+        Value = "2026-07-20T01:59:59.12345678Z"
+        Label = "Over-precise creation timestamp"
+    },
+    @{
+        Name = "invalid-calendar"
+        RelationshipSuffix = "600006"
+        CoreSuffix = "60000660000660000660000660000660"
+        Value = "2026-02-30T01:59:59Z"
+        Label = "Invalid-calendar creation timestamp"
+    },
+    @{
+        Name = "invalid-time"
+        RelationshipSuffix = "600007"
+        CoreSuffix = "60000760000760000760000760000760"
+        Value = "2026-07-20T24:00:00Z"
+        Label = "Invalid-time creation timestamp"
+    }
+)
+
+foreach ($invalidTimestamp in $invalidTimestamps) {
+    $path = Join-Path $root "$($invalidTimestamp.Name).nupkg"
+    New-TestPackage `
+        -Path $path `
+        -RelationshipSuffix $invalidTimestamp.RelationshipSuffix `
+        -CoreSuffix $invalidTimestamp.CoreSuffix `
+        -Created $invalidTimestamp.Value
+    Assert-Rejected $path $invalidTimestamp.Label
+}
+
+Write-Output "PASS normalized-opc-positive-randomization=4"
+Write-Output "PASS normalized-opc-negative-drift=11"
