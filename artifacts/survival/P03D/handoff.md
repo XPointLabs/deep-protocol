@@ -7,20 +7,32 @@ Status: `contract-only-awaiting-human-and-external-crypto-review`
 `Deep.Protocol.DeepExtension.NearbySecureChannels` defines:
 
 - bounded opaque account, device and transcript identifiers;
-- device credential roster epoch, validity and revocation state;
-- opaque local device-key handle;
+- untrusted credential descriptors and verifier-issued opaque credential
+  capabilities with visible roster epoch, validity and revocation state;
+- provider-issued local device-key handle binding the verified local
+  credential to an opaque platform-key reference;
 - fixed `UnassignedPendingExternalCryptoReview` profile;
 - fresh-only AKE context over the existing P03C binding;
-- initiator/responder flights restricted to AKE bytes;
+- disposable initiator/responder flights restricted to AKE bytes, with
+  exactly-once state/pending transfer;
 - authenticated-peer and pending-session boundaries;
-- durable replay claim/classification/acceptance/committer contracts;
+- exact value-equal replay claim owned by the pending session;
+- one-shot async activation through a durable replay committer returning only
+  commit classification;
 - opaque secure-session `Seal`/`Open` record boundary;
-- bounded directional opened-record result and explicit fail-closed errors.
+- role-derived send/receive directions, directional opened-record result and
+  explicit fail-closed errors.
 
 All input byte buffers are copied. Opaque values redact `ToString()`.
-Resumption is rejected. Replay acceptance binds local and peer device IDs,
-transport attempt, transcript digest and roster epoch. The P03D namespace has
-no concrete AKE, replay committer, pending session or secure channel.
+Opaque identifiers/digests and replay claims have value equality/hash.
+Resumption is rejected. The pending base validates its local device, peer
+device, transport attempt and roster epoch against the immutable AKE context.
+It supplies that exact claim to the committer, rejects concurrent/repeated
+activation, and disposes non-fresh outcomes. There is no reusable replay
+acceptance object. `Seal` has no direction selector, and the abstract secure
+session base rejects an opened result in the reflected direction. The P03D
+namespace has no concrete AKE, replay committer, credential verifier, key
+provider or secure channel.
 
 ## Deliberately absent
 
@@ -29,7 +41,7 @@ no concrete AKE, replay committer, pending session or secure channel.
 - static, ephemeral or traffic-key bytes;
 - record encoding, AEAD, counters, nonces or rekey implementation;
 - credentials, keys or secret generation;
-- credential verification and device-roster authority;
+- credential signature verification and device-roster authority;
 - durable replay/period/roster persistence;
 - DI/runtime activation;
 - shared-client, MAUI, BLE/Wi-Fi or QR behavior;
@@ -49,10 +61,13 @@ results or implement its own AEAD/nonce logic.
 
 Local verification is recorded as work-package engineering evidence only:
 
-- RED focused tests: compiled; 7 expected failures before implementation;
-- GREEN focused P03D tests: 7 passed, 0 failed;
+- initial RED focused tests: compiled; 7 expected failures before the initial
+  contract implementation;
+- corrective RED test project: 23 expected compile errors before the
+  ownership/capability topology existed;
+- corrective GREEN focused P03D tests: 22 passed, 0 failed;
 - Release build: succeeded with 0 warnings and 0 errors;
-- full protocol tests: 261 passed, 0 failed, 0 skipped;
+- full protocol tests: 276 passed, 0 failed, 0 skipped;
 - `dotnet format --verify-no-changes`: passed;
 - `git diff --check`: passed.
 

@@ -163,8 +163,9 @@ review of an established AKE, cross-language vectors, durable state and mobile/W
 
 ## P03D nearby secure-channel gaps
 
-P03D defines a typed, fresh-only activation boundary over the existing P03C binding. It
-deliberately does not implement:
+P03D defines a typed, fresh-only activation boundary over the existing P03C binding. Its verifier
+and local-key-provider capabilities are abstract trust boundaries, not verification or key
+implementations. It deliberately does not implement:
 
 - an AKE suite, DH operation, transcript/prologue mapping or production AKE adapter;
 - discovery PRF construction or contact-secret issuance, rotation and delivery;

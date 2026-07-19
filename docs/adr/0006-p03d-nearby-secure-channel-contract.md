@@ -26,27 +26,44 @@ The contract:
 
 - uses typed opaque account identities, device-key identifiers and transcript
   digests with bounded, nonzero representations;
-- binds an expected peer credential to an explicit roster epoch, validity
-  interval and revocation status;
+- separates an untrusted serialized credential descriptor from a
+  verifier-issued opaque credential capability with visible account/device,
+  roster epoch, validity interval and revocation status;
 - passes the P03C `NearbyHandshakeBinding` through a fresh-only
   `NearbyAkeContext`;
-- exposes an opaque local device-key handle, never key bytes;
-- separates initiator/responder handshake flights from application records;
+- exposes a provider-issued opaque local device-key handle that binds the
+  verified local credential to a redacted platform-key reference, never key
+  bytes or key operations;
+- makes initiator/responder flights disposable owners whose state or pending
+  session can be transferred exactly once;
 - returns an opaque pending session after peer authentication;
-- requires a durable fresh replay acceptance before activation;
+- makes that pending session own the exact immutable replay claim derived from
+  its context and transcript;
+- performs one-shot asynchronous activation through
+  `INearbyReplayCommitter`, with no caller-supplied acceptance token;
 - gives the caller only an `INearbySecureSession` that owns seal/open behavior
-  and directional counters;
+  and role-derived send/receive directions and counters;
 - fixes the only profile identifier to
   `UnassignedPendingExternalCryptoReview`.
 
 P03D v1 rejects P03C resumption mode and a nonzero resume counter. No suite
 negotiation is defined.
 
-`NearbyReplayAcceptance` binds local device, peer device, P03C transport
-attempt, transcript digest, roster epoch and `AcceptedFresh`
-classification. Only an abstract replay-committer boundary may create it.
-Persistence, atomicity and crash recovery remain host responsibilities; a
-claim is never a rollback token.
+`NearbyFreshReplayClaim` has value equality over local device, peer device,
+P03C transport attempt, transcript digest and roster epoch. The pending
+session base validates that claim against its immutable AKE context and passes
+only that exact claim to `INearbyReplayCommitter`. The committer returns only a
+classification. `AcceptedFresh` contractually means the durable commit has
+completed; duplicate, collision and rejected outcomes consume and dispose the
+pending session without activating a channel. There is no reusable replay
+acceptance object or rollback token.
+
+`NearbyPendingSessionBase` serializes activation/disposal, rejects concurrent
+or repeated activation, and transfers channel ownership only after an
+`AcceptedFresh` commit. `Seal` has no direction argument. Channel send and
+receive directions are derived from the immutable local initiator/responder
+role. `NearbySecureSessionBase` supplies the expected direction to external
+record operations and rejects a reflected opened result.
 
 ## Security boundary
 
@@ -55,14 +72,18 @@ The assembly contains no concrete implementation of:
 - `INearbyFreshAke`;
 - `INearbyPendingSession`;
 - `INearbySecureSession`;
-- `INearbyReplayCommitter`.
+- `INearbyReplayCommitter`;
+- `INearbyDeviceCredentialVerifier`;
+- `INearbyLocalDeviceKeyProvider`.
 
 It contains no AKE suite, DH operation, discovery PRF, AEAD, nonce schedule,
-key issuance, device authenticator, credential verifier, persistence or
-runtime registration. `NearbyHandshakePayload` is marked for authenticated
-key-exchange bytes only and is bounded by the existing P03C adapter payload
-limits. Application and bundle bytes are carried only after an external
-implementation activates an opaque secure session.
+key issuance, credential signature implementation, platform key operation,
+persistence or runtime registration. Abstract verifier and local-key-provider
+base contracts may issue opaque capabilities only to external implementations.
+`NearbyHandshakePayload` is marked for authenticated key-exchange bytes only
+and is bounded by the existing P03C adapter payload limits. Application and
+bundle bytes are carried only after an external implementation activates an
+opaque secure session.
 
 The contract does not establish forward secrecy, post-compromise security,
 deniability, radio unlinkability or lost-device recovery.

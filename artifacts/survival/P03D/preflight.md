@@ -57,3 +57,19 @@ the P03D types did not yet exist. RED commit:
 
 No production package or final security evidence is produced by this work
 package. Independent internal and external reviews remain outstanding.
+
+## Corrective iteration 1
+
+- Exact corrective base:
+  `2ad98357b1584ec4f49d46455e01f60471a2298d`
+- Initial corrective worktree: clean
+- Review disposition entering iteration: `NO-GO` on contract topology
+- Corrective RED commit:
+  `a42b483e10de0d4cf641d389153eca773526708a`
+  (`test(protocol): define P03D corrective ownership topology`)
+- RED result: Release test project failed with 23 expected compile errors on
+  the absent verifier capability, owned replay activation, role/direction and
+  ownership-transfer APIs.
+
+The corrective iteration remains contract-only and adds no evidence carrier,
+package, production cryptography, persistence or runtime registration.

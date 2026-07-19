@@ -67,6 +67,7 @@ public sealed class NearbySecureChannelContractTests
     public async Task VerifiedCredential_IsOpaqueVerifierIssuedAndReadOnly()
     {
         Assert.Empty(typeof(NearbyVerifiedDeviceCredential).GetConstructors());
+        Assert.Empty(typeof(NearbyAuthenticatedPeer).GetConstructors());
 
         var descriptor = Descriptor(
             Account(0x10),
@@ -216,15 +217,14 @@ public sealed class NearbySecureChannelContractTests
     [Fact]
     public async Task PendingSession_CommitsItsOwnedClaimAndActivatesOnlyOnce()
     {
-        var (_, peer, _) = await Capabilities();
+        var (_, peer, handle) = await Capabilities();
         var claim = Claim(peer: peer.DeviceKeyId);
         var channel = new TestSecureSession(
             NearbySessionRole.Initiator,
             peer,
             ValidationTime);
         var pending = new TestPendingSession(
-            NearbySessionRole.Initiator,
-            peer,
+            Context(NearbySessionRole.Initiator, handle, peer),
             ValidationTime,
             claim,
             channel);
@@ -248,12 +248,11 @@ public sealed class NearbySecureChannelContractTests
     [Fact]
     public async Task PendingSession_RejectsConcurrentDoubleActivationBeforeSecondCommit()
     {
-        var (_, peer, _) = await Capabilities();
+        var (_, peer, handle) = await Capabilities();
         var claim = Claim(peer: peer.DeviceKeyId);
         var committer = TestReplayCommitter.Blocked();
         var pending = new TestPendingSession(
-            NearbySessionRole.Responder,
-            peer,
+            Context(NearbySessionRole.Responder, handle, peer),
             ValidationTime,
             claim,
             new TestSecureSession(NearbySessionRole.Responder, peer, ValidationTime));
@@ -272,6 +271,32 @@ public sealed class NearbySecureChannelContractTests
         Assert.Equal(claim, committer.Claims.Single());
     }
 
+    [Fact]
+    public async Task PendingSession_DisposeDuringCommitAbandonsStateAndNeverTransfers()
+    {
+        var (_, peer, handle) = await Capabilities();
+        var committer = TestReplayCommitter.Blocked();
+        var pending = new TestPendingSession(
+            Context(NearbySessionRole.Initiator, handle, peer),
+            ValidationTime,
+            Claim(peer: peer.DeviceKeyId),
+            new TestSecureSession(NearbySessionRole.Initiator, peer, ValidationTime));
+
+        var activation = pending.ActivateAsync(committer).AsTask();
+        await committer.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        pending.Dispose();
+        pending.Dispose();
+        Assert.Equal(1, pending.PendingDisposeCount);
+
+        committer.Release.TrySetResult(
+            new NearbyReplayCommitOutcome(NearbyReplayClaimClassification.AcceptedFresh));
+        var disposed = await Assert.ThrowsAsync<NearbySecureChannelException>(
+            async () => await activation);
+        Assert.Equal(NearbySecureChannelError.InvalidState, disposed.Error);
+        Assert.Equal(0, pending.ActivationCount);
+        Assert.Equal(1, pending.PendingDisposeCount);
+    }
+
     [Theory]
     [InlineData(
         NearbyReplayClaimClassification.DuplicateSameTranscript,
@@ -286,10 +311,9 @@ public sealed class NearbySecureChannelContractTests
         NearbyReplayClaimClassification classification,
         NearbySecureChannelError expectedError)
     {
-        var (_, peer, _) = await Capabilities();
+        var (_, peer, handle) = await Capabilities();
         var pending = new TestPendingSession(
-            NearbySessionRole.Initiator,
-            peer,
+            Context(NearbySessionRole.Initiator, handle, peer),
             ValidationTime,
             Claim(peer: peer.DeviceKeyId),
             new TestSecureSession(NearbySessionRole.Initiator, peer, ValidationTime));
@@ -305,6 +329,34 @@ public sealed class NearbySecureChannelContractTests
             async () => await pending.ActivateAsync(committer));
         Assert.Equal(NearbySecureChannelError.InvalidState, retry.Error);
         Assert.Equal(1, committer.CallCount);
+    }
+
+    [Fact]
+    public async Task PendingSession_RejectsAnyReplayClaimScopeMismatch()
+    {
+        var (_, peer, handle) = await Capabilities();
+        var context = Context(NearbySessionRole.Initiator, handle, peer);
+        var channel = new TestSecureSession(
+            NearbySessionRole.Initiator,
+            peer,
+            ValidationTime);
+
+        foreach (var mismatch in new[]
+                 {
+                     Claim(local: Device(0x21), peer: peer.DeviceKeyId),
+                     Claim(peer: Device(0x41)),
+                     Claim(peer: peer.DeviceKeyId, attemptStart: 0x91),
+                     Claim(peer: peer.DeviceKeyId, rosterEpoch: 8)
+                 })
+        {
+            var exception = Assert.Throws<NearbySecureChannelException>(() =>
+                new TestPendingSession(
+                    context,
+                    ValidationTime,
+                    mismatch,
+                    channel));
+            Assert.Equal(NearbySecureChannelError.InvalidCredential, exception.Error);
+        }
     }
 
     [Fact]
@@ -329,8 +381,8 @@ public sealed class NearbySecureChannelContractTests
         Assert.Equal(1, abandonedState.DisposeCount);
         Assert.Throws<NearbySecureChannelException>(() => abandonedInitiator.TakeState());
 
-        var (_, peer, _) = await Capabilities();
-        var transferredPending = Pending(peer);
+        var (_, peer, handle) = await Capabilities();
+        var transferredPending = Pending(handle, peer);
         var responder = new NearbyResponderFlight(payload, transferredPending);
         Assert.Same(transferredPending, responder.TakePendingSession());
         Assert.Throws<NearbySecureChannelException>(() => responder.TakePendingSession());
@@ -339,7 +391,7 @@ public sealed class NearbySecureChannelContractTests
         transferredPending.Dispose();
         Assert.Equal(1, transferredPending.PendingDisposeCount);
 
-        var abandonedPending = Pending(peer);
+        var abandonedPending = Pending(handle, peer);
         var abandonedResponder = new NearbyResponderFlight(payload, abandonedPending);
         abandonedResponder.Dispose();
         abandonedResponder.Dispose();
@@ -374,6 +426,14 @@ public sealed class NearbySecureChannelContractTests
         var opened = initiator.Open(Range(2, 16));
         Assert.Equal(initiator.ReceiveDirection, opened.Direction);
         Assert.Equal(1UL, opened.Counter);
+
+        using var reflected = new ReflectedSecureSession(
+            NearbySessionRole.Initiator,
+            peer,
+            ValidationTime);
+        var reflection = Assert.Throws<NearbySecureChannelException>(() =>
+            reflected.Open(Range(3, 16)));
+        Assert.Equal(NearbySecureChannelError.DirectionReflection, reflection.Error);
 
         Assert.Equal(
             NearbyRecordDirection.ResponderToInitiator,
@@ -457,13 +517,27 @@ public sealed class NearbySecureChannelContractTests
         return (local, peer, handle);
     }
 
-    private static TestPendingSession Pending(NearbyVerifiedDeviceCredential peer) =>
+    private static TestPendingSession Pending(
+        NearbyLocalDeviceKeyHandle handle,
+        NearbyVerifiedDeviceCredential peer) =>
         new(
-            NearbySessionRole.Initiator,
-            peer,
+            Context(NearbySessionRole.Initiator, handle, peer),
             ValidationTime,
             Claim(peer: peer.DeviceKeyId),
             new TestSecureSession(NearbySessionRole.Initiator, peer, ValidationTime));
+
+    private static NearbyAkeContext Context(
+        NearbySessionRole localRole,
+        NearbyLocalDeviceKeyHandle handle,
+        NearbyVerifiedDeviceCredential peer) =>
+        new(
+            NearbySecureChannelProfileId.UnassignedPendingExternalCryptoReview,
+            Binding(),
+            localRole,
+            handle,
+            peer,
+            rosterEpoch: 7,
+            ValidationTime);
 
     private static NearbyDeviceCredentialDescriptor Descriptor(
         NearbyAccountIdentity account,
@@ -484,7 +558,7 @@ public sealed class NearbySecureChannelContractTests
     private static NearbyFreshReplayClaim Claim(
         NearbyDeviceKeyId? local = null,
         NearbyDeviceKeyId? peer = null,
-        int attemptStart = 0x90,
+        int attemptStart = 0x80,
         NearbyTranscriptDigest? digest = null,
         ulong rosterEpoch = 7) =>
         new(
@@ -587,14 +661,12 @@ public sealed class NearbySecureChannelContractTests
         private int pendingDisposeCount;
 
         public TestPendingSession(
-            NearbySessionRole localRole,
-            NearbyVerifiedDeviceCredential peerCredential,
+            NearbyAkeContext context,
             DateTimeOffset authenticatedAt,
             NearbyFreshReplayClaim replayClaim,
             INearbySecureSession channel)
             : base(
-                localRole,
-                peerCredential,
+                context,
                 authenticatedAt,
                 new NearbyTranscriptDigest(Range(0xd0, 32)),
                 replayClaim)
@@ -663,7 +735,7 @@ public sealed class NearbySecureChannelContractTests
         }
     }
 
-    private sealed class TestSecureSession : INearbySecureSession
+    private class TestSecureSession : NearbySecureSessionBase
     {
         private ulong sendCounter;
         private ulong receiveCounter;
@@ -672,40 +744,52 @@ public sealed class NearbySecureChannelContractTests
             NearbySessionRole localRole,
             NearbyVerifiedDeviceCredential peerCredential,
             DateTimeOffset authenticatedAt)
-        {
-            LocalRole = localRole;
-            Peer = new NearbyAuthenticatedPeer(
+            : base(
+                localRole,
                 peerCredential,
                 peerCredential.RosterEpoch,
-                authenticatedAt);
+                authenticatedAt)
+        {
         }
 
-        public NearbyAuthenticatedPeer Peer { get; }
-
-        public NearbySessionRole LocalRole { get; }
-
-        public NearbyRecordDirection SendDirection =>
-            NearbyRecordDirectionPolicy.SendFor(LocalRole);
-
-        public NearbyRecordDirection ReceiveDirection =>
-            NearbyRecordDirectionPolicy.ReceiveFor(LocalRole);
-
-        public byte[] Seal(NearbyRecordKind kind, ReadOnlySpan<byte> plaintext)
+        protected override byte[] SealCore(
+            NearbyRecordDirection direction,
+            NearbyRecordKind kind,
+            ReadOnlySpan<byte> plaintext)
         {
+            Assert.Equal(SendDirection, direction);
             _ = kind;
             _ = checked(++sendCounter);
             return plaintext.ToArray();
         }
 
-        public NearbyOpenedRecord Open(ReadOnlySpan<byte> record) =>
+        protected override NearbyOpenedRecord OpenCore(
+            NearbyRecordDirection expectedDirection,
+            ReadOnlySpan<byte> record) =>
             new(
-                ReceiveDirection,
+                expectedDirection,
                 NearbyRecordKind.Control,
                 checked(++receiveCounter),
                 record.ToArray());
 
-        public void Dispose()
+        public override void Dispose()
         {
         }
+    }
+
+    private sealed class ReflectedSecureSession(
+        NearbySessionRole localRole,
+        NearbyVerifiedDeviceCredential peerCredential,
+        DateTimeOffset authenticatedAt)
+        : TestSecureSession(localRole, peerCredential, authenticatedAt)
+    {
+        protected override NearbyOpenedRecord OpenCore(
+            NearbyRecordDirection expectedDirection,
+            ReadOnlySpan<byte> record) =>
+            new(
+                SendDirection,
+                NearbyRecordKind.Control,
+                1,
+                record.ToArray());
     }
 }
