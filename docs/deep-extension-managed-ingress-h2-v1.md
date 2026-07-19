@@ -31,7 +31,15 @@ result can advance such application state.
 | retry delay when present | 1..60 seconds |
 
 Header-list accounting is the RFC 9113 decoded calculation: name bytes + value bytes + 32 for
-each field. The opaque application body may span multiple HTTP/2 DATA frames.
+each field. For requests this includes `:method`, `:scheme`, `:authority`, `:path`, `accept`,
+`content-length` and, for frame requests, `content-type`; an adapter must not also put these
+fields in the supplemental header collection. The opaque application body may span multiple
+HTTP/2 DATA frames.
+
+`ManagedIngressStreamingAdmission` accounts for each received chunk without allocating from the
+declared length. It allows forwarding only after the actual byte count exactly matches a bounded
+declared length. Truncation, overflow and cancellation before that transition cannot be reported
+as forwarded. Cancellation after the transition is always `OutcomeUnknown`.
 
 ## Canonical `DIE1`
 
@@ -52,11 +60,21 @@ All integers are unsigned big-endian.
 The codec is canonical and allocation-bounded. It has no string, request identifier, digest,
 capability or evidence field.
 
+An error response is authoritative only when HTTP/2, status, exact media type, fixed body length,
+canonical `DIE1` mapping and the optional decimal `Retry-After` all agree. `Retry-After` is present
+exactly once only for a nonzero `DIE1` delay and must be the same canonical integer in `1..60`.
+Malformed, proxy-generated or contradictory responses are `OutcomeUnknown`.
+
+The capability response is exact HTTP `200`, the capability media type and canonical JSON bytes.
+Unknown fields, alternate field order/whitespace, duplicate features, overlap between critical
+and optional features, and unknown critical features fail closed.
+
 ## Host requirements
 
-A host must stream with bounds before forwarding, reject partial/over-limit bodies, prohibit
-compression/redirect/0-RTT and distinguish the forward boundary for cancellation. P10B does not
-provide the host, server, queue, timers, TLS, retry scheduler or inner verifier.
+A host must drive the admission state before forwarding, reject partial/over-limit bodies,
+prohibit compression/redirect/0-RTT and preserve the forward boundary for cancellation. P10B
+provides the bounded contract state but not the host, server, queue, timers, TLS, retry scheduler
+or inner verifier.
 
 Logs and metrics are aggregate bounded reason counters only. Do not log frames, prefixes,
 digests, IPs, capabilities, receipt identifiers, attempts, accounts or topology.

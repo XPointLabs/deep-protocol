@@ -41,7 +41,10 @@ Capability documents are at most 4,096 bytes. Canonical outer errors are exactly
 contain no text, request identifier, digest or evidence.
 
 Queries, compression, redirects, cookies, authorization, idempotency headers and distributed
-tracing/correlation headers are forbidden. TLS early data is rejected. The public ingress still
+tracing/correlation headers are forbidden. Account, plan, payer, wallet, operation, attempt,
+session, capability, receipt, forwarding and hop-by-hop headers are also forbidden. Mandatory
+HTTP/2 routing and media fields are included in both the 32-field and 8,192-byte decoded limits
+and cannot be duplicated by an adapter. TLS early data is rejected. The public ingress still
 observes source IP, timing, connection reuse, direction, endpoint choice and padded ciphertext
 length. This contract makes no global-anonymity, endpoint-unblockability or full-IP-cutoff claim.
 
@@ -57,8 +60,10 @@ idempotency context.
 
 `DIE1` is a fixed 64-byte big-endian outer error. It distinguishes before-forward failures from
 unknown-after-forward outcomes and permits a bounded 1..60 second retry value only where the
-status mapping allows it. Unknown versions, classes, certainty values, reserved bytes and
-noncanonical retry combinations fail closed.
+status mapping allows it. When nonzero, the HTTP `Retry-After` header must occur exactly once and
+equal the canonical decimal value in `DIE1`; it must otherwise be absent. Unknown versions,
+classes, certainty values, reserved bytes, malformed outer responses and noncanonical retry
+combinations become `OutcomeUnknown` rather than definite rejection.
 
 ## Non-goals and activation blockers
 
