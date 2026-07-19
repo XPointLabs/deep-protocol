@@ -143,9 +143,31 @@ public static class LoRaFragmentCodec
                 "The LoRa fragment authentication tag was rejected.");
         }
 
-        // The returned model performs the first retained shard/tag copies, only
-        // after the fixed header and exact tag transcript have authenticated.
-        return new LoRaFragmentFrame(header, shard, authenticationTag);
+        // The caller owns the input memory and could mutate it concurrently.
+        // Retain only after the first verification, then authenticate the exact
+        // retained snapshot once more to close the verify/copy TOCTOU window.
+        var retainedShard = shard.ToArray();
+        var retainedAuthenticationTag = authenticationTag.ToArray();
+        var retainedTranscript = BuildAuthenticatedTranscript(
+            header,
+            retainedShard,
+            direction);
+        if (!authenticator.VerifyTag(
+                LoRaFragmentDomains.Authentication,
+                authenticationHandle,
+                direction,
+                retainedTranscript,
+                retainedAuthenticationTag))
+        {
+            throw Error(
+                LoRaFragmentError.AuthenticationFailed,
+                "The retained LoRa fragment bytes changed after authentication.");
+        }
+
+        return new LoRaFragmentFrame(
+            header,
+            retainedShard,
+            retainedAuthenticationTag);
     }
 
     public static byte[] BuildAuthenticatedTranscript(
