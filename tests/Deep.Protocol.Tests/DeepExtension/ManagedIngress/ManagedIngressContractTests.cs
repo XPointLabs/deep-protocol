@@ -166,7 +166,9 @@ public sealed class ManagedIngressContractTests
             bodyLength: 64,
             headers: Array.Empty<ManagedIngressHeader>());
 
-        Assert.Equal(expected, ManagedIngressH2Contract.ClassifyFrameResponse(response));
+        Assert.Equal(
+            expected,
+            ManagedIngressH2Contract.ClassifyFrameResponse(response, new byte[64]));
     }
 
     [Theory]
@@ -231,6 +233,82 @@ public sealed class ManagedIngressContractTests
     }
 
     [Fact]
+    public void OverflowPermanentlyPoisonsAdmission()
+    {
+        var admission = new ManagedIngressStreamingAdmission(
+            ManagedIngressLimits.MaximumOpaqueFrameBytes);
+        admission.Append(new byte[ManagedIngressLimits.MaximumOpaqueFrameBytes]);
+
+        Assert.Throws<ManagedIngressContractException>(() => admission.Append([0x01]));
+        Assert.Throws<InvalidOperationException>(() => admission.Append(ReadOnlySpan<byte>.Empty));
+        Assert.Throws<InvalidOperationException>(() => admission.Complete());
+        Assert.Throws<InvalidOperationException>(() => admission.MarkForwardStarted());
+    }
+
+    [Fact]
+    public void TruncatedCompletionPermanentlyPoisonsAdmission()
+    {
+        var admission = new ManagedIngressStreamingAdmission(65);
+        admission.Append(new byte[64]);
+
+        Assert.Throws<ManagedIngressContractException>(() => admission.Complete());
+        Assert.Throws<InvalidOperationException>(() => admission.Append([0x01]));
+        Assert.Throws<InvalidOperationException>(() => admission.Complete());
+        Assert.Throws<InvalidOperationException>(() => admission.MarkForwardStarted());
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(63)]
+    [InlineData(65)]
+    public void FrameResponse_RequiresActualCompleteBody(int actualLength)
+    {
+        var response = CanonicalFrameResponse(bodyLength: 64);
+
+        Assert.Equal(
+            ManagedIngressTransportResult.OutcomeUnknown,
+            ManagedIngressH2Contract.ClassifyFrameResponse(
+                response,
+                new byte[actualLength]));
+    }
+
+    [Theory]
+    [InlineData(64)]
+    [InlineData(1_572_864)]
+    public void FrameResponse_ActualBoundsAreAccepted(int length)
+    {
+        var response = CanonicalFrameResponse(length);
+        Assert.Equal(
+            ManagedIngressTransportResult.TransitCompleted,
+            ManagedIngressH2Contract.ClassifyFrameResponse(response, new byte[length]));
+    }
+
+    [Fact]
+    public void ResponseMandatoryFields_AreIncludedInLimits()
+    {
+        var response = CanonicalFrameResponse(64);
+        Assert.True(
+            ManagedIngressH2Contract.ComputeEffectiveResponseHeaderBytes(response) >
+            ManagedIngressH2Contract.ComputeDecodedHeaderListBytes(response.Headers));
+
+        var supplementalWithinStandaloneLimit = new[]
+        {
+            new ManagedIngressHeader(
+                "cache-control",
+                new string('a', ManagedIngressLimits.MaximumDecodedHeaderListBytes - 64))
+        };
+        Assert.True(
+            ManagedIngressH2Contract.ComputeDecodedHeaderListBytes(
+                supplementalWithinStandaloneLimit) <=
+            ManagedIngressLimits.MaximumDecodedHeaderListBytes);
+        Assert.Equal(
+            ManagedIngressTransportResult.OutcomeUnknown,
+            ManagedIngressH2Contract.ClassifyFrameResponse(
+                response with { Headers = supplementalWithinStandaloneLimit },
+                new byte[64]));
+    }
+
+    [Fact]
     public void MandatoryPseudoAndMediaHeaders_AreCountedAndCannotBeDuplicated()
     {
         var request = CanonicalRequest();
@@ -253,6 +331,12 @@ public sealed class ManagedIngressContractTests
     [InlineData("x-wallet")]
     [InlineData("x-operation-id")]
     [InlineData("x-attempt-id")]
+    [InlineData("account-id")]
+    [InlineData("plan")]
+    [InlineData("payer")]
+    [InlineData("wallet")]
+    [InlineData("operation-id")]
+    [InlineData("bad/header")]
     [InlineData("connection")]
     [InlineData("transfer-encoding")]
     [InlineData(":path")]
@@ -264,6 +348,17 @@ public sealed class ManagedIngressContractTests
         };
         Assert.Throws<ManagedIngressContractException>(
             () => ManagedIngressH2Contract.ValidateFrameRequest(request));
+    }
+
+    [Theory]
+    [InlineData("\0")]
+    [InlineData("\u001f")]
+    [InlineData("\u007f")]
+    public void InvalidH2HeaderValues_AreRejected(string value)
+    {
+        Assert.Throws<ManagedIngressContractException>(() =>
+            ManagedIngressH2Contract.ValidateHeaders(
+                [new ManagedIngressHeader("cache-control", value)]));
     }
 
     [Fact]
@@ -434,10 +529,27 @@ public sealed class ManagedIngressContractTests
             },
             new byte[OpaqueBundleLimits.MaximumEncodedLength]);
 
-        Assert.InRange(
-            payload.Body.Length,
-            ManagedIngressLimits.MinimumOpaqueFrameBytes,
-            ManagedIngressLimits.MaximumOpaqueFrameBytes);
+        Assert.Equal(1_420_309, payload.Body.Length);
+        var outer = ManagedIngressH2Contract.ValidateOpaqueFrame(payload.Body.Span);
+        Assert.Equal(payload.Body.ToArray(), outer.Bytes.ToArray());
+        var fixture = GoldenVectorLoader.Load("managed-ingress-h2-v1.json")
+            .GetRequired("deep-extension/managed-ingress/v1/max-three-hop-producer");
+        Assert.Equal((ulong)payload.Body.Length, fixture.TimestampMs);
+        Assert.Equal(
+            "DPB1-max=1064960;hops=3;endpoint=/api/ingress/internal/opaque-v1;xchacha20",
+            fixture.Body);
+    }
+
+    [Fact]
+    public void LanguageNeutralHttpFixtures_ArePresent()
+    {
+        var vectors = GoldenVectorLoader.Load("managed-ingress-h2-v1.json");
+        Assert.Contains("\"method\":\"POST\"", vectors
+            .GetRequired("deep-extension/managed-ingress/v1/frame-request").Body);
+        Assert.Contains("\"status\":200", vectors
+            .GetRequired("deep-extension/managed-ingress/v1/frame-success").Body);
+        Assert.Contains("\"ready\":true", vectors
+            .GetRequired("deep-extension/managed-ingress/v1/capability-ready").Body);
     }
 
     [Fact]
@@ -490,4 +602,12 @@ public sealed class ManagedIngressContractTests
         headers: Array.Empty<ManagedIngressHeader>(),
         scheme: "https",
         authority: "bridge.example");
+
+    private static ManagedIngressResponseMetadata CanonicalFrameResponse(long bodyLength) => new(
+        200,
+        HttpVersion.Version20,
+        ManagedIngressH2Contract.OpaqueMediaType,
+        contentEncoding: null,
+        bodyLength,
+        headers: Array.Empty<ManagedIngressHeader>());
 }

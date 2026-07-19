@@ -232,4 +232,35 @@ public sealed class ManagedIngressMalformedAndFuzzTests
                 ManagedIngressCapabilityDocumentCodec.Encode(overlap),
                 ManagedIngressCapabilityFeatures.KnownCritical));
     }
+
+    [Fact]
+    public void MalformedFrameResponse_MetadataNeverEscapesOutcomeUnknown()
+    {
+        var response = new ManagedIngressResponseMetadata(
+            200,
+            new Version(2, 0),
+            ManagedIngressH2Contract.OpaqueMediaType,
+            contentEncoding: null,
+            bodyLength: 64,
+            headers: Array.Empty<ManagedIngressHeader>());
+
+        Assert.Equal(
+            ManagedIngressTransportResult.OutcomeUnknown,
+            ManagedIngressH2Contract.ClassifyFrameResponse(
+                response with { Headers = null! },
+                new byte[64]));
+        Assert.Equal(
+            ManagedIngressTransportResult.OutcomeUnknown,
+            ManagedIngressH2Contract.ClassifyFrameResponse(
+                response with { ContentEncoding = " " },
+                new byte[64]));
+    }
+
+    [Fact]
+    public void MalformedDie1_DirectDecodeNeverClaimsBeforeForward()
+    {
+        var exception = Assert.Throws<ManagedIngressContractException>(() =>
+            ManagedIngressErrorCodec.Decode(new byte[ManagedIngressLimits.ErrorFrameBytes]));
+        Assert.Equal(ManagedIngressOutcomeCertainty.UnknownAfterForward, exception.Certainty);
+    }
 }
