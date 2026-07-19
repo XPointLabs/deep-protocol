@@ -32,8 +32,8 @@ The contract:
 - passes the P03C `NearbyHandshakeBinding` through a fresh-only
   `NearbyAkeContext`;
 - exposes a provider-issued opaque local device-key handle that binds the
-  verified local credential to a redacted platform-key reference, never key
-  bytes or key operations;
+  independently supplied verified local credential to a redacted platform-key
+  reference, never key bytes or key operations;
 - makes initiator/responder flights disposable owners whose state or pending
   session can be transferred exactly once;
 - returns an opaque pending session after peer authentication;
@@ -51,8 +51,9 @@ negotiation is defined.
 
 `NearbyFreshReplayClaim` has value equality over local device, peer device,
 P03C transport attempt, transcript digest and roster epoch. The pending
-session base validates that claim against its immutable AKE context and passes
-only that exact claim to `INearbyReplayCommitter`. The committer returns only a
+session base validates that claim, including the pending handshake hash, against
+its immutable AKE context and passes only that exact claim to
+`INearbyReplayCommitter`. The committer returns only a
 classification. `AcceptedFresh` contractually means the durable commit has
 completed; duplicate, collision and rejected outcomes consume and dispose the
 pending session without activating a channel. There is no reusable replay
@@ -60,10 +61,17 @@ acceptance object or rollback token.
 
 `NearbyPendingSessionBase` serializes activation/disposal, rejects concurrent
 or repeated activation, and transfers channel ownership only after an
-`AcceptedFresh` commit. `Seal` has no direction argument. Channel send and
+`AcceptedFresh` commit. Transfer verifies the exact expected verified peer
+capability and its account/device/roster/validation context. Once a committer
+returns `AcceptedFresh`, acceptance wins a cancellation observed afterwards:
+the base does not re-check the cancellation token and never asks for replay
+rollback. `Seal` has no direction argument. Channel send and
 receive directions are derived from the immutable local initiator/responder
 role. `NearbySecureSessionBase` supplies the expected direction to external
-record operations and rejects a reflected opened result.
+record operations and rejects a reflected opened result. Canonical AKE frames
+are bounded P03C frame values before reaching an external AKE, while encoded
+records are capped at the existing opaque-bundle maximum plus 4096 bytes of
+format-agnostic envelope overhead; the same cap is enforced on adapter output.
 
 ## Security boundary
 
@@ -80,6 +88,11 @@ It contains no AKE suite, DH operation, discovery PRF, AEAD, nonce schedule,
 key issuance, credential signature implementation, platform key operation,
 persistence or runtime registration. Abstract verifier and local-key-provider
 base contracts may issue opaque capabilities only to external implementations.
+The local-key-provider base verifies that its returned handle retains the exact
+credential capability requested, and `NearbyAkeContext` independently checks
+that binding again. Direct implementations supplied through DI remain a trusted
+integration boundary and must provide the same guarantee; the context rejects
+mismatched handles it receives.
 `NearbyHandshakePayload` is marked for authenticated key-exchange bytes only
 and is bounded by the existing P03C adapter payload limits. Application and
 bundle bytes are carried only after an external implementation activates an

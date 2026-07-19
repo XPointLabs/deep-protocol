@@ -15,8 +15,14 @@ public static class NearbySecureChannelLimits
     public const int MaximumTranscriptDigestLength = 64;
     public const int MinimumHandshakePayloadLength = NearbyHandshakeLimits.MinimumAdapterPayloadLength;
     public const int MaximumHandshakePayloadLength = NearbyHandshakeLimits.MaximumAdapterPayloadLength;
+    public const int MinimumCanonicalAkeFrameLength =
+        NearbyHandshakeLimits.FrameHeaderLength + NearbyHandshakeLimits.MinimumAdapterPayloadLength;
+    public const int MaximumCanonicalAkeFrameLength =
+        NearbyHandshakeLimits.FrameHeaderLength + NearbyHandshakeLimits.MaximumAdapterPayloadLength;
     public const int MinimumRecordPlaintextLength = 1;
     public const int MaximumRecordPlaintextLength = OpaqueBundleLimits.MaximumEncodedLength;
+    // Allows a bounded record envelope without choosing an AKE/AEAD record format.
+    public const int MaximumEncodedRecordLength = OpaqueBundleLimits.MaximumEncodedLength + 4_096;
 }
 
 public enum NearbySecureChannelProfileId : ushort
@@ -360,6 +366,15 @@ public sealed class NearbyVerifiedDeviceCredential
         }
     }
 
+    internal bool HasExactValue(NearbyVerifiedDeviceCredential other) =>
+        ReferenceEquals(this, other) ||
+        (AccountIdentity.Equals(other.AccountIdentity) &&
+         DeviceKeyId.Equals(other.DeviceKeyId) &&
+         RosterEpoch == other.RosterEpoch &&
+         ValidFrom == other.ValidFrom &&
+         ValidUntil == other.ValidUntil &&
+         Status == other.Status);
+
     private static NearbySecureChannelException Error(
         NearbySecureChannelError error,
         string message) =>
@@ -419,9 +434,26 @@ public interface INearbyLocalDeviceKeyProvider
 
 public abstract class NearbyLocalDeviceKeyProviderBase : INearbyLocalDeviceKeyProvider
 {
-    public abstract ValueTask<NearbyLocalDeviceKeyHandle> GetLocalKeyAsync(
+    public async ValueTask<NearbyLocalDeviceKeyHandle> GetLocalKeyAsync(
         NearbyVerifiedDeviceCredential credential,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(credential);
+        var handle = await GetLocalKeyCoreAsync(credential, cancellationToken).ConfigureAwait(false);
+        ArgumentNullException.ThrowIfNull(handle);
+        if (!ReferenceEquals(handle.Credential, credential))
+        {
+            throw new NearbySecureChannelException(
+                NearbySecureChannelError.InvalidCredential,
+                "Local key provider returned a handle for a different verified credential.");
+        }
+
+        return handle;
+    }
+
+    protected abstract ValueTask<NearbyLocalDeviceKeyHandle> GetLocalKeyCoreAsync(
+        NearbyVerifiedDeviceCredential credential,
+        CancellationToken cancellationToken);
 
     protected static NearbyLocalDeviceKeyHandle CreateOpaqueLocalKeyHandle(
         NearbyVerifiedDeviceCredential credential,
@@ -441,6 +473,7 @@ public sealed class NearbyAkeContext
         NearbySecureChannelProfileId profileId,
         NearbyHandshakeBinding binding,
         NearbySessionRole localRole,
+        NearbyVerifiedDeviceCredential localCredential,
         NearbyLocalDeviceKeyHandle localKeyHandle,
         NearbyVerifiedDeviceCredential expectedPeerCredential,
         ulong rosterEpoch,
@@ -454,6 +487,7 @@ public sealed class NearbyAkeContext
         }
 
         ArgumentNullException.ThrowIfNull(binding);
+        ArgumentNullException.ThrowIfNull(localCredential);
         ArgumentNullException.ThrowIfNull(localKeyHandle);
         ArgumentNullException.ThrowIfNull(expectedPeerCredential);
         ValidateRole(localRole);
@@ -472,7 +506,13 @@ public sealed class NearbyAkeContext
                 "Expected roster epoch must be nonzero.");
         }
 
-        var localCredential = localKeyHandle.Credential;
+        if (!ReferenceEquals(localCredential, localKeyHandle.Credential))
+        {
+            throw Error(
+                NearbySecureChannelError.InvalidCredential,
+                "Local key handle does not bind the independently verified local credential.");
+        }
+
         localCredential.ValidateAt(new NearbyCredentialVerificationExpectation(
             localCredential.AccountIdentity,
             localCredential.DeviceKeyId,
@@ -565,6 +605,40 @@ public sealed class NearbyHandshakePayload
     public ReadOnlyMemory<byte> Bytes => bytes.ToArray();
 
     public override string ToString() => "NearbyHandshakePayload[redacted]";
+}
+
+public sealed class NearbyCanonicalAkeFrame
+{
+    private readonly byte[] bytes;
+
+    public NearbyCanonicalAkeFrame(ReadOnlyMemory<byte> bytes)
+    {
+        if (bytes.Length is
+            < NearbySecureChannelLimits.MinimumCanonicalAkeFrameLength or
+            > NearbySecureChannelLimits.MaximumCanonicalAkeFrameLength)
+        {
+            throw new NearbySecureChannelException(
+                NearbySecureChannelError.InvalidHandshakePayload,
+                "Canonical AKE frame length is outside strict P03C bounds.");
+        }
+
+        try
+        {
+            _ = NearbyHandshakeCodec.DecodeFrame(bytes.Span);
+        }
+        catch (NearbyHandshakeException exception)
+        {
+            throw new NearbySecureChannelException(
+                NearbySecureChannelError.InvalidHandshakePayload,
+                $"Canonical AKE frame is invalid: {exception.Error}.");
+        }
+
+        this.bytes = bytes.ToArray();
+    }
+
+    public ReadOnlyMemory<byte> Bytes => bytes.ToArray();
+
+    public override string ToString() => "NearbyCanonicalAkeFrame[redacted]";
 }
 
 public interface INearbyInitiatorState : IDisposable
@@ -662,12 +736,12 @@ public interface INearbyFreshAke
 
     NearbyResponderFlight AcceptInitiator(
         NearbyAkeContext context,
-        ReadOnlySpan<byte> canonicalInitiatorFrame);
+        NearbyCanonicalAkeFrame canonicalInitiatorFrame);
 
     INearbyPendingSession AcceptResponder(
         INearbyInitiatorState state,
-        ReadOnlySpan<byte> canonicalInitiatorFrame,
-        ReadOnlySpan<byte> canonicalResponderFrame);
+        NearbyCanonicalAkeFrame canonicalInitiatorFrame,
+        NearbyCanonicalAkeFrame canonicalResponderFrame);
 }
 
 public interface INearbyPendingSession : IDisposable
@@ -745,19 +819,27 @@ public abstract class NearbySecureSessionBase : INearbySecureSession
                 "Nearby record kind or plaintext length is invalid.");
         }
 
-        return SealCore(SendDirection, kind, plaintext) ??
+        var record = SealCore(SendDirection, kind, plaintext) ??
             throw Error(
                 NearbySecureChannelError.InvalidRecord,
                 "Nearby record sealing returned no record.");
+        if (record.Length > NearbySecureChannelLimits.MaximumEncodedRecordLength)
+        {
+            throw Error(
+                NearbySecureChannelError.InvalidRecord,
+                "Nearby encoded record exceeds the contract maximum.");
+        }
+
+        return record;
     }
 
     public NearbyOpenedRecord Open(ReadOnlySpan<byte> record)
     {
-        if (record.IsEmpty)
+        if (record.Length is <= 0 or > NearbySecureChannelLimits.MaximumEncodedRecordLength)
         {
             throw Error(
                 NearbySecureChannelError.InvalidRecord,
-                "Nearby encoded record must not be empty.");
+                "Nearby encoded record length is invalid.");
         }
 
         var opened = OpenCore(ReceiveDirection, record) ??
@@ -923,6 +1005,7 @@ public abstract class NearbyPendingSessionBase : INearbyPendingSession
         if (!context.LocalCredential.DeviceKeyId.Equals(replayClaim.LocalDeviceKeyId) ||
             !context.ExpectedPeerCredential.DeviceKeyId.Equals(replayClaim.PeerDeviceKeyId) ||
             context.RosterEpoch != replayClaim.RosterEpoch ||
+            !handshakeHash.Equals(replayClaim.TranscriptDigest) ||
             !binding.TransportAttemptId.Bytes.Span.SequenceEqual(
                 replayClaim.TransportAttemptId.Bytes.Span))
         {
@@ -965,6 +1048,7 @@ public abstract class NearbyPendingSessionBase : INearbyPendingSession
             lifecycleState = Activating;
         }
 
+        INearbySecureSession? channel = null;
         try
         {
             var outcome = await replayCommitter
@@ -990,16 +1074,15 @@ public abstract class NearbyPendingSessionBase : INearbyPendingSession
                         "Pending nearby session was disposed during activation.");
                 }
 
-                var channel = ActivateAfterReplayCommit() ??
+                channel = ActivateAfterReplayCommit() ??
                     throw Error(
                         NearbySecureChannelError.InvalidState,
                         "Accepted pending session did not transfer a secure channel.");
                 if (channel.LocalRole != LocalRole ||
-                    !channel.Peer.Credential.DeviceKeyId.Equals(Peer.Credential.DeviceKeyId) ||
+                    !HasExactAuthenticatedPeer(channel.Peer, Peer) ||
                     channel.SendDirection != NearbyRecordDirectionPolicy.SendFor(LocalRole) ||
                     channel.ReceiveDirection != NearbyRecordDirectionPolicy.ReceiveFor(LocalRole))
                 {
-                    channel.Dispose();
                     throw Error(
                         NearbySecureChannelError.DirectionReflection,
                         "Activated channel role, peer or direction does not match the pending session.");
@@ -1011,12 +1094,20 @@ public abstract class NearbyPendingSessionBase : INearbyPendingSession
         }
         catch
         {
-            lock (lifecycleGate)
+            try
             {
-                lifecycleState = Disposed;
+                channel?.Dispose();
+            }
+            finally
+            {
+                lock (lifecycleGate)
+                {
+                    lifecycleState = Disposed;
+                }
+
+                DisposePendingStateOnce();
             }
 
-            DisposePendingStateOnce();
             throw;
         }
     }
@@ -1051,6 +1142,20 @@ public abstract class NearbyPendingSessionBase : INearbyPendingSession
         {
             DisposePendingState();
         }
+    }
+
+    private static bool HasExactAuthenticatedPeer(
+        NearbyAuthenticatedPeer actual,
+        NearbyAuthenticatedPeer expected)
+    {
+        ArgumentNullException.ThrowIfNull(actual);
+        ArgumentNullException.ThrowIfNull(expected);
+        var actualCredential = actual.Credential;
+        var expectedCredential = expected.Credential;
+        return ReferenceEquals(actualCredential, expectedCredential) &&
+               actualCredential.HasExactValue(expectedCredential) &&
+               actual.RosterEpoch == expected.RosterEpoch &&
+               actual.AuthenticatedAt == expected.AuthenticatedAt;
     }
 
     private static NearbySecureChannelException Error(
