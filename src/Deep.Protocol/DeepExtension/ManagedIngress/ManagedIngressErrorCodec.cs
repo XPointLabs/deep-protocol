@@ -135,5 +135,8 @@ public static class ManagedIngressErrorCodec
 
     private static ManagedIngressContractException Error(
         ManagedIngressContractError error,
-        string message) => new(error, message);
+        string message) => new(
+            error,
+            message,
+            ManagedIngressOutcomeCertainty.UnknownAfterForward);
 }
