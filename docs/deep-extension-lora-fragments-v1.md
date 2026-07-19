@@ -114,9 +114,12 @@ the bundle is not emitted before that durable commit.
 - `TryCommitTerminalAsync` generation-CASes `Completed` or `Poisoned` before
   the coordinator can return reconstructed DPB1 bytes.
 
-`ReadAsync` is reconciliation-only. There is no production store
-implementation or fallback. Incomplete state and completed/poisoned/expired
-tombstones are durable through restart.
+`ReadAsync` is reconciliation-only and returns a bounded discriminated
+`Absent`/`Incomplete`/`Completed`/`Poisoned`/`Expired` record with generation,
+deadlines and only a completed digest. Reads use an explicit bounded timeout
+after unknown mutation outcomes; they never emit payload. There is no
+production store implementation or fallback. Incomplete state and
+completed/poisoned/expired tombstones are durable through restart.
 
 Per scope there are at most four incomplete messages; globally at most 16.
 The exact global charge is
@@ -130,6 +133,12 @@ ceiling.
 Exact authenticated duplicates are idempotent. A conflicting ordinal poisons
 the replay key. Scope, direction and ID never mix. Unknown persistence outcome
 never emits payload.
+
+A foreign-key snapshot from a corrupt store returns `OutcomeUnknown` without
+mutating that foreign key. Store shard enumerables are consumed only to the
+authenticated count plus one overlength sentinel. Completed results include
+the validated descriptor so a relay can increment the hop and use a fresh
+message ID while preserving exact DPB1 bytes.
 
 ## Claims and blockers
 

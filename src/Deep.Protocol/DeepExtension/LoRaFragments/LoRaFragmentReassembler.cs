@@ -31,7 +31,8 @@ public sealed class LoRaFragmentReassemblyPolicy
         int maximumReservedBytesGlobal = LoRaFragmentReassemblyLimits.MaximumReservedBytesGlobal,
         int maximumTombstonesPerReplayScope = LoRaFragmentReassemblyLimits.MaximumTombstonesPerReplayScope,
         int maximumTombstonesGlobal = LoRaFragmentReassemblyLimits.MaximumTombstonesGlobal,
-        int maximumTombstoneBytesGlobal = LoRaFragmentReassemblyLimits.MaximumTombstoneBytesGlobal)
+        int maximumTombstoneBytesGlobal = LoRaFragmentReassemblyLimits.MaximumTombstoneBytesGlobal,
+        TimeSpan reconciliationTimeout = default)
     {
         ArgumentNullException.ThrowIfNull(fragmentPolicy);
         ValidateLowerLimit(maximumIncompleteMessagesPerReplayScope, 1, LoRaFragmentReassemblyLimits.MaximumIncompleteMessagesPerReplayScope, nameof(maximumIncompleteMessagesPerReplayScope));
@@ -49,6 +50,17 @@ public sealed class LoRaFragmentReassemblyPolicy
             provisionalExpiryBucket > opaquePolicy.MaximumExpiryBucket)
         {
             throw new ArgumentOutOfRangeException(nameof(provisionalExpiryBucket), "Current and provisional expiry buckets must be explicit and inside the accepted opaque-bundle window.");
+        }
+
+        var effectiveReconciliationTimeout = reconciliationTimeout == default
+            ? TimeSpan.FromSeconds(2)
+            : reconciliationTimeout;
+        if (effectiveReconciliationTimeout < TimeSpan.FromMilliseconds(10) ||
+            effectiveReconciliationTimeout > TimeSpan.FromSeconds(30))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(reconciliationTimeout),
+                "Durable reconciliation must use an explicit 10 ms to 30 second bound.");
         }
 
         try
@@ -71,6 +83,7 @@ public sealed class LoRaFragmentReassemblyPolicy
         MaximumTombstonesPerReplayScope = maximumTombstonesPerReplayScope;
         MaximumTombstonesGlobal = maximumTombstonesGlobal;
         MaximumTombstoneBytesGlobal = maximumTombstoneBytesGlobal;
+        ReconciliationTimeout = effectiveReconciliationTimeout;
     }
 
     public LoRaFragmentPolicy FragmentPolicy { get; }
@@ -83,6 +96,7 @@ public sealed class LoRaFragmentReassemblyPolicy
     public int MaximumTombstonesPerReplayScope { get; }
     public int MaximumTombstonesGlobal { get; }
     public int MaximumTombstoneBytesGlobal { get; }
+    public TimeSpan ReconciliationTimeout { get; }
 
     public uint GetRetentionExpiryBucket(uint expiryBucket)
     {
@@ -257,30 +271,158 @@ public sealed class LoRaFragmentReassemblySnapshot
 
     private static byte[]?[] CopyShards(IEnumerable<ReadOnlyMemory<byte>?> source, int expectedCount, int shardSize, string name)
     {
-        var values = source.ToArray();
-        if (values.Length != expectedCount)
+        var values = new byte[]?[expectedCount];
+        using var enumerator = source.GetEnumerator();
+        for (var index = 0; index < expectedCount; index++)
         {
-            throw new ArgumentException("The shard collection does not match the authenticated shape.", name);
-        }
+            if (!enumerator.MoveNext())
+            {
+                throw new ArgumentException(
+                    "The shard collection is shorter than the authenticated shape.",
+                    name);
+            }
 
-        return values.Select(value =>
-        {
+            var value = enumerator.Current;
             if (value is null)
             {
-                return null;
+                continue;
             }
 
             if (value.Value.Length != shardSize)
             {
-                throw new ArgumentException("Every present shard must have the exact authenticated size.", name);
+                throw new ArgumentException(
+                    "Every present shard must have the exact authenticated size.",
+                    name);
             }
 
-            return value.Value.ToArray();
-        }).ToArray();
+            values[index] = value.Value.ToArray();
+        }
+
+        if (enumerator.MoveNext())
+        {
+            throw new ArgumentException(
+                "The shard collection is longer than the authenticated shape.",
+                name);
+        }
+
+        return values;
     }
 
     private static IReadOnlyList<ReadOnlyMemory<byte>?> CopyForRead(IEnumerable<byte[]?> source) =>
         source.Select(static value => value is null ? null : (ReadOnlyMemory<byte>?)value.ToArray()).ToArray();
+}
+
+public enum LoRaFragmentReplayRecordStatus : byte
+{
+    Absent = 1,
+    Incomplete = 2,
+    Completed = 3,
+    Poisoned = 4,
+    Expired = 5
+}
+
+/// <summary>
+/// Bounded durable replay record used to reconcile uncertain store mutations.
+/// Terminal records never expose payload bytes.
+/// </summary>
+public sealed class LoRaFragmentReplayRecord
+{
+    private readonly byte[]? _bundleDigest;
+
+    public LoRaFragmentReplayRecord(
+        LoRaFragmentReplayKey key,
+        LoRaFragmentReplayRecordStatus status,
+        long generation,
+        uint expiryBucket,
+        uint retentionExpiryBucket,
+        LoRaFragmentReassemblySnapshot? snapshot = null,
+        ReadOnlySpan<byte> bundleDigest = default)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        if (status is < LoRaFragmentReplayRecordStatus.Absent
+            or > LoRaFragmentReplayRecordStatus.Expired)
+        {
+            throw new ArgumentOutOfRangeException(nameof(status));
+        }
+
+        if (generation < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(generation));
+        }
+
+        if (status == LoRaFragmentReplayRecordStatus.Absent)
+        {
+            if (generation != 0 ||
+                expiryBucket != 0 ||
+                retentionExpiryBucket != 0 ||
+                snapshot is not null ||
+                bundleDigest.Length != 0)
+            {
+                throw new ArgumentException(
+                    "An absent replay record cannot carry durable state.",
+                    nameof(status));
+            }
+        }
+        else if (status == LoRaFragmentReplayRecordStatus.Incomplete)
+        {
+            if (snapshot is null ||
+                snapshot.Generation != generation ||
+                snapshot.ExpiryBucket != expiryBucket ||
+                retentionExpiryBucket != 0 ||
+                bundleDigest.Length != 0 ||
+                !ReplayKeysMatch(snapshot.Key, key))
+            {
+                throw new ArgumentException(
+                    "An incomplete replay record requires its exact bounded snapshot.",
+                    nameof(snapshot));
+            }
+        }
+        else
+        {
+            if (snapshot is not null || retentionExpiryBucket < expiryBucket)
+            {
+                throw new ArgumentException(
+                    "A terminal replay record requires a valid retention deadline and no snapshot.",
+                    nameof(snapshot));
+            }
+
+            var completed = status == LoRaFragmentReplayRecordStatus.Completed;
+            if (completed !=
+                (bundleDigest.Length ==
+                 System.Security.Cryptography.SHA256.HashSizeInBytes))
+            {
+                throw new ArgumentException(
+                    "Only a completed replay record carries one SHA-256 bundle digest.",
+                    nameof(bundleDigest));
+            }
+        }
+
+        Key = key;
+        Status = status;
+        Generation = generation;
+        ExpiryBucket = expiryBucket;
+        RetentionExpiryBucket = retentionExpiryBucket;
+        Snapshot = snapshot;
+        _bundleDigest = bundleDigest.Length == 0 ? null : bundleDigest.ToArray();
+    }
+
+    public LoRaFragmentReplayKey Key { get; }
+    public LoRaFragmentReplayRecordStatus Status { get; }
+    public long Generation { get; }
+    public uint ExpiryBucket { get; }
+    public uint RetentionExpiryBucket { get; }
+    public LoRaFragmentReassemblySnapshot? Snapshot { get; }
+    public ReadOnlyMemory<byte>? BundleDigest =>
+        _bundleDigest is null
+            ? (ReadOnlyMemory<byte>?)null
+            : _bundleDigest.ToArray();
+
+    private static bool ReplayKeysMatch(
+        LoRaFragmentReplayKey left,
+        LoRaFragmentReplayKey right) =>
+        ReferenceEquals(left.ReplayScope, right.ReplayScope) &&
+        left.Direction == right.Direction &&
+        left.MessageId.Span.SequenceEqual(right.MessageId.Span);
 }
 
 public sealed class LoRaFragmentStoreApplyResult
@@ -396,7 +538,7 @@ public interface ILoRaFragmentReplayStore
         LoRaFragmentReassemblyPolicy policy,
         CancellationToken cancellationToken);
 
-    ValueTask<LoRaFragmentReassemblySnapshot?> ReadAsync(
+    ValueTask<LoRaFragmentReplayRecord> ReadAsync(
         LoRaFragmentReplayKey key,
         CancellationToken cancellationToken);
 }
@@ -437,25 +579,37 @@ public sealed class LoRaFragmentReassemblyResult
 {
     private readonly byte[]? _encodedOpaqueBundle;
 
-    public LoRaFragmentReassemblyResult(LoRaFragmentReassemblyOutcome outcome, LoRaFragmentReassemblyError error = LoRaFragmentReassemblyError.None, ReadOnlySpan<byte> encodedOpaqueBundle = default)
+    public LoRaFragmentReassemblyResult(
+        LoRaFragmentReassemblyOutcome outcome,
+        LoRaFragmentReassemblyError error = LoRaFragmentReassemblyError.None,
+        ReadOnlySpan<byte> encodedOpaqueBundle = default,
+        LoRaFragmentDescriptor? descriptor = null)
     {
-        if (outcome == LoRaFragmentReassemblyOutcome.Completed && encodedOpaqueBundle.Length == 0)
+        if (outcome == LoRaFragmentReassemblyOutcome.Completed &&
+            (encodedOpaqueBundle.Length == 0 || descriptor is null))
         {
-            throw new ArgumentException("Completed reassembly requires an exact opaque bundle.", nameof(encodedOpaqueBundle));
+            throw new ArgumentException(
+                "Completed reassembly requires an exact opaque bundle and validated descriptor.",
+                nameof(encodedOpaqueBundle));
         }
 
-        if (outcome != LoRaFragmentReassemblyOutcome.Completed && encodedOpaqueBundle.Length != 0)
+        if (outcome != LoRaFragmentReassemblyOutcome.Completed &&
+            (encodedOpaqueBundle.Length != 0 || descriptor is not null))
         {
-            throw new ArgumentException("Only completed reassembly may return bundle bytes.", nameof(encodedOpaqueBundle));
+            throw new ArgumentException(
+                "Only completed reassembly may return bundle bytes or relay metadata.",
+                nameof(encodedOpaqueBundle));
         }
 
         Outcome = outcome;
         Error = error;
+        Descriptor = descriptor;
         _encodedOpaqueBundle = encodedOpaqueBundle.Length == 0 ? null : encodedOpaqueBundle.ToArray();
     }
 
     public LoRaFragmentReassemblyOutcome Outcome { get; }
     public LoRaFragmentReassemblyError Error { get; }
+    public LoRaFragmentDescriptor? Descriptor { get; }
     public ReadOnlyMemory<byte>? EncodedOpaqueBundle =>
         _encodedOpaqueBundle is null
             ? (ReadOnlyMemory<byte>?)null
@@ -523,18 +677,18 @@ public sealed class LoRaFragmentReassembler
         }
         catch (OperationCanceledException)
         {
-            await ReconcileAsync(key, CancellationToken.None).ConfigureAwait(false);
+            await ReconcileAsync(key).ConfigureAwait(false);
             return Unknown();
         }
         catch (Exception exception) when (IsRecoverable(exception))
         {
-            await ReconcileAsync(key, CancellationToken.None).ConfigureAwait(false);
+            await ReconcileAsync(key).ConfigureAwait(false);
             return Unknown();
         }
 
         if (applied.Status == LoRaFragmentStoreApplyStatus.OutcomeUnknown)
         {
-            await ReconcileAsync(key, cancellationToken).ConfigureAwait(false);
+            await ReconcileAsync(key).ConfigureAwait(false);
             return Unknown();
         }
 
@@ -554,7 +708,13 @@ public sealed class LoRaFragmentReassembler
         }
 
         var snapshot = applied.Snapshot;
-        if (!SnapshotMatches(snapshot, key, frame.Header))
+        if (!ReplayKeyMatches(snapshot.Key, key))
+        {
+            await ReconcileAsync(key).ConfigureAwait(false);
+            return Unknown();
+        }
+
+        if (!SnapshotShapeMatches(snapshot, frame.Header))
         {
             return await PoisonAsync(snapshot, LoRaFragmentReassemblyError.InvalidSnapshot, cancellationToken).ConfigureAwait(false);
         }
@@ -578,6 +738,7 @@ public sealed class LoRaFragmentReassembler
                 reconstructedData,
                 out var bundle,
                 out var validatedExpiryBucket,
+                out var descriptor,
                 out var error))
         {
             return await PoisonAsync(snapshot, error, cancellationToken).ConfigureAwait(false);
@@ -598,19 +759,25 @@ public sealed class LoRaFragmentReassembler
         }
         catch (OperationCanceledException)
         {
+            await ReconcileAsync(key).ConfigureAwait(false);
             return Unknown();
         }
         catch (Exception exception) when (IsRecoverable(exception))
         {
+            await ReconcileAsync(key).ConfigureAwait(false);
             return Unknown();
         }
 
         if (committed.Status == LoRaFragmentStoreCommitStatus.Committed)
         {
-            return new LoRaFragmentReassemblyResult(LoRaFragmentReassemblyOutcome.Completed, LoRaFragmentReassemblyError.None, bundle);
+            return new LoRaFragmentReassemblyResult(
+                LoRaFragmentReassemblyOutcome.Completed,
+                LoRaFragmentReassemblyError.None,
+                bundle,
+                descriptor);
         }
 
-        if (!await ReconcileAsync(key, cancellationToken).ConfigureAwait(false))
+        if (await ReconcileAsync(key).ConfigureAwait(false) is null)
         {
             return Unknown();
         }
@@ -634,27 +801,29 @@ public sealed class LoRaFragmentReassembler
                 return Rejected(error);
             }
 
-            await ReconcileAsync(snapshot.Key, cancellationToken).ConfigureAwait(false);
+            await ReconcileAsync(snapshot.Key).ConfigureAwait(false);
         }
         catch (Exception exception) when (IsRecoverable(exception))
         {
-            // A cancellation or store failure has an unknown durable outcome.
+            await ReconcileAsync(snapshot.Key).ConfigureAwait(false);
         }
 
         return Unknown();
     }
 
-    private async ValueTask<bool> ReconcileAsync(LoRaFragmentReplayKey key, CancellationToken cancellationToken)
+    private async ValueTask<LoRaFragmentReplayRecord?> ReconcileAsync(
+        LoRaFragmentReplayKey key)
     {
+        using var timeout = new CancellationTokenSource(_policy.ReconciliationTimeout);
         try
         {
-            _ = await _store.ReadAsync(key, cancellationToken).ConfigureAwait(false);
-            return true;
+            var record = await _store.ReadAsync(key, timeout.Token).ConfigureAwait(false);
+            return ReplayKeyMatches(record.Key, key) ? record : null;
         }
         catch (Exception exception) when (IsRecoverable(exception))
         {
             // Read failure is deliberately indistinguishable from an unknown mutation outcome.
-            return false;
+            return null;
         }
     }
 
@@ -663,10 +832,12 @@ public sealed class LoRaFragmentReassembler
         byte[] data,
         out byte[] bundle,
         out uint validatedExpiryBucket,
+        out LoRaFragmentDescriptor descriptor,
         out LoRaFragmentReassemblyError error)
     {
         bundle = Array.Empty<byte>();
         validatedExpiryBucket = 0;
+        descriptor = null!;
         error = LoRaFragmentReassemblyError.DescriptorRejected;
         if (data.Length < LoRaFragmentLimits.DescriptorLength ||
             data[0] != LoRaFragmentLimits.DescriptorVersion ||
@@ -727,6 +898,11 @@ public sealed class LoRaFragmentReassembler
         }
 
         validatedExpiryBucket = descriptorExpiry;
+        descriptor = new LoRaFragmentDescriptor(
+            currentHop,
+            hopLimit,
+            bundleLength,
+            descriptorExpiry);
         error = LoRaFragmentReassemblyError.None;
         return true;
     }
@@ -833,12 +1009,16 @@ public sealed class LoRaFragmentReassembler
         }
     }
 
-    private static bool SnapshotMatches(LoRaFragmentReassemblySnapshot snapshot, LoRaFragmentReplayKey key, LoRaFragmentHeader header) =>
-        // Provider-issued scope handles are opaque, but their object identity is
-        // still part of the replay key and must survive an untrusted store round trip.
-        ReferenceEquals(snapshot.Key.ReplayScope, key.ReplayScope) &&
-        snapshot.Key.Direction == key.Direction &&
-        snapshot.Key.MessageId.Span.SequenceEqual(key.MessageId.Span) &&
+    private static bool ReplayKeyMatches(
+        LoRaFragmentReplayKey left,
+        LoRaFragmentReplayKey right) =>
+        ReferenceEquals(left.ReplayScope, right.ReplayScope) &&
+        left.Direction == right.Direction &&
+        left.MessageId.Span.SequenceEqual(right.MessageId.Span);
+
+    private static bool SnapshotShapeMatches(
+        LoRaFragmentReassemblySnapshot snapshot,
+        LoRaFragmentHeader header) =>
         snapshot.Shape.MessageIdSpan.SequenceEqual(header.MessageIdSpan) &&
         snapshot.Shape.DataShardCount == header.DataShardCount &&
         snapshot.Shape.ParityShardCount == header.ParityShardCount &&

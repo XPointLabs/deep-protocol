@@ -1268,7 +1268,7 @@ public sealed class LoRaFragmentReassemblerTests
             }
         }
 
-        public ValueTask<LoRaFragmentReassemblySnapshot?> ReadAsync(
+        public ValueTask<LoRaFragmentReplayRecord> ReadAsync(
             LoRaFragmentReplayKey key,
             CancellationToken cancellationToken)
         {
@@ -1277,12 +1277,43 @@ public sealed class LoRaFragmentReassemblerTests
             {
                 ReadCalls++;
                 LastReadTokenCanBeCanceled = cancellationToken.CanBeCanceled;
+                if (!_states.TryGetValue(Key.From(key), out var state))
+                {
+                    return ValueTask.FromResult(
+                        new LoRaFragmentReplayRecord(
+                            key,
+                            LoRaFragmentReplayRecordStatus.Absent,
+                            generation: 0,
+                            expiryBucket: 0,
+                            retentionExpiryBucket: 0));
+                }
+
+                if (state.Terminal is null && !state.Expired)
+                {
+                    var snapshot = state.Snapshot();
+                    return ValueTask.FromResult(
+                        new LoRaFragmentReplayRecord(
+                            state.Key,
+                            LoRaFragmentReplayRecordStatus.Incomplete,
+                            state.Generation,
+                            state.ExpiryBucket,
+                            retentionExpiryBucket: 0,
+                            snapshot));
+                }
+
+                var status = state.Expired
+                    ? LoRaFragmentReplayRecordStatus.Expired
+                    : state.Terminal == LoRaFragmentTerminalStatus.Completed
+                        ? LoRaFragmentReplayRecordStatus.Completed
+                        : LoRaFragmentReplayRecordStatus.Poisoned;
                 return ValueTask.FromResult(
-                    _states.TryGetValue(Key.From(key), out var state) &&
-                    state.Terminal is null &&
-                    !state.Expired
-                        ? state.Snapshot()
-                        : null);
+                    new LoRaFragmentReplayRecord(
+                        state.Key,
+                        status,
+                        state.Generation,
+                        state.ExpiryBucket,
+                        state.RetentionExpiryBucket,
+                        bundleDigest: state.BundleDigest ?? []));
             }
         }
 

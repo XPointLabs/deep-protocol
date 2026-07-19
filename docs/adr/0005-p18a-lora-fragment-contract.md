@@ -126,12 +126,21 @@ linearization points:
    reconstructed bytes may be returned. A CAS loss or unknown outcome never
    emits payload and must be reconciled through the durable record.
 
+`ReadAsync` returns a bounded discriminated durable record for `Absent`,
+`Incomplete`, `Completed`, `Poisoned` or `Expired`, including generation,
+expiry/retention and only the completed bundle digest. Reconciliation uses a
+caller-bounded timeout independent of a cancelled mutation token. A confirmed
+read never converts an uncertain mutation into payload emission.
+
 The key is the provider-owned replay scope handle, direction and exact
 eight-byte message ID. The same logical scope may be reissued after restart,
 but only the provider/store can resolve it; protocol code never serializes
 `ToString`, object hashes, identity or raw scope bytes. Per-scope incomplete
 quota counts both directions. Duplicate equality covers the exact authenticated
 header and shard after tag verification; the tag itself is excluded.
+If a corrupt store returns a snapshot for a different key, scope or direction,
+the coordinator returns `OutcomeUnknown` and never poisons that foreign key.
+Only same-key shape/content corruption may create a poisoned tombstone.
 
 Incomplete state is durable. The store state machine is:
 
@@ -172,6 +181,14 @@ per-shard object graph inside this budget. All charges use checked arithmetic;
 their sum is at most 64 KiB. A caller may lower the 64 KiB cap and the message
 counts, but never raise them. This preserves the 4096-byte bundle plus `Xor1`
 boundary without pretending parity storage is free.
+Snapshot constructors enumerate at most the authenticated expected shard
+count plus one sentinel element; a corrupt or unbounded store enumerable is
+rejected without materializing its tail.
+
+Successful reassembly returns the validated immutable descriptor together
+with the exact unchanged DPB1 bytes. A relay can therefore increment
+`currentHop`, retain `hopLimit`, choose a fresh hop-local message ID and
+re-fragment without interpreting message plaintext.
 
 Durable terminal records have separate absolute ceilings: at most 256
 tombstones per replay scope, 1024 globally and 128 KiB of canonical logical
