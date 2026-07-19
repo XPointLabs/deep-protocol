@@ -103,6 +103,73 @@ Different scopes, directions and IDs never mix. Missing input returns only
 simulated restart. No detailed local failure requires a distinct over-air
 response.
 
+### Atomic store boundary
+
+Independent pre-implementation review rejected a split
+`reserve -> store -> complete` API because a crash or concurrent processor
+could leak quota, accept conflicting bytes or emit payload before its durable
+tombstone. The public store contract therefore has exactly two mutating
+linearization points:
+
+1. `ApplyAuthenticatedFragmentAsync` performs expired-state eviction,
+   tombstone and shape checks, full-message reservation and shard copying in
+   one serializable transaction. It returns an immutable generation-pinned
+   snapshot only when enough authenticated shards exist.
+2. `TryCommitTerminalAsync` generation-CASes `Completed` or `Poisoned` before
+   reconstructed bytes may be returned. A CAS loss or unknown outcome never
+   emits payload and must be reconciled through the durable record.
+
+The key is the provider-owned replay scope handle, direction and exact
+eight-byte message ID. The same logical scope may be reissued after restart,
+but only the provider/store can resolve it; protocol code never serializes
+`ToString`, object hashes, identity or raw scope bytes. Per-scope incomplete
+quota counts both directions. Duplicate equality covers the exact authenticated
+header and shard after tag verification; the tag itself is excluded.
+
+Incomplete state is durable. The store state machine is:
+
+```text
+Absent -> Incomplete -> Completed | Poisoned | Expired
+```
+
+A conflicting authenticated ordinal atomically replaces `Incomplete` with a
+`Poisoned` tombstone. Store corruption, unavailability, cancellation with an
+unknown commit outcome, or reconciliation failure is fail-closed with no
+in-memory fallback.
+
+### Reorder expiry and measurable quotas
+
+Because descriptor expiry appears only in ordinal zero, admission of an
+authenticated nonzero ordinal uses an explicit caller-supplied provisional
+expiry bucket. It must be within the same
+`OpaqueBundleDecodePolicy.MinimumExpiryBucket..MaximumExpiryBucket` window and
+cannot exceed its maximum. Arrival of ordinal zero may only tighten that
+deadline to the descriptor expiry; it can never extend it. Retention adds the
+explicit accepted skew with checked arithmetic; overflow rejects policy.
+
+The mandated per-message admission test remains
+`dataCount * shardSize <= 4352`. The exact global in-memory reservation charge
+is:
+
+```text
+(dataCount + parityCount) * shardSize + 256 bytes
+```
+
+The fixed 256-byte charge covers the required contiguous-state metadata,
+bitmap, shape, generation and deadline. Implementations must not allocate a
+per-shard object graph inside this budget. All charges use checked arithmetic;
+their sum is at most 64 KiB. A caller may lower the 64 KiB cap and the message
+counts, but never raise them. This preserves the 4096-byte bundle plus `Xor1`
+boundary without pretending parity storage is free.
+
+Durable terminal records have separate absolute ceilings: at most 256
+tombstones per replay scope, 1024 globally and 128 KiB of canonical logical
+tombstone records. A record charge is measured by the store's canonical
+serialized key/status/retention/digest bytes, never object allocator
+estimates. Expired tombstones are purged before admission; an unexpired record
+is never evicted to admit a new ID. Hitting any tombstone ceiling rejects new
+admission. Policy may lower these ceilings only.
+
 ## Privacy, power and regulatory consequences
 
 Fragment authentication is not encryption. Observers and the untrusted
