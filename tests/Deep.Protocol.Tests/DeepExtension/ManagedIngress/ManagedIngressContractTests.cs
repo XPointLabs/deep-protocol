@@ -1,7 +1,10 @@
 using System.Net;
 using System.Text;
 using Deep.Protocol.DeepExtension.ManagedIngress;
+using Deep.Protocol.DeepExtension.OpaqueBundles;
 using Deep.Protocol.GoldenVectors;
+using Deep.Protocol.Abstractions.OnionRequests;
+using Sodium;
 
 namespace Deep.Protocol.Tests.DeepExtension.ManagedIngress;
 
@@ -148,9 +151,9 @@ public sealed class ManagedIngressContractTests
 
     [Theory]
     [InlineData(200, ManagedIngressTransportResult.TransitCompleted)]
-    [InlineData(202, ManagedIngressTransportResult.InvalidResponse)]
-    [InlineData(204, ManagedIngressTransportResult.InvalidResponse)]
-    [InlineData(301, ManagedIngressTransportResult.InvalidResponse)]
+    [InlineData(202, ManagedIngressTransportResult.OutcomeUnknown)]
+    [InlineData(204, ManagedIngressTransportResult.OutcomeUnknown)]
+    [InlineData(301, ManagedIngressTransportResult.OutcomeUnknown)]
     public void OuterSuccess_NeverCreatesMailboxAuthority(
         int statusCode,
         ManagedIngressTransportResult expected)
@@ -189,6 +192,78 @@ public sealed class ManagedIngressContractTests
         ManagedIngressTransportResult expected)
     {
         Assert.Equal(expected, ManagedIngressH2Contract.ClassifyCancellation(forwardStarted));
+    }
+
+    [Fact]
+    public void StreamingAdmission_RejectsMismatchTruncationOverflowAndCancellationBeforeForward()
+    {
+        var mismatch = new ManagedIngressStreamingAdmission(declaredLength: 65);
+        mismatch.Append(new byte[64]);
+        Assert.Throws<ManagedIngressContractException>(() => mismatch.Complete());
+
+        var overflow = new ManagedIngressStreamingAdmission(
+            ManagedIngressLimits.MaximumOpaqueFrameBytes);
+        overflow.Append(new byte[ManagedIngressLimits.MaximumOpaqueFrameBytes]);
+        Assert.Throws<ManagedIngressContractException>(() => overflow.Append([0x01]));
+
+        var cancelled = new ManagedIngressStreamingAdmission(64);
+        cancelled.Append(new byte[32]);
+        Assert.Equal(
+            ManagedIngressTransportResult.CancelledBeforeForward,
+            cancelled.Cancel());
+        Assert.Throws<InvalidOperationException>(() => cancelled.MarkForwardStarted());
+    }
+
+    [Fact]
+    public void StreamingAdmission_OnlyAllowsForwardAfterCompleteBoundedBody()
+    {
+        var admission = new ManagedIngressStreamingAdmission(64);
+        admission.Append(new byte[17]);
+        admission.Append(new byte[47]);
+
+        admission.Complete();
+        admission.MarkForwardStarted();
+
+        Assert.Equal(64, admission.ReceivedBytes);
+        Assert.Equal(
+            ManagedIngressTransportResult.OutcomeUnknown,
+            admission.Cancel());
+    }
+
+    [Fact]
+    public void MandatoryPseudoAndMediaHeaders_AreCountedAndCannotBeDuplicated()
+    {
+        var request = CanonicalRequest();
+        Assert.True(
+            ManagedIngressH2Contract.ComputeEffectiveFrameRequestHeaderBytes(request) >
+            ManagedIngressH2Contract.ComputeDecodedHeaderListBytes(request.Headers));
+
+        var duplicate = request with
+        {
+            Headers = [new ManagedIngressHeader("content-type", ManagedIngressH2Contract.OpaqueMediaType)]
+        };
+        Assert.Throws<ManagedIngressContractException>(
+            () => ManagedIngressH2Contract.ValidateFrameRequest(duplicate));
+    }
+
+    [Theory]
+    [InlineData("x-account")]
+    [InlineData("x-plan")]
+    [InlineData("x-payer")]
+    [InlineData("x-wallet")]
+    [InlineData("x-operation-id")]
+    [InlineData("x-attempt-id")]
+    [InlineData("connection")]
+    [InlineData("transfer-encoding")]
+    [InlineData(":path")]
+    public void PrivacyBearingAndInvalidH2Headers_AreRejected(string name)
+    {
+        var request = CanonicalRequest() with
+        {
+            Headers = [new ManagedIngressHeader(name, "value")]
+        };
+        Assert.Throws<ManagedIngressContractException>(
+            () => ManagedIngressH2Contract.ValidateFrameRequest(request));
     }
 
     [Fact]
@@ -241,6 +316,152 @@ public sealed class ManagedIngressContractTests
     }
 
     [Fact]
+    public void CapabilityEndpoint_HasExactRequestAndResponseContract()
+    {
+        var request = CanonicalRequest() with
+        {
+            Method = "GET",
+            Path = ManagedIngressH2Contract.CapabilitiesPath,
+            ContentType = string.Empty,
+            Accept = ManagedIngressH2Contract.CapabilitiesMediaType,
+            BodyLength = 0
+        };
+        ManagedIngressH2Contract.ValidateCapabilityRequest(request);
+
+        var body = ManagedIngressCapabilityDocumentCodec.Encode(
+            ManagedIngressCapabilityDocument.V1Ready());
+        var response = new ManagedIngressResponseMetadata(
+            200,
+            HttpVersion.Version20,
+            ManagedIngressH2Contract.CapabilitiesMediaType,
+            contentEncoding: null,
+            body.Length,
+            headers: Array.Empty<ManagedIngressHeader>());
+
+        Assert.True(
+            ManagedIngressH2Contract.ValidateCapabilityResponse(
+                response,
+                body,
+                ManagedIngressCapabilityFeatures.KnownCritical).Ready);
+
+        Assert.Throws<ManagedIngressContractException>(() =>
+            ManagedIngressH2Contract.ValidateCapabilityRequest(request with { Query = "probe=1" }));
+    }
+
+    [Theory]
+    [InlineData(421)]
+    [InlineData(429)]
+    [InlineData(503)]
+    public void RetryAfterHeader_MustExactlyMatchCanonicalDie1(int status)
+    {
+        var errorClass = status switch
+        {
+            421 => ManagedIngressErrorClass.WrongOrigin,
+            429 => ManagedIngressErrorClass.Saturated,
+            _ => ManagedIngressErrorClass.Unavailable
+        };
+        var retryAfter = status is 429 or 503 ? 17 : 0;
+        var frame = new ManagedIngressErrorFrame(
+            errorClass,
+            ManagedIngressOutcomeCertainty.BeforeForward,
+            retryable: true,
+            retryAfter);
+        var body = ManagedIngressErrorCodec.Encode(frame);
+        var headers = retryAfter == 0
+            ? Array.Empty<ManagedIngressHeader>()
+            : [new ManagedIngressHeader("retry-after", retryAfter.ToString())];
+        var response = new ManagedIngressResponseMetadata(
+            status,
+            HttpVersion.Version20,
+            ManagedIngressH2Contract.ErrorMediaType,
+            contentEncoding: null,
+            body.Length,
+            headers);
+
+        var classification = ManagedIngressH2Contract.ClassifyErrorResponse(response, body);
+
+        Assert.Equal(
+            frame.Certainty == ManagedIngressOutcomeCertainty.BeforeForward
+                ? ManagedIngressTransportResult.RejectedBeforeForward
+                : ManagedIngressTransportResult.OutcomeUnknown,
+            classification.Result);
+
+        var mismatch = response with
+        {
+            Headers = [new ManagedIngressHeader("retry-after", "60")]
+        };
+        Assert.Equal(
+            ManagedIngressTransportResult.OutcomeUnknown,
+            ManagedIngressH2Contract.ClassifyErrorResponse(mismatch, body).Result);
+    }
+
+    [Fact]
+    public void MalformedOuterResponse_IsAlwaysOutcomeUnknown()
+    {
+        var response = new ManagedIngressResponseMetadata(
+            503,
+            HttpVersion.Version20,
+            ManagedIngressH2Contract.ErrorMediaType,
+            contentEncoding: null,
+            ManagedIngressLimits.ErrorFrameBytes,
+            headers: [new ManagedIngressHeader("retry-after", "17")]);
+
+        Assert.Equal(
+            ManagedIngressTransportResult.OutcomeUnknown,
+            ManagedIngressH2Contract.ClassifyErrorResponse(
+                response,
+                new byte[ManagedIngressLimits.ErrorFrameBytes]).Result);
+    }
+
+    [Fact]
+    public void MaximumSelectedThreeHopOnionProducerProfile_FitsOuterBound()
+    {
+        var destination = PublicKeyBox.GenerateKeyPair();
+        var hops = Enumerable.Range(0, 3)
+            .Select(index =>
+            {
+                var key = PublicKeyBox.GenerateKeyPair();
+                return new OnionServiceNode($"hop-{index}", Array.Empty<byte>(), key.PublicKey);
+            })
+            .ToArray();
+        var payload = new OnionRequestCodec().Build(
+            new OnionRequestBuildOptions
+            {
+                EncryptionType = OnionEncryptionType.XChaCha20,
+                Endpoint = "/api/ingress/internal/opaque-v1",
+                DestinationX25519PublicKey = destination.PublicKey,
+                Hops = hops
+            },
+            new byte[OpaqueBundleLimits.MaximumEncodedLength]);
+
+        Assert.InRange(
+            payload.Body.Length,
+            ManagedIngressLimits.MinimumOpaqueFrameBytes,
+            ManagedIngressLimits.MaximumOpaqueFrameBytes);
+    }
+
+    [Fact]
+    public void ProductionSurface_HasNoInnerCodecTypes()
+    {
+        var managedTypes = typeof(ManagedIngressH2Contract).Assembly.GetExportedTypes()
+            .Where(type => type.Namespace == typeof(ManagedIngressH2Contract).Namespace)
+            .ToArray();
+        var referencedTypeNames = managedTypes
+            .SelectMany(type =>
+                type.GetMethods().Select(method => method.ReturnType.FullName ?? string.Empty)
+                    .Concat(type.GetMethods().SelectMany(method =>
+                        method.GetParameters().Select(parameter =>
+                            parameter.ParameterType.FullName ?? string.Empty)))
+                    .Concat(type.GetProperties().Select(property =>
+                        property.PropertyType.FullName ?? string.Empty)))
+            .ToArray();
+
+        Assert.DoesNotContain(referencedTypeNames, name =>
+            name.Contains("OpaqueBundle", StringComparison.Ordinal) ||
+            name.Contains("Mailbox", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void UnknownCriticalCapabilityFeature_FailsClosed()
     {
         var encoded = ManagedIngressCapabilityDocumentCodec.Encode(
@@ -266,5 +487,7 @@ public sealed class ManagedIngressContractTests
         contentEncoding: null,
         bodyLength: 64,
         isEarlyData: false,
-        headers: Array.Empty<ManagedIngressHeader>());
+        headers: Array.Empty<ManagedIngressHeader>(),
+        scheme: "https",
+        authority: "bridge.example");
 }

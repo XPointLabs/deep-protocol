@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Text;
 using Deep.Protocol.DeepExtension.ManagedIngress;
 
 namespace Deep.Protocol.Tests.DeepExtension.ManagedIngress;
@@ -181,5 +182,54 @@ public sealed class ManagedIngressMalformedAndFuzzTests
         Assert.All(encoded.AsSpan(9, 1).ToArray(), value => Assert.Equal(0, value));
         Assert.All(encoded.AsSpan(12, 52).ToArray(), value => Assert.Equal(0, value));
         Assert.Equal((ushort)0, BinaryPrimitives.ReadUInt16BigEndian(encoded.AsSpan(10, 2)));
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("61")]
+    [InlineData("+1")]
+    [InlineData("01")]
+    [InlineData("1 ")]
+    public void RetryAfterHeader_NonCanonicalValuesYieldOutcomeUnknown(string value)
+    {
+        var frame = new ManagedIngressErrorFrame(
+            ManagedIngressErrorClass.Unavailable,
+            ManagedIngressOutcomeCertainty.BeforeForward,
+            retryable: true,
+            retryAfterSeconds: 1);
+        var body = ManagedIngressErrorCodec.Encode(frame);
+        var response = new ManagedIngressResponseMetadata(
+            503,
+            new Version(2, 0),
+            ManagedIngressH2Contract.ErrorMediaType,
+            contentEncoding: null,
+            body.Length,
+            [new ManagedIngressHeader("retry-after", value)]);
+
+        Assert.Equal(
+            ManagedIngressTransportResult.OutcomeUnknown,
+            ManagedIngressH2Contract.ClassifyErrorResponse(response, body).Result);
+    }
+
+    [Fact]
+    public void CapabilityJson_WhitespaceOrderAndFeatureOverlapFailCanonicalDecode()
+    {
+        var canonical = ManagedIngressCapabilityDocumentCodec.Encode(
+            ManagedIngressCapabilityDocument.V1Ready());
+        var whitespace = Encoding.UTF8.GetBytes(
+            Encoding.UTF8.GetString(canonical).Replace("{", "{ ", StringComparison.Ordinal));
+        Assert.Throws<ManagedIngressContractException>(() =>
+            ManagedIngressCapabilityDocumentCodec.Decode(
+                whitespace,
+                ManagedIngressCapabilityFeatures.KnownCritical));
+
+        var overlap = ManagedIngressCapabilityDocument.V1Ready() with
+        {
+            OptionalFeatures = [ManagedIngressCapabilityFeatures.OpaqueFrameV1]
+        };
+        Assert.Throws<ManagedIngressContractException>(() =>
+            ManagedIngressCapabilityDocumentCodec.Decode(
+                ManagedIngressCapabilityDocumentCodec.Encode(overlap),
+                ManagedIngressCapabilityFeatures.KnownCritical));
     }
 }
