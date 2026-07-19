@@ -160,6 +160,35 @@ public sealed class LoRaFragmentReassemblerTests
     }
 
     [Fact]
+    public async Task Xor1RecoveredOrdinalZeroTightensExpiryAndCompletesAcrossRestart()
+    {
+        var fixture = new Fixture(LoRaFragmentFecMode.Xor1);
+        var store = new MemoryReplayStore();
+        var reassembler = fixture.Reassembler(store);
+        LoRaFragmentReassemblyResult? result = null;
+
+        foreach (var ordinal in new[] { 3, 4, 1, 5, 2 })
+        {
+            result = await reassembler.ProcessAsync(
+                fixture.Request(fixture.Plan.Frames[ordinal]));
+        }
+
+        Assert.NotNull(result);
+        Assert.Equal(LoRaFragmentReassemblyOutcome.Completed, result.Outcome);
+        Assert.Equal(fixture.Bundle, result.EncodedOpaqueBundle!.Value.ToArray());
+        Assert.Equal(100u, store.CompletedExpiryBucket);
+
+        Assert.Equal(
+            LoRaFragmentReassemblyOutcome.Rejected,
+            (await reassembler.ProcessAsync(
+                fixture.Request(fixture.Plan.Frames[0]))).Outcome);
+        Assert.Equal(
+            LoRaFragmentReassemblyOutcome.Rejected,
+            (await fixture.Reassembler(store).ProcessAsync(
+                fixture.Request(fixture.Plan.Frames[0]))).Outcome);
+    }
+
+    [Fact]
     public async Task AuthenticatedMalformedParityPoisonsAndRejectsAfterRestart()
     {
         var fixture = new Fixture(LoRaFragmentFecMode.Xor1);
@@ -905,6 +934,16 @@ public sealed class LoRaFragmentReassemblerTests
                 lock (_gate)
                     return _states.Values.Count(state =>
                         state.Terminal is null && !state.Expired);
+            }
+        }
+        public uint? CompletedExpiryBucket
+        {
+            get
+            {
+                lock (_gate)
+                    return _states.Values.SingleOrDefault(state =>
+                        state.Terminal == LoRaFragmentTerminalStatus.Completed)
+                        ?.ExpiryBucket;
             }
         }
 
