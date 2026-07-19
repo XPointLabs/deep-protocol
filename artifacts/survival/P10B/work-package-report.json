@@ -3,18 +3,19 @@
   "workPackage": "P10B",
   "status": "contract-candidate-review-pending-runtime-blocked",
   "baseCommit": "db58937d4070eb057642c00d10a64d2f738f6e41",
-  "redCommit": "deb5886",
-  "initialGreenCommit": "6bebca0",
+  "redCommit": "deb58868f8c29e4a06bbd8f8ec15b77f04feeae1",
+  "initialGreenCommit": "6bebca092f015d95818efb9fc54f23522baa79db",
   "promptSha256": "02bc3fa1b13adfc96a97d6553000a2d8f3fac4ad6b3e5b4ddb4c4ceab08ef2d4",
   "dependencyManifestSha256": "920b24bb5bcfcc8b4f91aef56ed210127246ec9fd2d49178ed9856c8555d0b93",
   "compatibilityContractSha256": "c45f66f7a688cbd70b7ca57a777851962ce2ab59eb37a3304d9b4bf7e4c55719",
   "correctiveRedCommits": [
-    "17f60c3",
-    "ab672f6"
+    "17f60c3e0b7324cc41efc96a038c85661af7fd4d",
+    "ab672f68e58b8f0a9ef7b9f4377eb4dbeabfe8e0"
   ],
-  "correctiveGreenCommit": "a4a4d57",
+  "correctiveGreenCommit": "a4a4d5760c8dd284edf9fd26ca6e23060e632466",
   "sourceCommit": "c6fcf1a90a5bf85e613b0aa0f15cd61d5c246b2f",
   "evidenceCommit": "b456d4826286f96bb42ac1e7eeddf5a66ca862f1",
+  "evidenceCarrierCommit": "449e3c1c5aee218a0a18c0cb263a32fb8b1eb427",
   "packageManifestSha256": "613893dc394c8a43dc5299cc93cbd03a234fb8e027354fb0bb4c40d5ee00eb39",
   "tests": {
     "focusedPassed": 116,
