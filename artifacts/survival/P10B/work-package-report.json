@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0.0",
   "workPackage": "P10B",
-  "status": "contract-candidate-review-pending-runtime-blocked",
+  "status": "contract-go-runtime-blocked",
   "baseCommit": "db58937d4070eb057642c00d10a64d2f738f6e41",
   "redCommit": "deb58868f8c29e4a06bbd8f8ec15b77f04feeae1",
   "initialGreenCommit": "6bebca092f015d95818efb9fc54f23522baa79db",
@@ -26,11 +26,12 @@
     "skipped": 0
   },
   "review": {
-    "status": "pending",
-    "p0": null,
-    "p1": null,
-    "p2": null,
-    "p3": null
+    "status": "go",
+    "reviewedHead": "a21b2a2cbbec845b5497601d6bbf21c1283fd236",
+    "p0": 0,
+    "p1": 0,
+    "p2": 0,
+    "p3": 2
   },
   "priorReview": {
     "sourceCommit": "7cf846a51411b82b1e4146940a72c80fa2ec16fb",
