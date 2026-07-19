@@ -87,6 +87,9 @@ function New-TestPackage {
         Add-TextEntry $zip `
             "lib/net10.0/Deep.Protocol.ProfileCarrier.dll" `
             "semantic assembly"
+        Add-TextEntry $zip `
+            "lib/net10.0/Deep.Protocol.ProfileCarrier.pdb" `
+            "semantic portable symbols"
         Add-TextEntry $zip "[Content_Types].xml" @"
 <?xml version="1.0" encoding="utf-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -95,6 +98,7 @@ function New-TestPackage {
   <Default Extension="dll" ContentType="$DllContentType" />
   <Default Extension="md" ContentType="application/octet" />
   <Default Extension="nuspec" ContentType="application/octet" />
+  <Default Extension="pdb" ContentType="application/octet" />
 </Types>
 "@
         Add-TextEntry $zip $coreName @"

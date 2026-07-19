@@ -85,8 +85,10 @@ eng/verify-p14-profile-carrier-provenance.ps1 -XNodeRoot C:\path\to\pinned\xnode
 The first gate uses isolated empty NuGet and CLI homes, an explicit cleared
 NuGet configuration, locked restore, a dead network proxy, exact dependency
 asset allowlisting and ancestor build/config injection checks. The second
-verifies the accepted XNode commit/tree/blob identities and executes the
-source-to-source differential oracle. Both gates are required for review;
+proves deterministic binary and normalized package identity across two clean,
+randomized extraction paths. The third verifies the accepted XNode
+commit/tree/blob identities and executes the source-to-source differential
+oracle. All three gates are required for review;
 their existence is not a production approval.
 
 ## Deterministic source identity
@@ -101,10 +103,14 @@ NuGet packages are OPC/ZIP containers whose relationship and core-property
 parts may contain random identifiers. Therefore a raw `.nupkg` SHA-256 is
 reported only as `exact-carrier-file-only-sha256`; it is never a reproducible
 source identity. `Get-P14ProfileCarrierNormalizedIdentity.ps1` rejects entries
-outside the exact semantic/OPC allowlist, normalizes the nuspec metadata,
-requires its full 40-character verified repository commit, and hashes the
-normalized nuspec plus exact DLL and README contents. The two clean packs must
-produce the same `normalized-source-identity-sha256`.
+outside the exact semantic/OPC allowlist, requires the root relationships to
+bind the actual nuspec and core-property part with the exact OPC types,
+requires the exact sorted content-type model, and validates canonical core
+properties against nuspec semantics. Only relationship IDs, the GUID core-part
+name, and a valid optional creation timestamp are normalized. The canonical
+OPC model, canonical nuspec and exact README/DLL/portable-PDB bytes are all
+hashed. The two clean packs must produce the same
+`normalized-source-identity-sha256`.
 
 The provenance gate reads objects from the supplied XNode repository but does
 not build its current checkout. It materializes the exact accepted
