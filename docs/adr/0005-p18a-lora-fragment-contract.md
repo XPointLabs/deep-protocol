@@ -153,6 +153,10 @@ expiry bucket. It must be within the same
 cannot exceed its maximum. Arrival of ordinal zero may only tighten that
 deadline to the descriptor expiry; it can never extend it. Retention adds the
 explicit accepted skew with checked arithmetic; overflow rejects policy.
+If authenticated XOR recovery reconstructs ordinal zero before its physical
+frame arrives, successful DPB1 validation supplies the same descriptor expiry.
+The terminal generation CAS must atomically tighten the provisional deadline
+to that recovered expiry before completion may emit the bundle.
 
 The mandated per-message admission test remains
 `dataCount * shardSize <= 4352`. The exact global in-memory reservation charge

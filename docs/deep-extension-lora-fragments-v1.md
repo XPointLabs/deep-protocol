@@ -99,6 +99,11 @@ same buffer as the pre-admission frame view. No second shard copy is made
 between tag verification and the store call. Persistent reassembly bytes are
 copied only by a durable store after atomic quota admission.
 
+When Xor1 reconstructs data ordinal zero, the recovered descriptor expiry may
+only tighten the store's explicit provisional expiry. Completion commits that
+tighter expiry and its checked retention deadline in the same generation CAS;
+the bundle is not emitted before that durable commit.
+
 ## Durable replay and quotas
 
 `ILoRaFragmentReplayStore` has two atomic mutation boundaries:

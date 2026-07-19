@@ -573,7 +573,12 @@ public sealed class LoRaFragmentReassembler
                 cancellationToken).ConfigureAwait(false);
         }
 
-        if (!TryValidateAndDecode(snapshot, reconstructedData, out var bundle, out var error))
+        if (!TryValidateAndDecode(
+                snapshot,
+                reconstructedData,
+                out var bundle,
+                out var validatedExpiryBucket,
+                out var error))
         {
             return await PoisonAsync(snapshot, error, cancellationToken).ConfigureAwait(false);
         }
@@ -583,8 +588,8 @@ public sealed class LoRaFragmentReassembler
             key,
             snapshot.Generation,
             LoRaFragmentTerminalStatus.Completed,
-            snapshot.ExpiryBucket,
-            _policy.GetRetentionExpiryBucket(snapshot.ExpiryBucket),
+            validatedExpiryBucket,
+            _policy.GetRetentionExpiryBucket(validatedExpiryBucket),
             digest);
         LoRaFragmentStoreCommitResult committed;
         try
@@ -653,9 +658,15 @@ public sealed class LoRaFragmentReassembler
         }
     }
 
-    private bool TryValidateAndDecode(LoRaFragmentReassemblySnapshot snapshot, byte[] data, out byte[] bundle, out LoRaFragmentReassemblyError error)
+    private bool TryValidateAndDecode(
+        LoRaFragmentReassemblySnapshot snapshot,
+        byte[] data,
+        out byte[] bundle,
+        out uint validatedExpiryBucket,
+        out LoRaFragmentReassemblyError error)
     {
         bundle = Array.Empty<byte>();
+        validatedExpiryBucket = 0;
         error = LoRaFragmentReassemblyError.DescriptorRejected;
         if (data.Length < LoRaFragmentLimits.DescriptorLength ||
             data[0] != LoRaFragmentLimits.DescriptorVersion ||
@@ -674,6 +685,12 @@ public sealed class LoRaFragmentReassembler
 
         var bundleLength = BinaryPrimitives.ReadUInt16BigEndian(data.AsSpan(4, 2));
         var descriptorExpiry = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(6, 4));
+        var ordinalZeroWasRecovered = snapshot.DataShards[0] is null;
+        var expiryMatchesSnapshot =
+            snapshot.ExpiryBucket == descriptorExpiry ||
+            ordinalZeroWasRecovered &&
+            snapshot.ExpiryBucket == _policy.ProvisionalExpiryBucket &&
+            descriptorExpiry <= snapshot.ExpiryBucket;
         if (bundleLength < LoRaFragmentLimits.MinimumBundleLength ||
             bundleLength > LoRaFragmentLimits.MaximumBundleLength ||
             bundleLength > _policy.FragmentPolicy.MaxBundleLength ||
@@ -681,7 +698,7 @@ public sealed class LoRaFragmentReassembler
             descriptorExpiry > _policy.ProvisionalExpiryBucket ||
             descriptorExpiry < _policy.FragmentPolicy.OpaqueBundleDecodePolicy.MinimumExpiryBucket ||
             descriptorExpiry > _policy.FragmentPolicy.OpaqueBundleDecodePolicy.MaximumExpiryBucket ||
-            snapshot.ExpiryBucket != descriptorExpiry)
+            !expiryMatchesSnapshot)
         {
             return false;
         }
@@ -709,6 +726,7 @@ public sealed class LoRaFragmentReassembler
             return false;
         }
 
+        validatedExpiryBucket = descriptorExpiry;
         error = LoRaFragmentReassemblyError.None;
         return true;
     }

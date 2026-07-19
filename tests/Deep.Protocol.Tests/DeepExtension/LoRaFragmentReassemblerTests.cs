@@ -1070,7 +1070,10 @@ public sealed class LoRaFragmentReassemblerTests
                 if (!_states.TryGetValue(key, out var state) ||
                     state.Generation != terminal.Generation ||
                     state.Terminal is not null ||
-                    state.Expired)
+                    state.Expired ||
+                    terminal.ExpiryBucket > state.ExpiryBucket ||
+                    terminal.RetentionExpiryBucket !=
+                    policy.GetRetentionExpiryBucket(terminal.ExpiryBucket))
                 {
                     return ValueTask.FromResult(
                         new LoRaFragmentStoreCommitResult(
@@ -1080,6 +1083,7 @@ public sealed class LoRaFragmentReassemblerTests
                 if (CommitStatus == LoRaFragmentStoreCommitStatus.Committed)
                 {
                     state.Terminal = terminal.Status;
+                    state.ExpiryBucket = terminal.ExpiryBucket;
                     state.RetentionExpiryBucket = terminal.RetentionExpiryBucket;
                 }
                 return ValueTask.FromResult(
