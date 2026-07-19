@@ -529,14 +529,23 @@ public sealed class ManagedIngressContractTests
             },
             new byte[OpaqueBundleLimits.MaximumEncodedLength]);
 
-        Assert.Equal(1_420_314, payload.Body.Length);
+        const int minimumEncodedProducerLength = 1_420_309;
+        const int maximumEscapedReplyKeyExpansion = 44 * 5;
+        const int maximumEncodedProducerLength =
+            minimumEncodedProducerLength + maximumEscapedReplyKeyExpansion;
+        Assert.InRange(
+            payload.Body.Length,
+            minimumEncodedProducerLength,
+            maximumEncodedProducerLength);
+        Assert.True(maximumEncodedProducerLength <= ManagedIngressLimits.MaximumOpaqueFrameBytes);
         var outer = ManagedIngressH2Contract.ValidateOpaqueFrame(payload.Body.Span);
         Assert.Equal(payload.Body.ToArray(), outer.Bytes.ToArray());
         var fixture = GoldenVectorLoader.Load("managed-ingress-h2-v1.json")
             .GetRequired("deep-extension/managed-ingress/v1/max-three-hop-producer");
-        Assert.Equal((ulong)payload.Body.Length, fixture.TimestampMs);
+        Assert.Equal((ulong)maximumEncodedProducerLength, fixture.TimestampMs);
         Assert.Equal(
-            "DPB1-max=1064960;hops=3;endpoint=/api/ingress/internal/opaque-v1;xchacha20",
+            "DPB1-max=1064960;hops=3;endpoint=/api/ingress/internal/opaque-v1;" +
+            "xchacha20;worst-case-json-escape-bound",
             fixture.Body);
     }
 
