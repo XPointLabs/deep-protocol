@@ -50,10 +50,34 @@ function New-TestPackage {
         [string]$ManifestType =
             "http://schemas.microsoft.com/packaging/2010/07/manifest",
         [string]$DllContentType = "application/octet",
-        [string]$Creator = "Deep.Protocol.ProfileCarrier"
+        [string]$Creator = "Deep.Protocol.ProfileCarrier",
+        [switch]$IncludeManifestRelationshipContent,
+        [string]$ManifestRelationshipContent = "",
+        [switch]$IncludeDllDefaultContent,
+        [string]$DllDefaultContent = "",
+        [switch]$IncludeOverride,
+        [string]$OverrideContent = ""
     )
 
     $coreName = "package/services/metadata/core-properties/$CoreSuffix.psmdcp"
+    $manifestRelationship = if ($IncludeManifestRelationshipContent) {
+        "  <Relationship Type=`"$ManifestType`" Target=`"$ManifestTarget`" Id=`"RManifest$RelationshipSuffix`">$ManifestRelationshipContent</Relationship>"
+    }
+    else {
+        "  <Relationship Type=`"$ManifestType`" Target=`"$ManifestTarget`" Id=`"RManifest$RelationshipSuffix`" />"
+    }
+    $dllDefault = if ($IncludeDllDefaultContent) {
+        "  <Default Extension=`"dll`" ContentType=`"$DllContentType`">$DllDefaultContent</Default>"
+    }
+    else {
+        "  <Default Extension=`"dll`" ContentType=`"$DllContentType`" />"
+    }
+    $override = if ($IncludeOverride) {
+        "  <Override PartName=`"/README.md`" ContentType=`"application/octet`">$OverrideContent</Override>"
+    }
+    else {
+        ""
+    }
     $zip = [System.IO.Compression.ZipFile]::Open(
         $Path,
         [System.IO.Compression.ZipArchiveMode]::Create)
@@ -61,7 +85,7 @@ function New-TestPackage {
         Add-TextEntry $zip "_rels/.rels" @"
 <?xml version="1.0" encoding="utf-8"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Type="$ManifestType" Target="$ManifestTarget" Id="RManifest$RelationshipSuffix" />
+$manifestRelationship
   <Relationship Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="/$coreName" Id="RCore$RelationshipSuffix" />
 </Relationships>
 "@
@@ -95,10 +119,11 @@ function New-TestPackage {
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml" />
   <Default Extension="psmdcp" ContentType="application/vnd.openxmlformats-package.core-properties+xml" />
-  <Default Extension="dll" ContentType="$DllContentType" />
+$dllDefault
   <Default Extension="md" ContentType="application/octet" />
   <Default Extension="nuspec" ContentType="application/octet" />
   <Default Extension="pdb" ContentType="application/octet" />
+$override
 </Types>
 "@
         Add-TextEntry $zip $coreName @"
@@ -276,5 +301,73 @@ foreach ($invalidTimestamp in $invalidTimestamps) {
     Assert-Rejected $path $invalidTimestamp.Label
 }
 
+$nonEmptyOpcElements = @(
+    @{
+        Name = "relationship-text"
+        Arguments = @{
+            IncludeManifestRelationshipContent = $true
+            ManifestRelationshipContent = "unexpected text"
+        }
+        Label = "Relationship text content"
+    },
+    @{
+        Name = "relationship-cdata"
+        Arguments = @{
+            IncludeManifestRelationshipContent = $true
+            ManifestRelationshipContent = "<![CDATA[unexpected cdata]]>"
+        }
+        Label = "Relationship CDATA content"
+    },
+    @{
+        Name = "default-text"
+        Arguments = @{
+            IncludeDllDefaultContent = $true
+            DllDefaultContent = "unexpected text"
+        }
+        Label = "Default text content"
+    },
+    @{
+        Name = "default-cdata"
+        Arguments = @{
+            IncludeDllDefaultContent = $true
+            DllDefaultContent = "<![CDATA[unexpected cdata]]>"
+        }
+        Label = "Default CDATA content"
+    },
+    @{
+        Name = "override-text"
+        Arguments = @{
+            IncludeOverride = $true
+            OverrideContent = "unexpected text"
+        }
+        Label = "Override text content"
+    },
+    @{
+        Name = "override-cdata"
+        Arguments = @{
+            IncludeOverride = $true
+            OverrideContent = "<![CDATA[unexpected cdata]]>"
+        }
+        Label = "Override CDATA content"
+    }
+)
+
+$opcCase = 700000
+foreach ($nonEmptyOpcElement in $nonEmptyOpcElements) {
+    $opcCase++
+    $parameters = @{
+        Path = Join-Path $root "$($nonEmptyOpcElement.Name).nupkg"
+        RelationshipSuffix = "$opcCase"
+        CoreSuffix = "$opcCase$opcCase$opcCase$opcCase$opcCase" +
+            "$($opcCase.ToString().Substring(0, 2))"
+        Created = "2026-07-20T01:59:59Z"
+    }
+    foreach ($argument in $nonEmptyOpcElement.Arguments.GetEnumerator()) {
+        $parameters[$argument.Key] = $argument.Value
+    }
+    New-TestPackage @parameters
+    Assert-Rejected $parameters.Path $nonEmptyOpcElement.Label
+}
+
 Write-Output "PASS normalized-opc-positive-randomization=4"
-Write-Output "PASS normalized-opc-negative-drift=11"
+Write-Output "PASS normalized-opc-negative-drift=17"
