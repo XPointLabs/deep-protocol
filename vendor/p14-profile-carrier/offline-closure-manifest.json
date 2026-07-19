@@ -30,14 +30,14 @@
       "sha256": "02a4a40ad4b81aae6652a4b163eb5622d1b3b3519cca348b3cb79ac71d9b2cab"
     },
     {
+      "file": "packages/grpc.tools.2.76.0.nupkg",
+      "bytes": 22560324,
+      "sha256": "ff5360353c746a0892946d0ef2b17a74ffa82ec236d2f5f47bf9da8939836a28"
+    },
+    {
       "file": "packages/libsodium.1.0.22.nupkg",
       "bytes": 7404253,
       "sha256": "f66eac31ea413c1d5d068b46ade11d3295c86ec9d6cd29ff158ba58ef51db51a"
-    },
-    {
-      "file": "packages/Microsoft.AspNetCore.App.Runtime.win-arm64.10.0.9.nupkg",
-      "bytes": 12385929,
-      "sha256": "91746678d8bc9c7e3d93d7101dce5acb81e88c9a9b58badeae3a69121c1c0bdf"
     },
     {
       "file": "packages/Microsoft.CodeCoverage.17.14.1.nupkg",
@@ -50,11 +50,6 @@
       "sha256": "9995330c5bc5a7bc759caadc9d17748616cdbb983c11062df122a74607614ff0"
     },
     {
-      "file": "packages/Microsoft.NETCore.App.Runtime.win-arm64.10.0.9.nupkg",
-      "bytes": 39715299,
-      "sha256": "1a9dd847442f01db24fa6bf7c7db4b9a9fac579879a2c90b9b87e47e8b261fa8"
-    },
-    {
       "file": "packages/Microsoft.TestPlatform.ObjectModel.17.14.1.nupkg",
       "bytes": 1657190,
       "sha256": "40c7fa3bec34213fb5e8caf3a3bc27f8ddb47f72f5fe60e1b3faa3984a35ad8b"
@@ -63,11 +58,6 @@
       "file": "packages/Microsoft.TestPlatform.TestHost.17.14.1.nupkg",
       "bytes": 3167820,
       "sha256": "d5cc4759cbc7443ee8ad0dc41043cfc55184913a71a26d7fce82020bd4889c9b"
-    },
-    {
-      "file": "packages/Microsoft.WindowsDesktop.App.Runtime.win-arm64.10.0.9.nupkg",
-      "bytes": 35316023,
-      "sha256": "c4e0dd00f1fa63be5c0a2e000ae44334286b5ddfba320c2f52369953396801cc"
     },
     {
       "file": "packages/Newtonsoft.Json.13.0.3.nupkg",

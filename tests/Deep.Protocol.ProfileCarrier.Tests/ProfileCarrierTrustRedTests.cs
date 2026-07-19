@@ -41,7 +41,7 @@ public sealed class ProfileCarrierTrustRedTests
             SyntheticProfileFixture.Verifier());
 
         var duplicate = parts.GenesisApprovals
-            .Select(static value => value with
+            .Select(value => value with
             {
                 SignerId = parts.GenesisApprovals[0].SignerId.ToArray()
             })

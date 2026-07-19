@@ -51,6 +51,10 @@ Primary upstream areas reviewed:
 - P03C contact-scoped nearby rendezvous, canonical handshake framing, replay scope and
   platform-neutral lifecycle, isolated in `Deep.Protocol.DeepExtension.NearbyHandshakes`; the
   mutually authenticated AKE remains a blocked host adapter with no production implementation
+- DPF1 exact self-hosted profile carrier composition and verification, isolated in the
+  `Deep.Protocol.ProfileCarrier` package and
+  `Deep.Protocol.DeepExtension.SelfHostedProfiles`; it is an unsigned wrapper over the exact
+  pinned P04 authority and has no signer, network, persistence or activation API
 
 ## Wire Semantics Preserved
 
@@ -114,5 +118,10 @@ set, and two distinct active online signers authorize bridge or membership state
 snapshots contain public entry contacts, not full core/storage membership. Signature verification,
 durable last-known-good state, registry/client integration and production keys remain outside this
 library.
+
+DPF1 V1 adds one deterministic unsigned carrier around canonical P04 genesis, public genesis
+approvals, a canonical signed delegation and canonical signed bridges. Exact parse success requires
+P04 verification followed by byte-identical recomposition. DPF1 introduces no signing domain,
+authority override or alternate trust protocol. See `deep-extension-profile-carrier-v1.md`.
 
 Tests use an explicit fake adapter only to verify managed state and wire container behavior.

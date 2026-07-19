@@ -35,6 +35,7 @@ Any regression in these suites fails CI.
 | Onion layered request build/decrypt parity vs direct sodium sealed-box operations | `CrossLanguageDifferentialTests.OnionBuildLayeringAndResponseDecryptMatchDirectSodium` | Covered |
 | Robustness on malformed/random protocol payloads | `ProtocolFuzzSmokeTests`, `ProtocolParserCodecFuzzTests` | Covered |
 | DPB1 structured failure branches | `OpaqueBundleMalformedAndFuzzTests.DeterministicStructuredMutations_ReachNamedFailureBranches`, truncation and encoder separation tests | Covered by deterministic structural mutations |
+| DPF1 exact carrier compatibility and malformed input | `ProfileCarrierContractRedTests`, `ProfileCarrierMalformedRedTests`, accepted XNode `eff4523` public synthetic golden vector | Covered by exact bytes, full truncation, structured mutations, deterministic random smoke and reachable maximum bounds |
 
 ## Remaining Risk Areas
 

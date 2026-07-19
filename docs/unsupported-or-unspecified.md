@@ -179,3 +179,22 @@ bridge contacts are public discovery data and do not provide anonymity against a
 Fork witnesses record candidate ancestry but do not select a winning branch. Production activation
 remains blocked until the verifier/key lifecycle and durable state are supplied, independently
 reviewed, and exercised by registry/client E2E work.
+
+## DPF1 exact profile carrier gaps
+
+`Deep.Protocol.ProfileCarrier` defines one unsigned framing implementation and
+delegates every trust decision to the exact pinned P04 package. It deliberately
+does not implement:
+
+- a production `IMembershipSignatureVerifier` or approved signature profile;
+- root/online signer generation, custody, ceremony or private-key handling;
+- client trust persistence, last-known-good updates or atomic activation;
+- endpoint selection, network access, transport, dependency injection or runtime registration;
+- QR/file UI, billing, wallet or deployment behavior.
+
+The existing dormant client `DSIG` genesis-only signature envelope is not
+interchangeable with DPF1 genesis approvals and does not carry the delegation
+or bridge chain. Conversion between these formats is unsupported. A future
+activation path must reverify the exact staged DPF1 bytes using this shared
+package and atomically import the complete trust chain; it must not maintain a
+second parser or reinterpret legacy dormant rows.

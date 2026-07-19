@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using Deep.Protocol.DeepExtension.Membership;
 using Deep.Protocol.DeepExtension.SelfHostedProfiles;
 
 namespace Deep.Protocol.ProfileCarrier.Tests;
@@ -13,6 +14,9 @@ public sealed class ProfileCarrierContractRedTests
         var oracle = AcceptedXNodeDpf1Oracle.Encode(parts);
         var golden = GoldenCorpus.Load();
 
+        Assert.Equal(
+            "eff452368fa4cb1324c5b3c8ee06e2f10e96b835",
+            golden.SourceCommit);
         Assert.Equal(golden.Hex, Convert.ToHexStringLower(oracle));
         Assert.Equal(golden.Sha256, Convert.ToHexStringLower(SHA256.HashData(oracle)));
 
@@ -21,7 +25,9 @@ public sealed class ProfileCarrierContractRedTests
             Options(),
             SyntheticProfileFixture.Verifier());
         Assert.Equal(oracle, composed.FilePayload.ToArray());
-        Assert.Equal("sha256:989287543166ae448ee19453e6e748115e2df3c2756b63acf0d108a247a281d4", composed.Fingerprint);
+        Assert.Equal(
+            "sha256:f297fde558e06fb88b83ab638e7bd85113a5d0cf617e3d4fe20d8e77a9b18fe2",
+            composed.Fingerprint);
         Assert.Equal(1, composed.MinimumProtocol);
         Assert.Equal(3, composed.MaximumProtocol);
         Assert.Equal(4, composed.ComponentCount);
@@ -57,6 +63,43 @@ public sealed class ProfileCarrierContractRedTests
             SyntheticProfileFixture.Verifier());
 
         Assert.Equal(first.FilePayload.ToArray(), second.FilePayload.ToArray());
+    }
+
+    [Fact]
+    public void InputsAndVerifiedOutputsAreDefensiveCopies()
+    {
+        var parts = SyntheticProfileFixture.Parts();
+        var input = Input(parts);
+        var first = ProfileCarrierComposer.ComposeExact(
+            input,
+            Options(),
+            SyntheticProfileFixture.Verifier());
+        var expected = first.FilePayload.ToArray();
+        var expectedHash = first.FilePayloadSha256.ToArray();
+
+        parts.CanonicalGenesis.AsSpan().Fill(0xff);
+        parts.CanonicalSignedDelegation.AsSpan().Fill(0xff);
+        parts.CanonicalSignedBridges[0].AsSpan().Fill(0xff);
+        var approvals = Assert.IsType<MembershipSignature[]>(parts.GenesisApprovals);
+        approvals[0] = approvals[0] with
+        {
+            SignerId = new byte[approvals[0].SignerId.Length],
+            Signature = new byte[approvals[0].Signature.Length]
+        };
+
+        var exportedPayload = first.FilePayload.ToArray();
+        var exportedHash = first.FilePayloadSha256.ToArray();
+        exportedPayload.AsSpan().Fill(0xff);
+        exportedHash.AsSpan().Fill(0xff);
+
+        var second = ProfileCarrierComposer.ComposeExact(
+            input,
+            Options(),
+            SyntheticProfileFixture.Verifier());
+        Assert.Equal(expected, second.FilePayload.ToArray());
+        Assert.Equal(expectedHash, second.FilePayloadSha256.ToArray());
+        Assert.Equal(expected, first.FilePayload.ToArray());
+        Assert.Equal(expectedHash, first.FilePayloadSha256.ToArray());
     }
 
     internal static ProfileCarrierAssemblyInput Input(SyntheticProfileParts parts) =>
