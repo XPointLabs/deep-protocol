@@ -1111,6 +1111,30 @@ public sealed class NearbySecureChannelContractTests
     }
 
     [Fact]
+    public void InitiatorFactory_IsInstanceBoundAndCannotReExportRawState()
+    {
+        var factory = typeof(NearbyFreshAkeBase).GetMethod(
+            "CreateInitiatorFlight",
+            BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+
+        Assert.NotNull(factory);
+        Assert.False(factory.IsStatic);
+        Assert.Null(typeof(NearbyInitiatorResponseFlight).GetMethod("TakeState"));
+        Assert.DoesNotContain(
+            typeof(NearbyFreshAkeBase).GetMethods(
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance),
+            method => method.ReturnType == typeof(INearbyInitiatorState));
+    }
+
+    [Fact]
+    public void ResponderFlight_IsIssuerCapabilityNotCallerConstructible()
+    {
+        Assert.Empty(typeof(NearbyResponderFlight).GetConstructors());
+        Assert.NotNull(typeof(NearbyResponderFlight).GetProperty("Context"));
+        Assert.NotNull(typeof(NearbyResponderFlight).GetProperty("InitiatorHello"));
+    }
+
+    [Fact]
     public void ContractAssembly_HasNoRawKeyCryptoOrRuntimeImplementation()
     {
         var contractTypes = typeof(NearbyAkeContext).Assembly.GetTypes()
