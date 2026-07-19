@@ -1,0 +1,61 @@
+{
+  "schemaVersion": "1.0.0",
+  "workPackage": "P10B",
+  "status": "contract-candidate-review-pending-runtime-blocked",
+  "baseCommit": "db58937d4070eb057642c00d10a64d2f738f6e41",
+  "redCommit": "deb5886",
+  "initialGreenCommit": "6bebca0",
+  "promptSha256": "02bc3fa1b13adfc96a97d6553000a2d8f3fac4ad6b3e5b4ddb4c4ceab08ef2d4",
+  "dependencyManifestSha256": "920b24bb5bcfcc8b4f91aef56ed210127246ec9fd2d49178ed9856c8555d0b93",
+  "compatibilityContractSha256": "c45f66f7a688cbd70b7ca57a777851962ce2ab59eb37a3304d9b4bf7e4c55719",
+  "correctiveRedCommits": [
+    "17f60c3",
+    "ab672f6"
+  ],
+  "correctiveGreenCommit": "a4a4d57",
+  "sourceCommit": "c6fcf1a90a5bf85e613b0aa0f15cd61d5c246b2f",
+  "evidenceCommit": null,
+  "packageManifestSha256": "613893dc394c8a43dc5299cc93cbd03a234fb8e027354fb0bb4c40d5ee00eb39",
+  "tests": {
+    "focusedPassed": 116,
+    "malformedPassed": 41,
+    "malformedIterations": 512,
+    "fullPassed": 289,
+    "failed": 0,
+    "skipped": 0
+  },
+  "review": {
+    "status": "pending",
+    "p0": null,
+    "p1": null,
+    "p2": null,
+    "p3": null
+  },
+  "priorReview": {
+    "sourceCommit": "7cf846a51411b82b1e4146940a72c80fa2ec16fb",
+    "p0": 0,
+    "p1": 3,
+    "p2": 3,
+    "p3": 1
+  },
+  "packageVersion": "0.3.0-p10b.c6fcf1a",
+  "packageSha256": {
+    "Deep.Protocol": "5d57c8f376c0696991f88af4778d4707a8f5e65e0b8af0979c9fffc8268ac75b",
+    "Deep.Protocol.Abstractions": "33872c586fc638079f563d29c5508b5d228f8c949d56f41fac852162fe1cd561",
+    "Deep.Protocol.Protobuf": "65a84ca45e6bc63ca80f29b4cc0103f4ed9a1d6228b63d91773425ff6d1a6003"
+  },
+  "externalTestsNotRun": [
+    "HTTP/2 server/runtime",
+    "live TLS/proxy",
+    "Docker/network path",
+    "Android device",
+    "Windows application E2E"
+  ],
+  "gitPush": false,
+  "packagePublished": false,
+  "serverImplemented": false,
+  "dockerChanged": false,
+  "networkAccessed": false,
+  "productionCredentialsAccessed": false,
+  "runtimeActivation": "blocked"
+}
