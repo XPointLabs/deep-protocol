@@ -211,6 +211,28 @@ public sealed class LoRaFragmentReassemblerTests
     }
 
     [Fact]
+    public async Task StoreSnapshotFromAnotherReplayScopeNeverEmitsBundle()
+    {
+        var fixture = new Fixture(LoRaFragmentFecMode.None);
+        var store = new MemoryReplayStore
+        {
+            SnapshotReplayScopeOverride = fixture.ReplayProvider.Create()
+        };
+        var reassembler = fixture.Reassembler(store);
+        LoRaFragmentReassemblyResult? result = null;
+
+        foreach (var encoded in fixture.Plan.Frames)
+        {
+            result = await reassembler.ProcessAsync(fixture.Request(encoded));
+        }
+
+        Assert.NotNull(result);
+        Assert.NotEqual(LoRaFragmentReassemblyOutcome.Completed, result.Outcome);
+        Assert.Null(result.EncodedOpaqueBundle);
+        Assert.Equal(0, store.CompletedCount);
+    }
+
+    [Fact]
     public async Task CallerMutationBeforeProcessingIsAuthenticatedBeforeStoreCopy()
     {
         var fixture = new Fixture(LoRaFragmentFecMode.None);
@@ -423,6 +445,7 @@ public sealed class LoRaFragmentReassemblerTests
 
         public LoRaFragmentStoreCommitStatus CommitStatus { get; set; } =
             LoRaFragmentStoreCommitStatus.Committed;
+        public LoRaFragmentReplayScopeHandle? SnapshotReplayScopeOverride { get; set; }
         public int ApplyCalls { get; private set; }
         public int CompletedCount
         {
@@ -535,7 +558,7 @@ public sealed class LoRaFragmentReassemblerTests
                 return ValueTask.FromResult(
                     new LoRaFragmentStoreApplyResult(
                         LoRaFragmentStoreApplyStatus.Ready,
-                        state.Snapshot()));
+                        state.Snapshot(SnapshotReplayScopeOverride)));
             }
         }
 
@@ -648,9 +671,15 @@ public sealed class LoRaFragmentReassemblerTests
                 return true;
             }
 
-            public LoRaFragmentReassemblySnapshot Snapshot() =>
+            public LoRaFragmentReassemblySnapshot Snapshot(
+                LoRaFragmentReplayScopeHandle? replayScopeOverride = null) =>
                 new(
-                    Key,
+                    replayScopeOverride is null
+                        ? Key
+                        : new LoRaFragmentReplayKey(
+                            replayScopeOverride,
+                            Key.Direction,
+                            Key.MessageId.Span),
                     Shape,
                     Generation,
                     ExpiryBucket,
