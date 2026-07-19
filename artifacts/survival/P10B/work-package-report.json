@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "1.0.0",
+  "workPackage": "P10B",
+  "status": "contract-candidate-review-pending-runtime-blocked",
+  "baseCommit": "db58937d4070eb057642c00d10a64d2f738f6e41",
+  "redCommit": "deb5886",
+  "initialGreenCommit": "6bebca0",
+  "correctiveRedCommit": "17f60c3",
+  "sourceCommit": "7cf846a51411b82b1e4146940a72c80fa2ec16fb",
+  "evidenceCommit": null,
+  "tests": {
+    "focusedPassed": 96,
+    "fullPassed": 269,
+    "failed": 0,
+    "skipped": 0
+  },
+  "review": {
+    "status": "pending",
+    "p0": null,
+    "p1": null,
+    "p2": null,
+    "p3": null
+  },
+  "gitPush": false,
+  "packagePublished": false,
+  "serverImplemented": false,
+  "dockerChanged": false,
+  "networkAccessed": false,
+  "productionCredentialsAccessed": false,
+  "runtimeActivation": "blocked"
+}

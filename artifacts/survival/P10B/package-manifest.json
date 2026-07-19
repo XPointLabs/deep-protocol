@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "1.0.0",
+  "workPackage": "P10B",
+  "version": "0.3.0-p10b.7cf846a",
+  "sourceCommit": "7cf846a51411b82b1e4146940a72c80fa2ec16fb",
+  "repositoryCommitVerified": true,
+  "packages": [
+    {
+      "file": "packages/Deep.Protocol.0.3.0-p10b.7cf846a.nupkg",
+      "sha256": "457b03c380d6baa4c4b1ac72f4c264511d9eb242ea7115481dc2881919cd7c19"
+    },
+    {
+      "file": "packages/Deep.Protocol.Abstractions.0.3.0-p10b.7cf846a.nupkg",
+      "sha256": "dcd2acf24499b8e084b4dda9e250487542f9e84b3ae870917c954aa1c4cacf55"
+    },
+    {
+      "file": "packages/Deep.Protocol.Protobuf.0.3.0-p10b.7cf846a.nupkg",
+      "sha256": "0ec11aa474468bdcd9615d5683659dbc9e19d4199696281514f09ed7c4ab81f2"
+    }
+  ],
+  "published": false
+}
