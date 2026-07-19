@@ -115,4 +115,11 @@ snapshots contain public entry contacts, not full core/storage membership. Signa
 durable last-known-good state, registry/client integration and production keys remain outside this
 library.
 
+P10B adds bounded public HTTP/2 opaque-transit constants, a canonical fixed-size outer-error codec
+and a bounded advisory capability-document codec in
+`Deep.Protocol.DeepExtension.ManagedIngress`. It adds no Session or mailbox authority semantics:
+HTTP success is only `TransitCompleted` and cannot represent mailbox acceptance, durability or
+delivery. ASP.NET, proxy/TLS configuration, bridge selection, retry scheduling and inner receipt
+verification remain outside this library.
+
 Tests use an explicit fake adapter only to verify managed state and wire container behavior.
