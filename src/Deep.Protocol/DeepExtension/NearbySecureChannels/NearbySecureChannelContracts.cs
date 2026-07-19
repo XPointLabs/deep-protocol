@@ -679,24 +679,24 @@ public sealed class NearbyResponderResponseFrame
     public override string ToString() => "NearbyResponderResponseFrame[redacted]";
 }
 
-public interface INearbyInitiatorState : IDisposable
-{
-}
-
 public sealed class NearbyInitiatorFlight : IDisposable
 {
-    private INearbyInitiatorState? ownedState;
+    private readonly object issuerCapability;
+    private NearbyInitiatorContinuation? ownedContinuation;
 
     internal NearbyInitiatorFlight(
+        object issuerCapability,
         NearbyAkeContext context,
         NearbyHandshakePayload handshakePayload,
-        INearbyInitiatorState state)
+        NearbyInitiatorContinuation continuation)
     {
+        this.issuerCapability = issuerCapability ??
+            throw new ArgumentNullException(nameof(issuerCapability));
         Context = context ?? throw new ArgumentNullException(nameof(context));
         ArgumentNullException.ThrowIfNull(handshakePayload);
-        ArgumentNullException.ThrowIfNull(state);
+        ArgumentNullException.ThrowIfNull(continuation);
         HandshakePayload = handshakePayload;
-        ownedState = state;
+        ownedContinuation = continuation;
     }
 
     public NearbyAkeContext Context { get; }
@@ -726,19 +726,23 @@ public sealed class NearbyInitiatorFlight : IDisposable
                 "Initiator state payload does not match the exact initiator frame.");
         }
 
-        var state = Interlocked.Exchange(ref ownedState, null) ??
+        var continuation = Interlocked.Exchange(ref ownedContinuation, null) ??
             throw Error("Initiator state was already bound or disposed.");
         return new NearbyInitiatorResponseFlight(
+            issuerCapability,
             Context,
             initiatorHello,
             responderResponse,
-            state);
+            continuation);
     }
 
     public void Dispose() =>
-        Interlocked.Exchange(ref ownedState, null)?.Dispose();
+        Interlocked.Exchange(ref ownedContinuation, null)?.Dispose();
 
     public override string ToString() => "NearbyInitiatorFlight[redacted]";
+
+    internal bool IsIssuedBy(object expectedIssuer) =>
+        ReferenceEquals(issuerCapability, expectedIssuer);
 
     private static NearbySecureChannelException Error(string message) =>
         new(NearbySecureChannelError.InvalidState, message);
@@ -746,18 +750,21 @@ public sealed class NearbyInitiatorFlight : IDisposable
 
 public sealed class NearbyInitiatorResponseFlight : IDisposable
 {
-    private INearbyInitiatorState? ownedState;
+    private readonly object issuerCapability;
+    private NearbyInitiatorContinuation? ownedContinuation;
 
     internal NearbyInitiatorResponseFlight(
+        object issuerCapability,
         NearbyAkeContext context,
         NearbyInitiatorHelloFrame initiatorHello,
         NearbyResponderResponseFrame responderResponse,
-        INearbyInitiatorState state)
+        NearbyInitiatorContinuation continuation)
     {
+        this.issuerCapability = issuerCapability;
         Context = context;
         InitiatorHello = initiatorHello;
         ResponderResponse = responderResponse;
-        ownedState = state;
+        ownedContinuation = continuation;
     }
 
     public NearbyAkeContext Context { get; }
@@ -766,14 +773,28 @@ public sealed class NearbyInitiatorResponseFlight : IDisposable
 
     public NearbyResponderResponseFrame ResponderResponse { get; }
 
-    public INearbyInitiatorState TakeState() =>
-        Interlocked.Exchange(ref ownedState, null) ??
-        throw Error("Initiator response state was already transferred or disposed.");
-
     public void Dispose() =>
-        Interlocked.Exchange(ref ownedState, null)?.Dispose();
+        Interlocked.Exchange(ref ownedContinuation, null)?.Dispose();
 
     public override string ToString() => "NearbyInitiatorResponseFlight[redacted]";
+
+    internal bool IsIssuedBy(object expectedIssuer) =>
+        ReferenceEquals(issuerCapability, expectedIssuer);
+
+    internal INearbyPendingSession AcceptResponse(object expectedIssuer)
+    {
+        if (!ReferenceEquals(issuerCapability, expectedIssuer))
+        {
+            throw new NearbySecureChannelException(
+                NearbySecureChannelError.InvalidCredential,
+                "Initiator response was issued by a different AKE capability.");
+        }
+
+        var continuation = Interlocked.Exchange(ref ownedContinuation, null) ??
+            throw Error(
+                "Initiator response state was already accepted or disposed.");
+        return continuation.Accept(ResponderResponse);
+    }
 
     private static NearbySecureChannelException Error(string message) =>
         new(NearbySecureChannelError.InvalidState, message);
@@ -781,17 +802,30 @@ public sealed class NearbyInitiatorResponseFlight : IDisposable
 
 public sealed class NearbyResponderFlight : IDisposable
 {
+    private readonly object issuerCapability;
     private INearbyPendingSession? ownedPendingSession;
 
-    public NearbyResponderFlight(
+    internal NearbyResponderFlight(
+        object issuerCapability,
+        NearbyAkeContext context,
+        NearbyInitiatorHelloFrame initiatorHello,
         NearbyHandshakePayload handshakePayload,
         INearbyPendingSession pendingSession)
     {
+        this.issuerCapability = issuerCapability ??
+            throw new ArgumentNullException(nameof(issuerCapability));
+        Context = context ?? throw new ArgumentNullException(nameof(context));
+        InitiatorHello = initiatorHello ??
+            throw new ArgumentNullException(nameof(initiatorHello));
         ArgumentNullException.ThrowIfNull(handshakePayload);
         ArgumentNullException.ThrowIfNull(pendingSession);
         HandshakePayload = handshakePayload;
         ownedPendingSession = pendingSession;
     }
+
+    public NearbyAkeContext Context { get; }
+
+    public NearbyInitiatorHelloFrame InitiatorHello { get; }
 
     public NearbyHandshakePayload HandshakePayload { get; }
 
@@ -804,8 +838,53 @@ public sealed class NearbyResponderFlight : IDisposable
 
     public override string ToString() => "NearbyResponderFlight[redacted]";
 
+    internal bool IsIssuedBy(object expectedIssuer) =>
+        ReferenceEquals(issuerCapability, expectedIssuer);
+
     private static NearbySecureChannelException Error(string message) =>
         new(NearbySecureChannelError.InvalidState, message);
+}
+
+internal sealed class NearbyInitiatorContinuation : IDisposable
+{
+    private readonly Func<
+        NearbyResponderResponseFrame,
+        INearbyPendingSession> acceptResponder;
+    private Action? disposeState;
+
+    internal NearbyInitiatorContinuation(
+        Func<NearbyResponderResponseFrame, INearbyPendingSession> acceptResponder,
+        Action disposeState)
+    {
+        this.acceptResponder = acceptResponder ??
+            throw new ArgumentNullException(nameof(acceptResponder));
+        this.disposeState = disposeState ??
+            throw new ArgumentNullException(nameof(disposeState));
+    }
+
+    internal INearbyPendingSession Accept(
+        NearbyResponderResponseFrame responderResponse)
+    {
+        var dispose = Interlocked.Exchange(ref disposeState, null) ??
+            throw new NearbySecureChannelException(
+                NearbySecureChannelError.InvalidState,
+                "Initiator continuation was already accepted or disposed.");
+        try
+        {
+            return acceptResponder(responderResponse) ??
+                throw new NearbySecureChannelException(
+                    NearbySecureChannelError.InvalidState,
+                    "AKE returned no pending session.");
+        }
+        catch
+        {
+            dispose();
+            throw;
+        }
+    }
+
+    public void Dispose() =>
+        Interlocked.Exchange(ref disposeState, null)?.Invoke();
 }
 
 public sealed class NearbyAuthenticatedPeer
@@ -848,6 +927,8 @@ public interface INearbyFreshAke
 
 public abstract class NearbyFreshAkeBase : INearbyFreshAke
 {
+    private readonly object issuerCapability = new();
+
     public NearbyInitiatorFlight BeginInitiator(NearbyAkeContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -855,12 +936,13 @@ public abstract class NearbyFreshAkeBase : INearbyFreshAke
             throw new NearbySecureChannelException(
                 NearbySecureChannelError.InvalidState,
                 "AKE returned no initiator flight.");
-        if (!ReferenceEquals(context, flight.Context))
+        if (!flight.IsIssuedBy(issuerCapability) ||
+            !ReferenceEquals(context, flight.Context))
         {
             flight.Dispose();
             throw new NearbySecureChannelException(
                 NearbySecureChannelError.InvalidCredential,
-                "AKE returned an initiator flight for a different context capability.");
+                "AKE returned an initiator flight for a different issuer or context capability.");
         }
 
         return flight;
@@ -870,20 +952,37 @@ public abstract class NearbyFreshAkeBase : INearbyFreshAke
         NearbyInitiatorHelloFrame canonicalInitiatorFrame)
     {
         ArgumentNullException.ThrowIfNull(canonicalInitiatorFrame);
-        return AcceptInitiatorCore(canonicalInitiatorFrame) ??
+        var flight = AcceptInitiatorCore(canonicalInitiatorFrame) ??
             throw new NearbySecureChannelException(
                 NearbySecureChannelError.InvalidState,
                 "AKE returned no responder flight.");
+        if (!flight.IsIssuedBy(issuerCapability) ||
+            !ReferenceEquals(flight.Context, canonicalInitiatorFrame.Context) ||
+            !ReferenceEquals(flight.InitiatorHello, canonicalInitiatorFrame))
+        {
+            flight.Dispose();
+            throw new NearbySecureChannelException(
+                NearbySecureChannelError.InvalidCredential,
+                "AKE returned a responder flight for a different issuer, context, or initiator frame capability.");
+        }
+
+        return flight;
     }
 
     public INearbyPendingSession AcceptResponder(
         NearbyInitiatorResponseFlight initiatorResponse)
     {
         ArgumentNullException.ThrowIfNull(initiatorResponse);
-        return AcceptResponderCore(initiatorResponse) ??
+        if (!initiatorResponse.IsIssuedBy(issuerCapability))
+        {
+            // A wrong issuer must not consume another instance's continuation:
+            // the owning issuer may still accept it, or its holder may dispose it.
             throw new NearbySecureChannelException(
-                NearbySecureChannelError.InvalidState,
-                "AKE returned no pending session.");
+                NearbySecureChannelError.InvalidCredential,
+                "Initiator response was issued by a different AKE capability.");
+        }
+
+        return initiatorResponse.AcceptResponse(issuerCapability);
     }
 
     protected abstract NearbyInitiatorFlight BeginInitiatorCore(
@@ -892,14 +991,30 @@ public abstract class NearbyFreshAkeBase : INearbyFreshAke
     protected abstract NearbyResponderFlight AcceptInitiatorCore(
         NearbyInitiatorHelloFrame canonicalInitiatorFrame);
 
-    protected abstract INearbyPendingSession AcceptResponderCore(
-        NearbyInitiatorResponseFlight initiatorResponse);
-
-    protected static NearbyInitiatorFlight CreateInitiatorFlight(
+    protected NearbyInitiatorFlight CreateInitiatorFlight(
         NearbyAkeContext context,
         NearbyHandshakePayload handshakePayload,
-        INearbyInitiatorState state) =>
-        new(context, handshakePayload, state);
+        Func<NearbyResponderResponseFrame, INearbyPendingSession> acceptResponder,
+        Action disposeState) =>
+        new(
+            issuerCapability,
+            context,
+            handshakePayload,
+            new NearbyInitiatorContinuation(acceptResponder, disposeState));
+
+    protected NearbyResponderFlight CreateResponderFlight(
+        NearbyInitiatorHelloFrame initiatorHello,
+        NearbyHandshakePayload handshakePayload,
+        INearbyPendingSession pendingSession)
+    {
+        ArgumentNullException.ThrowIfNull(initiatorHello);
+        return new NearbyResponderFlight(
+            issuerCapability,
+            initiatorHello.Context,
+            initiatorHello,
+            handshakePayload,
+            pendingSession);
+    }
 }
 
 public interface INearbyPendingSession : IDisposable

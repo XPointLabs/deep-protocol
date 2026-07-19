@@ -527,8 +527,10 @@ public sealed class NearbySecureChannelContractTests
                 NearbyHandshakeMessageKind.ResponderResponse,
                 Binding(),
                 Range(0x20, 16)));
-        var transferredState = new TestInitiatorState();
-        var initiator = TestFreshAkeFactory.IssueInitiatorFlight(
+        var factory = new TestFreshAkeFactory();
+        var transferredPending = Pending(handle, peer);
+        var transferredState = new TestInitiatorState(transferredPending);
+        var initiator = factory.IssueInitiatorFlight(
             context,
             payload,
             transferredState);
@@ -536,19 +538,20 @@ public sealed class NearbySecureChannelContractTests
             initiatorHello,
             responderResponse);
 
-        Assert.Same(transferredState, responseFlight.TakeState());
-        Assert.Throws<NearbySecureChannelException>(() => responseFlight.TakeState());
+        Assert.Same(transferredPending, factory.AcceptResponder(responseFlight));
+        Assert.Equal(1, transferredState.AcceptCount);
+        Assert.Throws<NearbySecureChannelException>(() =>
+            factory.AcceptResponder(responseFlight));
         Assert.Throws<NearbySecureChannelException>(() =>
             initiator.BindResponse(initiatorHello, responderResponse));
         initiator.Dispose();
         responseFlight.Dispose();
         initiator.Dispose();
         Assert.Equal(0, transferredState.DisposeCount);
-        transferredState.Dispose();
-        Assert.Equal(1, transferredState.DisposeCount);
+        transferredPending.Dispose();
 
         var abandonedState = new TestInitiatorState();
-        var abandonedInitiator = TestFreshAkeFactory.IssueInitiatorFlight(
+        var abandonedInitiator = factory.IssueInitiatorFlight(
             context,
             payload,
             abandonedState);
@@ -559,7 +562,7 @@ public sealed class NearbySecureChannelContractTests
             abandonedInitiator.BindResponse(initiatorHello, responderResponse));
 
         var abandonedResponseState = new TestInitiatorState();
-        var abandonedResponse = TestFreshAkeFactory.IssueInitiatorFlight(
+        var abandonedResponse = factory.IssueInitiatorFlight(
                 context,
                 payload,
                 abandonedResponseState)
@@ -567,19 +570,26 @@ public sealed class NearbySecureChannelContractTests
         abandonedResponse.Dispose();
         abandonedResponse.Dispose();
         Assert.Equal(1, abandonedResponseState.DisposeCount);
-        Assert.Throws<NearbySecureChannelException>(() => abandonedResponse.TakeState());
+        Assert.Throws<NearbySecureChannelException>(() =>
+            factory.AcceptResponder(abandonedResponse));
 
-        var transferredPending = Pending(handle, peer);
-        var responder = new NearbyResponderFlight(payload, transferredPending);
-        Assert.Same(transferredPending, responder.TakePendingSession());
+        var responderPending = Pending(handle, peer);
+        var responder = factory.IssueResponderFlight(
+            initiatorHello,
+            payload,
+            responderPending);
+        Assert.Same(responderPending, responder.TakePendingSession());
         Assert.Throws<NearbySecureChannelException>(() => responder.TakePendingSession());
         responder.Dispose();
-        Assert.Equal(0, transferredPending.PendingDisposeCount);
-        transferredPending.Dispose();
-        Assert.Equal(1, transferredPending.PendingDisposeCount);
+        Assert.Equal(0, responderPending.PendingDisposeCount);
+        responderPending.Dispose();
+        Assert.Equal(1, responderPending.PendingDisposeCount);
 
         var abandonedPending = Pending(handle, peer);
-        var abandonedResponder = new NearbyResponderFlight(payload, abandonedPending);
+        var abandonedResponder = factory.IssueResponderFlight(
+            initiatorHello,
+            payload,
+            abandonedPending);
         abandonedResponder.Dispose();
         abandonedResponder.Dispose();
         Assert.Equal(1, abandonedPending.PendingDisposeCount);
@@ -609,8 +619,9 @@ public sealed class NearbySecureChannelContractTests
                 NearbyHandshakeMessageKind.ResponderResponse,
                 Binding(),
                 Range(0x41, 16)));
+        var factory = new TestFreshAkeFactory();
         var crossContextState = new TestInitiatorState();
-        var crossContextFlight = TestFreshAkeFactory.IssueInitiatorFlight(
+        var crossContextFlight = factory.IssueInitiatorFlight(
             context,
             payload,
             crossContextState);
@@ -635,7 +646,7 @@ public sealed class NearbySecureChannelContractTests
                 Binding(),
                 Range(0x51, 16)));
         var payloadMismatchState = new TestInitiatorState();
-        var payloadMismatchFlight = TestFreshAkeFactory.IssueInitiatorFlight(
+        var payloadMismatchFlight = factory.IssueInitiatorFlight(
             context,
             new NearbyHandshakePayload(Range(0x32, 16)),
             payloadMismatchState);
@@ -1102,7 +1113,9 @@ public sealed class NearbySecureChannelContractTests
                 .ToArray());
         Assert.DoesNotContain(
             acceptResponder.GetParameters(),
-            parameter => parameter.ParameterType == typeof(INearbyInitiatorState));
+            parameter => parameter.ParameterType.Name.Contains(
+                "InitiatorState",
+                StringComparison.Ordinal));
         Assert.Empty(typeof(NearbyInitiatorFlight).GetConstructors());
         Assert.Empty(ownedResponse!.GetConstructors());
         Assert.Equal(
@@ -1123,7 +1136,19 @@ public sealed class NearbySecureChannelContractTests
         Assert.DoesNotContain(
             typeof(NearbyFreshAkeBase).GetMethods(
                 BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance),
-            method => method.ReturnType == typeof(INearbyInitiatorState));
+            method => method.ReturnType.Name.Contains(
+                "InitiatorState",
+                StringComparison.Ordinal) ||
+                method.GetParameters().Any(parameter =>
+                    parameter.ParameterType.Name.Contains(
+                        "InitiatorState",
+                        StringComparison.Ordinal)));
+        Assert.DoesNotContain(
+            typeof(NearbyFreshAkeBase).GetMethods(
+                BindingFlags.NonPublic | BindingFlags.Static),
+            method => method.ReturnType == typeof(NearbyInitiatorFlight));
+        Assert.Null(typeof(NearbyFreshAkeBase).Assembly.GetType(
+            "Deep.Protocol.DeepExtension.NearbySecureChannels.INearbyInitiatorState"));
     }
 
     [Fact]
@@ -1132,6 +1157,178 @@ public sealed class NearbySecureChannelContractTests
         Assert.Empty(typeof(NearbyResponderFlight).GetConstructors());
         Assert.NotNull(typeof(NearbyResponderFlight).GetProperty("Context"));
         Assert.NotNull(typeof(NearbyResponderFlight).GetProperty("InitiatorHello"));
+    }
+
+    [Fact]
+    public async Task InitiatorResponse_IsInstanceBoundAndWrongIssuerRetainsOwnership()
+    {
+        var (_, peer, handle) = await Capabilities();
+        var context = Context(NearbySessionRole.Initiator, handle, peer);
+        var payload = new NearbyHandshakePayload(Range(0x73, 16));
+        var initiatorHello = new NearbyInitiatorHelloFrame(
+            context,
+            NearbyHandshakeCodec.EncodeFrame(
+                NearbyHandshakeMessageKind.InitiatorHello,
+                Binding(),
+                payload.Bytes.Span));
+        var responderResponse = new NearbyResponderResponseFrame(
+            context,
+            initiatorHello,
+            NearbyHandshakeCodec.EncodeFrame(
+                NearbyHandshakeMessageKind.ResponderResponse,
+                Binding(),
+                Range(0x83, 16)));
+        var owner = new TestFreshAkeFactory();
+        var sameSubclassThief = new TestFreshAkeFactory();
+        var otherSubclassThief = new OtherFreshAkeFactory();
+
+        var sameSubclassBeginState = new TestInitiatorState();
+        var sameSubclassBegin = owner.IssueInitiatorFlight(
+            context,
+            payload,
+            sameSubclassBeginState);
+        sameSubclassThief.ReturnInitiatorFlight(_ => sameSubclassBegin);
+        Assert.Throws<NearbySecureChannelException>(() =>
+            sameSubclassThief.BeginInitiator(context));
+        Assert.Equal(1, sameSubclassBeginState.DisposeCount);
+
+        var otherSubclassBeginState = new TestInitiatorState();
+        var otherSubclassBegin = owner.IssueInitiatorFlight(
+            context,
+            payload,
+            otherSubclassBeginState);
+        otherSubclassThief.ReturnInitiatorFlight(_ => otherSubclassBegin);
+        Assert.Throws<NearbySecureChannelException>(() =>
+            otherSubclassThief.BeginInitiator(context));
+        Assert.Equal(1, otherSubclassBeginState.DisposeCount);
+
+        var pending = Pending(handle, peer);
+        var state = new TestInitiatorState(pending);
+        var responseFlight = owner.IssueInitiatorFlight(
+                context,
+                payload,
+                state)
+            .BindResponse(initiatorHello, responderResponse);
+
+        foreach (var thief in new NearbyFreshAkeBase[]
+                 {
+                     sameSubclassThief,
+                     otherSubclassThief
+                 })
+        {
+            var rejected = Assert.Throws<NearbySecureChannelException>(() =>
+                thief.AcceptResponder(responseFlight));
+            Assert.Equal(
+                NearbySecureChannelError.InvalidCredential,
+                rejected.Error);
+            Assert.Equal(0, state.AcceptCount);
+            Assert.Equal(0, state.DisposeCount);
+        }
+
+        Assert.Same(pending, owner.AcceptResponder(responseFlight));
+        Assert.Equal(1, state.AcceptCount);
+        Assert.Equal(0, state.DisposeCount);
+        responseFlight.Dispose();
+        pending.Dispose();
+
+        var abandonedState = new TestInitiatorState();
+        var abandoned = owner.IssueInitiatorFlight(
+                context,
+                payload,
+                abandonedState)
+            .BindResponse(initiatorHello, responderResponse);
+        Assert.Throws<NearbySecureChannelException>(() =>
+            sameSubclassThief.AcceptResponder(abandoned));
+        abandoned.Dispose();
+        abandoned.Dispose();
+        Assert.Equal(0, abandonedState.AcceptCount);
+        Assert.Equal(1, abandonedState.DisposeCount);
+
+        var failingState = new TestInitiatorState();
+        var failing = owner.IssueInitiatorFlight(
+                context,
+                payload,
+                failingState)
+            .BindResponse(initiatorHello, responderResponse);
+        Assert.Throws<NotSupportedException>(() =>
+            owner.AcceptResponder(failing));
+        Assert.Equal(1, failingState.AcceptCount);
+        Assert.Equal(1, failingState.DisposeCount);
+        Assert.Throws<NearbySecureChannelException>(() =>
+            owner.AcceptResponder(failing));
+    }
+
+    [Fact]
+    public async Task ResponderFlight_RejectsStolenIssuerAndMismatchedInputFrame()
+    {
+        var (_, peer, handle) = await Capabilities();
+        var context = Context(NearbySessionRole.Responder, handle, peer);
+        var payload = new NearbyHandshakePayload(Range(0x93, 16));
+        var initiatorHello = new NearbyInitiatorHelloFrame(
+            context,
+            NearbyHandshakeCodec.EncodeFrame(
+                NearbyHandshakeMessageKind.InitiatorHello,
+                Binding(),
+                payload.Bytes.Span));
+        var sameValuesDifferentFrame = new NearbyInitiatorHelloFrame(
+            context,
+            initiatorHello.Bytes);
+        var owner = new TestFreshAkeFactory();
+        var sameSubclassThief = new TestFreshAkeFactory();
+        var otherSubclassThief = new OtherFreshAkeFactory();
+
+        var sameSubclassPending = Pending(handle, peer);
+        var sameSubclassStolen = owner.IssueResponderFlight(
+            initiatorHello,
+            payload,
+            sameSubclassPending);
+        sameSubclassThief.ReturnResponderFlight(_ => sameSubclassStolen);
+        var sameSubclassRejected =
+            Assert.Throws<NearbySecureChannelException>(() =>
+                sameSubclassThief.AcceptInitiator(initiatorHello));
+        Assert.Equal(
+            NearbySecureChannelError.InvalidCredential,
+            sameSubclassRejected.Error);
+        Assert.Equal(1, sameSubclassPending.PendingDisposeCount);
+
+        var otherSubclassPending = Pending(handle, peer);
+        var otherSubclassStolen = owner.IssueResponderFlight(
+            initiatorHello,
+            payload,
+            otherSubclassPending);
+        otherSubclassThief.ReturnResponderFlight(_ => otherSubclassStolen);
+        var otherSubclassRejected =
+            Assert.Throws<NearbySecureChannelException>(() =>
+                otherSubclassThief.AcceptInitiator(initiatorHello));
+        Assert.Equal(
+            NearbySecureChannelError.InvalidCredential,
+            otherSubclassRejected.Error);
+        Assert.Equal(1, otherSubclassPending.PendingDisposeCount);
+
+        var wrongFramePending = Pending(handle, peer);
+        var wrongFrame = owner.IssueResponderFlight(
+            initiatorHello,
+            payload,
+            wrongFramePending);
+        owner.ReturnResponderFlight(_ => wrongFrame);
+        var wrongFrameRejected =
+            Assert.Throws<NearbySecureChannelException>(() =>
+                owner.AcceptInitiator(sameValuesDifferentFrame));
+        Assert.Equal(
+            NearbySecureChannelError.InvalidCredential,
+            wrongFrameRejected.Error);
+        Assert.Equal(1, wrongFramePending.PendingDisposeCount);
+
+        var acceptedPending = Pending(handle, peer);
+        owner.ReturnResponderFlight(input =>
+            owner.IssueResponderFlight(input, payload, acceptedPending));
+        var accepted = owner.AcceptInitiator(initiatorHello);
+        Assert.Same(context, accepted.Context);
+        Assert.Same(initiatorHello, accepted.InitiatorHello);
+        Assert.Same(acceptedPending, accepted.TakePendingSession());
+        accepted.Dispose();
+        Assert.Equal(0, acceptedPending.PendingDisposeCount);
+        acceptedPending.Dispose();
     }
 
     [Fact]
@@ -1371,55 +1568,121 @@ public sealed class NearbySecureChannelContractTests
             CreateOpaqueLocalKeyHandle(returnedCredential, keyReference);
     }
 
-    private sealed class TestInitiatorState : INearbyInitiatorState
+    private sealed class TestInitiatorState(
+        INearbyPendingSession? pendingSession = null)
     {
+        private int accepted;
         private int disposed;
 
+        public int AcceptCount => Volatile.Read(ref accepted);
+
         public int DisposeCount => Volatile.Read(ref disposed);
+
+        public INearbyPendingSession Accept(
+            NearbyResponderResponseFrame responderResponse)
+        {
+            ArgumentNullException.ThrowIfNull(responderResponse);
+            Interlocked.Increment(ref accepted);
+            return pendingSession ?? throw new NotSupportedException();
+        }
 
         public void Dispose() => Interlocked.CompareExchange(ref disposed, 1, 0);
     }
 
     private sealed class TestFreshAkeFactory : NearbyFreshAkeBase
     {
-        public static NearbyInitiatorFlight IssueInitiatorFlight(
+        private Func<
+            NearbyAkeContext,
+            NearbyInitiatorFlight>? beginInitiator;
+        private Func<
+            NearbyInitiatorHelloFrame,
+            NearbyResponderFlight>? acceptInitiator;
+
+        public NearbyInitiatorFlight IssueInitiatorFlight(
             NearbyAkeContext context,
             NearbyHandshakePayload handshakePayload,
-            INearbyInitiatorState state) =>
-            CreateInitiatorFlight(context, handshakePayload, state);
+            TestInitiatorState state) =>
+            CreateInitiatorFlight(
+                context,
+                handshakePayload,
+                state.Accept,
+                state.Dispose);
+
+        public NearbyResponderFlight IssueResponderFlight(
+            NearbyInitiatorHelloFrame initiatorHello,
+            NearbyHandshakePayload handshakePayload,
+            INearbyPendingSession pendingSession) =>
+            CreateResponderFlight(
+                initiatorHello,
+                handshakePayload,
+                pendingSession);
+
+        public void ReturnInitiatorFlight(
+            Func<NearbyAkeContext, NearbyInitiatorFlight> value) =>
+            beginInitiator = value;
+
+        public void ReturnResponderFlight(
+            Func<NearbyInitiatorHelloFrame, NearbyResponderFlight> value) =>
+            acceptInitiator = value;
 
         protected override NearbyInitiatorFlight BeginInitiatorCore(
             NearbyAkeContext context) =>
+            beginInitiator?.Invoke(context) ??
             throw new NotSupportedException();
 
         protected override NearbyResponderFlight AcceptInitiatorCore(
             NearbyInitiatorHelloFrame canonicalInitiatorFrame) =>
-            throw new NotSupportedException();
-
-        protected override INearbyPendingSession AcceptResponderCore(
-            NearbyInitiatorResponseFlight initiatorResponse) =>
+            acceptInitiator?.Invoke(canonicalInitiatorFrame) ??
             throw new NotSupportedException();
     }
 
     private sealed class MismatchedFreshAkeFactory(
         NearbyAkeContext issuedContext,
         NearbyHandshakePayload payload,
-        INearbyInitiatorState state)
+        TestInitiatorState state)
         : NearbyFreshAkeBase
     {
         protected override NearbyInitiatorFlight BeginInitiatorCore(
             NearbyAkeContext context)
         {
             _ = context;
-            return CreateInitiatorFlight(issuedContext, payload, state);
+            return CreateInitiatorFlight(
+                issuedContext,
+                payload,
+                state.Accept,
+                state.Dispose);
         }
 
         protected override NearbyResponderFlight AcceptInitiatorCore(
             NearbyInitiatorHelloFrame canonicalInitiatorFrame) =>
             throw new NotSupportedException();
+    }
 
-        protected override INearbyPendingSession AcceptResponderCore(
-            NearbyInitiatorResponseFlight initiatorResponse) =>
+    private sealed class OtherFreshAkeFactory : NearbyFreshAkeBase
+    {
+        private Func<
+            NearbyAkeContext,
+            NearbyInitiatorFlight>? beginInitiator;
+        private Func<
+            NearbyInitiatorHelloFrame,
+            NearbyResponderFlight>? acceptInitiator;
+
+        public void ReturnInitiatorFlight(
+            Func<NearbyAkeContext, NearbyInitiatorFlight> value) =>
+            beginInitiator = value;
+
+        public void ReturnResponderFlight(
+            Func<NearbyInitiatorHelloFrame, NearbyResponderFlight> value) =>
+            acceptInitiator = value;
+
+        protected override NearbyInitiatorFlight BeginInitiatorCore(
+            NearbyAkeContext context) =>
+            beginInitiator?.Invoke(context) ??
+            throw new NotSupportedException();
+
+        protected override NearbyResponderFlight AcceptInitiatorCore(
+            NearbyInitiatorHelloFrame canonicalInitiatorFrame) =>
+            acceptInitiator?.Invoke(canonicalInitiatorFrame) ??
             throw new NotSupportedException();
     }
 
