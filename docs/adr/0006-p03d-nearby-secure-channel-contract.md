@@ -31,6 +31,9 @@ The contract:
   roster epoch, validity interval and revocation status;
 - passes the P03C `NearbyHandshakeBinding` through a fresh-only
   `NearbyAkeContext`;
+- admits canonical frames only through role-specific
+  `NearbyInitiatorHelloFrame` and `NearbyResponderResponseFrame` values whose
+  kind and complete P03C binding exactly match that context;
 - exposes a provider-issued opaque local device-key handle that binds the
   independently supplied verified local credential to a redacted platform-key
   reference, never key bytes or key operations;
@@ -68,10 +71,24 @@ the base does not re-check the cancellation token and never asks for replay
 rollback. `Seal` has no direction argument. Channel send and
 receive directions are derived from the immutable local initiator/responder
 role. `NearbySecureSessionBase` supplies the expected direction to external
-record operations and rejects a reflected opened result. Canonical AKE frames
-are bounded P03C frame values before reaching an external AKE, while encoded
-records are capped at the existing opaque-bundle maximum plus 4096 bytes of
-format-agnostic envelope overhead; the same cap is enforced on adapter output.
+record operations and rejects a reflected opened result. Peer credential
+mismatches fail as `InvalidCredential`, authentication-time mismatch fails as
+`AuthenticationFailed`, and only role or record-direction mismatch fails as
+`DirectionReflection`.
+
+Activation never invokes the external channel-transfer callback or channel
+property getters while holding the lifecycle monitor. It marks the transfer
+inspection explicitly, performs those calls outside the monitor, then rechecks
+that the state is still `Activating` before committing `Activated`. Reentrant
+dispose therefore consumes the pending session and the returned channel instead
+of allowing a disposed session to be resurrected.
+
+Canonical AKE inputs are length-bounded, snapshot caller-owned memory, and
+decode only the snapshot before reaching an external AKE. The role-specific
+types reject reflected kinds, resumption, and any P03C binding/attempt mismatch.
+Encoded records are capped at the existing opaque-bundle maximum plus 4096
+bytes of format-agnostic envelope overhead; empty and oversized adapter output
+are rejected.
 
 ## Security boundary
 

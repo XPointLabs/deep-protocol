@@ -552,6 +552,16 @@ public sealed class NearbyAkeContext
 
     public override string ToString() => "NearbyAkeContext[redacted]";
 
+    internal bool HasExactBinding(NearbyHandshakeBinding candidate) =>
+        binding.BundleVersion == candidate.BundleVersion &&
+        binding.Period == candidate.Period &&
+        binding.TransportAttemptId.Bytes.Span.SequenceEqual(
+            candidate.TransportAttemptId.Bytes.Span) &&
+        binding.SimultaneousOpenToken.Span.SequenceEqual(
+            candidate.SimultaneousOpenToken.Span) &&
+        binding.Mode == candidate.Mode &&
+        binding.ResumeCounter == candidate.ResumeCounter;
+
     private static NearbyHandshakeBinding CopyBinding(NearbyHandshakeBinding binding) =>
         new()
         {
@@ -607,38 +617,64 @@ public sealed class NearbyHandshakePayload
     public override string ToString() => "NearbyHandshakePayload[redacted]";
 }
 
-public sealed class NearbyCanonicalAkeFrame
+public sealed class NearbyInitiatorHelloFrame
 {
-    private readonly byte[] bytes;
+    private readonly NearbyFreshAkeFrameValue value;
 
-    public NearbyCanonicalAkeFrame(ReadOnlyMemory<byte> bytes)
+    public NearbyInitiatorHelloFrame(
+        NearbyAkeContext context,
+        ReadOnlyMemory<byte> canonicalFrame)
     {
-        if (bytes.Length is
-            < NearbySecureChannelLimits.MinimumCanonicalAkeFrameLength or
-            > NearbySecureChannelLimits.MaximumCanonicalAkeFrameLength)
-        {
-            throw new NearbySecureChannelException(
-                NearbySecureChannelError.InvalidHandshakePayload,
-                "Canonical AKE frame length is outside strict P03C bounds.");
-        }
-
-        try
-        {
-            _ = NearbyHandshakeCodec.DecodeFrame(bytes.Span);
-        }
-        catch (NearbyHandshakeException exception)
-        {
-            throw new NearbySecureChannelException(
-                NearbySecureChannelError.InvalidHandshakePayload,
-                $"Canonical AKE frame is invalid: {exception.Error}.");
-        }
-
-        this.bytes = bytes.ToArray();
+        Context = context ?? throw new ArgumentNullException(nameof(context));
+        value = NearbyFreshAkeFrameValue.Create(
+            context,
+            canonicalFrame,
+            NearbyHandshakeMessageKind.InitiatorHello);
     }
 
-    public ReadOnlyMemory<byte> Bytes => bytes.ToArray();
+    public NearbyAkeContext Context { get; }
 
-    public override string ToString() => "NearbyCanonicalAkeFrame[redacted]";
+    public ReadOnlyMemory<byte> Bytes => value.Bytes;
+
+    public NearbyHandshakeBinding Binding => value.Binding;
+
+    public override string ToString() => "NearbyInitiatorHelloFrame[redacted]";
+}
+
+public sealed class NearbyResponderResponseFrame
+{
+    private readonly NearbyFreshAkeFrameValue value;
+
+    public NearbyResponderResponseFrame(
+        NearbyAkeContext context,
+        NearbyInitiatorHelloFrame initiatorHello,
+        ReadOnlyMemory<byte> canonicalFrame)
+    {
+        Context = context ?? throw new ArgumentNullException(nameof(context));
+        InitiatorHello = initiatorHello ??
+            throw new ArgumentNullException(nameof(initiatorHello));
+        if (!context.HasExactBinding(initiatorHello.Binding))
+        {
+            throw new NearbySecureChannelException(
+                NearbySecureChannelError.InvalidHandshakePayload,
+                "Responder frame context does not match its initiator frame binding.");
+        }
+
+        value = NearbyFreshAkeFrameValue.Create(
+            context,
+            canonicalFrame,
+            NearbyHandshakeMessageKind.ResponderResponse);
+    }
+
+    public NearbyAkeContext Context { get; }
+
+    public NearbyInitiatorHelloFrame InitiatorHello { get; }
+
+    public ReadOnlyMemory<byte> Bytes => value.Bytes;
+
+    public NearbyHandshakeBinding Binding => value.Binding;
+
+    public override string ToString() => "NearbyResponderResponseFrame[redacted]";
 }
 
 public interface INearbyInitiatorState : IDisposable
@@ -735,13 +771,11 @@ public interface INearbyFreshAke
     NearbyInitiatorFlight BeginInitiator(NearbyAkeContext context);
 
     NearbyResponderFlight AcceptInitiator(
-        NearbyAkeContext context,
-        NearbyCanonicalAkeFrame canonicalInitiatorFrame);
+        NearbyInitiatorHelloFrame canonicalInitiatorFrame);
 
     INearbyPendingSession AcceptResponder(
         INearbyInitiatorState state,
-        NearbyCanonicalAkeFrame canonicalInitiatorFrame,
-        NearbyCanonicalAkeFrame canonicalResponderFrame);
+        NearbyResponderResponseFrame canonicalResponderFrame);
 }
 
 public interface INearbyPendingSession : IDisposable
@@ -823,11 +857,11 @@ public abstract class NearbySecureSessionBase : INearbySecureSession
             throw Error(
                 NearbySecureChannelError.InvalidRecord,
                 "Nearby record sealing returned no record.");
-        if (record.Length > NearbySecureChannelLimits.MaximumEncodedRecordLength)
+        if (record.Length is <= 0 or > NearbySecureChannelLimits.MaximumEncodedRecordLength)
         {
             throw Error(
                 NearbySecureChannelError.InvalidRecord,
-                "Nearby encoded record exceeds the contract maximum.");
+                "Nearby encoded record length is invalid.");
         }
 
         return record;
@@ -991,6 +1025,7 @@ public abstract class NearbyPendingSessionBase : INearbyPendingSession
     private readonly object lifecycleGate = new();
     private int lifecycleState;
     private int pendingStateDisposed;
+    private bool externalTransferInspectionInProgress;
 
     protected NearbyPendingSessionBase(
         NearbyAkeContext context,
@@ -1074,23 +1109,29 @@ public abstract class NearbyPendingSessionBase : INearbyPendingSession
                         "Pending nearby session was disposed during activation.");
                 }
 
-                channel = ActivateAfterReplayCommit() ??
-                    throw Error(
-                        NearbySecureChannelError.InvalidState,
-                        "Accepted pending session did not transfer a secure channel.");
-                if (channel.LocalRole != LocalRole ||
-                    !HasExactAuthenticatedPeer(channel.Peer, Peer) ||
-                    channel.SendDirection != NearbyRecordDirectionPolicy.SendFor(LocalRole) ||
-                    channel.ReceiveDirection != NearbyRecordDirectionPolicy.ReceiveFor(LocalRole))
+                externalTransferInspectionInProgress = true;
+            }
+
+            channel = ActivateAfterReplayCommit() ??
+                throw Error(
+                    NearbySecureChannelError.InvalidState,
+                    "Accepted pending session did not transfer a secure channel.");
+            ValidateActivatedChannel(channel);
+
+            lock (lifecycleGate)
+            {
+                if (lifecycleState != Activating)
                 {
                     throw Error(
-                        NearbySecureChannelError.DirectionReflection,
-                        "Activated channel role, peer or direction does not match the pending session.");
+                        NearbySecureChannelError.InvalidState,
+                        "Pending nearby session was disposed during channel transfer.");
                 }
 
+                externalTransferInspectionInProgress = false;
                 lifecycleState = Activated;
-                return channel;
             }
+
+            return channel;
         }
         catch
         {
@@ -1102,6 +1143,7 @@ public abstract class NearbyPendingSessionBase : INearbyPendingSession
             {
                 lock (lifecycleGate)
                 {
+                    externalTransferInspectionInProgress = false;
                     lifecycleState = Disposed;
                 }
 
@@ -1123,7 +1165,7 @@ public abstract class NearbyPendingSessionBase : INearbyPendingSession
             }
 
             lifecycleState = Disposed;
-            disposePendingState = true;
+            disposePendingState = !externalTransferInspectionInProgress;
         }
 
         if (disposePendingState)
@@ -1144,18 +1186,43 @@ public abstract class NearbyPendingSessionBase : INearbyPendingSession
         }
     }
 
-    private static bool HasExactAuthenticatedPeer(
-        NearbyAuthenticatedPeer actual,
-        NearbyAuthenticatedPeer expected)
+    private void ValidateActivatedChannel(INearbySecureSession channel)
     {
+        if (channel.LocalRole != LocalRole)
+        {
+            throw Error(
+                NearbySecureChannelError.DirectionReflection,
+                "Activated channel role is reflected.");
+        }
+
+        var actual = channel.Peer;
+        var expected = Peer;
         ArgumentNullException.ThrowIfNull(actual);
-        ArgumentNullException.ThrowIfNull(expected);
         var actualCredential = actual.Credential;
         var expectedCredential = expected.Credential;
-        return ReferenceEquals(actualCredential, expectedCredential) &&
-               actualCredential.HasExactValue(expectedCredential) &&
-               actual.RosterEpoch == expected.RosterEpoch &&
-               actual.AuthenticatedAt == expected.AuthenticatedAt;
+        if (!ReferenceEquals(actualCredential, expectedCredential) ||
+            !actualCredential.HasExactValue(expectedCredential) ||
+            actual.RosterEpoch != expected.RosterEpoch)
+        {
+            throw Error(
+                NearbySecureChannelError.InvalidCredential,
+                "Activated channel peer credential does not match the pending session.");
+        }
+
+        if (actual.AuthenticatedAt != expected.AuthenticatedAt)
+        {
+            throw Error(
+                NearbySecureChannelError.AuthenticationFailed,
+                "Activated channel authentication context does not match the pending session.");
+        }
+
+        if (channel.SendDirection != NearbyRecordDirectionPolicy.SendFor(LocalRole) ||
+            channel.ReceiveDirection != NearbyRecordDirectionPolicy.ReceiveFor(LocalRole))
+        {
+            throw Error(
+                NearbySecureChannelError.DirectionReflection,
+                "Activated channel record direction is reflected.");
+        }
     }
 
     private static NearbySecureChannelException Error(
@@ -1226,6 +1293,95 @@ public sealed class NearbyOpenedRecord
     public ReadOnlyMemory<byte> Plaintext => plaintext.ToArray();
 
     public override string ToString() => "NearbyOpenedRecord[redacted]";
+}
+
+internal sealed class NearbyFreshAkeFrameValue
+{
+    private readonly byte[] bytes;
+    private readonly NearbyHandshakeBinding binding;
+
+    private NearbyFreshAkeFrameValue(
+        byte[] bytes,
+        NearbyHandshakeBinding binding)
+    {
+        this.bytes = bytes;
+        this.binding = CopyBinding(binding);
+    }
+
+    public ReadOnlyMemory<byte> Bytes => bytes.ToArray();
+
+    public NearbyHandshakeBinding Binding => CopyBinding(binding);
+
+    public static NearbyFreshAkeFrameValue Create(
+        NearbyAkeContext context,
+        ReadOnlyMemory<byte> canonicalFrame,
+        NearbyHandshakeMessageKind expectedKind)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        if (canonicalFrame.Length is
+            < NearbySecureChannelLimits.MinimumCanonicalAkeFrameLength or
+            > NearbySecureChannelLimits.MaximumCanonicalAkeFrameLength)
+        {
+            throw Error(
+                NearbySecureChannelError.InvalidHandshakePayload,
+                "Canonical AKE frame length is outside strict P03C bounds.");
+        }
+
+        // Snapshot caller-owned memory before parsing any content from it.
+        var snapshot = canonicalFrame.ToArray();
+        NearbyHandshakeFrame decoded;
+        try
+        {
+            decoded = NearbyHandshakeCodec.DecodeFrame(snapshot);
+        }
+        catch (NearbyHandshakeException exception)
+        {
+            throw Error(
+                NearbySecureChannelError.InvalidHandshakePayload,
+                $"Canonical AKE frame is invalid: {exception.Error}.");
+        }
+
+        if (decoded.Kind != expectedKind)
+        {
+            throw Error(
+                NearbySecureChannelError.DirectionReflection,
+                "Canonical AKE frame kind is reflected.");
+        }
+
+        if (decoded.Binding.Mode != NearbyHandshakeMode.Fresh ||
+            decoded.Binding.ResumeCounter != 0)
+        {
+            throw Error(
+                NearbySecureChannelError.ResumptionNotSupported,
+                "P03D AKE frames must use the fresh P03C binding.");
+        }
+
+        if (!context.HasExactBinding(decoded.Binding))
+        {
+            throw Error(
+                NearbySecureChannelError.InvalidHandshakePayload,
+                "Canonical AKE frame does not match its exact P03C context binding.");
+        }
+
+        return new NearbyFreshAkeFrameValue(snapshot, decoded.Binding);
+    }
+
+    private static NearbyHandshakeBinding CopyBinding(NearbyHandshakeBinding value) =>
+        new()
+        {
+            BundleVersion = value.BundleVersion,
+            Period = value.Period,
+            TransportAttemptId = new TransportAttemptId(
+                value.TransportAttemptId.Bytes.Span),
+            SimultaneousOpenToken = value.SimultaneousOpenToken.ToArray(),
+            Mode = value.Mode,
+            ResumeCounter = value.ResumeCounter
+        };
+
+    private static NearbySecureChannelException Error(
+        NearbySecureChannelError error,
+        string message) =>
+        new(error, message);
 }
 
 internal static class NearbyOpaqueValue

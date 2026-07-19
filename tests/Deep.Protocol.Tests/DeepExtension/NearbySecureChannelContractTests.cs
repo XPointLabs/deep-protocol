@@ -748,38 +748,99 @@ public sealed class NearbySecureChannelContractTests
     }
 
     [Fact]
-    public void CanonicalAkeFrames_AreBoundedValidatedAndRequiredByAkeContract()
+    public async Task CanonicalAkeFrames_AreRoleSpecificFreshBoundedAndContextBound()
     {
-        var encoded = NearbyHandshakeCodec.EncodeFrame(
+        var (_, peer, handle) = await Capabilities();
+        var context = Context(NearbySessionRole.Responder, handle, peer);
+        var initiatorBytes = NearbyHandshakeCodec.EncodeFrame(
             NearbyHandshakeMessageKind.InitiatorHello,
             Binding(),
             Range(0x10, NearbyHandshakeLimits.MinimumAdapterPayloadLength));
-        var frame = new NearbyCanonicalAkeFrame(encoded);
-        Assert.Equal(encoded, frame.Bytes.ToArray());
+        var responderBytes = NearbyHandshakeCodec.EncodeFrame(
+            NearbyHandshakeMessageKind.ResponderResponse,
+            Binding(),
+            Range(0x20, NearbyHandshakeLimits.MinimumAdapterPayloadLength));
+        var initiator = new NearbyInitiatorHelloFrame(context, initiatorBytes);
+        var responder = new NearbyResponderResponseFrame(
+            context,
+            initiator,
+            responderBytes);
+        Assert.Equal(initiatorBytes, initiator.Bytes.ToArray());
+        Assert.Equal(responderBytes, responder.Bytes.ToArray());
+        Assert.Same(context, initiator.Context);
+        Assert.Same(context, responder.Context);
+        Assert.Same(initiator, responder.InitiatorHello);
+        Assert.Equal(
+            context.Binding.TransportAttemptId.Bytes.ToArray(),
+            initiator.Binding.TransportAttemptId.Bytes.ToArray());
         Assert.Throws<NearbySecureChannelException>(() =>
-            new NearbyCanonicalAkeFrame(
+            new NearbyInitiatorHelloFrame(
+                context,
                 new byte[NearbySecureChannelLimits.MaximumCanonicalAkeFrameLength + 1]));
 
         Assert.Equal(
-            typeof(NearbyCanonicalAkeFrame),
+            [typeof(NearbyInitiatorHelloFrame)],
             typeof(INearbyFreshAke).GetMethod("AcceptInitiator")!
-                .GetParameters()[1].ParameterType);
+                .GetParameters().Select(static parameter => parameter.ParameterType).ToArray());
         Assert.Equal(
-            [typeof(INearbyInitiatorState), typeof(NearbyCanonicalAkeFrame), typeof(NearbyCanonicalAkeFrame)],
+            [typeof(INearbyInitiatorState), typeof(NearbyResponderResponseFrame)],
             typeof(INearbyFreshAke).GetMethod("AcceptResponder")!
                 .GetParameters().Select(static parameter => parameter.ParameterType).ToArray());
+
+        var reflected = Assert.Throws<NearbySecureChannelException>(() =>
+            new NearbyInitiatorHelloFrame(context, responderBytes));
+        Assert.Equal(NearbySecureChannelError.DirectionReflection, reflected.Error);
+        var reflectedResponse = Assert.Throws<NearbySecureChannelException>(() =>
+            new NearbyResponderResponseFrame(context, initiator, initiatorBytes));
+        Assert.Equal(
+            NearbySecureChannelError.DirectionReflection,
+            reflectedResponse.Error);
+
+        var resumptionBytes = NearbyHandshakeCodec.EncodeFrame(
+            NearbyHandshakeMessageKind.InitiatorHello,
+            Binding(NearbyHandshakeMode.Resumption, 1),
+            Range(0x30, NearbyHandshakeLimits.MinimumAdapterPayloadLength));
+        var resumption = Assert.Throws<NearbySecureChannelException>(() =>
+            new NearbyInitiatorHelloFrame(context, resumptionBytes));
+        Assert.Equal(NearbySecureChannelError.ResumptionNotSupported, resumption.Error);
+
+        var differentAttempt = NearbyHandshakeCodec.EncodeFrame(
+            NearbyHandshakeMessageKind.InitiatorHello,
+            Binding(attemptStart: 0x91),
+            Range(0x40, NearbyHandshakeLimits.MinimumAdapterPayloadLength));
+        var mismatch = Assert.Throws<NearbySecureChannelException>(() =>
+            new NearbyInitiatorHelloFrame(context, differentAttempt));
+        Assert.Equal(NearbySecureChannelError.InvalidHandshakePayload, mismatch.Error);
+
+        var differentContext = new NearbyAkeContext(
+            NearbySecureChannelProfileId.UnassignedPendingExternalCryptoReview,
+            Binding(attemptStart: 0x91),
+            NearbySessionRole.Responder,
+            handle.Credential,
+            handle,
+            peer,
+            7,
+            ValidationTime);
+        var otherInitiator = new NearbyInitiatorHelloFrame(
+            differentContext,
+            differentAttempt);
+        var crossedExchange = Assert.Throws<NearbySecureChannelException>(() =>
+            new NearbyResponderResponseFrame(context, otherInitiator, responderBytes));
+        Assert.Equal(NearbySecureChannelError.InvalidHandshakePayload, crossedExchange.Error);
     }
 
     [Fact]
-    public void CanonicalAkeFrame_SnapshotsCallerMemoryBeforeValidation()
+    public async Task CanonicalAkeFrame_SnapshotsCallerMemoryBeforeValidation()
     {
+        var (_, peer, handle) = await Capabilities();
+        var context = Context(NearbySessionRole.Responder, handle, peer);
         var encoded = NearbyHandshakeCodec.EncodeFrame(
             NearbyHandshakeMessageKind.InitiatorHello,
             Binding(),
             Range(0x20, NearbyHandshakeLimits.MinimumAdapterPayloadLength));
         using var memory = new MutatingMemoryManager(encoded);
 
-        var frame = new NearbyCanonicalAkeFrame(memory.Memory);
+        var frame = new NearbyInitiatorHelloFrame(context, memory.Memory);
 
         _ = NearbyHandshakeCodec.DecodeFrame(frame.Bytes.Span);
         Assert.Equal(encoded, frame.Bytes.ToArray());
@@ -799,11 +860,11 @@ public sealed class NearbySecureChannelContractTests
         Assert.Null(assembly.GetType(
             "Deep.Protocol.DeepExtension.NearbySecureChannels.NearbyCanonicalAkeFrame"));
         Assert.Equal(
-            initiator,
+            [initiator],
             typeof(INearbyFreshAke).GetMethod("AcceptInitiator")!
-                .GetParameters()[1].ParameterType);
+                .GetParameters().Select(static parameter => parameter.ParameterType).ToArray());
         Assert.Equal(
-            [typeof(INearbyInitiatorState), initiator, responder],
+            [typeof(INearbyInitiatorState), responder],
             typeof(INearbyFreshAke).GetMethod("AcceptResponder")!
                 .GetParameters().Select(static parameter => parameter.ParameterType).ToArray());
     }
@@ -936,12 +997,13 @@ public sealed class NearbySecureChannelContractTests
 
     private static NearbyHandshakeBinding Binding(
         NearbyHandshakeMode mode = NearbyHandshakeMode.Fresh,
-        ulong resumeCounter = 0) =>
+        ulong resumeCounter = 0,
+        int attemptStart = 0x80) =>
         new()
         {
             BundleVersion = 1,
             Period = 100,
-            TransportAttemptId = new TransportAttemptId(Range(0x80, 16)),
+            TransportAttemptId = new TransportAttemptId(Range(attemptStart, 16)),
             SimultaneousOpenToken = Range(0xa0, 16),
             Mode = mode,
             ResumeCounter = resumeCounter
@@ -1275,7 +1337,9 @@ public sealed class NearbySecureChannelContractTests
 
         public override Span<byte> GetSpan()
         {
-            if (Interlocked.Increment(ref spanReads) > 1)
+            // MemoryManager.Memory observes the span once while creating Memory.
+            // The second observation must be snapshotted; any later caller read mutates.
+            if (Interlocked.Increment(ref spanReads) > 2)
             {
                 bytes[0] ^= 0xff;
             }
