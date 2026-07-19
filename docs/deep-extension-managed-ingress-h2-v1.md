@@ -33,13 +33,16 @@ result can advance such application state.
 Header-list accounting is the RFC 9113 decoded calculation: name bytes + value bytes + 32 for
 each field. For requests this includes `:method`, `:scheme`, `:authority`, `:path`, `accept`,
 `content-length` and, for frame requests, `content-type`; an adapter must not also put these
-fields in the supplemental header collection. The opaque application body may span multiple
-HTTP/2 DATA frames.
+fields in the supplemental header collection. Public requests permit no supplemental headers.
+Responses include `:status`, `content-type` and `content-length` in the same limits; the only
+supplemental response fields are exact `cache-control: no-store` and, on a canonical error that
+requires it, `retry-after`. The opaque application body may span multiple HTTP/2 DATA frames.
 
 `ManagedIngressStreamingAdmission` accounts for each received chunk without allocating from the
 declared length. It allows forwarding only after the actual byte count exactly matches a bounded
-declared length. Truncation, overflow and cancellation before that transition cannot be reported
-as forwarded. Cancellation after the transition is always `OutcomeUnknown`.
+declared length. Truncation or overflow permanently poisons that admission instance; it cannot be
+resumed or forwarded. Cancellation before the transition cannot be reported as forwarded.
+Cancellation after the transition is always `OutcomeUnknown`.
 
 ## Canonical `DIE1`
 
@@ -60,7 +63,9 @@ All integers are unsigned big-endian.
 The codec is canonical and allocation-bounded. It has no string, request identifier, digest,
 capability or evidence field.
 
-An error response is authoritative only when HTTP/2, status, exact media type, fixed body length,
+An opaque success is `TransitCompleted` only when the actual complete body bytes equal the
+declared bounded length. Metadata alone cannot produce success. An error response is authoritative
+only when HTTP/2, status, exact media type, fixed body length,
 canonical `DIE1` mapping and the optional decimal `Retry-After` all agree. `Retry-After` is present
 exactly once only for a nonzero `DIE1` delay and must be the same canonical integer in `1..60`.
 Malformed, proxy-generated or contradictory responses are `OutcomeUnknown`.

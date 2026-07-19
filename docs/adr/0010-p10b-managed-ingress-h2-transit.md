@@ -21,7 +21,8 @@ Accept: application/vnd.xpoint.deep.ingress-opaque-v1
 A canonical successful response is HTTP `200` with one complete opaque response frame. It means
 only `TransitCompleted`. HTTP success, TLS success, an ingress buffer write or response-body
 completion never means mailbox acceptance, durability or delivery. `202`, `204` and redirects are
-not successful P10B outcomes.
+not successful P10B outcomes. Declared response metadata without the exact complete bounded body
+is `OutcomeUnknown`.
 
 The exact bounded advisory capability endpoint is:
 
@@ -47,6 +48,8 @@ HTTP/2 routing and media fields are included in both the 32-field and 8,192-byte
 and cannot be duplicated by an adapter. TLS early data is rejected. The public ingress still
 observes source IP, timing, connection reuse, direction, endpoint choice and padded ciphertext
 length. This contract makes no global-anonymity, endpoint-unblockability or full-IP-cutoff claim.
+Supplemental public request headers are forbidden. Supplemental responses are limited to exact
+`cache-control: no-store` and a contract-bound `retry-after`.
 
 ## Retry and cancellation
 
