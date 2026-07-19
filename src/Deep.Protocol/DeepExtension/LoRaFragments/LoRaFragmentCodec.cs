@@ -131,42 +131,28 @@ public static class LoRaFragmentCodec
             LoRaFragmentLimits.HeaderLength + shardSize,
             LoRaFragmentLimits.AuthenticationTagLength);
         var transcript = BuildAuthenticatedTranscript(header, shard, direction);
+        var retainedAuthenticationTag = authenticationTag.ToArray();
         if (!authenticator.VerifyTag(
                 LoRaFragmentDomains.Authentication,
                 authenticationHandle,
                 direction,
                 transcript,
-                authenticationTag))
+                retainedAuthenticationTag))
         {
             throw Error(
                 LoRaFragmentError.AuthenticationFailed,
                 "The LoRa fragment authentication tag was rejected.");
         }
 
-        // The caller owns the input memory and could mutate it concurrently.
-        // Retain only after the first verification, then authenticate the exact
-        // retained snapshot once more to close the verify/copy TOCTOU window.
-        var retainedShard = shard.ToArray();
-        var retainedAuthenticationTag = authenticationTag.ToArray();
-        var retainedTranscript = BuildAuthenticatedTranscript(
-            header,
-            retainedShard,
-            direction);
-        if (!authenticator.VerifyTag(
-                LoRaFragmentDomains.Authentication,
-                authenticationHandle,
-                direction,
-                retainedTranscript,
-                retainedAuthenticationTag))
-        {
-            throw Error(
-                LoRaFragmentError.AuthenticationFailed,
-                "The retained LoRa fragment bytes changed after authentication.");
-        }
-
+        // The transcript is the bounded authentication snapshot. Retain its
+        // exact shard tail rather than rereading caller-owned mutable memory.
+        var retainedShardOffset =
+            LoRaFragmentDomains.Authentication.Length +
+            1 +
+            LoRaFragmentLimits.HeaderLength;
         return new LoRaFragmentFrame(
             header,
-            retainedShard,
+            transcript.AsSpan(retainedShardOffset, shardSize),
             retainedAuthenticationTag);
     }
 

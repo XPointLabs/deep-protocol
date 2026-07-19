@@ -210,16 +210,15 @@ public sealed class LoRaFragmentCodecAndPlannerTests
             stable,
             () => encoded[LoRaFragmentLimits.HeaderLength] ^= 1);
 
-        var exception = Assert.Throws<LoRaFragmentException>(() =>
-            LoRaFragmentCodec.Decode(
-                encoded,
-                Policy(),
-                handle,
-                LoRaFragmentDirection.Forward,
-                mutating));
+        var decoded = LoRaFragmentCodec.Decode(
+            encoded,
+            Policy(),
+            handle,
+            LoRaFragmentDirection.Forward,
+            mutating);
 
-        Assert.Equal(LoRaFragmentError.AuthenticationFailed, exception.Error);
-        Assert.Equal(2, mutating.VerifyCalls);
+        Assert.Equal(Range(0x10, 64), decoded.Shard.ToArray());
+        Assert.Equal(1, mutating.VerifyCalls);
     }
 
     [Fact]
