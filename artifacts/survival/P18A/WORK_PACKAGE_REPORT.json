@@ -1,0 +1,80 @@
+{
+  "schema": "deep-survival-work-package-report.v1",
+  "workPackage": "P18A",
+  "title": "Compact authenticated fragment contract",
+  "status": "contract-green-awaiting-independent-review",
+  "humanOwner": "Mr. X",
+  "repository": "deep-protocol",
+  "branch": "survival/w03-p18a-lora-fragment",
+  "baseCommit": "b887fa088f486390be182cac4cbcb59b60ce8931",
+  "requiredP03CAncestor": "261c77658c8ff1f51ba45116ca8d938b1336eaa9",
+  "preflightCommit": "e035ad92c1dd3bbc1c758179b2b34f9f26e257b1",
+  "redCommits": [
+    "1328e839acaed85878def7aa4eeb35ba45c5e16b",
+    "ec43ba39fcf64af530e7305a6bf2794956a5df26",
+    "0c68647eb13d00370e99d98f9fc7c7524d63f720",
+    "4553eb27fd6165adc9e75c755ee78c4814c6e0bf",
+    "d21270ebd0c72c5e1854632a0f4fa0d01db0e10c"
+  ],
+  "replayAdrCorrectiveCommit": "960ec3543aece7ad4b57384209debaa14a13278b",
+  "greenSourceCommit": "9678875578faa7e8ecf5231ce480a6ccc7b99ba3",
+  "prerequisite": {
+    "w1w2FinalEvidence": "1c01e24e24647a46b4f37622f3934dc2cc1284ef",
+    "w1w2Carrier": "524c5796aa868fa3d057fbf7eaa13cfea2e0d19c",
+    "protocolEvidenceCarrier": "db58937d4070eb057642c00d10a64d2f738f6e41",
+    "manifestSha256": "920b24bb5bcfcc8b4f91aef56ed210127246ec9fd2d49178ed9856c8555d0b93",
+    "contractSha256": "c45f66f7a688cbd70b7ca57a777851962ce2ab59eb37a3304d9b4bf7e4c55719",
+    "strictProducerArtifacts": 17,
+    "verdict": "GO-0/0/0/0"
+  },
+  "tests": {
+    "offlineRestore": "PASS-local-cache-network-denied",
+    "releaseBuild": "PASS-0-warnings-0-errors",
+    "focused": {
+      "passed": 45,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "c73c33d3d0d11582278fc30cfe8d9677a4d2747ccbafdb22428a7432b36cb831"
+    },
+    "malformedFuzz": {
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "6ce47cb7d28c7a4be36282b5f47e96e6e76bb8ca29dfe42b22d5f845f2cb7ebd"
+    },
+    "full": {
+      "passed": 218,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "b21659bc4bb92bc1887a38ae57cafc20890a7861eb45f08b52a0b29e73228067"
+    },
+    "coverage": {
+      "lines": "4881/8767",
+      "branches": "1808/4375",
+      "coberturaSha256": "de238dfcd28e6f916575e8a73700f1d57356c96cbf2289d37074a23b705e7d58"
+    },
+    "format": "PASS",
+    "diffCheck": "PASS"
+  },
+  "package": {
+    "version": "0.3.0-p18a.9678875",
+    "manifest": "artifacts/survival/P18A/package-manifest.json",
+    "count": 3,
+    "sourcePinnedInEveryNuspec": true,
+    "published": false
+  },
+  "productionBoundary": {
+    "authenticatorPresent": false,
+    "durableReplayStorePresent": false,
+    "runtimeRegistrationPresent": false,
+    "radioOrBleUsbPresent": false,
+    "regionOrPowerDefaultsPresent": false,
+    "commercialDependencyPresent": false,
+    "testAuthenticatorProductionVisible": false
+  },
+  "independentReview": {
+    "protocol": "pending",
+    "embeddedSecurity": "pending"
+  },
+  "requiredFinalStatus": "contract-go-runtime-blocked"
+}
