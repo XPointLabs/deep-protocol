@@ -542,10 +542,18 @@ public sealed class LoRaFragmentReassembler
             return await PoisonAsync(snapshot, LoRaFragmentReassemblyError.InvalidSnapshot, cancellationToken).ConfigureAwait(false);
         }
 
-        if (!TryReconstructData(snapshot, out var reconstructedData))
+        var reconstruction = TryReconstructData(snapshot, out var reconstructedData);
+        if (reconstruction == LoRaFragmentReconstructionStatus.Incomplete)
         {
             // A store may pessimistically return a snapshot; it is not terminal until all data is present or recoverable.
             return new LoRaFragmentReassemblyResult(LoRaFragmentReassemblyOutcome.Incomplete);
+        }
+        if (reconstruction == LoRaFragmentReconstructionStatus.Invalid)
+        {
+            return await PoisonAsync(
+                snapshot,
+                LoRaFragmentReassemblyError.InvalidSnapshot,
+                cancellationToken).ConfigureAwait(false);
         }
 
         if (!TryValidateAndDecode(snapshot, reconstructedData, out var bundle, out var error))
@@ -688,7 +696,9 @@ public sealed class LoRaFragmentReassembler
         return true;
     }
 
-    private static bool TryReconstructData(LoRaFragmentReassemblySnapshot snapshot, out byte[] data)
+    private static LoRaFragmentReconstructionStatus TryReconstructData(
+        LoRaFragmentReassemblySnapshot snapshot,
+        out byte[] data)
     {
         var shape = snapshot.Shape;
         var presentData = snapshot.DataShards.Select(static shard => shard?.ToArray()).ToArray();
@@ -727,7 +737,8 @@ public sealed class LoRaFragmentReassembler
                         var member = presentData[index];
                         if (member is null)
                         {
-                            return Incomplete(out data);
+                            data = Array.Empty<byte>();
+                            return LoRaFragmentReconstructionStatus.Incomplete;
                         }
 
                         for (var offset = 0; offset < recovered.Length; offset++)
@@ -738,12 +749,36 @@ public sealed class LoRaFragmentReassembler
 
                     presentData[missing] = recovered;
                 }
+
+                if (presentParity[group] is { } parity &&
+                    presentData
+                        .Skip(first)
+                        .Take(end - first)
+                        .All(static shard => shard is not null))
+                {
+                    var expectedParity = new byte[shape.ShardSize];
+                    for (var index = first; index < end; index++)
+                    {
+                        var member = presentData[index]!;
+                        for (var offset = 0; offset < expectedParity.Length; offset++)
+                        {
+                            expectedParity[offset] ^= member[offset];
+                        }
+                    }
+
+                    if (!expectedParity.AsSpan().SequenceEqual(parity))
+                    {
+                        data = Array.Empty<byte>();
+                        return LoRaFragmentReconstructionStatus.Invalid;
+                    }
+                }
             }
         }
 
         if (presentData.Any(static shard => shard is null))
         {
-            return Incomplete(out data);
+            data = Array.Empty<byte>();
+            return LoRaFragmentReconstructionStatus.Incomplete;
         }
 
         try
@@ -754,17 +789,19 @@ public sealed class LoRaFragmentReassembler
                 presentData[index]!.CopyTo(data, checked(index * shape.ShardSize));
             }
 
-            return true;
+            return LoRaFragmentReconstructionStatus.Complete;
         }
         catch (OverflowException)
         {
-            return Incomplete(out data);
+            data = Array.Empty<byte>();
+            return LoRaFragmentReconstructionStatus.Invalid;
         }
     }
 
     private static bool SnapshotMatches(LoRaFragmentReassemblySnapshot snapshot, LoRaFragmentReplayKey key, LoRaFragmentHeader header) =>
-        // Scope equivalence belongs exclusively to the provider/store. Protocol code
-        // must not compare, serialize, or derive data from opaque replay handles.
+        // Provider-issued scope handles are opaque, but their object identity is
+        // still part of the replay key and must survive an untrusted store round trip.
+        ReferenceEquals(snapshot.Key.ReplayScope, key.ReplayScope) &&
         snapshot.Key.Direction == key.Direction &&
         snapshot.Key.MessageId.Span.SequenceEqual(key.MessageId.Span) &&
         snapshot.Shape.MessageIdSpan.SequenceEqual(header.MessageIdSpan) &&
@@ -773,10 +810,11 @@ public sealed class LoRaFragmentReassembler
         snapshot.Shape.ShardSize == header.ShardSize &&
         snapshot.Shape.FecMode == header.FecMode;
 
-    private static bool Incomplete(out byte[] data)
+    private enum LoRaFragmentReconstructionStatus : byte
     {
-        data = Array.Empty<byte>();
-        return false;
+        Incomplete = 1,
+        Complete = 2,
+        Invalid = 3
     }
 
     private static LoRaFragmentReassemblyResult Rejected(LoRaFragmentReassemblyError error) =>
