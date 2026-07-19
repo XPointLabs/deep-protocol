@@ -1,0 +1,262 @@
+{
+    "schema":  "deep.sanitized-test-evidence.v1",
+    "sourceCommit":  "5f1f8f2397dc5412a4bce3656270ee5e70b85185",
+    "command":  "dotnet test tests/Deep.Protocol.Tests/Deep.Protocol.Tests.csproj -c Release --no-restore --filter FullyQualifiedName~NearbySecureChannelContractTests",
+    "originalLocalTrxSha256":  "5af1fb4f951a58406fe940840259ddb55847da58e23b58b969c559b1f5365386",
+    "privacy":  {
+                    "userHostPathsTimesAndExecutionIdsRemoved":  true
+                },
+    "counters":  {
+                     "total":  49,
+                     "passed":  49,
+                     "failed":  0,
+                     "skipped":  0
+                 },
+    "tests":  [
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.AkeBoundary_RequiresRoleSpecificFrameTypes",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.CanonicalAkeFrame_SnapshotsCallerMemoryBeforeValidation",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.CanonicalAkeFrames_AreRoleSpecificFreshBoundedAndContextBound",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.Context_BindsProviderIssuedLocalKeyAndVerifiedCredentials",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.Context_RechecksIndependentLocalCredentialAgainstKeyHandle",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.Context_RejectsResumptionEvenWithVerifiedCapabilities",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.ContractAssembly_HasNoRawKeyCryptoOrRuntimeImplementation",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.CredentialVerification_FailsClosed(scenario: \"expired\", expectedError: CredentialExpired)",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.CredentialVerification_FailsClosed(scenario: \"not-yet-valid\", expectedError: CredentialNotYetValid)",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.CredentialVerification_FailsClosed(scenario: \"revoked\", expectedError: CredentialRevoked)",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.CredentialVerification_FailsClosed(scenario: \"roster-rollback\", expectedError: RosterRollback)",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.CredentialVerification_FailsClosed(scenario: \"same-account-wrong-device\", expectedError: InvalidCredential)",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.CredentialVerification_FailsClosed(scenario: \"wrong-account\", expectedError: InvalidCredential)",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.FlightWrappers_TransferOrDisposeOwnedStateExactlyOnce",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.InitiatorFactory_IsInstanceBoundAndCannotReExportRawState",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.InitiatorResponse_IsInstanceBoundAndWrongIssuerRetainsOwnership",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.InitiatorStateBinding_RejectsDifferentContextOrFramePayload",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.InitiatorStateBoundary_IsOwnedAndCannotAcceptRawState",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.LocalKeyProvider_RejectsMismatchedReturnedCredential",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.OpaqueValues_HaveValueEqualityStableHashesCopyingAndRedaction",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.PendingSession_CancellationBeforeCommitNeverActivates",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.PendingSession_CommitsItsOwnedClaimAndActivatesOnlyOnce",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.PendingSession_DisposeDuringCommitAbandonsStateAndNeverTransfers",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.PendingSession_DisposeReentrancyCannotResurrectOrEscapeChannel",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.PendingSession_DisposesReturnedChannelWhenInspectionThrows(throwingProperty: Peer)",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.PendingSession_DisposesReturnedChannelWhenInspectionThrows(throwingProperty: ReceiveDirection)",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.PendingSession_DisposesReturnedChannelWhenInspectionThrows(throwingProperty: Role)",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.PendingSession_DisposesReturnedChannelWhenInspectionThrows(throwingProperty: SendDirection)",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.PendingSession_DurableAcceptanceWinsCancellationAfterCommit",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.PendingSession_NonFreshOutcomeConsumesAndDisposes(classification: CollisionDifferentTranscript, expectedError: ReplayCollision)",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.PendingSession_NonFreshOutcomeConsumesAndDisposes(classification: DuplicateSameTranscript, expectedError: ReplayRejected)",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.PendingSession_NonFreshOutcomeConsumesAndDisposes(classification: Rejected, expectedError: ReplayRejected)",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.PendingSession_NullPostCommitChannelDisposesPendingState",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.PendingSession_ReentrantActivationCannotCommitOrTransferTwice",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.PendingSession_RejectsActivatedChannelWithDifferentAuthenticationContext",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.PendingSession_RejectsActivatedChannelWithSameDeviceButDifferentAccount",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.PendingSession_RejectsActivatedChannelWithSameDeviceButDifferentRosterEpoch",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.PendingSession_RejectsAnyReplayClaimScopeMismatch",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.PendingSession_RejectsConcurrentDoubleActivationBeforeSecondCommit",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.PendingSession_RejectsHandshakeHashDifferentFromReplayTranscript",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.RecordDirection_IsRoleBoundAndCannotBeSelectedBySealCaller",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.Records_RejectEmptyAdapterOutput",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.Records_RejectOversizedEncodedInputAndAdapterOutput",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.ReplayClaim_HasExactValueEqualityAndHashing",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.ResponderFlight_IsIssuerCapabilityNotCallerConstructible",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.ResponderFlight_RejectsStolenIssuerAndMismatchedInputFrame",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.ResponderFrame_RejectsSameBindingFromDifferentContextCapability",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.Topology_HasOwnedReplayCommitWithoutReusableAcceptance",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  },
+                  {
+                      "testName":  "Deep.Protocol.Tests.DeepExtension.NearbySecureChannelContractTests.VerifiedCredential_IsOpaqueVerifierIssuedAndReadOnly",
+                      "outcome":  "Passed",
+                      "occurrence":  1
+                  }
+              ]
+}

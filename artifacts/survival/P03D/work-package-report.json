@@ -1,0 +1,48 @@
+{
+  "schema": "deep.survival.work-package-report.v1",
+  "workPackage": "P03D",
+  "humanOwner": "Mr. X",
+  "sourceCommit": "5f1f8f2397dc5412a4bce3656270ee5e70b85185",
+  "evidenceContentCommit": "PENDING",
+  "status": "accepted-dormant-contract-go-production-activation-blocked",
+  "reviews": [
+    {
+      "taskPath": "/root/p03d_arch_final",
+      "role": "independent architecture",
+      "verdict": "GO",
+      "p0": 0,
+      "p1": 0,
+      "p2": 0,
+      "p3": 0
+    },
+    {
+      "taskPath": "/root/p18a_c1_security_review",
+      "role": "independent security",
+      "verdict": "GO",
+      "p0": 0,
+      "p1": 0,
+      "p2": 0,
+      "p3": 0
+    }
+  ],
+  "verification": {
+    "lockedOfflineRestore": "PASS",
+    "releaseBuild": "0 warnings, 0 errors",
+    "focusedRelease": "49/49",
+    "fullRelease": "303/303",
+    "format": "PASS",
+    "diffCheck": "PASS"
+  },
+  "sanitizedEvidenceSha256": {
+    "p03d-final-focused.sanitized.json": "ebb901ec482c72af546c2237242b9cb79fba043a627d18821f72fb1f77046142",
+    "p03d-final-full.sanitized.json": "aad88f5387a2a19614ea2e4ba33ec1acbf68c1a1f1b11cd3705526c16e7ad4b1"
+  },
+  "claims": {
+    "concreteCryptoImplemented": false,
+    "runtimeRegistered": false,
+    "durableReplayStoreImplemented": false,
+    "physicalDeviceE2EComplete": false,
+    "externalCryptoReviewComplete": false,
+    "productionReady": false
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "schema": "deep.p03d.handoff.v1",
+  "sourceCommit": "5f1f8f2397dc5412a4bce3656270ee5e70b85185",
+  "evidenceContentCommit": "PENDING",
+  "independentInternalReviewRequired": false,
+  "productionActivationApproved": false,
+  "status": "contract-go-runtime-and-production-crypto-blocked",
+  "next": [
+    "P12A disabled nearby power-policy shell",
+    "Mr. X device identity and revocation decision",
+    "exact AKE library selection and external cryptographic review"
+  ]
+}
