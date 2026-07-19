@@ -270,7 +270,7 @@ public sealed class LoRaFragmentReassemblerTests
             LoRaFragmentReplayScopeHandle? replayScope = null,
             LoRaFragmentDirection direction = LoRaFragmentDirection.Forward) =>
             new(
-                encoded.Span,
+                encoded,
                 AuthenticationHandle,
                 replayScope ?? ReplayScope,
                 direction);

@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using Deep.Protocol.DeepExtension.LoRaFragments;
 using Deep.Protocol.DeepExtension.OpaqueBundles;
+using Deep.Protocol.GoldenVectors;
 
 namespace Deep.Protocol.Tests.DeepExtension;
 
@@ -53,6 +54,45 @@ public sealed class LoRaFragmentCodecAndPlannerTests
             Assert.Equal(64, decoded.Shard.Length);
             Assert.Equal(16, decoded.AuthenticationTag.Length);
         });
+    }
+
+    [Theory]
+    [InlineData("deep-extension/lora-fragment/v1/none", LoRaFragmentFecMode.None)]
+    [InlineData("deep-extension/lora-fragment/v1/xor1", LoRaFragmentFecMode.Xor1)]
+    public void PlannerMatchesEveryFrameInGoldenVector(
+        string vectorId,
+        LoRaFragmentFecMode fecMode)
+    {
+        var provider = new TestAuthenticationProvider();
+        var handle = provider.Create(Range(0x90, 32));
+        var authenticator = new TestAuthenticator(provider);
+        var bundle = ValidOpaqueBundle();
+        var plan = LoRaFragmentPlanner.Plan(
+            new LoRaFragmentPlanRequest(
+                bundle,
+                MessageId,
+                0,
+                3,
+                64,
+                fecMode,
+                LoRaFragmentDirection.Forward,
+                handle),
+            Policy(),
+            authenticator);
+        var vector = GoldenVectorLoader.Load("lora-fragment-v1.json")
+            .GetRequired(vectorId);
+
+        Assert.NotNull(vector.FramesHex);
+        Assert.Equal(
+            vector.FramesHex,
+            plan.Frames.Select(frame =>
+                Convert.ToHexString(frame.Span).ToLowerInvariant()));
+        Assert.Equal(
+            vector.ReassembledBundleHex,
+            Convert.ToHexString(bundle).ToLowerInvariant());
+        Assert.Equal(vector.DataShardCount, plan.DataShardCount);
+        Assert.Equal(vector.ParityShardCount, plan.ParityShardCount);
+        Assert.Equal(vector.ShardSize, plan.Frames[0].Length - 32);
     }
 
     [Fact]
