@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using Deep.Protocol.DeepExtension.NearbyHandshakes;
@@ -400,7 +401,7 @@ public sealed class NearbySecureChannelContractTests
             async () => await pending.ActivateAsync(TestReplayCommitter.Immediate(
                 NearbyReplayClaimClassification.AcceptedFresh)));
 
-        Assert.Equal(NearbySecureChannelError.DirectionReflection, exception.Error);
+        Assert.Equal(NearbySecureChannelError.InvalidCredential, exception.Error);
         Assert.Equal(1, channel.DisposeCount);
         Assert.Equal(1, pending.PendingDisposeCount);
     }
@@ -429,7 +430,7 @@ public sealed class NearbySecureChannelContractTests
             async () => await pending.ActivateAsync(TestReplayCommitter.Immediate(
                 NearbyReplayClaimClassification.AcceptedFresh)));
 
-        Assert.Equal(NearbySecureChannelError.DirectionReflection, exception.Error);
+        Assert.Equal(NearbySecureChannelError.InvalidCredential, exception.Error);
         Assert.Equal(1, channel.DisposeCount);
         Assert.Equal(1, pending.PendingDisposeCount);
     }
@@ -452,7 +453,7 @@ public sealed class NearbySecureChannelContractTests
             async () => await pending.ActivateAsync(TestReplayCommitter.Immediate(
                 NearbyReplayClaimClassification.AcceptedFresh)));
 
-        Assert.Equal(NearbySecureChannelError.DirectionReflection, exception.Error);
+        Assert.Equal(NearbySecureChannelError.AuthenticationFailed, exception.Error);
         Assert.Equal(1, channel.DisposeCount);
         Assert.Equal(1, pending.PendingDisposeCount);
     }
@@ -608,6 +609,81 @@ public sealed class NearbySecureChannelContractTests
         Assert.Equal(NearbySecureChannelError.InvalidRecord, seal.Error);
     }
 
+    [Fact]
+    public async Task Records_RejectEmptyAdapterOutput()
+    {
+        var (_, peer, _) = await Capabilities();
+        using var session = new EmptyRecordSession(peer);
+
+        var exception = Assert.Throws<NearbySecureChannelException>(() =>
+            session.Seal(NearbyRecordKind.Control, Range(1, 16)));
+
+        Assert.Equal(NearbySecureChannelError.InvalidRecord, exception.Error);
+    }
+
+    [Fact]
+    public async Task PendingSession_DisposeReentrancyCannotResurrectOrEscapeChannel()
+    {
+        var (_, peer, handle) = await Capabilities();
+        var channel = new TestSecureSession(
+            NearbySessionRole.Initiator,
+            peer,
+            ValidationTime);
+        TestPendingSession? pending = null;
+        pending = new TestPendingSession(
+            Context(NearbySessionRole.Initiator, handle, peer),
+            ValidationTime,
+            Claim(peer: peer.DeviceKeyId),
+            channel,
+            beforeReturn: () => pending!.Dispose());
+
+        var exception = await Assert.ThrowsAsync<NearbySecureChannelException>(
+            async () => await pending.ActivateAsync(TestReplayCommitter.Immediate(
+                NearbyReplayClaimClassification.AcceptedFresh)));
+
+        Assert.Equal(NearbySecureChannelError.InvalidState, exception.Error);
+        Assert.Equal(1, channel.DisposeCount);
+        Assert.Equal(1, pending.PendingDisposeCount);
+    }
+
+    [Fact]
+    public async Task PendingSession_ReentrantActivationCannotCommitOrTransferTwice()
+    {
+        var (_, peer, handle) = await Capabilities();
+        var channel = new TestSecureSession(
+            NearbySessionRole.Initiator,
+            peer,
+            ValidationTime);
+        var committer = TestReplayCommitter.Immediate(
+            NearbyReplayClaimClassification.AcceptedFresh);
+        NearbySecureChannelException? nestedFailure = null;
+        TestPendingSession? pending = null;
+        pending = new TestPendingSession(
+            Context(NearbySessionRole.Initiator, handle, peer),
+            ValidationTime,
+            Claim(peer: peer.DeviceKeyId),
+            channel,
+            beforeReturn: () =>
+            {
+                try
+                {
+                    _ = pending!.ActivateAsync(committer).AsTask().GetAwaiter().GetResult();
+                }
+                catch (NearbySecureChannelException exception)
+                {
+                    nestedFailure = exception;
+                }
+            });
+
+        var activated = await pending.ActivateAsync(committer);
+
+        Assert.Same(channel, activated);
+        Assert.Equal(NearbySecureChannelError.InvalidState, nestedFailure?.Error);
+        Assert.Equal(1, committer.CallCount);
+        Assert.Equal(1, pending.ActivationCount);
+        Assert.Equal(0, channel.DisposeCount);
+    }
+
     [Theory]
     [InlineData(ThrowingInspectionProperty.Role)]
     [InlineData(ThrowingInspectionProperty.Peer)]
@@ -690,6 +766,44 @@ public sealed class NearbySecureChannelContractTests
                 .GetParameters()[1].ParameterType);
         Assert.Equal(
             [typeof(INearbyInitiatorState), typeof(NearbyCanonicalAkeFrame), typeof(NearbyCanonicalAkeFrame)],
+            typeof(INearbyFreshAke).GetMethod("AcceptResponder")!
+                .GetParameters().Select(static parameter => parameter.ParameterType).ToArray());
+    }
+
+    [Fact]
+    public void CanonicalAkeFrame_SnapshotsCallerMemoryBeforeValidation()
+    {
+        var encoded = NearbyHandshakeCodec.EncodeFrame(
+            NearbyHandshakeMessageKind.InitiatorHello,
+            Binding(),
+            Range(0x20, NearbyHandshakeLimits.MinimumAdapterPayloadLength));
+        using var memory = new MutatingMemoryManager(encoded);
+
+        var frame = new NearbyCanonicalAkeFrame(memory.Memory);
+
+        _ = NearbyHandshakeCodec.DecodeFrame(frame.Bytes.Span);
+        Assert.Equal(encoded, frame.Bytes.ToArray());
+    }
+
+    [Fact]
+    public void AkeBoundary_RequiresRoleSpecificFrameTypes()
+    {
+        var assembly = typeof(NearbyAkeContext).Assembly;
+        var initiator = assembly.GetType(
+            "Deep.Protocol.DeepExtension.NearbySecureChannels.NearbyInitiatorHelloFrame");
+        var responder = assembly.GetType(
+            "Deep.Protocol.DeepExtension.NearbySecureChannels.NearbyResponderResponseFrame");
+
+        Assert.NotNull(initiator);
+        Assert.NotNull(responder);
+        Assert.Null(assembly.GetType(
+            "Deep.Protocol.DeepExtension.NearbySecureChannels.NearbyCanonicalAkeFrame"));
+        Assert.Equal(
+            initiator,
+            typeof(INearbyFreshAke).GetMethod("AcceptInitiator")!
+                .GetParameters()[1].ParameterType);
+        Assert.Equal(
+            [typeof(INearbyInitiatorState), initiator, responder],
             typeof(INearbyFreshAke).GetMethod("AcceptResponder")!
                 .GetParameters().Select(static parameter => parameter.ParameterType).ToArray());
     }
@@ -927,6 +1041,7 @@ public sealed class NearbySecureChannelContractTests
     private sealed class TestPendingSession : NearbyPendingSessionBase
     {
         private readonly INearbySecureSession channel;
+        private readonly Action? beforeReturn;
         private int activationCount;
         private int pendingDisposeCount;
 
@@ -935,7 +1050,8 @@ public sealed class NearbySecureChannelContractTests
             DateTimeOffset authenticatedAt,
             NearbyFreshReplayClaim replayClaim,
             INearbySecureSession channel,
-            NearbyTranscriptDigest? handshakeHash = null)
+            NearbyTranscriptDigest? handshakeHash = null,
+            Action? beforeReturn = null)
             : base(
                 context,
                 authenticatedAt,
@@ -943,6 +1059,7 @@ public sealed class NearbySecureChannelContractTests
                 replayClaim)
         {
             this.channel = channel;
+            this.beforeReturn = beforeReturn;
         }
 
         public int ActivationCount => Volatile.Read(ref activationCount);
@@ -952,6 +1069,7 @@ public sealed class NearbySecureChannelContractTests
         protected override INearbySecureSession ActivateAfterReplayCommit()
         {
             Interlocked.Increment(ref activationCount);
+            beforeReturn?.Invoke();
             return channel;
         }
 
@@ -1132,6 +1250,48 @@ public sealed class NearbySecureChannelContractTests
                 NearbyRecordKind.Control,
                 1,
                 Range(1, 16));
+        }
+    }
+
+    private sealed class EmptyRecordSession(NearbyVerifiedDeviceCredential peer)
+        : TestSecureSession(NearbySessionRole.Initiator, peer, ValidationTime)
+    {
+        protected override byte[] SealCore(
+            NearbyRecordDirection direction,
+            NearbyRecordKind kind,
+            ReadOnlySpan<byte> plaintext)
+        {
+            _ = direction;
+            _ = kind;
+            _ = plaintext;
+            return [];
+        }
+    }
+
+    private sealed class MutatingMemoryManager(byte[] initial) : MemoryManager<byte>
+    {
+        private readonly byte[] bytes = initial.ToArray();
+        private int spanReads;
+
+        public override Span<byte> GetSpan()
+        {
+            if (Interlocked.Increment(ref spanReads) > 1)
+            {
+                bytes[0] ^= 0xff;
+            }
+
+            return bytes;
+        }
+
+        public override MemoryHandle Pin(int elementIndex = 0) =>
+            throw new NotSupportedException();
+
+        public override void Unpin()
+        {
+        }
+
+        protected override void Dispose(bool disposing)
+        {
         }
     }
 
