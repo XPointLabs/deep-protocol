@@ -870,6 +870,135 @@ public sealed class NearbySecureChannelContractTests
     }
 
     [Fact]
+    public async Task ResponderFrame_RejectsSameBindingFromDifferentContextCapability()
+    {
+        var (local, peer, handle) = await Capabilities();
+        var context = Context(NearbySessionRole.Responder, handle, peer);
+        var initiatorBytes = NearbyHandshakeCodec.EncodeFrame(
+            NearbyHandshakeMessageKind.InitiatorHello,
+            Binding(),
+            Range(0x51, NearbyHandshakeLimits.MinimumAdapterPayloadLength));
+        var responderBytes = NearbyHandshakeCodec.EncodeFrame(
+            NearbyHandshakeMessageKind.ResponderResponse,
+            Binding(),
+            Range(0x61, NearbyHandshakeLimits.MinimumAdapterPayloadLength));
+        var initiator = new NearbyInitiatorHelloFrame(context, initiatorBytes);
+        var verifier = new TestCredentialVerifier();
+        var otherPeer = await verifier.VerifyAsync(
+            Descriptor(
+                Account(0x51),
+                Device(0x61),
+                7,
+                NearbyDeviceCredentialStatus.Active,
+                ValidFrom,
+                ValidUntil),
+            Expectation(Account(0x51), Device(0x61), 7, ValidationTime));
+        var otherLocal = await verifier.VerifyAsync(
+            Descriptor(
+                Account(0x11),
+                Device(0x21),
+                7,
+                NearbyDeviceCredentialStatus.Active,
+                ValidFrom,
+                ValidUntil),
+            Expectation(Account(0x11), Device(0x21), 7, ValidationTime));
+        var otherHandle = await new TestLocalKeyProvider(
+            new NearbyLocalKeyReference(Range(0x71, 16)))
+            .GetLocalKeyAsync(otherLocal);
+        var epochEightLocal = await verifier.VerifyAsync(
+            Descriptor(
+                local.AccountIdentity,
+                local.DeviceKeyId,
+                8,
+                NearbyDeviceCredentialStatus.Active,
+                ValidFrom,
+                ValidUntil),
+            Expectation(local.AccountIdentity, local.DeviceKeyId, 8, ValidationTime));
+        var epochEightPeer = await verifier.VerifyAsync(
+            Descriptor(
+                peer.AccountIdentity,
+                peer.DeviceKeyId,
+                8,
+                NearbyDeviceCredentialStatus.Active,
+                ValidFrom,
+                ValidUntil),
+            Expectation(peer.AccountIdentity, peer.DeviceKeyId, 8, ValidationTime));
+        var epochEightHandle = await new TestLocalKeyProvider(
+            new NearbyLocalKeyReference(Range(0x72, 16)))
+            .GetLocalKeyAsync(epochEightLocal);
+
+        foreach (var differentContext in new[]
+                 {
+                     AkeContext(
+                         NearbySessionRole.Responder,
+                         local,
+                         handle,
+                         otherPeer,
+                         7,
+                         ValidationTime),
+                     AkeContext(
+                         NearbySessionRole.Responder,
+                         otherLocal,
+                         otherHandle,
+                         peer,
+                         7,
+                         ValidationTime),
+                     AkeContext(
+                         NearbySessionRole.Initiator,
+                         local,
+                         handle,
+                         peer,
+                         7,
+                         ValidationTime),
+                     AkeContext(
+                         NearbySessionRole.Responder,
+                         epochEightLocal,
+                         epochEightHandle,
+                         epochEightPeer,
+                         8,
+                         ValidationTime),
+                     AkeContext(
+                         NearbySessionRole.Responder,
+                         local,
+                         handle,
+                         peer,
+                         7,
+                         ValidationTime.AddMinutes(-1))
+                 })
+        {
+            var exception = Assert.Throws<NearbySecureChannelException>(() =>
+                new NearbyResponderResponseFrame(
+                    differentContext,
+                    initiator,
+                    responderBytes));
+            Assert.Equal(NearbySecureChannelError.InvalidCredential, exception.Error);
+        }
+    }
+
+    [Fact]
+    public void InitiatorStateBoundary_IsOwnedAndCannotAcceptRawState()
+    {
+        var assembly = typeof(NearbyAkeContext).Assembly;
+        var ownedResponse = assembly.GetType(
+            "Deep.Protocol.DeepExtension.NearbySecureChannels.NearbyInitiatorResponseFlight");
+        var acceptResponder = typeof(INearbyFreshAke).GetMethod("AcceptResponder")!;
+
+        Assert.NotNull(ownedResponse);
+        Assert.Equal(
+            [ownedResponse],
+            acceptResponder.GetParameters()
+                .Select(static parameter => parameter.ParameterType)
+                .ToArray());
+        Assert.DoesNotContain(
+            acceptResponder.GetParameters(),
+            parameter => parameter.ParameterType == typeof(INearbyInitiatorState));
+        Assert.Empty(typeof(NearbyInitiatorFlight).GetConstructors());
+        Assert.Equal(
+            ownedResponse,
+            typeof(NearbyInitiatorFlight).GetMethod("BindResponse")?.ReturnType);
+    }
+
+    [Fact]
     public void ContractAssembly_HasNoRawKeyCryptoOrRuntimeImplementation()
     {
         var contractTypes = typeof(NearbyAkeContext).Assembly.GetTypes()
@@ -956,15 +1085,30 @@ public sealed class NearbySecureChannelContractTests
         NearbySessionRole localRole,
         NearbyLocalDeviceKeyHandle handle,
         NearbyVerifiedDeviceCredential peer) =>
-        new(
-            NearbySecureChannelProfileId.UnassignedPendingExternalCryptoReview,
-            Binding(),
+        AkeContext(
             localRole,
             handle.Credential,
             handle,
             peer,
-            rosterEpoch: 7,
+            7,
             ValidationTime);
+
+    private static NearbyAkeContext AkeContext(
+        NearbySessionRole localRole,
+        NearbyVerifiedDeviceCredential local,
+        NearbyLocalDeviceKeyHandle handle,
+        NearbyVerifiedDeviceCredential peer,
+        ulong rosterEpoch,
+        DateTimeOffset validationTime) =>
+        new(
+            NearbySecureChannelProfileId.UnassignedPendingExternalCryptoReview,
+            Binding(),
+            localRole,
+            local,
+            handle,
+            peer,
+            rosterEpoch,
+            validationTime);
 
     private static NearbyDeviceCredentialDescriptor Descriptor(
         NearbyAccountIdentity account,
