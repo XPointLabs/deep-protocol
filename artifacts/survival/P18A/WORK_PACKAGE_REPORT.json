@@ -2,7 +2,7 @@
   "schema": "deep-survival-work-package-report.v1",
   "workPackage": "P18A",
   "title": "Compact authenticated fragment contract",
-  "status": "contract-green-awaiting-independent-review",
+  "status": "corrective-source-awaiting-independent-review",
   "humanOwner": "Mr. X",
   "repository": "deep-protocol",
   "branch": "survival/w03-p18a-lora-fragment",
@@ -14,10 +14,15 @@
     "ec43ba39fcf64af530e7305a6bf2794956a5df26",
     "0c68647eb13d00370e99d98f9fc7c7524d63f720",
     "4553eb27fd6165adc9e75c755ee78c4814c6e0bf",
-    "d21270ebd0c72c5e1854632a0f4fa0d01db0e10c"
+    "d21270ebd0c72c5e1854632a0f4fa0d01db0e10c",
+    "35957f1c42fe78484159b521183c924972e4e993",
+    "8eebc84",
+    "ce2d802",
+    "bb6406b"
   ],
   "replayAdrCorrectiveCommit": "960ec3543aece7ad4b57384209debaa14a13278b",
-  "greenSourceCommit": "9678875578faa7e8ecf5231ce480a6ccc7b99ba3",
+  "initialGreenSourceCommit": "9678875578faa7e8ecf5231ce480a6ccc7b99ba3",
+  "acceptedSourceCommit": "b34ac5f84d2e2e7e06bad347b66df18fa503d061",
   "prerequisite": {
     "w1w2FinalEvidence": "1c01e24e24647a46b4f37622f3934dc2cc1284ef",
     "w1w2Carrier": "524c5796aa868fa3d057fbf7eaa13cfea2e0d19c",
@@ -31,33 +36,33 @@
     "offlineRestore": "PASS-local-cache-network-denied",
     "releaseBuild": "PASS-0-warnings-0-errors",
     "focused": {
-      "passed": 45,
+      "passed": 71,
       "failed": 0,
       "skipped": 0,
-      "trxSha256": "c73c33d3d0d11582278fc30cfe8d9677a4d2747ccbafdb22428a7432b36cb831"
+      "trxSha256": "0792d26e945d810b26183fa19547ae18db4a453d114c7ccdc83fca74779c8eda"
     },
     "malformedFuzz": {
       "passed": 13,
       "failed": 0,
       "skipped": 0,
-      "trxSha256": "6ce47cb7d28c7a4be36282b5f47e96e6e76bb8ca29dfe42b22d5f845f2cb7ebd"
+      "trxSha256": "a97ee08e55bb58c884d3cbfde5cd0a0b222f170ee825f84577e01ada284cc36a"
     },
     "full": {
-      "passed": 218,
+      "passed": 244,
       "failed": 0,
       "skipped": 0,
-      "trxSha256": "b21659bc4bb92bc1887a38ae57cafc20890a7861eb45f08b52a0b29e73228067"
+      "trxSha256": "1b5e76e47d159fed840c5927f39626eaf95af6ab6be6629bf3308240bf9cf2d7"
     },
     "coverage": {
-      "lines": "4881/8767",
-      "branches": "1808/4375",
-      "coberturaSha256": "de238dfcd28e6f916575e8a73700f1d57356c96cbf2289d37074a23b705e7d58"
+      "lines": "4942/8830",
+      "branches": "1855/4401",
+      "coberturaSha256": "e40561f52a26aa1862182b04b63aa9732912a819e0826b6d97aff068c6827791"
     },
     "format": "PASS",
     "diffCheck": "PASS"
   },
   "package": {
-    "version": "0.3.0-p18a.9678875",
+    "version": "0.3.0-p18a.b34ac5f",
     "manifest": "artifacts/survival/P18A/package-manifest.json",
     "count": 3,
     "sourcePinnedInEveryNuspec": true,

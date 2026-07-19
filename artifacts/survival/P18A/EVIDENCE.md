@@ -1,6 +1,6 @@
 # P18A contract/vector evidence
 
-Status: green source and local packages awaiting two independent reviews.
+Status: corrective source and local packages awaiting two independent reviews.
 
 Human owner: Mr. X.
 
@@ -24,8 +24,23 @@ Human owner: Mr. X.
   `4553eb27fd6165adc9e75c755ee78c4814c6e0bf`;
 - complete vector RED:
   `d21270ebd0c72c5e1854632a0f4fa0d01db0e10c`;
-- green source:
-  `9678875578faa7e8ecf5231ce480a6ccc7b99ba3`.
+- initial green source:
+  `9678875578faa7e8ecf5231ce480a6ccc7b99ba3`;
+- post-auth mutation RED/fix:
+  `35957f1c42fe78484159b521183c924972e4e993` /
+  `a2ed0df`;
+- cross-scope and malformed-parity REDs:
+  `8eebc84` and `ce2d802`;
+- replay-scope/parity corrective source:
+  `94b7a4d`;
+- terminal-record RED/fix:
+  `bb6406b` / `ac0917b`;
+- authenticated-transcript ownership correction:
+  `0a8d7a2`;
+- quota/expiry and descriptor/vector acceptance:
+  `21623d0` and `b34ac5f`;
+- accepted source:
+  `b34ac5f84d2e2e7e06bad347b66df18fa503d061`.
 
 The initial focused RED was compiling and produced 3 expected failures with
 11 passing cases. Later RED commits added behavioral, malformed, memory-order,
@@ -34,7 +49,8 @@ restart and FEC regressions before the final source commit.
 ## Implemented boundary
 
 - exact `LF` V1 fixed header/frame codec;
-- strict policy-lowered parser with auth before retained shard copy;
+- strict policy-lowered parser with one bounded authenticated transcript
+  reused as the ephemeral pre-admission frame view;
 - exact `domain || direction || header || shard` transcript;
 - canonical DPB1 descriptor, zero padding and expiry equality;
 - `None` and one-XOR-per-eight planning/recovery;
@@ -62,13 +78,13 @@ NuGet lock files, so the report does not claim locked restore.
 | W1/W2 detached raw hashes | PASS |
 | offline restore | PASS |
 | Release build | PASS, 0 warnings, 0 errors |
-| focused P18A | PASS, 45/45 |
+| focused P18A | PASS, 71/71 |
 | malformed/fuzz | PASS, 13/13 |
-| full protocol | PASS, 218/218 |
+| full protocol | PASS, 244/244 |
 | format | PASS |
 | diff check | PASS |
-| line coverage | 4,881/8,767, 55.67% |
-| branch coverage | 1,808/4,375, 41.32% |
+| line coverage | 4,942/8,830, 55.97% |
+| branch coverage | 1,855/4,401, 42.15% |
 
 Result SHA-256 values are recorded in `WORK_PACKAGE_REPORT.json`.
 
@@ -80,17 +96,31 @@ direction, FEC mapping, limits and negative error names. HMAC-SHA-256 truncated
 to 16 bytes is labeled deterministic test-only and does not exist in
 production source.
 
-Local package version: `0.3.0-p18a.9678875`.
+Local package version: `0.3.0-p18a.b34ac5f`.
 
 | Package | Bytes | SHA-256 |
 | --- | ---: | --- |
-| `Deep.Protocol` | 105,921 | `4f6f7fdfc8ea36b5c64369995d1ab83c741fd02b4b3ac55d5989f30096961cc1` |
-| `Deep.Protocol.Abstractions` | 25,679 | `6fdce7098e41c8877f3e1e033c6469b9da3d1c579f9fac2231a43d765f91140b` |
-| `Deep.Protocol.Protobuf` | 51,188 | `8cbbc679d591dfe5feb4ad67107ed36ce93c6ac181f9ff5efeb1f7114c7a596c` |
+| `Deep.Protocol` | 106,383 | `49293dcca54fcb8667c1842ba62afa8b7b3fb7f6f8cad0ed4604365129669723` |
+| `Deep.Protocol.Abstractions` | 25,665 | `321d40ec8ec67b20420952b8bd59460f92e7c3dced785725ce78f44be8e5856d` |
+| `Deep.Protocol.Protobuf` | 51,187 | `de9b2aaed49649a6b13df75ca8457574c3a79f5819d9e55f2f7f665d7d2581d4` |
 
 Every nuspec pins exact source
-`9678875578faa7e8ecf5231ce480a6ccc7b99ba3`. Packages are local-only and were
+`b34ac5f84d2e2e7e06bad347b66df18fa503d061`. Packages are local-only and were
 not published.
+
+## Inventory and dependency proof
+
+The accepted-source diff is limited to the four P18A production files,
+P18A-focused tests/vector catalog, the P18A ADR/spec, required protocol
+surface/compatibility/verification/unsupported documents, and local P18A
+evidence. It changes no protobuf, existing Session wire path, client, XNode,
+DevOps, Docker or blockchain file.
+
+A case-insensitive production scan of the P18A namespace and protocol project
+found no `wallet`, `billing`, `staking`, `reward`, `entitlement`, `XPNT` or
+`subscription` reference. The production assembly test also rejects those
+assembly/namespace dependencies and proves the deterministic authenticator is
+test-only.
 
 ## Privacy, power, regulatory and commercial boundary
 
