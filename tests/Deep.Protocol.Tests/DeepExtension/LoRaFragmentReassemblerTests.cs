@@ -670,6 +670,53 @@ public sealed class LoRaFragmentReassemblerTests
     }
 
     [Fact]
+    public void LateFaultBetweenStateChecksIsAlwaysObserved()
+    {
+        const System.Reflection.BindingFlags flags =
+            System.Reflection.BindingFlags.NonPublic |
+            System.Reflection.BindingFlags.Static;
+        var type = typeof(LoRaFragmentReassembler);
+        var raceHook = Assert.IsAssignableFrom<System.Reflection.FieldInfo>(
+            type.GetField("s_observeLateFaultRaceHook", flags));
+        var observedHook = Assert.IsAssignableFrom<System.Reflection.FieldInfo>(
+            type.GetField("s_lateFaultObservedHook", flags));
+        var observeLateFault = Assert.IsAssignableFrom<System.Reflection.MethodInfo>(
+            type.GetMethod("ObserveLateFault", flags));
+        var originalRaceHook = raceHook.GetValue(null);
+        var originalObservedHook = observedHook.GetValue(null);
+        var marker = new IOException("late reconciliation fault");
+        var pending = new TaskCompletionSource<LoRaFragmentReplayRecord>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var observed = 0;
+
+        try
+        {
+            raceHook.SetValue(
+                null,
+                (Action)(() => pending.TrySetException(marker)));
+            observedHook.SetValue(
+                null,
+                (Action<Task>)(completed =>
+                {
+                    if (ReferenceEquals(completed, pending.Task))
+                    {
+                        Interlocked.Increment(ref observed);
+                    }
+                }));
+
+            _ = observeLateFault.Invoke(null, [pending.Task]);
+
+            Assert.True(pending.Task.IsFaulted);
+            Assert.Equal(1, observed);
+        }
+        finally
+        {
+            raceHook.SetValue(null, originalRaceHook);
+            observedHook.SetValue(null, originalObservedHook);
+        }
+    }
+
+    [Fact]
     public async Task WrappedFatalCancellationIsNeverNormalized()
     {
         var fixture = new Fixture(LoRaFragmentFecMode.None);

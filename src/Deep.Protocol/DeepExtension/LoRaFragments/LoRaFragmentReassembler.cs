@@ -619,6 +619,11 @@ public sealed class LoRaFragmentReassemblyResult
 /// <summary>Bounded coordinator over an externally supplied durable replay store.</summary>
 public sealed class LoRaFragmentReassembler
 {
+    // Private deterministic probes used only by the race regression test.
+    // They are not part of the public protocol or store surface.
+    private static Action? s_observeLateFaultRaceHook = null;
+    private static Action<Task>? s_lateFaultObservedHook = null;
+
     private readonly ILoRaFragmentReplayStore _store;
     private readonly LoRaFragmentReassemblyPolicy _policy;
     private readonly ILoRaFragmentAuthenticator _authenticator;
@@ -844,19 +849,26 @@ public sealed class LoRaFragmentReassembler
 
         if (task.IsFaulted)
         {
-            _ = task.Exception;
+            ObserveFault(task);
             return;
         }
 
+        s_observeLateFaultRaceHook?.Invoke();
         if (!task.IsCompleted)
         {
             _ = task.ContinueWith(
-                static completed => _ = completed.Exception,
+                static completed => ObserveFault(completed),
                 CancellationToken.None,
                 TaskContinuationOptions.ExecuteSynchronously |
                 TaskContinuationOptions.OnlyOnFaulted,
                 TaskScheduler.Default);
         }
+    }
+
+    private static void ObserveFault(Task task)
+    {
+        _ = task.Exception;
+        s_lateFaultObservedHook?.Invoke(task);
     }
 
     private bool TryValidateAndDecode(
