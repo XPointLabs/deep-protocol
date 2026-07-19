@@ -222,6 +222,23 @@ function Assert-Leaf {
     }
 }
 
+function Assert-EmptyElement {
+    param([System.Xml.XmlElement]$Element, [string]$Label)
+    foreach ($node in $Element.ChildNodes) {
+        if ($node.NodeType -in @(
+            [System.Xml.XmlNodeType]::Whitespace,
+            [System.Xml.XmlNodeType]::SignificantWhitespace
+        )) {
+            continue
+        }
+        if ($node.NodeType -eq [System.Xml.XmlNodeType]::Text -and
+            [string]::IsNullOrWhiteSpace($node.Value)) {
+            continue
+        }
+        throw "$Label must be an empty element."
+    }
+}
+
 function Get-Entry {
     param(
         [System.IO.Compression.ZipArchive]$Archive,
@@ -263,7 +280,7 @@ function Get-CanonicalRelationships {
             "{}Target",
             "{}Type"
         ) "OPC Relationship"
-        Assert-Leaf $element "OPC Relationship"
+        Assert-EmptyElement $element "OPC Relationship"
         $id = $element.GetAttribute("Id")
         $type = $element.GetAttribute("Type")
         $target = $element.GetAttribute("Target")
@@ -317,7 +334,7 @@ function Get-CanonicalContentTypes {
                 "{}ContentType",
                 "{}Extension"
             ) "OPC Default content type"
-            Assert-Leaf $element "OPC Default content type"
+            Assert-EmptyElement $element "OPC Default content type"
             $defaults += "$($element.GetAttribute("Extension"))|$($element.GetAttribute("ContentType"))"
             continue
         }
@@ -326,7 +343,7 @@ function Get-CanonicalContentTypes {
                 "{}ContentType",
                 "{}PartName"
             ) "OPC Override content type"
-            Assert-Leaf $element "OPC Override content type"
+            Assert-EmptyElement $element "OPC Override content type"
             $overrides += "$($element.GetAttribute("PartName"))|$($element.GetAttribute("ContentType"))"
             continue
         }

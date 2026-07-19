@@ -189,7 +189,11 @@ New-TestPackage `
     -Path $fourth `
     -RelationshipSuffix "888888" `
     -CoreSuffix "88888888888888888888888888888888" `
-    -Created "2026-07-20T01:59:59.9999999Z"
+    -Created "2026-07-20T01:59:59.9999999Z" `
+    -IncludeManifestRelationshipContent `
+    -ManifestRelationshipContent " `t " `
+    -IncludeDllDefaultContent `
+    -DllDefaultContent "`r`n  "
 $firstIdentity = Get-Identity $first
 $secondIdentity = Get-Identity $second
 $thirdIdentity = Get-Identity $third
