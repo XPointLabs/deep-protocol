@@ -381,17 +381,35 @@ function Get-CanonicalCoreProperties {
             if ($typeParts.Count -ne 2 -or
                 $typeParts[1] -ne "W3CDTF" -or
                 $element.GetNamespaceOfPrefix($typeParts[0]) -ne
-                    $dctermsNamespace -or
-                -not $element.InnerText.EndsWith(
-                    "Z",
-                    [StringComparison]::Ordinal)) {
+                    $dctermsNamespace) {
                 throw "The OPC creation timestamp shape is invalid."
             }
+
+            $createdText = $element.InnerText
+            $createdMatch = [regex]::Match(
+                $createdText,
+                "^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}" +
+                    "(?:\.(?<fraction>\d{1,7}))?Z$",
+                [Text.RegularExpressions.RegexOptions]::CultureInvariant)
+            if (-not $createdMatch.Success) {
+                throw "The OPC creation timestamp shape is invalid."
+            }
+
+            $timestampFormat = "yyyy-MM-dd'T'HH:mm:ss"
+            if ($createdMatch.Groups["fraction"].Success) {
+                $timestampFormat += "." +
+                    ("f" * $createdMatch.Groups["fraction"].Length)
+            }
+            $timestampFormat += "'Z'"
             $parsed = [DateTimeOffset]::MinValue
-            if (-not [DateTimeOffset]::TryParse(
-                $element.InnerText,
+            $timestampStyles =
+                [Globalization.DateTimeStyles]::AssumeUniversal -bor
+                [Globalization.DateTimeStyles]::AdjustToUniversal
+            if (-not [DateTimeOffset]::TryParseExact(
+                $createdText,
+                $timestampFormat,
                 [Globalization.CultureInfo]::InvariantCulture,
-                [Globalization.DateTimeStyles]::RoundtripKind,
+                $timestampStyles,
                 [ref]$parsed)) {
                 throw "The OPC creation timestamp is invalid."
             }
