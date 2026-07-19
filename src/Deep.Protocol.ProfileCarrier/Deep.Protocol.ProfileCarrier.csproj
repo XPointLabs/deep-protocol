@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PackageId>Deep.Protocol.ProfileCarrier</PackageId>
+    <Description>Unsigned exact DPF1 carrier contract over the pinned P04 trust authority.</Description>
+    <Version>0.1.0-p14.local</Version>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreAdditionalProjectSources>$(MSBuildThisFileDirectory)..\..\vendor\p14-profile-carrier\packages</RestoreAdditionalProjectSources>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Deep.Protocol" Version="[0.3.0-p04.b887fa0]" />
+  </ItemGroup>
+
+</Project>
