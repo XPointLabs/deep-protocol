@@ -533,6 +533,79 @@ public sealed class LoRaFragmentReassemblerTests
     }
 
     [Fact]
+    public async Task CompletedResultCarriesDescriptorForRelayRefragmentation()
+    {
+        var fixture = new Fixture(LoRaFragmentFecMode.None);
+        var reassembler = fixture.Reassembler(new MemoryReplayStore());
+        LoRaFragmentReassemblyResult? completed = null;
+        foreach (var frame in fixture.Plan.Frames)
+        {
+            completed = await reassembler.ProcessAsync(fixture.Request(frame));
+        }
+
+        Assert.NotNull(completed);
+        Assert.Equal(LoRaFragmentReassemblyOutcome.Completed, completed.Outcome);
+        var descriptorProperty = typeof(LoRaFragmentReassemblyResult)
+            .GetProperty("Descriptor");
+        Assert.NotNull(descriptorProperty);
+        var descriptor = Assert.IsType<LoRaFragmentDescriptor>(
+            descriptorProperty.GetValue(completed));
+        Assert.Equal((byte)0, descriptor.CurrentHop);
+        Assert.Equal((byte)3, descriptor.HopLimit);
+        Assert.Equal(100u, descriptor.ExpiryBucket);
+
+        var relayPlan = LoRaFragmentPlanner.Plan(
+            new LoRaFragmentPlanRequest(
+                completed.EncodedOpaqueBundle!.Value.Span,
+                new byte[] { 8, 7, 6, 5, 4, 3, 2, 1 },
+                checked((byte)(descriptor.CurrentHop + 1)),
+                descriptor.HopLimit,
+                fixture.ShardSize,
+                LoRaFragmentFecMode.None,
+                LoRaFragmentDirection.Forward,
+                fixture.AuthenticationHandle),
+            fixture.FragmentPolicy,
+            fixture.Authenticator);
+        Assert.Equal((byte)1, relayPlan.Descriptor.CurrentHop);
+        Assert.Equal(fixture.Bundle, completed.EncodedOpaqueBundle.Value.ToArray());
+    }
+
+    [Fact]
+    public void ReplayStoreReadContractRepresentsTerminalRecords()
+    {
+        var read = typeof(ILoRaFragmentReplayStore).GetMethod("ReadAsync");
+
+        Assert.NotNull(read);
+        Assert.Contains(
+            "LoRaFragmentReplayRecord",
+            read.ReturnType.FullName,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task PostCommitExceptionPerformsBoundedReconciliationWithoutPayload()
+    {
+        var fixture = new Fixture(LoRaFragmentFecMode.None);
+        var store = new MemoryReplayStore
+        {
+            ThrowAfterCommit = true
+        };
+        var reassembler = fixture.Reassembler(store);
+        LoRaFragmentReassemblyResult? result = null;
+        foreach (var frame in fixture.Plan.Frames)
+        {
+            result = await reassembler.ProcessAsync(fixture.Request(frame));
+        }
+
+        Assert.NotNull(result);
+        Assert.Equal(LoRaFragmentReassemblyOutcome.OutcomeUnknown, result.Outcome);
+        Assert.Null(result.EncodedOpaqueBundle);
+        Assert.Equal(1, store.CompletedCount);
+        Assert.Equal(1, store.ReadCalls);
+        Assert.True(store.LastReadTokenCanBeCanceled);
+    }
+
+    [Fact]
     public async Task LoweredGlobalAdmissionLimitRejectsWithoutEvictingLiveState()
     {
         var fixture = new Fixture(
@@ -906,7 +979,10 @@ public sealed class LoRaFragmentReassemblerTests
             LoRaFragmentStoreCommitStatus.Committed;
         public LoRaFragmentReplayScopeHandle? SnapshotReplayScopeOverride { get; set; }
         public bool RequireAllDataForReady { get; set; }
+        public bool ThrowAfterCommit { get; set; }
         public int ApplyCalls { get; private set; }
+        public int ReadCalls { get; private set; }
+        public bool LastReadTokenCanBeCanceled { get; private set; }
         public int CompletedCount
         {
             get
@@ -1085,6 +1161,12 @@ public sealed class LoRaFragmentReassemblerTests
                     state.Terminal = terminal.Status;
                     state.ExpiryBucket = terminal.ExpiryBucket;
                     state.RetentionExpiryBucket = terminal.RetentionExpiryBucket;
+                    state.BundleDigest = terminal.BundleDigest?.ToArray();
+                    if (ThrowAfterCommit)
+                    {
+                        throw new IOException(
+                            "Simulated unknown result after durable terminal commit.");
+                    }
                 }
                 return ValueTask.FromResult(
                     new LoRaFragmentStoreCommitResult(CommitStatus));
@@ -1098,6 +1180,8 @@ public sealed class LoRaFragmentReassemblerTests
             cancellationToken.ThrowIfCancellationRequested();
             lock (_gate)
             {
+                ReadCalls++;
+                LastReadTokenCanBeCanceled = cancellationToken.CanBeCanceled;
                 return ValueTask.FromResult(
                     _states.TryGetValue(Key.From(key), out var state) &&
                     state.Terminal is null &&
@@ -1186,6 +1270,7 @@ public sealed class LoRaFragmentReassemblerTests
             public LoRaFragmentTerminalStatus? Terminal { get; set; }
             public bool Expired { get; set; }
             public uint RetentionExpiryBucket { get; set; }
+            public byte[]? BundleDigest { get; set; }
             public byte[]?[] CanonicalByOrdinal { get; }
             public byte[]?[] Data { get; }
             public byte[]?[] Parity { get; }
