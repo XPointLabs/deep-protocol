@@ -167,6 +167,21 @@ public sealed class ManagedIngressContractTests
     }
 
     [Theory]
+    [InlineData("MRR1")]
+    [InlineData("MQR1")]
+    [InlineData("DPB1")]
+    [InlineData("MCP1")]
+    public void InnerLookingBytes_RemainOpaqueAndUninterpreted(string prefix)
+    {
+        var bytes = new byte[ManagedIngressLimits.MinimumOpaqueFrameBytes];
+        Encoding.ASCII.GetBytes(prefix).CopyTo(bytes, 0);
+
+        var frame = ManagedIngressH2Contract.ValidateOpaqueFrame(bytes);
+
+        Assert.Equal(bytes, frame.Bytes.ToArray());
+    }
+
+    [Theory]
     [InlineData(false, ManagedIngressTransportResult.CancelledBeforeForward)]
     [InlineData(true, ManagedIngressTransportResult.OutcomeUnknown)]
     public void Cancellation_IsClassifiedByForwardBoundary(

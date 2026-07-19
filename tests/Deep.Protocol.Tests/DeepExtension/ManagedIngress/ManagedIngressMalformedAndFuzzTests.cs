@@ -80,7 +80,7 @@ public sealed class ManagedIngressMalformedAndFuzzTests
         ManagedIngressErrorClass errorClass,
         ManagedIngressOutcomeCertainty certainty)
     {
-        var retryable = status is 425 or 429 or 503;
+        var retryable = status is 421 or 425 or 429 or 502 or 503 or 504;
         var retryAfter = status is 429 or 503 ? 5 : 0;
         var frame = new ManagedIngressErrorFrame(errorClass, certainty, retryable, retryAfter);
 
@@ -98,6 +98,23 @@ public sealed class ManagedIngressMalformedAndFuzzTests
 
         Assert.False(ManagedIngressH2Contract.IsCanonicalErrorMapping(503, frame));
         Assert.False(ManagedIngressH2Contract.IsCanonicalErrorMapping(504, frame));
+    }
+
+    [Fact]
+    public void ErrorCodec_RejectsCrossClassCertaintyAndRetryPolicy()
+    {
+        Assert.Throws<ManagedIngressContractException>(() =>
+            ManagedIngressErrorCodec.Encode(new ManagedIngressErrorFrame(
+                ManagedIngressErrorClass.MalformedFrame,
+                ManagedIngressOutcomeCertainty.UnknownAfterForward,
+                retryable: true,
+                retryAfterSeconds: 0)));
+        Assert.Throws<ManagedIngressContractException>(() =>
+            ManagedIngressErrorCodec.Encode(new ManagedIngressErrorFrame(
+                ManagedIngressErrorClass.UpstreamOutcomeUnknown,
+                ManagedIngressOutcomeCertainty.BeforeForward,
+                retryable: false,
+                retryAfterSeconds: 0)));
     }
 
     [Fact]
@@ -123,7 +140,7 @@ public sealed class ManagedIngressMalformedAndFuzzTests
         var canonical = ManagedIngressErrorCodec.Encode(new ManagedIngressErrorFrame(
             ManagedIngressErrorClass.UpstreamOutcomeUnknown,
             ManagedIngressOutcomeCertainty.UnknownAfterForward,
-            retryable: false,
+            retryable: true,
             retryAfterSeconds: 0));
         var random = new Random(0x10b);
         var rejected = 0;
