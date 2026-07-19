@@ -51,6 +51,9 @@ Primary upstream areas reviewed:
 - P03C contact-scoped nearby rendezvous, canonical handshake framing, replay scope and
   platform-neutral lifecycle, isolated in `Deep.Protocol.DeepExtension.NearbyHandshakes`; the
   mutually authenticated AKE remains a blocked host adapter with no production implementation
+- P03D typed fresh-only nearby secure-channel and durable replay-acceptance boundary, isolated in
+  `Deep.Protocol.DeepExtension.NearbySecureChannels`; the fixed profile remains explicitly
+  unassigned pending external crypto review and no channel implementation is shipped
 - P18A compact authenticated fragmentation/planning and durable replay-store orchestration for
   exact DPB1 bytes, isolated in `Deep.Protocol.DeepExtension.LoRaFragments`; no production
   authenticator, replay store, radio runtime or DI registration is shipped
@@ -109,6 +112,15 @@ resumption counter, bundle version and hop-local attempt ID through
 `INearbyAuthenticatedKeyExchange`. Stable peer identity and session key material appear only after
 adapter authentication and replay acceptance. No radio transport, permission, UI, background
 scheduler, production AKE adapter or runtime registration is included.
+
+P03D preserves the P03C wire framing but replaces any downstream assumption of a raw traffic key
+with a typed, dormant boundary. A fresh-only context binds opaque account/device identities,
+credential validity and roster epoch to the P03C binding. Peer authentication yields only a
+pending session, and activation requires an opaque durable replay acceptance for the same local
+device, peer device, transport attempt, transcript digest and roster epoch. The activated
+`INearbySecureSession` owns record sealing/opening and directional counters; no raw key, AKE,
+record crypto, replay persistence, credential verifier or production implementation is included.
+The sole profile is `UnassignedPendingExternalCryptoReview`.
 
 P04 separates canonical network genesis, offline-root delegation/revocation, public bridge
 discovery, node-only membership commitments and fork witnesses. The approved Beta policy is

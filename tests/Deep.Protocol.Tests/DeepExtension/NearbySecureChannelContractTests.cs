@@ -30,6 +30,9 @@ public sealed class NearbySecureChannelContractTests
             ake.GetMethods().Select(static method => method.Name).Order().ToArray());
         Assert.Contains(pending.GetMethods(), method =>
             method.Name == "Activate" && method.ReturnType == channel);
+        Assert.Contains(pending.GetProperties(), property =>
+            property.Name == "HandshakeHash" &&
+            property.PropertyType == RequiredType("NearbyTranscriptDigest"));
         Assert.Contains(channel.GetMethods(), method => method.Name == "Seal");
         Assert.Contains(channel.GetMethods(), method => method.Name == "Open");
 
@@ -122,11 +125,11 @@ public sealed class NearbySecureChannelContractTests
             ["AuthenticatedKeyExchangeOnly"],
             Enum.GetNames(payloadPurpose));
 
-        Assert.ThrowsAny<Exception>(() => Create(payloadType, new byte[15].AsMemory()));
-        Assert.ThrowsAny<Exception>(() => Create(payloadType, new byte[1025].AsMemory()));
+        Assert.ThrowsAny<Exception>(() => Create(payloadType, Memory(new byte[15])));
+        Assert.ThrowsAny<Exception>(() => Create(payloadType, Memory(new byte[1025])));
 
         var input = Enumerable.Range(0, 16).Select(static value => (byte)value).ToArray();
-        var payload = Create(payloadType, input.AsMemory());
+        var payload = Create(payloadType, Memory(input));
         input[0] ^= 0xff;
         Assert.Equal(0, ReadBytes(payload, "Bytes")[0]);
         Assert.Equal(
@@ -206,7 +209,7 @@ public sealed class NearbySecureChannelContractTests
         Assert.ThrowsAny<Exception>(() => Create(recordType, kind, 0UL, ReadOnlyMemory<byte>.Empty));
 
         var bytes = Range(0x10, 32);
-        var record = Create(recordType, kind, 4UL, bytes.AsMemory());
+        var record = Create(recordType, kind, 4UL, Memory(bytes));
         bytes[0] ^= 0xff;
         Assert.Equal(0x10, ReadBytes(record, "Plaintext")[0]);
         Assert.Equal(4UL, ReadProperty(record, "Counter"));
@@ -268,7 +271,7 @@ public sealed class NearbySecureChannelContractTests
     {
         var profileType = RequiredType("NearbySecureChannelProfileId");
         var profile = Enum.Parse(profileType, "UnassignedPendingExternalCryptoReview");
-        return Create(
+        var context = Create(
             RequiredType("NearbyAkeContext"),
             profile,
             binding,
@@ -278,6 +281,15 @@ public sealed class NearbySecureChannelContractTests
             expectedPeerCredential,
             rosterEpoch,
             validationTime);
+        var originalToken = binding.SimultaneousOpenToken.ToArray();
+        if (MemoryMarshal.TryGetArray(binding.SimultaneousOpenToken, out var segment))
+        {
+            segment.Array![segment.Offset] ^= 0xff;
+        }
+
+        var storedBinding = (NearbyHandshakeBinding)ReadProperty(context, "Binding");
+        Assert.Equal(originalToken, storedBinding.SimultaneousOpenToken.ToArray());
+        return context;
     }
 
     private static object Credential(
@@ -314,12 +326,12 @@ public sealed class NearbySecureChannelContractTests
     {
         var type = RequiredType(typeName);
         Assert.ThrowsAny<Exception>(() => Create(type, ReadOnlyMemory<byte>.Empty));
-        Assert.ThrowsAny<Exception>(() => Create(type, new byte[minimum - 1].AsMemory()));
-        Assert.ThrowsAny<Exception>(() => Create(type, new byte[maximum + 1].AsMemory()));
-        Assert.ThrowsAny<Exception>(() => Create(type, new byte[minimum].AsMemory()));
+        Assert.ThrowsAny<Exception>(() => Create(type, Memory(new byte[minimum - 1])));
+        Assert.ThrowsAny<Exception>(() => Create(type, Memory(new byte[maximum + 1])));
+        Assert.ThrowsAny<Exception>(() => Create(type, Memory(new byte[minimum])));
 
         var input = Range(1, minimum);
-        var instance = Create(type, input.AsMemory());
+        var instance = Create(type, Memory(input));
         input[0] ^= 0xff;
         Assert.Equal(1, ReadBytes(instance, "Bytes")[0]);
 
@@ -344,7 +356,9 @@ public sealed class NearbySecureChannelContractTests
     }
 
     private static object Opaque(string typeName, int start, int length) =>
-        Create(RequiredType(typeName), Range(start, length).AsMemory());
+        Create(RequiredType(typeName), Memory(Range(start, length)));
+
+    private static ReadOnlyMemory<byte> Memory(byte[] bytes) => bytes;
 
     private static Type RequiredType(string name) =>
         ProtocolAssembly.GetType($"{ContractNamespace}.{name}", throwOnError: true)!;

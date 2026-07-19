@@ -161,6 +161,26 @@ transcript-bound mutually authenticated AKE contract and are not registered for 
 deterministic adapter exists only in tests. Production activation requires selection and external
 review of an established AKE, cross-language vectors, durable state and mobile/Windows E2E.
 
+## P03D nearby secure-channel gaps
+
+P03D defines a typed, fresh-only activation boundary over the existing P03C binding. It
+deliberately does not implement:
+
+- an AKE suite, DH operation, transcript/prologue mapping or production AKE adapter;
+- discovery PRF construction or contact-secret issuance, rotation and delivery;
+- device credential creation, signature verification, roster authority or lost-device recovery;
+- durable replay claim, collision, period high-water or roster high-water persistence;
+- record encoding, AEAD, directional nonce/counter state, rekey or erasure behavior;
+- resumption, tickets or resume counters;
+- runtime/DI registration, shared-client orchestration, radio, QR, UI or platform keystore work;
+- cross-language crypto vectors, forward-secrecy claims or production packages.
+
+The only profile identifier is `UnassignedPendingExternalCryptoReview`. Existing Session sealed
+boxes, onion crypto and the P03C deterministic test adapter do not implement this contract.
+Production activation requires human approval of device/revocation semantics, selection and
+independent review of an exact maintained AKE implementation and suite, durable state, independent
+vectors, fuzzing, Android key-storage review and physical-device E2E evidence.
+
 ## P04 membership and bridge contract gaps
 
 P04 defines canonical trust documents and fail-closed verifier decisions. It deliberately does not
