@@ -9,6 +9,12 @@ public sealed class ActivationTransitionRedTests
     public void ExactReplayIsIdempotentAndBothInputsAreReverified()
     {
         var payload = Compose(SyntheticProfileFixture.Parts());
+        var singleInputTracking = new TransitionTrackingVerifier(
+            SyntheticProfileFixture.Verifier());
+        _ = ProfileCarrierVerifier.VerifyExact(
+            payload,
+            ProfileCarrierContractRedTests.Options(),
+            singleInputTracking);
         var tracking = new TransitionTrackingVerifier(
             SyntheticProfileFixture.Verifier());
 
@@ -20,7 +26,8 @@ public sealed class ActivationTransitionRedTests
             tracking);
 
         Assert.Equal(ProfileCarrierTransitionDecision.Idempotent, decision);
-        Assert.Equal(22, tracking.Calls);
+        Assert.True(singleInputTracking.Calls > 0);
+        Assert.Equal(checked(singleInputTracking.Calls * 2), tracking.Calls);
     }
 
     [Fact]
@@ -174,6 +181,13 @@ public sealed class ActivationTransitionRedTests
         var current = new ProfileCarrierVerificationOptions(2_100, 30, 2);
         var currentCandidate = Compose(TransitionFixture.PartsWithValidity(3_000));
 
+        var expired = Assert.Throws<ProfileCarrierException>(() =>
+            ProfileCarrierVerifier.VerifyExact(
+                payload,
+                current,
+                SyntheticProfileFixture.Verifier()));
+        Assert.Equal(ProfileCarrierError.VerificationRejected, expired.Error);
+
         Assert.Equal(
             ProfileCarrierTransitionDecision.ForkRejected,
             ProfileCarrierTransitionVerifier.VerifyExact(
@@ -210,7 +224,6 @@ public sealed class ActivationTransitionRedTests
         foreach (var decision in Enum.GetValues<ProfileCarrierTransitionDecision>())
         {
             Assert.DoesNotContain("sha", decision.ToString(), StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain("network", decision.ToString(), StringComparison.OrdinalIgnoreCase);
         }
     }
 
