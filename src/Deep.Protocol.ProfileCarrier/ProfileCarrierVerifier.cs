@@ -129,6 +129,7 @@ public static class ProfileCarrierVerifier
         }
 
         byte[]? delegationCommitment = null;
+        ProfileCarrierContinuity? continuity = null;
         var bridgeValues = new List<ProfileCarrierBridgeContinuity>(
             components.Count - ProfileCarrierLimits.RequiredNonBridgeComponents);
         var transferred = false;
@@ -147,27 +148,35 @@ public static class ProfileCarrierVerifier
                         MembershipContractCodec.GetBridgeSigningBytes(signed.Statement))));
             }
 
-            var continuity = new ProfileCarrierContinuity(
+            continuity = new ProfileCarrierContinuity(
                 recomposed.Fingerprint,
                 delegation.Sequence,
                 delegationCommitment,
                 bridgeValues.ToArray(),
                 continuityDisposed);
+            var verifiedCarrier = new VerifiedCarrier(result, continuity);
             transferred = true;
-            return new(result, continuity);
+            return verifiedCarrier;
         }
         finally
         {
             if (!transferred)
             {
-                if (delegationCommitment is not null)
+                if (continuity is not null)
+                {
+                    continuity.Dispose();
+                }
+                else if (delegationCommitment is not null)
                 {
                     System.Security.Cryptography.CryptographicOperations.ZeroMemory(
                         delegationCommitment);
                 }
-                foreach (var bridge in bridgeValues)
+                if (continuity is null)
                 {
-                    bridge.Clear();
+                    foreach (var bridge in bridgeValues)
+                    {
+                        bridge.Clear();
+                    }
                 }
             }
         }

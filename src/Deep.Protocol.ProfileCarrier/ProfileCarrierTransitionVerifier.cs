@@ -131,8 +131,14 @@ public static class ProfileCarrierTransitionVerifier
         }
         finally
         {
-            candidate?.Dispose();
-            previous?.Dispose();
+            try
+            {
+                candidate?.Dispose();
+            }
+            finally
+            {
+                previous?.Dispose();
+            }
         }
     }
 }
