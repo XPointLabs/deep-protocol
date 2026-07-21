@@ -1,5 +1,6 @@
 using Deep.Protocol.DeepExtension.Membership;
 using Deep.Protocol.DeepExtension.SelfHostedProfiles;
+using System.Security.Cryptography;
 
 namespace Deep.Protocol.ProfileCarrier.Tests;
 
@@ -227,6 +228,70 @@ public sealed class ActivationTransitionRedTests
         }
     }
 
+    [Fact]
+    public void TransitionClearsEveryEphemeralContinuityProjection()
+    {
+        var payload = Compose(SyntheticProfileFixture.Parts(bridgeCount: 2));
+        var disposalEvidence = new List<bool>();
+
+        var decision = ProfileCarrierTransitionVerifier.VerifyExact(
+            payload,
+            ProfileCarrierContractRedTests.Options(),
+            payload,
+            ProfileCarrierContractRedTests.Options(),
+            SyntheticProfileFixture.Verifier(),
+            disposalEvidence.Add);
+
+        Assert.Equal(ProfileCarrierTransitionDecision.Idempotent, decision);
+        Assert.Equal(new[] { true, true }, disposalEvidence);
+    }
+
+    [Fact]
+    public void OrdinaryExactVerificationDoesNotCaptureContinuity()
+    {
+        var payload = Compose(SyntheticProfileFixture.Parts());
+        var disposalEvidence = new List<bool>();
+
+        var result = ProfileCarrierVerifier.VerifyExactWithoutContinuity(
+            payload,
+            ProfileCarrierContractRedTests.Options(),
+            SyntheticProfileFixture.Verifier(),
+            disposalEvidence.Add);
+
+        Assert.Equal(SHA256.HashData(payload), result.FilePayloadSha256.ToArray());
+        Assert.Empty(disposalEvidence);
+    }
+
+    [Fact]
+    public void TransitionPropagatesExactVerifierOomAndClearsPriorProjection()
+    {
+        var payload = Compose(SyntheticProfileFixture.Parts());
+        var firstInputCallCount = new TransitionTrackingVerifier(
+            SyntheticProfileFixture.Verifier());
+        _ = ProfileCarrierVerifier.VerifyExact(
+            payload,
+            ProfileCarrierContractRedTests.Options(),
+            firstInputCallCount);
+        var oom = new OutOfMemoryException("exact-transition-oom");
+        var verifier = new OomAfterCallsVerifier(
+            SyntheticProfileFixture.Verifier(),
+            firstInputCallCount.Calls,
+            oom);
+        var disposalEvidence = new List<bool>();
+
+        var thrown = Assert.Throws<OutOfMemoryException>(() =>
+            ProfileCarrierTransitionVerifier.VerifyExact(
+                payload,
+                ProfileCarrierContractRedTests.Options(),
+                payload,
+                ProfileCarrierContractRedTests.Options(),
+                verifier,
+                disposalEvidence.Add));
+
+        Assert.Same(oom, thrown);
+        Assert.Equal(new[] { true }, disposalEvidence);
+    }
+
     private static ProfileCarrierTransitionDecision Verify(
         byte[] previous,
         byte[] candidate) =>
@@ -256,6 +321,28 @@ public sealed class ActivationTransitionRedTests
             ReadOnlySpan<byte> signature)
         {
             Calls++;
+            return inner.Verify(signerId, publicKey, domain, signingBytes, signature);
+        }
+    }
+
+    private sealed class OomAfterCallsVerifier(
+        IMembershipSignatureVerifier inner,
+        int allowedCalls,
+        OutOfMemoryException oom) : IMembershipSignatureVerifier
+    {
+        private int calls;
+
+        public bool Verify(
+            ReadOnlySpan<byte> signerId,
+            ReadOnlySpan<byte> publicKey,
+            MembershipSignatureDomain domain,
+            ReadOnlySpan<byte> signingBytes,
+            ReadOnlySpan<byte> signature)
+        {
+            if (calls++ == allowedCalls)
+            {
+                throw oom;
+            }
             return inner.Verify(signerId, publicKey, domain, signingBytes, signature);
         }
     }
