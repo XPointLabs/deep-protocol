@@ -86,7 +86,7 @@ public sealed class ActivationTransitionRedTests
                     .Select((signer, index) => index == 0
                         ? signer with
                         {
-                            PublicKey = signer.PublicKey
+                            PublicKey = signer.PublicKey.ToArray()
                                 .Select(static (value, keyIndex) => keyIndex == 0
                                     ? (byte)(value ^ 0x20)
                                     : value)
@@ -147,7 +147,7 @@ public sealed class ActivationTransitionRedTests
         var previousParts = SyntheticProfileFixture.Parts();
         var otherGenesis = SyntheticProfileFixture.Genesis() with
         {
-            NetworkId = SyntheticProfileFixture.Genesis().NetworkId
+            NetworkId = SyntheticProfileFixture.Genesis().NetworkId.ToArray()
                 .Select(static (value, index) => index == 0 ? (byte)(value ^ 0x40) : value)
                 .ToArray()
         };
