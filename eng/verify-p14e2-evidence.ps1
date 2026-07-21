@@ -42,7 +42,8 @@ function Assert-Equal {
 
 function Assert-ContainsExact {
     param([string]$Text, [string]$Expected, [string]$Label)
-    if ($Text.IndexOf($Expected, [StringComparison]::Ordinal) -lt 0) {
+    $lines = @($Text -split "\r?\n")
+    if ($lines -notcontains $Expected -and $lines -notcontains "- $Expected") {
         throw "$Label is missing or drifted."
     }
 }
