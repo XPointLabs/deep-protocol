@@ -292,6 +292,30 @@ public sealed class ActivationTransitionRedTests
         Assert.Equal(new[] { true }, disposalEvidence);
     }
 
+    [Fact]
+    public void ObserverFailureCannotPreventBothProjectionCleanups()
+    {
+        var payload = Compose(SyntheticProfileFixture.Parts());
+        var sentinel = new InvalidOperationException("test-observer-failure");
+        var calls = 0;
+
+        var thrown = Assert.Throws<InvalidOperationException>(() =>
+            ProfileCarrierTransitionVerifier.VerifyExact(
+                payload,
+                ProfileCarrierContractRedTests.Options(),
+                payload,
+                ProfileCarrierContractRedTests.Options(),
+                SyntheticProfileFixture.Verifier(),
+                _ =>
+                {
+                    calls++;
+                    throw sentinel;
+                }));
+
+        Assert.Same(sentinel, thrown);
+        Assert.Equal(2, calls);
+    }
+
     private static ProfileCarrierTransitionDecision Verify(
         byte[] previous,
         byte[] candidate) =>
