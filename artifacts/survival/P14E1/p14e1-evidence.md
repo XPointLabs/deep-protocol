@@ -52,15 +52,18 @@ substitute an independent review.
 - Reviewer label: `dependency_audit_retry`.
 - Exact source: `faa598ff32913470cf85d6f2c8a8921cbf2aa287`.
 - Verdict: `GO`; `P0/P1/P2/P3 = 0/0/0/0`.
-- Disclosure: the reviewer participated in P14 C4, but not C5.
+- Participation disclosure: implemented C4, not C5; reviewed the C5 delta
+  and cumulative state.
+- Review scope: C5 delta and cumulative profile-carrier state.
 
 ### Review B — exact-source security and correctness audit
 
+- Reviewer label: `p12a_corrective2`.
 - Exact source: `faa598ff32913470cf85d6f2c8a8921cbf2aa287`.
 - Verdict: `GO`; `P0/P1/P2/P3 = 0/0/0/0`.
-- Disclosure: the reviewer participated in an earlier P14 base, but not C4 or
+- Participation disclosure: participated in an earlier P14 base, not C4 or
   C5.
-- C5 delta and the cumulative profile-carrier state were evaluated separately.
+- Review scope: C5 delta and cumulative profile-carrier state.
 
 ## C5 empty OPC semantics
 
