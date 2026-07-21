@@ -105,7 +105,6 @@ public sealed class ProfileCarrierDeterminismRedTests
         {
             "Microsoft.Extensions.DependencyInjection",
             "Newtonsoft.Json",
-            "Sodium",
             "System.IO",
             "System.Net",
             "System.Text.Json"
@@ -133,7 +132,6 @@ public sealed class ProfileCarrierDeterminismRedTests
                      "HttpClient",
                      "System.Text.Json",
                      "DependencyInjection",
-                     "Sodium",
                      "PrivateKey"
                  })
         {
@@ -146,7 +144,7 @@ public sealed class ProfileCarrierDeterminismRedTests
             "Deep.Protocol.ProfileCarrier",
             "Deep.Protocol.ProfileCarrier.csproj"));
         Assert.Equal(
-            new[] { "Deep.Protocol" },
+            new[] { "Deep.Protocol", "libsodium", "Sodium.Core" },
             project.Descendants("PackageReference")
                 .Select(static reference => reference.Attribute("Include")!.Value)
                 .OrderBy(static value => value, StringComparer.Ordinal));
