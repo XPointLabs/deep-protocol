@@ -204,18 +204,6 @@ public sealed class Ed25519MembershipSignatureVerifierRedTests
     }
 }
 
-internal static class ProfileCarrierFramingTestAccess
-{
-    public static byte[] EncodeWithoutVerification(SyntheticProfileParts parts)
-    {
-        var components = new List<byte[]>();
-        components.Add(parts.CanonicalGenesis);
-        // Test-only exact DPF1 assembly access is implemented in GREEN through
-        // InternalsVisibleTo; it never becomes a second production parser.
-        return ProfileCarrierTestHooks.EncodeUnverified(parts);
-    }
-}
-
 internal sealed record Ed25519ProfileFixture(
     SyntheticProfileParts Parts,
     IReadOnlyList<MembershipSignerDescriptor> OfflineSigners,

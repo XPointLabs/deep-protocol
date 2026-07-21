@@ -120,8 +120,14 @@ public sealed class ActivationTransitionRedTests
             {
                 Sequence = checked((ulong)((long)delegation.Sequence + delta))
             });
-        var candidate = ProfileCarrierFramingTestAccess.EncodeWithoutVerification(
-            invalidCandidate);
+        var validParts = SyntheticProfileFixture.Parts();
+        var candidate = Compose(validParts);
+        var offset = candidate.AsSpan().IndexOf(validParts.CanonicalSignedDelegation);
+        Assert.True(offset >= 0);
+        Assert.Equal(
+            validParts.CanonicalSignedDelegation.Length,
+            invalidCandidate.CanonicalSignedDelegation.Length);
+        invalidCandidate.CanonicalSignedDelegation.CopyTo(candidate, offset);
 
         Assert.Equal(
             ProfileCarrierTransitionDecision.TrustRejected,
