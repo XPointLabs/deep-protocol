@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Xml.Linq;
+using System.Text.Json;
 
 namespace Deep.Protocol.ProfileCarrier.Tests;
 
@@ -48,7 +49,7 @@ public sealed class P14E2SupplyRedTests
     }
 
     [Fact]
-    public void OfflineGateExecutesRequiredRidAssetSelectionProof()
+    public void OfflineGateExecutesRequiredRidNativeAssetProof()
     {
         var gate = File.ReadAllText(Path.Combine(
             RepositoryRoot(),
@@ -62,6 +63,29 @@ public sealed class P14E2SupplyRedTests
             Assert.Contains(rid, gate, StringComparison.Ordinal);
         }
         Assert.Contains("native-asset-sha256", gate, StringComparison.Ordinal);
+        Assert.Contains("CROSS-RID-EXECUTION-PENDING", gate, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OfflineClosureRemainsExactAndAddsNoRuntimePackDownload()
+    {
+        using var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(
+            RepositoryRoot(),
+            "eng",
+            "p14-profile-carrier.offline-packages.json")));
+        var files = manifest.RootElement.GetProperty("files")
+            .EnumerateArray()
+            .Select(static value => value.GetProperty("name").GetString()!)
+            .ToArray();
+
+        Assert.Equal(21, files.Length);
+        Assert.DoesNotContain(files, static value =>
+            value.StartsWith("Microsoft.NETCore.App.Runtime.", StringComparison.OrdinalIgnoreCase) ||
+            value.StartsWith("Microsoft.AspNetCore.App.Runtime.", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(1, files.Count(static value =>
+            value.Equals("libsodium.1.0.22.nupkg", StringComparison.Ordinal)));
+        Assert.Equal(1, files.Count(static value =>
+            value.Equals("Sodium.Core.1.4.1.nupkg", StringComparison.Ordinal)));
     }
 
     private static readonly (string Path, long Length, string Sha256)[] NativeAssets =
