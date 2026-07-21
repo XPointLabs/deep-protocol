@@ -8,8 +8,9 @@ public static class ProfileCarrierContract
 {
     public const string Identifier = "Deep.Protocol/DPF1-v1";
     public const string Status =
-        "REVIEW-PENDING / PRODUCTION-VERIFIER-NO-GO / " +
-        "ACTIVATION-NO-GO";
+        "REVIEW-PENDING / ED25519-VERIFY-ONLY-CANDIDATE / " +
+        "CLIENT-ACTIVATION-NO-GO / " +
+        "EXTERNAL-CRYPTO-PROFILE-REVIEW-PENDING";
 }
 
 public static class ProfileCarrierLimits

@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot),
+    [string]$RepositoryRoot = "",
     [string]$WorkRoot = (Join-Path ([System.IO.Path]::GetTempPath()) "deep-p14-opc-identity-tests")
 )
 
@@ -9,8 +9,12 @@ Set-StrictMode -Version Latest
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
+if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
+    $RepositoryRoot = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
+}
+
 $commit = "0123456789abcdef0123456789abcdef01234567"
-$version = "0.1.0-p14.0123456"
+$version = "0.2.0-p14.0123456"
 $identityScript = Join-Path $RepositoryRoot `
     "eng\Get-P14ProfileCarrierNormalizedIdentity.ps1"
 
@@ -97,11 +101,13 @@ $manifestRelationship
     <version>$version</version>
     <authors>Deep.Protocol.ProfileCarrier</authors>
     <readme>README.md</readme>
-    <description>Unsigned exact DPF1 carrier contract over the pinned P04 trust authority.</description>
+    <description>Dormant exact DPF1 carrier and activation trust prerequisites over the pinned P04 authority.</description>
     <repository type="git" url="https://github.com/XPointLabs/deep-protocol.git" commit="$commit" />
     <dependencies>
       <group targetFramework="net10.0">
         <dependency id="Deep.Protocol" version="[0.3.0-p04.b887fa0]" exclude="Build,Analyzers" />
+        <dependency id="libsodium" version="[1.0.22]" exclude="Build,Analyzers" />
+        <dependency id="Sodium.Core" version="[1.4.1]" exclude="Build,Analyzers" />
       </group>
     </dependencies>
   </metadata>
@@ -130,7 +136,7 @@ $override
 <?xml version="1.0" encoding="utf-8"?>
 <coreProperties xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://schemas.openxmlformats.org/package/2006/metadata/core-properties">
   <dc:creator>$Creator</dc:creator>
-  <dc:description>Unsigned exact DPF1 carrier contract over the pinned P04 trust authority.</dc:description>
+  <dc:description>Dormant exact DPF1 carrier and activation trust prerequisites over the pinned P04 authority.</dc:description>
   <dc:identifier>Deep.Protocol.ProfileCarrier</dc:identifier>
   <version>$version</version>
   <keywords></keywords>

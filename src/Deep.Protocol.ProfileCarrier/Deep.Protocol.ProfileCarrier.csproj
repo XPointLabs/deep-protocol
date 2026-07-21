@@ -5,9 +5,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <PackageId>Deep.Protocol.ProfileCarrier</PackageId>
-    <Description>Unsigned exact DPF1 carrier contract over the pinned P04 trust authority.</Description>
+    <Description>Dormant exact DPF1 carrier and activation trust prerequisites over the pinned P04 authority.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <Version>0.1.0-p14.local</Version>
+    <Version>0.2.0-p14.local</Version>
     <Deterministic>true</Deterministic>
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
     <PathMap>$(MSBuildProjectDirectory)=/_/Deep.Protocol.ProfileCarrier</PathMap>
@@ -23,6 +23,8 @@
 
   <ItemGroup>
     <PackageReference Include="Deep.Protocol" Version="[0.3.0-p04.b887fa0]" />
+    <PackageReference Include="libsodium" Version="[1.0.22]" />
+    <PackageReference Include="Sodium.Core" Version="[1.4.1]" />
   </ItemGroup>
 
   <ItemGroup>

@@ -525,6 +525,19 @@ try {
         $repository.commit -ne $ExpectedRepositoryCommit) {
         throw "The nuspec repository identity is not the verified exact commit."
     }
+    $dependencyElements = @($metadata.dependencies.group.dependency)
+    $actualDependencies = @($dependencyElements | ForEach-Object {
+        "$($_.id)|$($_.version)"
+    } | Sort-Object)
+    $expectedDependencies = @(
+        "Deep.Protocol|[0.3.0-p04.b887fa0]",
+        "libsodium|[1.0.22]",
+        "Sodium.Core|[1.4.1]"
+    ) | Sort-Object
+    if ($dependencyElements.Count -ne $expectedDependencies.Count -or
+        $null -ne (Compare-Object $expectedDependencies $actualDependencies)) {
+        throw "The package dependency graph differs from the exact P14E2 allowlist."
+    }
     $normalizedNuspecBytes = [Text.Encoding]::UTF8.GetBytes(
         (ConvertTo-CanonicalXml $nuspecDocument))
 

@@ -64,7 +64,9 @@ public sealed class ProfileCarrierSupplyGateRedTests
                 "false",
                 StringComparison.OrdinalIgnoreCase));
         Assert.Equal(
-            "REVIEW-PENDING / PRODUCTION-VERIFIER-NO-GO / ACTIVATION-NO-GO",
+            "REVIEW-PENDING / ED25519-VERIFY-ONLY-CANDIDATE / " +
+            "CLIENT-ACTIVATION-NO-GO / " +
+            "EXTERNAL-CRYPTO-PROFILE-REVIEW-PENDING",
             ProfileCarrierContract.Status);
     }
 

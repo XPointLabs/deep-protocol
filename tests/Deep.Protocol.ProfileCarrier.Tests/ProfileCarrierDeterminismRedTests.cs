@@ -144,7 +144,7 @@ public sealed class ProfileCarrierDeterminismRedTests
             "Deep.Protocol.ProfileCarrier",
             "Deep.Protocol.ProfileCarrier.csproj"));
         Assert.Equal(
-            new[] { "Deep.Protocol", "libsodium", "Sodium.Core" },
+            new[] { "Deep.Protocol", "Sodium.Core", "libsodium" },
             project.Descendants("PackageReference")
                 .Select(static reference => reference.Attribute("Include")!.Value)
                 .OrderBy(static value => value, StringComparer.Ordinal));

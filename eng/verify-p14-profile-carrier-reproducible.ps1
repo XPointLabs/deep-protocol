@@ -1,11 +1,15 @@
 [CmdletBinding()]
 param(
-    [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot),
+    [string]$RepositoryRoot = "",
     [string]$WorkRoot = (Join-Path ([System.IO.Path]::GetTempPath()) "deep-p14-carrier-reproducible")
 )
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+
+if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
+    $RepositoryRoot = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
+}
 
 function Invoke-Checked {
     param([string]$File, [string[]]$Arguments, [string]$WorkingDirectory)
@@ -42,7 +46,7 @@ $head = (& git -C $RepositoryRoot rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0 -or $head -notmatch "^[0-9a-f]{40}$") {
     throw "The exact repository commit could not be resolved."
 }
-$version = "0.1.0-p14.$($head.Substring(0, 7))"
+$version = "0.2.0-p14.$($head.Substring(0, 7))"
 
 $workBase = [System.IO.Path]::GetFullPath($WorkRoot)
 New-Item -ItemType Directory -Path $workBase -Force | Out-Null

@@ -1,11 +1,15 @@
 [CmdletBinding()]
 param(
-    [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot),
+    [string]$RepositoryRoot = "",
     [string]$WorkRoot = (Join-Path ([System.IO.Path]::GetTempPath()) "deep-p14-carrier-offline")
 )
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+
+if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
+    $RepositoryRoot = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
+}
 
 function Invoke-Checked {
     param([string]$File, [string[]]$Arguments, [string]$WorkingDirectory)
@@ -56,6 +60,41 @@ foreach ($entry in $manifest.files) {
     }
 }
 
+$requiredNativeRids = @(
+    "win-arm64",
+    "win-x64",
+    "linux-arm64",
+    "linux-x64",
+    "android-arm64"
+)
+$nativeAssetOutput = & (Join-Path $RepositoryRoot `
+    "eng\verify-p14e2-native-assets.ps1") -RepositoryRoot $RepositoryRoot
+foreach ($rid in $requiredNativeRids) {
+    if (@($nativeAssetOutput | Where-Object {
+        $_ -like "rid=$rid *native-asset-sha256=*"
+    }).Count -ne 1) {
+        throw "The exact native asset proof is missing for $rid."
+    }
+}
+if (@($nativeAssetOutput | Where-Object {
+    $_ -eq "CROSS-RID-EXECUTION-PENDING"
+}).Count -ne 1) {
+    throw "The cross-RID execution boundary was not recorded."
+}
+$nativeAssetOutput | Write-Output
+
+$winArm64Output = & (Join-Path $RepositoryRoot `
+    "eng\verify-p14e2-win-arm64-build.ps1") `
+    -RepositoryRoot $RepositoryRoot `
+    -WorkRoot (Join-Path ([System.IO.Path]::GetFullPath($WorkRoot)) `
+        "win-arm64-build")
+if (@($winArm64Output | Where-Object {
+    $_ -like "win-arm64-build=PASS repository-commit=*"
+}).Count -ne 1) {
+    throw "The isolated win-arm64 build proof is missing."
+}
+$winArm64Output | Write-Output
+
 $sdkJson = Get-Content -LiteralPath (Join-Path $RepositoryRoot "global.json") -Raw |
     ConvertFrom-Json
 if ($sdkJson.sdk.version -ne "10.0.301" -or $sdkJson.sdk.rollForward -ne "disable") {
@@ -66,7 +105,7 @@ $head = (& git -C $RepositoryRoot rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0 -or $head -notmatch "^[0-9a-f]{40}$") {
     throw "A committed source revision is required."
 }
-$version = "0.1.0-p14.$($head.Substring(0, 7))"
+$version = "0.2.0-p14.$($head.Substring(0, 7))"
 
 $workBase = [System.IO.Path]::GetFullPath($WorkRoot)
 New-Item -ItemType Directory -Path $workBase -Force | Out-Null

@@ -183,10 +183,12 @@ reviewed, and exercised by registry/client E2E work.
 ## DPF1 exact profile carrier gaps
 
 `Deep.Protocol.ProfileCarrier` defines one unsigned framing implementation and
-delegates every trust decision to the exact pinned P04 package. It deliberately
-does not implement:
+delegates every trust decision to the exact pinned P04 package. P14E2 adds a
+dormant exact transition verifier with ephemeral ordered bridge-prefix state
+and a sealed sodium-backed detached Ed25519 verification candidate. It
+deliberately does not implement:
 
-- a production `IMembershipSignatureVerifier` or approved signature profile;
+- an externally reviewed and approved production signature profile;
 - root/online signer generation, custody, ceremony or private-key handling;
 - client trust persistence, last-known-good updates or atomic activation;
 - endpoint selection, network access, transport, dependency injection or runtime registration;
@@ -198,3 +200,10 @@ or bridge chain. Conversion between these formats is unsupported. A future
 activation path must reverify the exact staged DPF1 bytes using this shared
 package and atomically import the complete trust chain; it must not maintain a
 second parser or reinterpret legacy dormant rows.
+
+DPF1 v1 carries only the single genesis-rooted delegation step. It cannot
+represent a verifiable delegation rotation chain: lower/higher delegation
+sequence inputs fail P04 verification, while equal-sequence different
+statements are forks. Cross-RID native assets are hash-pinned for Windows,
+Linux and Android, but execution outside the current Windows ARM64 host is
+deferred to the exact P14C3/P14A2b downstream package rebinds.

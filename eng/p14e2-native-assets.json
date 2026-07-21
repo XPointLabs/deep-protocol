@@ -1,0 +1,40 @@
+{
+  "schema": "deep-p14e2-libsodium-native-assets-v1",
+  "package": {
+    "name": "libsodium.1.0.22.nupkg",
+    "bytes": 7404253,
+    "sha256": "f66eac31ea413c1d5d068b46ade11d3295c86ec9d6cd29ff158ba58ef51db51a"
+  },
+  "assets": [
+    {
+      "rid": "win-arm64",
+      "path": "runtimes/win-arm64/native/libsodium.dll",
+      "bytes": 328192,
+      "sha256": "1616d5625f8721c9914ee7276f3ce63bc873eab530dfcf04e8c4184e2e77052c"
+    },
+    {
+      "rid": "win-x64",
+      "path": "runtimes/win-x64/native/libsodium.dll",
+      "bytes": 462848,
+      "sha256": "64a1f143868309069f0a0a3c8141c0853c4f17243ddf734e92b11c5411739771"
+    },
+    {
+      "rid": "linux-arm64",
+      "path": "runtimes/linux-arm64/native/libsodium.so",
+      "bytes": 422688,
+      "sha256": "54f416a70e0d982a63e7f2402ff6f2a8666bf0a430404a4205ed8eee1868b9db"
+    },
+    {
+      "rid": "linux-x64",
+      "path": "runtimes/linux-x64/native/libsodium.so",
+      "bytes": 582600,
+      "sha256": "963416833246938fd6983e4aa96248dbccb2f95b30095c4a94678d6fb903404b"
+    },
+    {
+      "rid": "android-arm64",
+      "path": "runtimes/android-arm64/native/libsodium.so",
+      "bytes": 423648,
+      "sha256": "f4382f2139f1ddd3a32dce406c98f2d41b472e02351bd18df362f8cb29af1952"
+    }
+  ]
+}

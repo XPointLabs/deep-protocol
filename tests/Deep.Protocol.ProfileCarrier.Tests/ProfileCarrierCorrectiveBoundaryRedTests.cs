@@ -60,9 +60,12 @@ public sealed class ProfileCarrierCorrectiveBoundaryRedTests
                 "ProfileCarrierError",
                 "ProfileCarrierException",
                 "ProfileCarrierLimits",
+                "ProfileCarrierTransitionDecision",
+                "ProfileCarrierTransitionVerifier",
                 "ProfileCarrierVerificationOptions",
                 "ProfileCarrierVerificationResult",
-                "ProfileCarrierVerifier"
+                "ProfileCarrierVerifier",
+                "SodiumEd25519MembershipSignatureVerifier"
             },
             assembly.ExportedTypes
                 .Select(static type => type.Name)

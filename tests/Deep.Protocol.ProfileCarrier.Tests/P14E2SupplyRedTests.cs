@@ -64,6 +64,10 @@ public sealed class P14E2SupplyRedTests
         }
         Assert.Contains("native-asset-sha256", gate, StringComparison.Ordinal);
         Assert.Contains("CROSS-RID-EXECUTION-PENDING", gate, StringComparison.Ordinal);
+        Assert.Contains(
+            "verify-p14e2-win-arm64-build.ps1",
+            gate,
+            StringComparison.Ordinal);
     }
 
     [Fact]

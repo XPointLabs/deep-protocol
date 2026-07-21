@@ -137,7 +137,9 @@
       "deep.protocol.profilecarrier": {
         "type": "Project",
         "dependencies": {
-          "Deep.Protocol": "[0.3.0-p04.b887fa0, 0.3.0-p04.b887fa0]"
+          "Deep.Protocol": "[0.3.0-p04.b887fa0, 0.3.0-p04.b887fa0]",
+          "Sodium.Core": "[1.4.1, 1.4.1]",
+          "libsodium": "[1.0.22, 1.0.22]"
         }
       }
     }

@@ -2,12 +2,16 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$XNodeRoot,
-    [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot),
+    [string]$RepositoryRoot = "",
     [string]$WorkRoot = (Join-Path ([System.IO.Path]::GetTempPath()) "deep-p14-carrier-provenance")
 )
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
+
+if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
+    $RepositoryRoot = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
+}
 
 function Invoke-Git {
     param([string[]]$Arguments)
