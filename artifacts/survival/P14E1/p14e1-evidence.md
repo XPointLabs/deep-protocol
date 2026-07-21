@@ -34,6 +34,19 @@ tracked package binaries. `git diff --check` passed.
 
 ## Independent reviews
 
+Attribution record schema: `p14e1.review-attribution.v1`.
+Each review record is valid only when it contains these stable fields:
+
+- `Reviewer label`;
+- `Exact source`;
+- `Verdict`;
+- `Participation disclosure`;
+- `Review scope`.
+
+Reviewer identities, participation disclosures, and review scopes must come
+from the authoritative review reports. This schema does not create or
+substitute an independent review.
+
 ### Review A — dependency audit
 
 - Reviewer label: `dependency_audit_retry`.
