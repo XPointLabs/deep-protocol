@@ -37,7 +37,8 @@ public static class ProfileCarrierVerifier
         ReadOnlySpan<byte> filePayload,
         ProfileCarrierVerificationOptions options,
         IMembershipSignatureVerifier verifier,
-        Action<bool>? continuityDisposed = null)
+        Action<bool>? continuityDisposed = null,
+        Action<byte[]>? beforeBridgeContinuityOwnership = null)
     {
         if (options is null || verifier is null)
         {
@@ -51,7 +52,8 @@ public static class ProfileCarrierVerifier
                 options,
                 verifier,
                 captureContinuity: true,
-                continuityDisposed).Continuity!;
+                continuityDisposed,
+                beforeBridgeContinuityOwnership).Continuity!;
         }
         catch (ProfileCarrierException)
         {
@@ -81,7 +83,8 @@ public static class ProfileCarrierVerifier
                 options,
                 verifier,
                 captureContinuity: false,
-                continuityDisposed).Result;
+                continuityDisposed,
+                beforeBridgeContinuityOwnership: null).Result;
         }
         catch (ProfileCarrierException)
         {
@@ -98,7 +101,8 @@ public static class ProfileCarrierVerifier
         ProfileCarrierVerificationOptions options,
         IMembershipSignatureVerifier verifier,
         bool captureContinuity,
-        Action<bool>? continuityDisposed)
+        Action<bool>? continuityDisposed,
+        Action<byte[]>? beforeBridgeContinuityOwnership = null)
     {
         var components = ProfileCarrierFraming.Decode(filePayload);
         ValidateOrder(components);
@@ -142,10 +146,12 @@ public static class ProfileCarrierVerifier
             foreach (var component in components.Skip(3))
             {
                 var signed = MembershipContractCodec.DecodeSignedBridge(component.Bytes);
+                var bridgeCommitment = MembershipContractHash.Sha256(
+                    MembershipContractCodec.GetBridgeSigningBytes(signed.Statement));
+                beforeBridgeContinuityOwnership?.Invoke(bridgeCommitment);
                 bridgeValues.Add(new ProfileCarrierBridgeContinuity(
                     signed.Statement.Sequence,
-                    MembershipContractHash.Sha256(
-                        MembershipContractCodec.GetBridgeSigningBytes(signed.Statement))));
+                    bridgeCommitment));
             }
 
             continuity = new ProfileCarrierContinuity(

@@ -293,6 +293,29 @@ public sealed class ActivationTransitionRedTests
     }
 
     [Fact]
+    public void BridgeCommitmentIsClearedWhenOwnershipAllocationThrowsExactOom()
+    {
+        var payload = Compose(SyntheticProfileFixture.Parts());
+        var oom = new OutOfMemoryException("exact-bridge-ownership-oom");
+        byte[]? capturedCommitment = null;
+
+        var thrown = Assert.Throws<OutOfMemoryException>(() =>
+            ProfileCarrierVerifier.VerifyContinuityExact(
+                payload,
+                ProfileCarrierContractRedTests.Options(),
+                SyntheticProfileFixture.Verifier(),
+                beforeBridgeContinuityOwnership: commitment =>
+                {
+                    capturedCommitment = commitment;
+                    throw oom;
+                }));
+
+        Assert.Same(oom, thrown);
+        Assert.NotNull(capturedCommitment);
+        Assert.All(capturedCommitment, value => Assert.Equal(0, value));
+    }
+
+    [Fact]
     public void ObserverFailureCannotPreventBothProjectionCleanups()
     {
         var payload = Compose(SyntheticProfileFixture.Parts());
