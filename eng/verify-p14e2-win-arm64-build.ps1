@@ -89,12 +89,13 @@ $assetsPath = Join-Path $sourceRoot `
     "src\Deep.Protocol.ProfileCarrier\obj\project.assets.json"
 $assetsText = Get-Content -LiteralPath $assetsPath -Raw
 $selectedPath = "runtimes/win-arm64/native/libsodium.dll"
-if (-not $assetsText.Contains($selectedPath, [StringComparison]::Ordinal)) {
+if ($assetsText.IndexOf($selectedPath, [StringComparison]::Ordinal) -lt 0) {
     throw "The win-arm64 restore did not select the exact libsodium asset."
 }
-$assembly = Get-Item -LiteralPath (Join-Path $sourceRoot `
+$assemblyRelativePath =
     "src\Deep.Protocol.ProfileCarrier\bin\Release\net10.0\win-arm64\" +
-    "Deep.Protocol.ProfileCarrier.dll")
+    "Deep.Protocol.ProfileCarrier.dll"
+$assembly = Get-Item -LiteralPath (Join-Path $sourceRoot $assemblyRelativePath)
 $assemblyHash = (Get-FileHash -LiteralPath $assembly.FullName -Algorithm SHA256).
     Hash.ToLowerInvariant()
 
