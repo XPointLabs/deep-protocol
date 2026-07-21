@@ -146,12 +146,31 @@ public static class ProfileCarrierVerifier
             foreach (var component in components.Skip(3))
             {
                 var signed = MembershipContractCodec.DecodeSignedBridge(component.Bytes);
-                var bridgeCommitment = MembershipContractHash.Sha256(
+                byte[]? bridgeCommitment = MembershipContractHash.Sha256(
                     MembershipContractCodec.GetBridgeSigningBytes(signed.Statement));
-                beforeBridgeContinuityOwnership?.Invoke(bridgeCommitment);
-                bridgeValues.Add(new ProfileCarrierBridgeContinuity(
-                    signed.Statement.Sequence,
-                    bridgeCommitment));
+                ProfileCarrierBridgeContinuity? bridge = null;
+                try
+                {
+                    beforeBridgeContinuityOwnership?.Invoke(bridgeCommitment);
+                    bridge = new ProfileCarrierBridgeContinuity(
+                        signed.Statement.Sequence,
+                        bridgeCommitment);
+                    bridgeCommitment = null;
+                    bridgeValues.Add(bridge);
+                    bridge = null;
+                }
+                finally
+                {
+                    if (bridge is not null)
+                    {
+                        bridge.Clear();
+                    }
+                    else if (bridgeCommitment is not null)
+                    {
+                        System.Security.Cryptography.CryptographicOperations.ZeroMemory(
+                            bridgeCommitment);
+                    }
+                }
             }
 
             continuity = new ProfileCarrierContinuity(
