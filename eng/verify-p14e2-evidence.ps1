@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$RepositoryRoot = "",
-    [string]$PackagePath = ""
+    [string]$PackagePath = "",
+    [switch]$SelfTest
 )
 
 $ErrorActionPreference = "Stop"
@@ -44,6 +45,50 @@ function Assert-ContainsExact {
     if ($Text.IndexOf($Expected, [StringComparison]::Ordinal) -lt 0) {
         throw "$Label is missing or drifted."
     }
+}
+
+if ($SelfTest) {
+    $mutationCases = @(
+        @(
+            "reviewer-attribution",
+            "Reviewer-1-Label: /root/p14e2_implementation/p14e2_protocol_review"
+        ),
+        @(
+            "source-tree",
+            "Source-Tree: d83bbdd001b723738357689bbb2150a51357cb3b"
+        ),
+        @(
+            "chosen-package",
+            "Chosen-Package-SHA256: fb0feca6bc1734b3a0ac26910421ccdddb24a6a03c1f83972a9b5685e6785498"
+        ),
+        @(
+            "release-boundary",
+            "CROSS-RID-EXECUTION-PENDING"
+        )
+    )
+    foreach ($mutationCase in $mutationCases) {
+        $label = $mutationCase[0]
+        $expected = $mutationCase[1]
+        $mutated = "$expected-drift"
+        $rejected = $false
+        try {
+            Assert-ContainsExact $mutated $expected $label
+        }
+        catch {
+            if ($_.Exception.Message -notlike "*missing or drifted*") {
+                throw
+            }
+            $rejected = $true
+        }
+        if (-not $rejected) {
+            throw "Evidence validator accepted $label suffix drift."
+        }
+    }
+    if ($allowedChanges -contains "artifacts/survival/P14E2/forbidden.bin") {
+        throw "Evidence validator allowlist accepted a binary path."
+    }
+    "PASS P14E2 evidence validator mutation self-test"
+    return
 }
 
 function Get-Sha256 {
