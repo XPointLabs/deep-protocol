@@ -48,6 +48,10 @@ function Assert-ContainsExact {
     }
 }
 
+function Assert-CanonicalStructuredEvidence {
+    param([string]$Text)
+}
+
 if ($SelfTest) {
     $mutationCases = @(
         @(
@@ -88,6 +92,45 @@ if ($SelfTest) {
     if ($allowedChanges -contains "artifacts/survival/P14E2/forbidden.bin") {
         throw "Evidence validator allowlist accepted a binary path."
     }
+
+    $canonicalCarrier = [IO.File]::ReadAllText($carrierPath)
+    $structuredMutations = @(
+        @("production-signer-positive", "- PRODUCTION-SIGNER-GO"),
+        @("client-activation-positive", "- CLIENT-ACTIVATION-GO"),
+        @("cross-rid-positive", "- CROSS-RID-EXECUTION-GO"),
+        @("external-review-complete", "- EXTERNAL-CRYPTO-PROFILE-REVIEW-COMPLETE"),
+        @("external-review-positive", "- EXTERNAL-CRYPTO-PROFILE-REVIEW-GO"),
+        @("duplicate-reviewer-1-label", "- Reviewer-1-Label: /root/p14e2_implementation/p14e2_protocol_review"),
+        @("duplicate-reviewer-2-label", "- Reviewer-2-Label: /root/p14e2_implementation/p14e2_security_review"),
+        @("duplicate-reviewer-1-verdict", "- Reviewer-1-Verdict: GO"),
+        @("duplicate-reviewer-2-verdict", "- Reviewer-2-Verdict: GO"),
+        @("duplicate-reviewer-1-findings", "- Reviewer-1-P0-P3: 0"),
+        @("duplicate-reviewer-2-findings", "- Reviewer-2-P0-P3: 0"),
+        @("duplicate-source-commit", "- Source-Commit: 69a712a894b024a09859096025c2bb8fe68a642e"),
+        @("duplicate-source-tree", "- Source-Tree: d83bbdd001b723738357689bbb2150a51357cb3b"),
+        @("duplicate-package-hash", "- Chosen-Package-SHA256: fb0feca6bc1734b3a0ac26910421ccdddb24a6a03c1f83972a9b5685e6785498"),
+        @("duplicate-package-identity", "- Normalized-Identity-SHA256: baadb33d07dfeb139f0d3ffdfd5bbd41587c02963f8434208fb7718a73733e0f"),
+        @("duplicate-package-version", "- Chosen-NuGet-Version: 0.2.0-p14.69a712a"),
+        @("duplicate-package-source", "- Chosen-Nuspec-Repository-Commit: 69a712a894b024a09859096025c2bb8fe68a642e"),
+        @("unexpected-structured-key", "- Unexpected-Evidence-Key: value"),
+        @("unexpected-structured-status", "- UNEXPECTED-RELEASE-GO")
+    )
+    $acceptedMutations = @()
+    foreach ($structuredMutation in $structuredMutations) {
+        $label = $structuredMutation[0]
+        $mutatedCarrier = "$canonicalCarrier`n$($structuredMutation[1])`n"
+        try {
+            Assert-CanonicalStructuredEvidence $mutatedCarrier
+            $acceptedMutations += $label
+        }
+        catch {
+            continue
+        }
+    }
+    if ($acceptedMutations.Count -ne 0) {
+        throw "Evidence validator accepted contradictory or duplicate structured claims: $($acceptedMutations -join ', ')."
+    }
+
     "PASS P14E2 evidence validator mutation self-test"
     return
 }
