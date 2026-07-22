@@ -50,6 +50,136 @@ function Assert-ContainsExact {
 
 function Assert-CanonicalStructuredEvidence {
     param([string]$Text)
+
+    $canonicalKeys = @(
+        "Source-Commit",
+        "Source-Tree",
+        "Source-Branch",
+        "Source-Worktree-Status-At-Acceptance",
+        "Scope",
+        "Reviewer-1-Label",
+        "Reviewer-1-Scope",
+        "Reviewer-1-Participation",
+        "Reviewer-1-Exact-Source",
+        "Reviewer-1-Verdict",
+        "Reviewer-1-P0-P3",
+        "Reviewer-2-Label",
+        "Reviewer-2-Scope",
+        "Reviewer-2-Participation",
+        "Reviewer-2-Exact-Source",
+        "Reviewer-2-Verdict",
+        "Reviewer-2-P0-P3",
+        "ActivationTransition-Debug",
+        "ActivationTransition-Release",
+        "Ed25519-Release",
+        "ProfileCarrier-Debug",
+        "ProfileCarrier-Release",
+        "Protocol-Debug",
+        "Protocol-Release",
+        "ActivationTransition-Release-Stress",
+        "Release-Build",
+        "Dotnet-Format-Verify-No-Changes",
+        "Git-Diff-Check",
+        "Offline-Isolated-Debug-And-Release",
+        "Offline-Package-Closure",
+        "Windows-ARM64-Isolated-Build",
+        "Windows-ARM64-Assembly-SHA256",
+        "Provenance-Drift-Rejection",
+        "Provenance-XNode-Commit",
+        "Provenance-XNode-Tree",
+        "Provenance-XNode-Files",
+        "Provenance-Differential-SHA256",
+        "Two-Clean-Path-Normalized-Reproducibility",
+        "win-arm64",
+        "win-x64",
+        "linux-arm64",
+        "linux-x64",
+        "android-arm64",
+        "Chosen-Package-Bytes",
+        "Chosen-Package-SHA256",
+        "Chosen-Package-SHA512",
+        "Normalized-Identity-SHA256",
+        "Chosen-DLL-SHA256",
+        "Chosen-PDB-SHA256",
+        "Chosen-NuGet-Version",
+        "Chosen-Nuspec-Repository-Commit",
+        "Chosen-Nuspec-Repository-URL",
+        "Chosen-Dependency-Deep.Protocol",
+        "Chosen-Dependency-Sodium.Core",
+        "Chosen-Dependency-libsodium",
+        "Independent-Security-Pack-Bytes",
+        "Independent-Security-Pack-SHA256",
+        "Independent-Security-Pack-Normalized-Identity-SHA256"
+    )
+    $canonicalStatuses = @(
+        "CROSS-RID-EXECUTION-PENDING",
+        "PRODUCTION-SIGNER-NO-GO",
+        "CLIENT-ACTIVATION-NO-GO",
+        "EXTERNAL-CRYPTO-PROFILE-REVIEW-PENDING"
+    )
+    $contradictoryClaims = @(
+        "PRODUCTION-SIGNER-GO",
+        "PRODUCTION-SIGNER-READY",
+        "PRODUCTION-SIGNER-APPROVED",
+        "CLIENT-ACTIVATION-GO",
+        "CLIENT-ACTIVATION-READY",
+        "CLIENT-ACTIVATION-APPROVED",
+        "CLIENT-ACTIVATION-ENABLED",
+        "CROSS-RID-EXECUTION-GO",
+        "CROSS-RID-EXECUTION-COMPLETE",
+        "CROSS-RID-EXECUTION-PASS",
+        "EXTERNAL-CRYPTO-PROFILE-REVIEW-COMPLETE",
+        "EXTERNAL-CRYPTO-PROFILE-REVIEW-GO",
+        "EXTERNAL-CRYPTO-PROFILE-REVIEW-APPROVED",
+        "EXTERNAL-CRYPTO-PROFILE-REVIEW-PASS"
+    )
+
+    foreach ($contradictoryClaim in $contradictoryClaims) {
+        $pattern = "(?<![A-Z0-9-])" +
+            [Regex]::Escape($contradictoryClaim) +
+            "(?![A-Z0-9-])"
+        if ($Text -match $pattern) {
+            throw "Contradictory positive evidence claim is forbidden: $contradictoryClaim"
+        }
+    }
+
+    $keyCounts = @{}
+    foreach ($canonicalKey in $canonicalKeys) {
+        $keyCounts[$canonicalKey] = 0
+    }
+    $statusCounts = @{}
+    foreach ($canonicalStatus in $canonicalStatuses) {
+        $statusCounts[$canonicalStatus] = 0
+    }
+
+    foreach ($line in @($Text -split "\r?\n")) {
+        if ($line -match "^- ([A-Za-z0-9][A-Za-z0-9.-]*):(?:\s|$)") {
+            $key = $Matches[1]
+            if (-not $keyCounts.ContainsKey($key)) {
+                throw "Unexpected structured evidence key: $key"
+            }
+            $keyCounts[$key] = 1 + $keyCounts[$key]
+            continue
+        }
+        if ($line -match "^- ([A-Z][A-Z0-9-]+)$") {
+            $status = $Matches[1]
+            if (-not $statusCounts.ContainsKey($status)) {
+                throw "Unexpected structured evidence status: $status"
+            }
+            $statusCounts[$status] = 1 + $statusCounts[$status]
+        }
+    }
+
+    foreach ($canonicalKey in $canonicalKeys) {
+        if ($keyCounts[$canonicalKey] -ne 1) {
+            throw "Structured evidence key must occur exactly once: $canonicalKey"
+        }
+    }
+    foreach ($canonicalStatus in $canonicalStatuses) {
+        if ($statusCounts[$canonicalStatus] -ne 1) {
+            throw "Structured evidence status must occur exactly once: $canonicalStatus"
+        }
+    }
 }
 
 if ($SelfTest) {
@@ -239,6 +369,7 @@ if ($carrier.IndexOf('```', [StringComparison]::Ordinal) -ge 0 -or
     $carrier -match "(?im)^\s*(password|api[_-]?key|private[_-]?key|seed|mnemonic|secret|token)\s*[:=]") {
     throw "Evidence Markdown contains forbidden raw-output or secret-shaped content."
 }
+Assert-CanonicalStructuredEvidence $carrier
 
 $requiredEvidence = @(
     "Source-Commit: $sourceCommit",
