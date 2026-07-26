@@ -170,7 +170,7 @@ implement:
 - a production signature implementation, key resolver or dependency-injection registration;
 - durable atomic last-known-good, delegation-revocation or equivocation state;
 - registry persistence, bridge publication, endpoint crawling resistance or client bootstrap UI;
-- core/storage topology distribution, storage execution, reward, billing or update authorization;
+- signed catalog publication, signer custody, storage execution, reward, billing or update authorization;
 - production/self-hosted deployment, migration from current bootstrap DTOs or P06/P07 integration;
 - cross-language crypto verification or external cryptographic review.
 
@@ -179,6 +179,11 @@ bridge contacts are public discovery data and do not provide anonymity against a
 Fork witnesses record candidate ancestry but do not select a winning branch. Production activation
 remains blocked until the verifier/key lifecycle and durable state are supplied, independently
 reviewed, and exercised by registry/client E2E work.
+
+The `Deep.Protocol.MembershipRoutes` package now defines canonical route leaves and Merkle proof
+verification. It does not claim that an arbitrary registry response is authoritative: consumers
+must first quorum-verify the enclosing P04 `SignedMembershipCommitment`, enforce monotonic LKG
+state, and require one valid proof for every catalog member.
 
 ## DPF1 exact profile carrier gaps
 

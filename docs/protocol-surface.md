@@ -119,6 +119,13 @@ snapshots contain public entry contacts, not full core/storage membership. Signa
 durable last-known-good state, registry/client integration and production keys remain outside this
 library.
 
+`Deep.Protocol.MembershipRoutes` is a separate Deep-extension package that gives the opaque
+`MemberCommitment` leaf a bounded, canonical route-descriptor meaning for the route-activation
+migration. An `MRL1` leaf binds router identity, Ed25519 and X25519 public keys, an authority-only
+RPC endpoint, roles, capabilities, epoch and validity. Domain-separated SHA-256 leaf/node hashes,
+power-of-two empty-leaf padding and exact-depth inclusion proofs bind each descriptor to a P04
+membership root. It does not sign or publish a catalog and contains no signer keys.
+
 DPF1 V1 adds one deterministic unsigned carrier around canonical P04 genesis, public genesis
 approvals, a canonical signed delegation and canonical signed bridges. Exact parse success requires
 P04 verification followed by byte-identical recomposition. DPF1 introduces no signing domain,
