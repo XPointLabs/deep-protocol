@@ -1,0 +1,61 @@
+{
+  "schema": "deep-protocol-package-provenance.v1",
+  "contract": "P10B2-corrected",
+  "sourceCommit": "eebcd509e80d51e3e1ef04bd9cb3c6e3268d873d",
+  "packageVersion": "0.3.0-p10b2.eebcd50",
+  "publication": "local-only-not-published",
+  "runtimeActivation": "blocked-contract-only",
+  "normalization": {
+    "script": "eng/Normalize-NuGetPackage.ps1",
+    "sha256": "237891f23c12f04bc799ab485ff4a297dca78af9bb0d0bb4002a8d507c1c0343",
+    "sha512": "53b31b3f1e353a8b746a54750d1711f1ed328897eb186487a6e33a848380675bf07494c68b7f611eedaa25c077061ee1eb71fcac0fa49b2ba371ddb6b0deb044",
+    "independentRebuildByteIdentical": true
+  },
+  "packages": [
+    {
+      "id": "Deep.Protocol",
+      "file": "Deep.Protocol.0.3.0-p10b2.eebcd50.nupkg",
+      "bytes": 148207,
+      "sha256": "7f24793c619f57ea40dbcb23a9ddcc9a3ea161bf48049d4d75e757071f43ae06",
+      "sha512": "bc3d51f7504cb048292df68e6ada182ed95477858dfd7d79287d11509108bed208f61d80d3ad3f429b0e16b042805889a1464dad9b9c59da9b35813e764b9e3f"
+    },
+    {
+      "id": "Deep.Protocol.Abstractions",
+      "file": "Deep.Protocol.Abstractions.0.3.0-p10b2.eebcd50.nupkg",
+      "bytes": 24982,
+      "sha256": "567e55269a779d7ca9a9c5c7968eefbf4f8910d7ce0eda6b5e15c57fea81c858",
+      "sha512": "9d93c7d940590da22f4c54b16003b8eb6221423976fc3d6a8ca113356380e3dc9f8629da09a875e8d1157bd6f1e11a08a5a799951d5ef270ef4a46117f48a306"
+    },
+    {
+      "id": "Deep.Protocol.MembershipRoutes",
+      "file": "Deep.Protocol.MembershipRoutes.0.3.0-p10b2.eebcd50.nupkg",
+      "bytes": 12879,
+      "sha256": "5361380c0b3273a5b2c34a12ebf2092c5312f61d646127650acc1ec4ac4da1f3",
+      "sha512": "b19cec3c36a55260e90031eb6fa2607e33b6093ee64203042e3695f87d399c652c5da55bfbd1543419446da643106d8d578b2dd39aecfbc0a613bac2163d37e3"
+    },
+    {
+      "id": "Deep.Protocol.Protobuf",
+      "file": "Deep.Protocol.Protobuf.0.3.0-p10b2.eebcd50.nupkg",
+      "bytes": 50248,
+      "sha256": "d5fbbd7d6155bcf3b11dafee02b0f77653dd8d5c25befa0b11642296bfc5abde",
+      "sha512": "ae24db26a6a4a7987db419d123c50fc89ba8c43b7b6ac1f9fbff20ee3c0502e698c11625ad3a73a16e9757e97e925b2ae4479d7ef3422602f11b1e5e739601a6"
+    }
+  ],
+  "installLock": {
+    "artifact": "artifacts/survival/P10B2/eebcd50/install-smoke/packages.lock.json",
+    "bytes": 2158,
+    "sha256": "8369c9eb83ed523d10dd1a5d6ea7bf3084c060c6ea75e06a0ffb3f4750bb9494",
+    "sha512": "3a4f46928e34613b8b297fb64889def269a86893a95a60477f3727a909624fc22c67e8813c15db0d7f4cd35653f332d30a132d6b5209f751281084b97f1f9701",
+    "targetFramework": "net10.0",
+    "direct": "Deep.Protocol.MembershipRoutes [0.3.0-p10b2.eebcd50]",
+    "resolved": [
+      "Deep.Protocol.MembershipRoutes 0.3.0-p10b2.eebcd50",
+      "Deep.Protocol 0.3.0-p10b2.eebcd50",
+      "Deep.Protocol.Abstractions 0.3.0-p10b2.eebcd50",
+      "Deep.Protocol.Protobuf 0.3.0-p10b2.eebcd50",
+      "Sodium.Core 1.4.1",
+      "libsodium 1.0.22",
+      "Google.Protobuf 3.32.1"
+    ]
+  }
+}
