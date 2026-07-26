@@ -125,17 +125,23 @@ cryptographic review.
 ## P03B mailbox contract gaps
 
 P03B defines canonical capability and receipt bytes plus strict client-side verification behavior.
-It deliberately does not implement:
+The strict non-convertible V2 profile now implements real Ed25519 issuer and holder authentication,
+exact operation/request/epoch/membership/placement binding, explicit generation/overlap checks and
+an atomic durable replay-journal interface. It deliberately does not implement:
 
-- deposit/retrieve/placement value generation, derivation, rotation or recovery;
-- secrecy, unlinkability, entropy or unforgeability of caller-provided opaque bytes;
-- durable replay/idempotency/lifecycle state;
-- replica/coordinator key distribution, signature or digest primitives;
+- mailbox/domain-scoped issuer or holder key custody, backup, derivation, rotation ceremony or
+  recovery;
+- proof that host-generated blinded identifiers or mailbox-scoped keys are unlinkable;
+- trusted-issuer distribution or durable revocation/replay/idempotency/lifecycle persistence;
+- coordinator key distribution;
 - replica write/storage execution, cursor allocation, tombstone persistence or repair;
 - free-admission issuance/accounting or any paid quota, wallet, payer or subscription identity;
 - legacy migration execution, production registration, service defaults or deployment.
 
-`IMailboxReceiptCrypto` and `IMailboxCapabilityReplayGuard` are trust boundaries. The replay guard
+`IMailboxReceiptCrypto`, legacy `IMailboxCapabilityReplayGuard`,
+`IMailboxCapabilityRevocationSource` and `IMailboxCapabilityReplayJournal` are trust boundaries.
+The V2 journal must atomically reserve/read a claim and atomically complete its bounded outcome;
+crash recovery must retain an explicit in-flight reservation. The legacy replay guard
 must durably compare the supplied canonical presentation and return a previously committed bounded
 outcome only for an exact idempotent retry; P03B defines this decision contract but supplies no
 persistence. Test fixtures use deterministic SHA-256-based signatures only to make codec and
@@ -154,12 +160,15 @@ not implement:
 - recipient master-secret generation, capability/identifier derivation, encryption or decryption;
 - proof that caller-provided blinded identifiers are unlinkable or derived without raw identity;
 - durable epoch, replay, idempotency, cursor, continuation-token or acknowledgement persistence;
-- xnode translation from the implementation-local JSON receipt at `a193dcc` to `MRR2`/`MQR2`;
-- replica/coordinator key resolution, production signatures or membership-commitment verification;
+- xnode runtime adoption of native PRQ1/MRR2/MQR2 and removal of its local JSON receipt;
+- coordinator key resolution and receipt signing integration;
 - client outbox/SQLite integration, dual-read/mirror execution, networking, DI or feature activation.
 
 The sender-facing store model intentionally has no retrieve or master material. Test-only
 SHA-256-based signatures produce stable vectors but are not a selected cryptographic scheme.
+PRQ1 uses real Ed25519. The optional MembershipRoutes RIP1 adapter verifies storage-role MRL1
+membership, but catalog acquisition, last-known-good persistence, transport and runtime wiring
+remain downstream work.
 
 ## P03C nearby handshake gaps
 

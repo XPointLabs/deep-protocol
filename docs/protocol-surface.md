@@ -48,6 +48,9 @@ Primary upstream areas reviewed:
 - P03B canonical mailbox capability, free-admission and accepted/durable receipt contracts,
   isolated in `Deep.Protocol.DeepExtension.MailboxCapabilities`; crypto, replay and capability
   production remain host-provided interfaces with no production registration
+- strict authenticated mailbox V2 `MCG2`/`MCP2`, peer `MIP1`/`PRQ1` and aggregate ACK `MAR1`
+  contracts in the same isolated namespace; sodium Ed25519 adapters are available but no keys,
+  durable replay/revocation store, runtime registration or transport is supplied
 - dormant P09C client mailbox `MEO1`/`MST1`/`MRT1`/`MRP1`/`MAK1` frames, explicit adjacent
   `E/E+1` overlap, local-only delivered transition and placement/membership-bound `MRR2`/`MQR2`
   receipts in the same isolated namespace; no runtime activation or default changes
@@ -107,6 +110,14 @@ idempotent-retry, stale-replay and conflict decisions. The library does not clai
 secret or unlinkable and does not create keys, persist lifecycle/replay state, execute storage,
 choose a signature/digest primitive, apply billing, or enable a runtime feature.
 
+The strict V2 profile addresses the opaque MCP1 authority gap without changing or converting MCP1.
+An offline/self-hosted, mailbox/domain-scoped Ed25519 issuer signs fixed `MCG2`; the authorized
+holder signs an exact Store/Retrieve/Ack `MCP2`. Both bind network, epoch, generation, membership,
+placement, validity, operation ID, replay counter and canonical request digest. Deposit authorizes
+only Store; retrieve authorizes only Retrieve/Ack. A host supplies trusted issuer keys, durable
+revocation state and an atomic replay journal. No Session ID, payer, wallet, subscription or
+payment entitlement is present.
+
 P09C extends that dormant surface additively. Fixed 32-byte `BlindedMailboxId` and
 `BlindedPlacementId` types keep raw Session/user identity out of canonical frames. `MEO1` bounds
 opaque ciphertext to 32..81768 bytes, the complete frame to 81920 bytes, and TTL to 60
@@ -119,6 +130,13 @@ ack entry from the envelope's exact deduplication/ack digest.
 receipt while additionally binding operation, epoch, cursor, placement and membership commitment.
 It is not byte-compatible with the implementation-local xnode JSON receipt. See
 `adr/0005-p09c-client-mailbox-wire-contract.md`.
+
+`PRQ1` authenticates exact MEO1 Store replication or a 32-byte tombstone digest between two
+membership-proven storage replicas. `MIP1` has a concrete `RIP1` adapter in
+`Deep.Protocol.MembershipRoutes`, verifying replica identity, Ed25519 key, Storage role/capability,
+epoch, validity and MRL1 Merkle inclusion against the exact commitment. Responses remain signed
+`MRR2`/`MQR2`. `MAR1` orders at most 100 exact tombstone `MQR2` receipts and adds no new durability
+meaning.
 
 P03C adds fixed `NRV1` advertisements and bounded `NHS1` initiator/responder frames. The public
 orchestrator passes exact canonical transcript bytes, expected contact identity, period,

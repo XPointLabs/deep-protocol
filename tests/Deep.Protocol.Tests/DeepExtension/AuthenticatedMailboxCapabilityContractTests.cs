@@ -1,4 +1,5 @@
 using Deep.Protocol.DeepExtension.MailboxCapabilities;
+using Deep.Protocol.GoldenVectors;
 
 namespace Deep.Protocol.Tests.DeepExtension;
 
@@ -21,10 +22,14 @@ public sealed class AuthenticatedMailboxCapabilityContractTests
             binding,
             replayCounter: 9,
             holderSeed);
+        var encoded = MailboxAuthenticatedCapabilityCodec.EncodePresentation(presentation);
+        var vector = GoldenVectorLoader.Load("authenticated-mailbox-v2.json")
+            .GetRequired("deep-extension/mailbox-capability/v2/deposit-store");
+        Assert.Equal(vector.Hex, Convert.ToHexString(encoded).ToLowerInvariant());
 
         var replay = new MemoryReplayJournal();
         var verified = MailboxAuthenticatedCapabilityCodec.Verify(
-            MailboxAuthenticatedCapabilityCodec.EncodePresentation(presentation),
+            encoded,
             binding,
             Policy(grant),
             crypto,

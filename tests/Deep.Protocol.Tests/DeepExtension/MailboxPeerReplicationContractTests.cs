@@ -245,7 +245,9 @@ public sealed class MailboxPeerReplicationContractTests
     {
         public int Calls { get; private set; }
 
-        public bool VerifyStorageReplica(MailboxReplicaMembershipProof proof)
+        public bool VerifyStorageReplica(
+            MailboxReplicaMembershipProof proof,
+            ulong verificationTimeUnixSeconds)
         {
             Calls++;
             return proof.CanonicalInclusionProof.Length == 64;

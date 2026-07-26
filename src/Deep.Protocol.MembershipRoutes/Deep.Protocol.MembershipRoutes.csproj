@@ -12,4 +12,8 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Deep.Protocol\Deep.Protocol.csproj" />
+  </ItemGroup>
+
 </Project>

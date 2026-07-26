@@ -29,6 +29,16 @@
         "resolved": "3.1.4",
         "contentHash": "5mj99LvCqrq3CNi06xYdyIAXOEh+5b33F2nErCzI5zWiDdLHXiPXEWFSUAF8zlIv0ZWqjZNCwHTQeAPYbF3pCg=="
       },
+      "Google.Protobuf": {
+        "type": "Transitive",
+        "resolved": "3.32.1",
+        "contentHash": "HbFFRNU46e1E+qhGvwCDAO2EZ80WADqlkNqlOBYvGi7SNxwMPkTrReZgCg9/TrXwLO/n0za+AIiT2IplzqrjZw=="
+      },
+      "libsodium": {
+        "type": "Transitive",
+        "resolved": "1.0.22",
+        "contentHash": "KPD9SloJFclrsjnhABu7dzWrcyYkwPbvx5l1gRSPAX/0n+OBtSiVCKtGFv4n+ecWUHU0tCG9LSSwoZZx673zBQ=="
+      },
       "Microsoft.CodeCoverage": {
         "type": "Transitive",
         "resolved": "17.14.1",
@@ -52,6 +62,14 @@
         "type": "Transitive",
         "resolved": "13.0.3",
         "contentHash": "HrC5BXdl00IP9zeV+0Z848QWPAoCr9P3bDEZguI+gkLcBKAOxix/tLEAAHC+UvDNPv4a2d18lOReHMOagPa+zQ=="
+      },
+      "Sodium.Core": {
+        "type": "Transitive",
+        "resolved": "1.4.1",
+        "contentHash": "K1Xhi20h9H15UPOa6NDNgW81NYN6AAvVT+v0Jz3n1qLS/nqiWzamWCyHyFxgoriCEMA90L1KQbYrIqBH+zKbrg==",
+        "dependencies": {
+          "libsodium": "[1.0.22, 1.0.23)"
+        }
       },
       "xunit.abstractions": {
         "type": "Transitive",
@@ -93,8 +111,28 @@
           "xunit.extensibility.core": "[2.9.3]"
         }
       },
-      "deep.protocol.membershiproutes": {
+      "deep.protocol": {
+        "type": "Project",
+        "dependencies": {
+          "Deep.Protocol.Abstractions": "[1.0.0, )",
+          "Deep.Protocol.Protobuf": "[1.0.0, )",
+          "Sodium.Core": "[1.4.1, )"
+        }
+      },
+      "deep.protocol.abstractions": {
         "type": "Project"
+      },
+      "deep.protocol.membershiproutes": {
+        "type": "Project",
+        "dependencies": {
+          "Deep.Protocol": "[1.0.0, )"
+        }
+      },
+      "deep.protocol.protobuf": {
+        "type": "Project",
+        "dependencies": {
+          "Google.Protobuf": "[3.32.1, )"
+        }
       }
     }
   }
