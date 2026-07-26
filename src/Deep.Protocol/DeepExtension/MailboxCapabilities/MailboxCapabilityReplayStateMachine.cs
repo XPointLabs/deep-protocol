@@ -32,8 +32,28 @@ public static class MailboxCapabilityReplayStateMachine
     {
         ArgumentNullException.ThrowIfNull(claim);
         ValidateClaim(claim);
-        if (current is null || claim.ReplayCounter > current.HighestCounter)
+        if (current is not null)
+            ValidateSnapshot(current);
+        if (current is null)
         {
+            return (
+                new MailboxCapabilityAtomicReplayEvaluation
+                {
+                    State = MailboxCapabilityAtomicReplayState.NewReserved,
+                    CachedOutcome = ReadOnlyMemory<byte>.Empty
+                },
+                new MailboxCapabilityReplaySnapshot
+                {
+                    HighestCounter = claim.ReplayCounter,
+                    ClaimDigest = claim.ClaimDigest.ToArray(),
+                    Status = MailboxCapabilityReplayRecordStatus.Pending,
+                    CanonicalOutcome = ReadOnlyMemory<byte>.Empty
+                });
+        }
+        if (claim.ReplayCounter > current.HighestCounter)
+        {
+            if (current.Status == MailboxCapabilityReplayRecordStatus.Pending)
+                return (Evaluation(MailboxCapabilityAtomicReplayState.PendingPrior), current);
             return (
                 new MailboxCapabilityAtomicReplayEvaluation
                 {
@@ -105,15 +125,42 @@ public static class MailboxCapabilityReplayStateMachine
     private static void ValidateClaim(MailboxCapabilityAtomicReplayClaim claim)
     {
         if (claim.ClaimDigest.Length != 32 ||
+            claim.ClaimDigest.Span.IndexOfAnyExcept((byte)0) < 0 ||
             claim.IssuerPublicKey.Length != 32 ||
+            claim.IssuerPublicKey.Span.IndexOfAnyExcept((byte)0) < 0 ||
             claim.Serial.Length != 16 ||
+            claim.Serial.Span.IndexOfAnyExcept((byte)0) < 0 ||
             claim.OperationId.Length != 16 ||
+            claim.OperationId.Span.IndexOfAnyExcept((byte)0) < 0 ||
             claim.RequestDigest.Length != 32 ||
+            claim.RequestDigest.Span.IndexOfAnyExcept((byte)0) < 0 ||
+            claim.Operation is not (
+                MailboxAuthenticatedOperation.Store or
+                MailboxAuthenticatedOperation.Retrieve or
+                MailboxAuthenticatedOperation.Ack) ||
             claim.Epoch == 0 ||
             claim.Generation == 0 ||
             claim.ReplayCounter == 0)
             throw new MailboxAuthenticatedCapabilityException(
                 MailboxAuthenticatedCapabilityError.InvalidReplayEvaluation,
                 "Replay claim is malformed.");
+    }
+
+    private static void ValidateSnapshot(MailboxCapabilityReplaySnapshot snapshot)
+    {
+        if (snapshot.HighestCounter == 0 ||
+            snapshot.ClaimDigest.Length != 32 ||
+            snapshot.ClaimDigest.Span.IndexOfAnyExcept((byte)0) < 0 ||
+            snapshot.Status is not (
+                MailboxCapabilityReplayRecordStatus.Pending or
+                MailboxCapabilityReplayRecordStatus.Completed) ||
+            snapshot.Status == MailboxCapabilityReplayRecordStatus.Pending &&
+            !snapshot.CanonicalOutcome.IsEmpty ||
+            snapshot.Status == MailboxCapabilityReplayRecordStatus.Completed &&
+            snapshot.CanonicalOutcome.Length is
+                0 or > MailboxAuthenticatedCapabilityLimits.MaximumCachedOutcomeLength)
+            throw new MailboxAuthenticatedCapabilityException(
+                MailboxAuthenticatedCapabilityError.InvalidReplayEvaluation,
+                "Persisted replay snapshot is malformed.");
     }
 }

@@ -159,7 +159,8 @@ public enum MailboxCapabilityAtomicReplayState
     PendingSame = 2,
     CompletedSame = 3,
     StaleReplay = 4,
-    Conflict = 5
+    Conflict = 5,
+    PendingPrior = 6
 }
 
 public sealed record MailboxCapabilityAtomicReplayEvaluation

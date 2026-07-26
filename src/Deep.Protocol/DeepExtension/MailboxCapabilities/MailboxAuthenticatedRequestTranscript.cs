@@ -29,6 +29,12 @@ public static class MailboxAuthenticatedRequestTranscript
                 MailboxAuthenticatedCapabilityError.InvalidField,
                 $"Canonical authenticated request is invalid: {exception.Error}.");
         }
+        catch (ArgumentException exception)
+        {
+            throw new MailboxAuthenticatedCapabilityException(
+                MailboxAuthenticatedCapabilityError.InvalidField,
+                $"Canonical authenticated request field is invalid: {exception.ParamName}.");
+        }
     }
 
     public static MailboxAuthenticatedRequestBinding ForStore(MailboxEncryptedEnvelope envelope)
@@ -91,6 +97,8 @@ public static class MailboxAuthenticatedRequestTranscript
         ValidateCommon(epoch, operationId, continuationToken);
         if (acknowledgements.Count is 0 or > MailboxClientLimits.MaximumPageItems)
             throw Error("ACK entry count is outside strict bounds.");
+        if (isFinalPage != continuationToken.IsEmpty)
+            throw Error("Final ACK must have no continuation token; non-final ACK must have one.");
         var canonical = new byte[112 + continuationToken.Length + acknowledgements.Count * 40];
         "MBA2"u8.CopyTo(canonical);
         canonical[4] = 2;

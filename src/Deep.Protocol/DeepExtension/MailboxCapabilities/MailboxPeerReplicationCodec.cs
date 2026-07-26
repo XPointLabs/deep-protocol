@@ -102,6 +102,9 @@ public static class MailboxPeerReplicationCodec
             !FixedEquals(request.TargetReplicaId.Span, policy.TargetReplicaId.Span) ||
             !FixedEquals(request.MembershipCommitment.Span, policy.MembershipCommitment.Span) ||
             !FixedEquals(request.PlacementCommitment.Span, policy.PlacementCommitment.Span) ||
+            !FixedEquals(
+                request.PlacementCommitment.Span,
+                MailboxPlacementCommitment.Compute(policy.PlacementId)) ||
             request.ExpiresAtUnixSeconds <= policy.NowUnixSeconds)
             throw Error(MailboxPeerReplicationError.BindingMismatch, "PRQ1 does not match exact peer authority context.");
         if (!membershipVerifier.VerifyStorageReplica(
@@ -143,6 +146,7 @@ public static class MailboxPeerReplicationCodec
         VerifiedMailboxPeerReplicationRequest verifiedRequest,
         MailboxPeerResponseReplica replica,
         MailboxReceiptStatus status,
+        MailboxReplicaDisposition disposition,
         ulong acceptedAtUnixSeconds,
         ulong durableAtUnixSeconds)
     {
@@ -150,6 +154,7 @@ public static class MailboxPeerReplicationCodec
         var request = verifiedRequest.Request;
         if (replica is not (MailboxPeerResponseReplica.Source or MailboxPeerResponseReplica.Target) ||
             status is not (MailboxReceiptStatus.Accepted or MailboxReceiptStatus.Durable) ||
+            !IsAllowedDisposition(request, disposition) ||
             acceptedAtUnixSeconds == 0 ||
             acceptedAtUnixSeconds >= request.ExpiresAtUnixSeconds ||
             status == MailboxReceiptStatus.Accepted && durableAtUnixSeconds != 0 ||
@@ -160,7 +165,7 @@ public static class MailboxPeerReplicationCodec
         return new MailboxReplicaReceiptV2
         {
             Status = status,
-            Disposition = ExpectedDisposition(request),
+            Disposition = disposition,
             ReplicaId = (replica == MailboxPeerResponseReplica.Source
                 ? request.SourceReplicaId
                 : request.TargetReplicaId).ToArray(),
@@ -208,6 +213,7 @@ public static class MailboxPeerReplicationCodec
         if (replicas.Any(receipt =>
                 receipt.Status != MailboxReceiptStatus.Durable ||
                 !MatchesRequest(receipt, verifiedRequest, allowSource: true)) ||
+            replicas[0].Disposition != replicas[1].Disposition ||
             !ContainsExactly(
                 replicas.Select(static receipt => receipt.ReplicaId).ToArray(),
                 request.SourceReplicaId,
@@ -240,7 +246,7 @@ public static class MailboxPeerReplicationCodec
             throw Error(MailboxPeerReplicationError.InvalidReceipt, "MQR2 coordinator signature is invalid.");
         return new VerifiedMailboxDurableQuorumV2(
             request.Cursor,
-            ExpectedDisposition(request),
+            replicas[0].Disposition,
             replicas,
             quorum);
     }
@@ -425,7 +431,7 @@ public static class MailboxPeerReplicationCodec
             allowSource && FixedEquals(receipt.ReplicaId.Span, request.SourceReplicaId.Span);
         return selectedReplica &&
                receipt.Status is (MailboxReceiptStatus.Accepted or MailboxReceiptStatus.Durable) &&
-               receipt.Disposition == ExpectedDisposition(request) &&
+               IsAllowedDisposition(request, receipt.Disposition) &&
                receipt.OperationId.Span.SequenceEqual(request.OperationId.Span) &&
                receipt.Epoch == request.Epoch &&
                receipt.Cursor == request.Cursor &&
@@ -436,11 +442,14 @@ public static class MailboxPeerReplicationCodec
                receipt.EnvelopeDigest.Span.SequenceEqual(ExpectedEnvelopeDigest(verifiedRequest).Span);
     }
 
-    private static MailboxReplicaDisposition ExpectedDisposition(
-        MailboxPeerReplicationRequest request) =>
+    private static bool IsAllowedDisposition(
+        MailboxPeerReplicationRequest request,
+        MailboxReplicaDisposition disposition) =>
         request.Operation == MailboxPeerReplicationOperation.Store
-            ? MailboxReplicaDisposition.Stored
-            : MailboxReplicaDisposition.Tombstone;
+            ? disposition is (
+                MailboxReplicaDisposition.Stored or
+                MailboxReplicaDisposition.Duplicate)
+            : disposition == MailboxReplicaDisposition.Tombstone;
 
     private static ReadOnlyMemory<byte> ExpectedEnvelopeDigest(
         VerifiedMailboxPeerReplicationRequest verifiedRequest) =>

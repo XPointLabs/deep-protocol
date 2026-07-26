@@ -14,9 +14,9 @@
       "hex": "07400fa8cd9a07e2d33e09a230a433625ae1f69ca0601b0114607689831b7f5e"
     },
     {
-      "id": "deep-extension/mailbox-authenticated/v2/MAU2-ack-length-584",
+      "id": "deep-extension/mailbox-authenticated/v2/MAU2-ack-length-576",
       "kind": "sha256-complete-canonical-frame",
-      "hex": "b617514ee20ae7fa73debb63081548e54f54ba11ec5d9e9ead4791d868dd2e6a"
+      "hex": "f8c88d332c394c3fe4c92f2284d2181ec1f0a4afc91c6b635a38c44f2426fd4c"
     },
     {
       "id": "deep-extension/mailbox-peer/v1/MIP1-length-184",

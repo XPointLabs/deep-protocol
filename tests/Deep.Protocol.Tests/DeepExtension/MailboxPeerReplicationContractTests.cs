@@ -58,6 +58,7 @@ public sealed class MailboxPeerReplicationContractTests
             verified,
             MailboxPeerResponseReplica.Target,
             MailboxReceiptStatus.Durable,
+            MailboxReplicaDisposition.Stored,
             1001,
             1002);
         var receipt = crypto.SignReplicaResponse(unsignedReceipt, targetSeed);
@@ -66,6 +67,21 @@ public sealed class MailboxPeerReplicationContractTests
             verified,
             crypto);
         Assert.Equal(envelope.DeduplicationDigest.ToArray(), verifiedReceipt.EnvelopeDigest.ToArray());
+        var duplicate = crypto.SignReplicaResponse(
+            MailboxPeerReplicationCodec.CreateUnsignedReplicaResponse(
+                verified,
+                MailboxPeerResponseReplica.Target,
+                MailboxReceiptStatus.Durable,
+                MailboxReplicaDisposition.Duplicate,
+                1001,
+                1002),
+            targetSeed);
+        Assert.Equal(
+            MailboxReplicaDisposition.Duplicate,
+            MailboxPeerReplicationCodec.VerifyReplicaResponse(
+                MailboxReceiptV2Codec.EncodeReplica(duplicate),
+                verified,
+                crypto).Disposition);
         Assert.Throws<MailboxPeerReplicationException>(() =>
             MailboxPeerReplicationCodec.VerifyReplicaResponse(
                 MailboxReceiptV2Codec.EncodeReplica(
@@ -111,6 +127,16 @@ public sealed class MailboxPeerReplicationContractTests
                 Policy(tombstone),
                 crypto,
                 new ExactProofVerifier()).Request.Operation);
+        var rawTombstonePlacement = crypto.SignRequest(tombstone with
+        {
+            PlacementCommitment = Range(0xa0, 32)
+        }, sourceSeed);
+        Assert.Throws<MailboxPeerReplicationException>(() =>
+            MailboxPeerReplicationCodec.Verify(
+                MailboxPeerReplicationCodec.Encode(rawTombstonePlacement),
+                Policy(rawTombstonePlacement),
+                crypto,
+                new ExactProofVerifier()));
     }
 
     [Fact]
@@ -216,6 +242,7 @@ public sealed class MailboxPeerReplicationContractTests
                     request,
                     MailboxPeerResponseReplica.Source,
                     MailboxReceiptStatus.Durable,
+                    MailboxReplicaDisposition.Tombstone,
                     1001,
                     1002),
                 sourceSeed);
@@ -224,6 +251,7 @@ public sealed class MailboxPeerReplicationContractTests
                     request,
                     MailboxPeerResponseReplica.Target,
                     MailboxReceiptStatus.Durable,
+                    MailboxReplicaDisposition.Tombstone,
                     1001,
                     1002),
                 targetSeed);
@@ -286,6 +314,7 @@ public sealed class MailboxPeerReplicationContractTests
             TargetReplicaId = request.TargetReplicaId,
             MembershipCommitment = request.MembershipCommitment,
             PlacementCommitment = request.PlacementCommitment,
+            PlacementId = new BlindedPlacementId(Range(0xa0, 32)),
             NowUnixSeconds = 1050
         };
 

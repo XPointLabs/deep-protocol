@@ -131,6 +131,10 @@ public static class MailboxAuthenticatedCapabilityCodec
         ArgumentNullException.ThrowIfNull(revocations);
         ArgumentNullException.ThrowIfNull(replayJournal);
         ValidateBinding(expectedBinding);
+        if (expectedBinding.CanonicalRequest.IsEmpty)
+            throw Error(
+                MailboxAuthenticatedCapabilityError.BindingMismatch,
+                "Verification requires a typed canonical request transcript.");
         ValidatePolicy(policy);
         var presentation = DecodePresentation(encoded);
         var grant = presentation.Grant;
@@ -144,6 +148,19 @@ public static class MailboxAuthenticatedCapabilityCodec
             !FixedEquals(grant.PlacementCommitment.Span, policy.PlacementCommitment.Span) ||
             !FixedEquals(grant.MembershipCommitment.Span, policy.MembershipCommitment.Span))
             throw Error(MailboxAuthenticatedCapabilityError.BindingMismatch, "MCG2 authority context does not match.");
+        var canonicalBody = expectedBinding.CanonicalRequest.Span;
+        var bodyEpoch = BinaryPrimitives.ReadUInt64BigEndian(canonicalBody.Slice(8, 8));
+        var placementOffset = expectedBinding.Operation == MailboxAuthenticatedOperation.Store
+            ? 48
+            : 64;
+        if (bodyEpoch != grant.Epoch ||
+            !FixedEquals(
+                MailboxPlacementCommitment.Compute(
+                    new BlindedPlacementId(canonicalBody.Slice(placementOffset, 32))),
+                grant.PlacementCommitment.Span))
+            throw Error(
+                MailboxAuthenticatedCapabilityError.BindingMismatch,
+                "Typed request epoch/placement does not match MCG2 authority.");
         if (grant.Generation < policy.MinimumGeneration)
             throw Error(MailboxAuthenticatedCapabilityError.GenerationRejected, "MCG2 generation is below the floor.");
         if (policy.NowUnixSeconds < grant.NotBeforeUnixSeconds ||
@@ -163,16 +180,6 @@ public static class MailboxAuthenticatedCapabilityCodec
             grant.NotBeforeUnixSeconds < authority.ValidFromUnixSeconds ||
             grant.ExpiresAtUnixSeconds > authority.ValidUntilUnixSeconds)
             throw Error(MailboxAuthenticatedCapabilityError.UntrustedIssuer, "MCG2 exceeds issuer rotation authority.");
-        if (revocations.IsRevoked(new MailboxCapabilityRevocationQuery
-        {
-            IssuerPublicKey = grant.IssuerPublicKey.ToArray(),
-            Serial = grant.Serial.ToArray(),
-            Domain = grant.Domain,
-            Generation = grant.Generation,
-            Epoch = grant.Epoch,
-            MembershipCommitment = grant.MembershipCommitment.ToArray()
-        }))
-            throw Error(MailboxAuthenticatedCapabilityError.Revoked, "MCG2 has been revoked.");
         if (!crypto.VerifyIssuer(
                 grant.IssuerPublicKey.Span,
                 GetGrantSigningBytes(grant),
@@ -183,6 +190,16 @@ public static class MailboxAuthenticatedCapabilityCodec
                 GetPresentationSigningBytes(presentation),
                 presentation.HolderSignature.Span))
             throw Error(MailboxAuthenticatedCapabilityError.InvalidHolderSignature, "MCP2 holder signature is invalid.");
+        if (revocations.IsRevoked(new MailboxCapabilityRevocationQuery
+        {
+            IssuerPublicKey = grant.IssuerPublicKey.ToArray(),
+            Serial = grant.Serial.ToArray(),
+            Domain = grant.Domain,
+            Generation = grant.Generation,
+            Epoch = grant.Epoch,
+            MembershipCommitment = grant.MembershipCommitment.ToArray()
+        }))
+            throw Error(MailboxAuthenticatedCapabilityError.Revoked, "MCG2 has been revoked.");
 
         var claim = new MailboxCapabilityAtomicReplayClaim
         {
@@ -206,6 +223,8 @@ public static class MailboxAuthenticatedCapabilityCodec
             MailboxCapabilityAtomicReplayState.NewReserved when evaluation.CachedOutcome.IsEmpty =>
                 MailboxAuthenticatedReplayDisposition.NewReserved,
             MailboxCapabilityAtomicReplayState.PendingSame when evaluation.CachedOutcome.IsEmpty =>
+                MailboxAuthenticatedReplayDisposition.InFlight,
+            MailboxCapabilityAtomicReplayState.PendingPrior when evaluation.CachedOutcome.IsEmpty =>
                 MailboxAuthenticatedReplayDisposition.InFlight,
             MailboxCapabilityAtomicReplayState.CompletedSame when !evaluation.CachedOutcome.IsEmpty =>
                 MailboxAuthenticatedReplayDisposition.IdempotentCompleted,

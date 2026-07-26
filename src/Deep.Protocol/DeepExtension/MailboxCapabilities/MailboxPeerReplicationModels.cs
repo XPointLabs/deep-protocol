@@ -83,6 +83,7 @@ public sealed record MailboxPeerReplicationVerificationPolicy
     public required ReadOnlyMemory<byte> TargetReplicaId { get; init; }
     public required ReadOnlyMemory<byte> MembershipCommitment { get; init; }
     public required ReadOnlyMemory<byte> PlacementCommitment { get; init; }
+    public required BlindedPlacementId PlacementId { get; init; }
     public required ulong NowUnixSeconds { get; init; }
 }
 
