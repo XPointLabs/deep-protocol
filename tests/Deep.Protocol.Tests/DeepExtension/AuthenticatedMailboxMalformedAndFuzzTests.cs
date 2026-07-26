@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using Deep.Protocol.DeepExtension.MailboxCapabilities;
 
 namespace Deep.Protocol.Tests.DeepExtension;
@@ -67,6 +68,71 @@ public sealed class AuthenticatedMailboxMalformedAndFuzzTests
             }));
     }
 
+    [Fact]
+    public void Prq1AttackerControlledUintLength_MapsToProtocolError()
+    {
+        var encoded = new byte[
+            MailboxPeerReplicationLimits.RequestFixedLength +
+            2 * MailboxPeerReplicationLimits.MembershipProofFixedLength +
+            MailboxPeerReplicationLimits.SignatureLength];
+        "PRQ1"u8.CopyTo(encoded);
+        encoded[4] = 1;
+        encoded[5] = 1;
+        BinaryPrimitives.WriteUInt32BigEndian(encoded.AsSpan(240), uint.MaxValue);
+        var error = Assert.Throws<MailboxPeerReplicationException>(() =>
+            MailboxPeerReplicationCodec.Decode(encoded));
+        Assert.Equal(MailboxPeerReplicationError.InvalidLength, error.Error);
+    }
+
+    [Fact]
+    public void Mau2RejectsEveryTruncationVersionReservedAndBodyTamper()
+    {
+        var presentationBytes = ValidPresentation();
+        var presentation = MailboxAuthenticatedCapabilityCodec.DecodePresentation(presentationBytes);
+        var binding = MailboxAuthenticatedRequestTranscript.ForStore(new MailboxEncryptedEnvelope
+        {
+            Epoch = 7,
+            MailboxId = new BlindedMailboxId(Range(0x20, 32)),
+            PlacementId = new BlindedPlacementId(Range(0x90, 32)),
+            OperationId = Range(0xd0, 16),
+            DeduplicationDigest = Range(0xe0, 32),
+            CreatedAtUnixSeconds = 1000,
+            ExpiresAtUnixSeconds = 1060,
+            Ciphertext = Range(1, 64)
+        });
+        var encoded = MailboxAuthenticatedClientRequestCodec.Encode(
+            new MailboxAuthenticatedClientRequest
+            {
+                Binding = binding,
+                Presentation = presentation
+            });
+        for (var length = 0; length < encoded.Length; length++)
+            Assert.Throws<MailboxAuthenticatedCapabilityException>(() =>
+                MailboxAuthenticatedClientRequestCodec.Decode(encoded.AsSpan(0, length)));
+        foreach (var offset in new[] { 4, 5, 6, 14, 16 + 5 })
+        {
+            var mutated = encoded.ToArray();
+            mutated[offset] ^= 1;
+            Assert.Throws<MailboxAuthenticatedCapabilityException>(() =>
+                MailboxAuthenticatedClientRequestCodec.Decode(mutated));
+        }
+        var bodyTamper = encoded.ToArray();
+        bodyTamper[^1] ^= 1;
+        Assert.Throws<MailboxAuthenticatedCapabilityException>(() =>
+            MailboxAuthenticatedClientRequestCodec.Decode(bodyTamper));
+    }
+
+    [Fact]
+    public void PlacementCommitment_IsDomainSeparatedAndNotRawPlacementId()
+    {
+        var placement = new BlindedPlacementId(Range(0x90, 32));
+        var commitment = MailboxPlacementCommitment.Compute(placement);
+        Assert.Equal(
+            "432187e2f0980d4d184d0eceed0e40151c4eb23a0098a092736bff8f3c715e2b",
+            Convert.ToHexString(commitment).ToLowerInvariant());
+        Assert.NotEqual(placement.Bytes.ToArray(), commitment);
+    }
+
     private static byte[] ValidPresentation()
     {
         var crypto = new SodiumMailboxCapabilityCrypto();
@@ -83,7 +149,8 @@ public sealed class AuthenticatedMailboxMalformedAndFuzzTests
             NotBeforeUnixSeconds = 1000,
             ExpiresAtUnixSeconds = 1100,
             OverlapUntilUnixSeconds = 0,
-            PlacementCommitment = Range(0x90, 32),
+            PlacementCommitment = MailboxPlacementCommitment.Compute(
+                new BlindedPlacementId(Range(0x90, 32))),
             MembershipCommitment = Range(0xb0, 32),
             IssuerPublicKey = crypto.GetPublicKey(issuer),
             HolderPublicKey = crypto.GetPublicKey(holder),
@@ -92,12 +159,17 @@ public sealed class AuthenticatedMailboxMalformedAndFuzzTests
         return MailboxAuthenticatedCapabilityCodec.EncodePresentation(
             crypto.SignPresentation(
                 grant,
-                new MailboxAuthenticatedRequestBinding
+                MailboxAuthenticatedRequestTranscript.ForStore(new MailboxEncryptedEnvelope
                 {
-                    Operation = MailboxAuthenticatedOperation.Store,
+                    Epoch = 7,
+                    MailboxId = new BlindedMailboxId(Range(0x20, 32)),
+                    PlacementId = new BlindedPlacementId(Range(0x90, 32)),
                     OperationId = Range(0xd0, 16),
-                    RequestDigest = Range(0xe0, 32)
-                },
+                    DeduplicationDigest = Range(0xe0, 32),
+                    CreatedAtUnixSeconds = 1000,
+                    ExpiresAtUnixSeconds = 1060,
+                    Ciphertext = Range(1, 64)
+                }),
                 11,
                 holder));
     }

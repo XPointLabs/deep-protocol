@@ -127,7 +127,8 @@ cryptographic review.
 P03B defines canonical capability and receipt bytes plus strict client-side verification behavior.
 The strict non-convertible V2 profile now implements real Ed25519 issuer and holder authentication,
 exact operation/request/epoch/membership/placement binding, explicit generation/overlap checks and
-an atomic durable replay-journal interface. It deliberately does not implement:
+an executable replay state machine. Typed MEO1/MBR2/MBA2 transcripts are carried only by MAU2;
+MCP1 and MST1/MRT1/MAK1 are not converted. It deliberately does not implement:
 
 - mailbox/domain-scoped issuer or holder key custody, backup, derivation, rotation ceremony or
   recovery;
@@ -141,7 +142,8 @@ an atomic durable replay-journal interface. It deliberately does not implement:
 `IMailboxReceiptCrypto`, legacy `IMailboxCapabilityReplayGuard`,
 `IMailboxCapabilityRevocationSource` and `IMailboxCapabilityReplayJournal` are trust boundaries.
 The V2 journal must atomically reserve/read a claim and atomically complete its bounded outcome;
-crash recovery must retain an explicit in-flight reservation. The legacy replay guard
+crash recovery must retain an explicit in-flight reservation, using the canonical scope key and
+state-machine transition. The legacy replay guard
 must durably compare the supplied canonical presentation and return a previously committed bounded
 outcome only for an exact idempotent retry; P03B defines this decision contract but supplies no
 persistence. Test fixtures use deterministic SHA-256-based signatures only to make codec and

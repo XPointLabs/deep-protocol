@@ -1,0 +1,47 @@
+{
+  "name": "Authenticated mailbox V2 canonical frame identities",
+  "sourceRepository": "XPointLabs/deep-protocol",
+  "sourceCommit": "contract-first deterministic fixtures; values are SHA-256 of complete canonical frame",
+  "vectors": [
+    {
+      "id": "deep-extension/mailbox-authenticated/v2/MAU2-store-length-640",
+      "kind": "sha256-complete-canonical-frame",
+      "hex": "95180b02677f260099f524046ea7d7d4de0c0a5bda5fc2921fd80839d79028f8"
+    },
+    {
+      "id": "deep-extension/mailbox-authenticated/v2/MAU2-retrieve-length-544",
+      "kind": "sha256-complete-canonical-frame",
+      "hex": "07400fa8cd9a07e2d33e09a230a433625ae1f69ca0601b0114607689831b7f5e"
+    },
+    {
+      "id": "deep-extension/mailbox-authenticated/v2/MAU2-ack-length-584",
+      "kind": "sha256-complete-canonical-frame",
+      "hex": "b617514ee20ae7fa73debb63081548e54f54ba11ec5d9e9ead4791d868dd2e6a"
+    },
+    {
+      "id": "deep-extension/mailbox-peer/v1/MIP1-length-184",
+      "kind": "sha256-complete-canonical-frame",
+      "hex": "a5ce0caceb0fceb581ac0619a667e9b5e83fc99135c72e10bf15a63ad7ec68d0"
+    },
+    {
+      "id": "deep-extension/mailbox-peer/v1/RIP1-length-206",
+      "kind": "sha256-complete-canonical-frame",
+      "hex": "3a0fefcd2018dd2ef108635e1cb48cd7a9dcd5556860fd5d7dd6217cb7829a6a"
+    },
+    {
+      "id": "deep-extension/mailbox-peer/v1/PRQ1-store-length-904",
+      "kind": "sha256-complete-canonical-frame",
+      "hex": "23e13434177ed5f538ef3c04883aafdee1ffc9fae4a1ba024457bf49720dd1c4"
+    },
+    {
+      "id": "deep-extension/mailbox-peer/v1/PRQ1-tombstone-length-720",
+      "kind": "sha256-complete-canonical-frame",
+      "hex": "b92e7d3678cbe28cb39abcb92583b98a76f726ac538c8db9e7ac637bbebaaaf7"
+    },
+    {
+      "id": "deep-extension/mailbox-peer/v1/MAR1-two-length-1596",
+      "kind": "sha256-complete-canonical-frame",
+      "hex": "74dcf7c78fb4ecddf1ce5f11875af2812ce244a323c3e3ff0e45decd406329be"
+    }
+  ]
+}

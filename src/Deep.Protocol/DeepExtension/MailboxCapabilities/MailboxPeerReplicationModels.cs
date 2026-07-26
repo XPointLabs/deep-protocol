@@ -25,6 +25,12 @@ public enum MailboxPeerReplicationOperation : byte
     Tombstone = 2
 }
 
+public enum MailboxPeerResponseReplica : byte
+{
+    Source = 1,
+    Target = 2
+}
+
 public enum MailboxPeerReplicationError
 {
     InvalidLength,

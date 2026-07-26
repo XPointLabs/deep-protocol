@@ -28,13 +28,19 @@ public sealed class AuthenticatedMailboxCapabilityContractTests
         Assert.Equal(vector.Hex, Convert.ToHexString(encoded).ToLowerInvariant());
 
         var replay = new MemoryReplayJournal();
-        var verified = MailboxAuthenticatedCapabilityCodec.Verify(
-            encoded,
-            binding,
+        var outer = MailboxAuthenticatedClientRequestCodec.Encode(
+            new MailboxAuthenticatedClientRequest
+            {
+                Binding = binding,
+                Presentation = presentation
+            });
+        var verifiedOuter = MailboxAuthenticatedClientRequestCodec.Verify(
+            outer,
             Policy(grant),
             crypto,
             new NoRevocations(),
             replay);
+        var verified = verifiedOuter.Capability;
 
         Assert.Equal(MailboxAuthenticatedReplayDisposition.NewReserved, verified.ReplayDisposition);
         Assert.Equal(grant.Serial.ToArray(), verified.Grant.Serial.ToArray());
@@ -64,7 +70,10 @@ public sealed class AuthenticatedMailboxCapabilityContractTests
         Assert.Throws<MailboxAuthenticatedCapabilityException>(() =>
             MailboxAuthenticatedCapabilityCodec.Verify(
                 encoded,
-                binding with { RequestDigest = Range(0x01, 32) },
+                MailboxAuthenticatedRequestTranscript.ForStore(StoreEnvelope() with
+                {
+                    Ciphertext = Range(0x02, 64)
+                }),
                 Policy(grant),
                 crypto,
                 new NoRevocations(),
@@ -72,7 +81,7 @@ public sealed class AuthenticatedMailboxCapabilityContractTests
         Assert.Throws<MailboxAuthenticatedCapabilityException>(() =>
             MailboxAuthenticatedCapabilityCodec.Verify(
                 encoded,
-                binding with { Operation = MailboxAuthenticatedOperation.Retrieve },
+                Binding(MailboxAuthenticatedOperation.Retrieve),
                 Policy(grant),
                 crypto,
                 new NoRevocations(),
@@ -145,6 +154,184 @@ public sealed class AuthenticatedMailboxCapabilityContractTests
             MailboxAuthenticatedCapabilityCodec.DecodePresentation(v1));
     }
 
+    [Fact]
+    public void TypedTranscripts_BindEveryCriticalStoreRetrieveAndAckField()
+    {
+        var store = StoreEnvelope();
+        var storeDigest = MailboxAuthenticatedRequestTranscript.ForStore(store).RequestDigest;
+        AssertChanged(MailboxAuthenticatedRequestTranscript.ForStore(store with { Epoch = 12 }).RequestDigest, storeDigest);
+        AssertChanged(MailboxAuthenticatedRequestTranscript.ForStore(store with { OperationId = Range(1, 16) }).RequestDigest, storeDigest);
+        AssertChanged(MailboxAuthenticatedRequestTranscript.ForStore(store with { MailboxId = new BlindedMailboxId(Range(2, 32)) }).RequestDigest, storeDigest);
+        AssertChanged(MailboxAuthenticatedRequestTranscript.ForStore(store with { PlacementId = new BlindedPlacementId(Range(3, 32)) }).RequestDigest, storeDigest);
+        AssertChanged(MailboxAuthenticatedRequestTranscript.ForStore(store with { DeduplicationDigest = Range(4, 32) }).RequestDigest, storeDigest);
+        AssertChanged(MailboxAuthenticatedRequestTranscript.ForStore(store with { CreatedAtUnixSeconds = 999 }).RequestDigest, storeDigest);
+        AssertChanged(MailboxAuthenticatedRequestTranscript.ForStore(store with { ExpiresAtUnixSeconds = 1061 }).RequestDigest, storeDigest);
+        AssertChanged(MailboxAuthenticatedRequestTranscript.ForStore(store with { Ciphertext = Range(5, 64) }).RequestDigest, storeDigest);
+
+        var operationId = Range(0xd0, 16);
+        var mailbox = new BlindedMailboxId(Range(0x20, 32));
+        var placement = new BlindedPlacementId(Range(0x90, 32));
+        var retrieve = MailboxAuthenticatedRequestTranscript.ForRetrieve(
+            11, operationId, mailbox, placement, 42, 10, Range(1, 8)).RequestDigest;
+        AssertChanged(MailboxAuthenticatedRequestTranscript.ForRetrieve(
+            12, operationId, mailbox, placement, 42, 10, Range(1, 8)).RequestDigest, retrieve);
+        AssertChanged(MailboxAuthenticatedRequestTranscript.ForRetrieve(
+            11, Range(2, 16), mailbox, placement, 42, 10, Range(1, 8)).RequestDigest, retrieve);
+        AssertChanged(MailboxAuthenticatedRequestTranscript.ForRetrieve(
+            11, operationId, new BlindedMailboxId(Range(3, 32)), placement, 42, 10, Range(1, 8)).RequestDigest, retrieve);
+        AssertChanged(MailboxAuthenticatedRequestTranscript.ForRetrieve(
+            11, operationId, mailbox, new BlindedPlacementId(Range(4, 32)), 42, 10, Range(1, 8)).RequestDigest, retrieve);
+        AssertChanged(MailboxAuthenticatedRequestTranscript.ForRetrieve(
+            11, operationId, mailbox, placement, 43, 10, Range(1, 8)).RequestDigest, retrieve);
+        AssertChanged(MailboxAuthenticatedRequestTranscript.ForRetrieve(
+            11, operationId, mailbox, placement, 42, 11, Range(1, 8)).RequestDigest, retrieve);
+        AssertChanged(MailboxAuthenticatedRequestTranscript.ForRetrieve(
+            11, operationId, mailbox, placement, 42, 10, Range(2, 8)).RequestDigest, retrieve);
+
+        var entries = new[]
+        {
+            new MailboxAcknowledgement { Cursor = 42, EnvelopeDigest = Range(0xe0, 32) },
+            new MailboxAcknowledgement { Cursor = 43, EnvelopeDigest = Range(1, 32) }
+        };
+        var ack = MailboxAuthenticatedRequestTranscript.ForAck(
+            11, operationId, mailbox, placement, true, Range(1, 8), entries).RequestDigest;
+        AssertChanged(MailboxAuthenticatedRequestTranscript.ForAck(
+            11, operationId, mailbox, placement, false, Range(1, 8), entries).RequestDigest, ack);
+        AssertChanged(MailboxAuthenticatedRequestTranscript.ForAck(
+            11, operationId, mailbox, placement, true, Range(2, 8), entries).RequestDigest, ack);
+        AssertChanged(MailboxAuthenticatedRequestTranscript.ForAck(
+            11, operationId, mailbox, placement, true, Range(1, 8),
+            [entries[0], entries[1] with { EnvelopeDigest = Range(2, 32) }]).RequestDigest, ack);
+        Assert.NotEqual(storeDigest.ToArray(), retrieve.ToArray());
+        Assert.NotEqual(retrieve.ToArray(), ack.ToArray());
+    }
+
+    [Fact]
+    public void Mau2CarriesExactMcp2AndCanonicalBody_ForAllOperations()
+    {
+        var crypto = new SodiumMailboxCapabilityCrypto();
+        var issuerSeed = Range(0x10, 32);
+        var holderSeed = Range(0x40, 32);
+        var identities = new List<string>();
+        foreach (var operation in new[]
+        {
+            MailboxAuthenticatedOperation.Store,
+            MailboxAuthenticatedOperation.Retrieve,
+            MailboxAuthenticatedOperation.Ack
+        })
+        {
+            var domain = operation == MailboxAuthenticatedOperation.Store
+                ? MailboxCapabilityDomain.Deposit
+                : MailboxCapabilityDomain.Retrieve;
+            var grant = crypto.SignGrant(
+                Grant(
+                    crypto.GetPublicKey(issuerSeed),
+                    crypto.GetPublicKey(holderSeed),
+                    domain),
+                issuerSeed);
+            var binding = Binding(operation);
+            var presentation = crypto.SignPresentation(grant, binding, 9, holderSeed);
+            var encoded = MailboxAuthenticatedClientRequestCodec.Encode(
+                new MailboxAuthenticatedClientRequest
+                {
+                    Binding = binding,
+                    Presentation = presentation
+                });
+            var decoded = MailboxAuthenticatedClientRequestCodec.Decode(encoded);
+            identities.Add(
+                $"{operation}:{encoded.Length}:" +
+                Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(encoded)).ToLowerInvariant());
+            Assert.Equal(operation, decoded.Binding.Operation);
+            Assert.Equal(binding.CanonicalRequest.ToArray(), decoded.Binding.CanonicalRequest.ToArray());
+            Assert.Equal(binding.RequestDigest.ToArray(), decoded.Presentation.RequestDigest.ToArray());
+        }
+        var vectors = GoldenVectorLoader.Load("authenticated-mailbox-v2-identities.json");
+        Assert.Equal(
+            $"Store:640:{vectors.GetRequired("deep-extension/mailbox-authenticated/v2/MAU2-store-length-640").Hex}",
+            identities[0]);
+        Assert.Equal(
+            $"Retrieve:544:{vectors.GetRequired("deep-extension/mailbox-authenticated/v2/MAU2-retrieve-length-544").Hex}",
+            identities[1]);
+        Assert.Equal(
+            $"Ack:584:{vectors.GetRequired("deep-extension/mailbox-authenticated/v2/MAU2-ack-length-584").Hex}",
+            identities[2]);
+
+        var legacy = MailboxClientCodec.EncodeEncryptedEnvelope(StoreEnvelope());
+        Assert.Throws<MailboxAuthenticatedCapabilityException>(() =>
+            MailboxAuthenticatedClientRequestCodec.Decode(legacy));
+    }
+
+    [Fact]
+    public void IssuerAuthority_BindsDomainGenerationLifecycleAndHardWindow()
+    {
+        var crypto = new SodiumMailboxCapabilityCrypto();
+        var issuerSeed = Range(0x10, 32);
+        var holderSeed = Range(0x40, 32);
+        var grant = crypto.SignGrant(
+            Grant(
+                crypto.GetPublicKey(issuerSeed),
+                crypto.GetPublicKey(holderSeed),
+                MailboxCapabilityDomain.Deposit),
+            issuerSeed);
+        var binding = Binding(MailboxAuthenticatedOperation.Store);
+        var encoded = MailboxAuthenticatedCapabilityCodec.EncodePresentation(
+            crypto.SignPresentation(grant, binding, 9, holderSeed));
+        var policy = Policy(grant);
+        var authority = policy.TrustedIssuers.Single();
+        foreach (var invalid in new[]
+        {
+            authority with { MaximumGeneration = grant.Generation - 1 },
+            authority with { Domain = MailboxCapabilityDomain.Retrieve },
+            authority with { AllowedLifecycle = MailboxCapabilityLifecycle.Overlap },
+            authority with { ValidFromUnixSeconds = grant.NotBeforeUnixSeconds + 1 },
+            authority with { ValidUntilUnixSeconds = grant.ExpiresAtUnixSeconds - 1 }
+        })
+        {
+            Assert.Throws<MailboxAuthenticatedCapabilityException>(() =>
+                MailboxAuthenticatedCapabilityCodec.Verify(
+                    encoded,
+                    binding,
+                    policy with { TrustedIssuers = [invalid] },
+                    crypto,
+                    new NoRevocations(),
+                    new MemoryReplayJournal()));
+        }
+    }
+
+    [Fact]
+    public void ReplayStateMachine_IsMonotonicCrashSafeAndConflictAware()
+    {
+        var claim = Claim(9, Range(1, 32));
+        var reserved = MailboxCapabilityReplayStateMachine.EvaluateAndReserve(null, claim);
+        Assert.Equal(MailboxCapabilityAtomicReplayState.NewReserved, reserved.Evaluation.State);
+        var pendingAfterRestart = MailboxCapabilityReplayStateMachine.EvaluateAndReserve(
+            reserved.NextSnapshot,
+            claim);
+        Assert.Equal(MailboxCapabilityAtomicReplayState.PendingSame, pendingAfterRestart.Evaluation.State);
+        var conflict = MailboxCapabilityReplayStateMachine.EvaluateAndReserve(
+            reserved.NextSnapshot,
+            Claim(9, Range(2, 32)));
+        Assert.Equal(MailboxCapabilityAtomicReplayState.Conflict, conflict.Evaluation.State);
+        var stale = MailboxCapabilityReplayStateMachine.EvaluateAndReserve(
+            reserved.NextSnapshot,
+            Claim(8, Range(3, 32)));
+        Assert.Equal(MailboxCapabilityAtomicReplayState.StaleReplay, stale.Evaluation.State);
+        var complete = MailboxCapabilityReplayStateMachine.Complete(
+            reserved.NextSnapshot!,
+            claim,
+            Range(4, 32));
+        var retry = MailboxCapabilityReplayStateMachine.EvaluateAndReserve(complete, claim);
+        Assert.Equal(MailboxCapabilityAtomicReplayState.CompletedSame, retry.Evaluation.State);
+        Assert.Equal(Range(4, 32), retry.Evaluation.CachedOutcome.ToArray());
+
+        var journal = new AtomicReferenceReplayJournal();
+        var decisions = new MailboxCapabilityAtomicReplayState[32];
+        Parallel.For(0, decisions.Length, index =>
+            decisions[index] = journal.EvaluateAndReserve(claim).State);
+        Assert.Single(decisions, value => value == MailboxCapabilityAtomicReplayState.NewReserved);
+        Assert.Equal(31, decisions.Count(value => value == MailboxCapabilityAtomicReplayState.PendingSame));
+    }
+
     private static MailboxAuthenticatedGrant Grant(
         byte[] issuer,
         byte[] holder,
@@ -160,7 +347,8 @@ public sealed class AuthenticatedMailboxCapabilityContractTests
             NotBeforeUnixSeconds = 1000,
             ExpiresAtUnixSeconds = 1100,
             OverlapUntilUnixSeconds = 0,
-            PlacementCommitment = Range(0x90, 32),
+            PlacementCommitment = MailboxPlacementCommitment.Compute(
+                new BlindedPlacementId(Range(0x90, 32))),
             MembershipCommitment = Range(0xb0, 32),
             IssuerPublicKey = issuer,
             HolderPublicKey = holder,
@@ -169,11 +357,48 @@ public sealed class AuthenticatedMailboxCapabilityContractTests
 
     private static MailboxAuthenticatedRequestBinding Binding(
         MailboxAuthenticatedOperation operation) =>
+        operation switch
+        {
+            MailboxAuthenticatedOperation.Store =>
+                MailboxAuthenticatedRequestTranscript.ForStore(StoreEnvelope()),
+            MailboxAuthenticatedOperation.Retrieve =>
+                MailboxAuthenticatedRequestTranscript.ForRetrieve(
+                    11,
+                    Range(0xd0, 16),
+                    new BlindedMailboxId(Range(0x20, 32)),
+                    new BlindedPlacementId(Range(0x90, 32)),
+                    42,
+                    10,
+                    Range(1, 8)),
+            MailboxAuthenticatedOperation.Ack =>
+                MailboxAuthenticatedRequestTranscript.ForAck(
+                    11,
+                    Range(0xd0, 16),
+                    new BlindedMailboxId(Range(0x20, 32)),
+                    new BlindedPlacementId(Range(0x90, 32)),
+                    true,
+                    Range(1, 8),
+                    [
+                        new MailboxAcknowledgement
+                        {
+                            Cursor = 42,
+                            EnvelopeDigest = Range(0xe0, 32)
+                        }
+                    ]),
+            _ => throw new ArgumentOutOfRangeException(nameof(operation))
+        };
+
+    private static MailboxEncryptedEnvelope StoreEnvelope() =>
         new()
         {
-            Operation = operation,
+            Epoch = 11,
+            MailboxId = new BlindedMailboxId(Range(0x20, 32)),
+            PlacementId = new BlindedPlacementId(Range(0x90, 32)),
             OperationId = Range(0xd0, 16),
-            RequestDigest = Range(0xe0, 32)
+            DeduplicationDigest = Range(0xe0, 32),
+            CreatedAtUnixSeconds = 1000,
+            ExpiresAtUnixSeconds = 1060,
+            Ciphertext = Range(0x01, 64)
         };
 
     private static MailboxAuthenticatedVerificationPolicy Policy(MailboxAuthenticatedGrant grant) =>
@@ -185,11 +410,40 @@ public sealed class AuthenticatedMailboxCapabilityContractTests
             MembershipCommitment = grant.MembershipCommitment,
             NowUnixSeconds = 1050,
             MinimumGeneration = grant.Generation,
-            TrustedIssuerPublicKeys = [grant.IssuerPublicKey]
+            TrustedIssuers =
+            [
+                new MailboxCapabilityIssuerAuthority
+                {
+                    PublicKey = grant.IssuerPublicKey,
+                    Domain = grant.Domain,
+                    AllowedLifecycle = grant.Lifecycle,
+                    MinimumGeneration = grant.Generation,
+                    MaximumGeneration = grant.Generation,
+                    ValidFromUnixSeconds = grant.NotBeforeUnixSeconds,
+                    ValidUntilUnixSeconds = grant.ExpiresAtUnixSeconds
+                }
+            ]
         };
 
     private static byte[] Range(int start, int length) =>
         Enumerable.Range(start, length).Select(static value => unchecked((byte)value)).ToArray();
+
+    private static void AssertChanged(ReadOnlyMemory<byte> actual, ReadOnlyMemory<byte> expected) =>
+        Assert.NotEqual(expected.ToArray(), actual.ToArray());
+
+    private static MailboxCapabilityAtomicReplayClaim Claim(ulong counter, byte[] digest) =>
+        new()
+        {
+            ClaimDigest = digest,
+            IssuerPublicKey = Range(0x10, 32),
+            Serial = Range(0x40, 16),
+            Epoch = 11,
+            Generation = 7,
+            Operation = MailboxAuthenticatedOperation.Store,
+            OperationId = Range(0x60, 16),
+            ReplayCounter = counter,
+            RequestDigest = Range(0x80, 32)
+        };
 
     private sealed class NoRevocations : IMailboxCapabilityRevocationSource
     {
@@ -222,5 +476,35 @@ public sealed class AuthenticatedMailboxCapabilityContractTests
             MailboxCapabilityAtomicReplayClaim claim,
             ReadOnlyMemory<byte> canonicalOutcome) =>
             throw new NotSupportedException();
+    }
+
+    private sealed class AtomicReferenceReplayJournal : IMailboxCapabilityReplayJournal
+    {
+        private readonly object _gate = new();
+        private MailboxCapabilityReplaySnapshot? _snapshot;
+
+        public MailboxCapabilityAtomicReplayEvaluation EvaluateAndReserve(
+            MailboxCapabilityAtomicReplayClaim claim)
+        {
+            lock (_gate)
+            {
+                var transition = MailboxCapabilityReplayStateMachine.EvaluateAndReserve(
+                    _snapshot,
+                    claim);
+                _snapshot = transition.NextSnapshot;
+                return transition.Evaluation;
+            }
+        }
+
+        public void CompleteAtomically(
+            MailboxCapabilityAtomicReplayClaim claim,
+            ReadOnlyMemory<byte> canonicalOutcome)
+        {
+            lock (_gate)
+                _snapshot = MailboxCapabilityReplayStateMachine.Complete(
+                    _snapshot!,
+                    claim,
+                    canonicalOutcome.Span);
+        }
     }
 }

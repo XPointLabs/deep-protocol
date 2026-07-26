@@ -20,8 +20,15 @@ public sealed class MailboxReplicaRouteProofTests
             MembershipCommitment = root,
             CanonicalInclusionProof = MailboxReplicaRouteProofCodec.Encode(members[0], proof)
         };
+        Assert.Equal(206, mailboxProof.CanonicalInclusionProof.Length);
+        Assert.Equal(
+            "3a0fefcd2018dd2ef108635e1cb48cd7a9dcd5556860fd5d7dd6217cb7829a6a",
+            Convert.ToHexString(
+                System.Security.Cryptography.SHA256.HashData(
+                    mailboxProof.CanonicalInclusionProof.Span)).ToLowerInvariant());
         var verifier = new MembershipRoutesMailboxReplicaProofVerifier();
 
+        Assert.NotEqual(mailboxProof.ReplicaId.ToArray(), mailboxProof.SigningPublicKey.ToArray());
         Assert.True(verifier.VerifyStorageReplica(mailboxProof, 1050));
         Assert.False(verifier.VerifyStorageReplica(mailboxProof with
         {

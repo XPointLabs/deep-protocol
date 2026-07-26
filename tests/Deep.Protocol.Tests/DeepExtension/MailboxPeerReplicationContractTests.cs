@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using Deep.Protocol.DeepExtension.MailboxCapabilities;
+using Deep.Protocol.GoldenVectors;
 
 namespace Deep.Protocol.Tests.DeepExtension;
 
@@ -10,9 +11,10 @@ public sealed class MailboxPeerReplicationContractTests
     {
         var crypto = new SodiumMailboxPeerReplicationCrypto();
         var sourceSeed = Range(0x10, 32);
+        var targetSeed = Range(0x50, 32);
         var sourceKey = crypto.GetPublicKey(sourceSeed);
         var proof = Proof(Range(0x20, 32), sourceKey);
-        var targetProof = Proof(Range(0x40, 32), Range(0x60, 32));
+        var targetProof = Proof(Range(0x40, 32), crypto.GetPublicKey(targetSeed));
         var envelope = Envelope();
         var payload = MailboxClientCodec.EncodeEncryptedEnvelope(envelope);
         var unsigned = Request(MailboxPeerReplicationOperation.Store, proof, targetProof, payload) with
@@ -21,6 +23,17 @@ public sealed class MailboxPeerReplicationContractTests
         };
         var signed = crypto.SignRequest(unsigned, sourceSeed);
         var encoded = MailboxPeerReplicationCodec.Encode(signed);
+        var mip1 = MailboxPeerReplicationCodec.EncodeMembershipProof(proof);
+        Assert.Equal(184, mip1.Length);
+        Assert.Equal(
+            GoldenVectorLoader.Load("authenticated-mailbox-v2-identities.json")
+                .GetRequired("deep-extension/mailbox-peer/v1/MIP1-length-184").Hex,
+            Convert.ToHexString(SHA256.HashData(mip1)).ToLowerInvariant());
+        Assert.Equal(904, encoded.Length);
+        Assert.Equal(
+            GoldenVectorLoader.Load("authenticated-mailbox-v2-identities.json")
+                .GetRequired("deep-extension/mailbox-peer/v1/PRQ1-store-length-904").Hex,
+            Convert.ToHexString(SHA256.HashData(encoded)).ToLowerInvariant());
         var verifier = new ExactProofVerifier();
 
         var verified = MailboxPeerReplicationCodec.Verify(
@@ -31,15 +44,70 @@ public sealed class MailboxPeerReplicationContractTests
         Assert.Equal(MailboxPeerReplicationOperation.Store, verified.Request.Operation);
         Assert.Equal(envelope.Ciphertext.ToArray(), verified.Envelope!.Ciphertext.ToArray());
         Assert.Equal(2, verifier.Calls);
+        var rawPlacement = crypto.SignRequest(unsigned with
+        {
+            PlacementCommitment = envelope.PlacementId.Bytes.ToArray()
+        }, sourceSeed);
+        Assert.Throws<MailboxPeerReplicationException>(() =>
+            MailboxPeerReplicationCodec.Verify(
+                MailboxPeerReplicationCodec.Encode(rawPlacement),
+                Policy(rawPlacement),
+                crypto,
+                new ExactProofVerifier()));
+        var unsignedReceipt = MailboxPeerReplicationCodec.CreateUnsignedReplicaResponse(
+            verified,
+            MailboxPeerResponseReplica.Target,
+            MailboxReceiptStatus.Durable,
+            1001,
+            1002);
+        var receipt = crypto.SignReplicaResponse(unsignedReceipt, targetSeed);
+        var verifiedReceipt = MailboxPeerReplicationCodec.VerifyReplicaResponse(
+            MailboxReceiptV2Codec.EncodeReplica(receipt),
+            verified,
+            crypto);
+        Assert.Equal(envelope.DeduplicationDigest.ToArray(), verifiedReceipt.EnvelopeDigest.ToArray());
+        Assert.Throws<MailboxPeerReplicationException>(() =>
+            MailboxPeerReplicationCodec.VerifyReplicaResponse(
+                MailboxReceiptV2Codec.EncodeReplica(
+                    crypto.SignReplicaResponse(unsignedReceipt, sourceSeed)),
+                verified,
+                crypto));
+        foreach (var mutation in new Func<MailboxReplicaReceiptV2, MailboxReplicaReceiptV2>[]
+        {
+            value => value with { ReplicaId = Range(0x70, 32) },
+            value => value with { OperationId = Range(1, 16) },
+            value => value with { Epoch = 8 },
+            value => value with { Cursor = 43 },
+            value => value with { ExpiresAtUnixSeconds = 1121 },
+            value => value with { BlindedMailboxId = Range(2, 32) },
+            value => value with { PlacementCommitment = Range(3, 32) },
+            value => value with { MembershipCommitment = Range(4, 32) },
+            value => value with { EnvelopeDigest = SHA256.HashData(payload) },
+            value => value with { Disposition = MailboxReplicaDisposition.Tombstone }
+        })
+        {
+            var mutated = crypto.SignReplicaResponse(mutation(unsignedReceipt), targetSeed);
+            Assert.Throws<MailboxPeerReplicationException>(() =>
+                MailboxPeerReplicationCodec.VerifyReplicaResponse(
+                    MailboxReceiptV2Codec.EncodeReplica(mutated),
+                    verified,
+                    crypto));
+        }
 
         var tombstonePayload = envelope.DeduplicationDigest.ToArray();
         var tombstone = crypto.SignRequest(
             Request(MailboxPeerReplicationOperation.Tombstone, proof, targetProof, tombstonePayload),
             sourceSeed);
+        var encodedTombstone = MailboxPeerReplicationCodec.Encode(tombstone);
+        Assert.Equal(720, encodedTombstone.Length);
+        Assert.Equal(
+            GoldenVectorLoader.Load("authenticated-mailbox-v2-identities.json")
+                .GetRequired("deep-extension/mailbox-peer/v1/PRQ1-tombstone-length-720").Hex,
+            Convert.ToHexString(SHA256.HashData(encodedTombstone)).ToLowerInvariant());
         Assert.Equal(
             MailboxPeerReplicationOperation.Tombstone,
             MailboxPeerReplicationCodec.Verify(
-                MailboxPeerReplicationCodec.Encode(tombstone),
+                encodedTombstone,
                 Policy(tombstone),
                 crypto,
                 new ExactProofVerifier()).Request.Operation);
@@ -85,10 +153,18 @@ public sealed class MailboxPeerReplicationContractTests
     [Fact]
     public void AggregateAck_RequiresOrderedExactTombstoneQuorums()
     {
-        var receiptCrypto = new DeterministicReceiptCrypto();
-        var expectations = new[] { Expectation(42), Expectation(43) };
-        var receipts = expectations
-            .Select(expectation => BuildTombstoneQuorum(expectation, receiptCrypto))
+        var crypto = new SodiumMailboxPeerReplicationCrypto();
+        var sourceSeed = Range(0x10, 32);
+        var targetSeed = Range(0x40, 32);
+        var source = Proof(Range(0x10, 32), crypto.GetPublicKey(sourceSeed));
+        var target = Proof(Range(0x30, 32), crypto.GetPublicKey(targetSeed));
+        var requests = new[]
+        {
+            VerifiedTombstone(42, Range(0xe0, 32)),
+            VerifiedTombstone(43, Range(0x01, 32))
+        };
+        var receipts = requests
+            .Select(BuildQuorum)
             .Select(MailboxReceiptV2Codec.EncodeDurableQuorum)
             .Select(static bytes => (ReadOnlyMemory<byte>)bytes)
             .ToArray();
@@ -99,21 +175,67 @@ public sealed class MailboxPeerReplicationContractTests
             TombstoneQuorums = receipts
         };
         var encoded = MailboxAggregateAckCodec.Encode(response);
+        Assert.Equal(1596, encoded.Length);
+        Assert.Equal(
+            GoldenVectorLoader.Load("authenticated-mailbox-v2-identities.json")
+                .GetRequired("deep-extension/mailbox-peer/v1/MAR1-two-length-1596").Hex,
+            Convert.ToHexString(SHA256.HashData(encoded)).ToLowerInvariant());
         var verified = MailboxAggregateAckCodec.Verify(
             encoded,
-            response.OperationId.Span,
-            response.Epoch,
-            expectations,
-            receiptCrypto);
+            requests,
+            crypto);
         Assert.Equal(2, verified.Count);
 
         Assert.Throws<MailboxPeerReplicationException>(() =>
             MailboxAggregateAckCodec.Verify(
                 encoded,
-                response.OperationId.Span,
-                response.Epoch,
-                expectations.Reverse().ToArray(),
-                receiptCrypto));
+                requests.Reverse().ToArray(),
+                crypto));
+
+        VerifiedMailboxPeerReplicationRequest VerifiedTombstone(ulong cursor, byte[] digest)
+        {
+            var request = Request(
+                MailboxPeerReplicationOperation.Tombstone,
+                source,
+                target,
+                digest) with
+            { Cursor = cursor };
+            var signed = crypto.SignRequest(request, sourceSeed);
+            return MailboxPeerReplicationCodec.Verify(
+                MailboxPeerReplicationCodec.Encode(signed),
+                Policy(signed),
+                crypto,
+                new ExactProofVerifier());
+        }
+
+        MailboxDurableQuorumReceiptV2 BuildQuorum(
+            VerifiedMailboxPeerReplicationRequest request)
+        {
+            var sourceReceipt = crypto.SignReplicaResponse(
+                MailboxPeerReplicationCodec.CreateUnsignedReplicaResponse(
+                    request,
+                    MailboxPeerResponseReplica.Source,
+                    MailboxReceiptStatus.Durable,
+                    1001,
+                    1002),
+                sourceSeed);
+            var targetReceipt = crypto.SignReplicaResponse(
+                MailboxPeerReplicationCodec.CreateUnsignedReplicaResponse(
+                    request,
+                    MailboxPeerResponseReplica.Target,
+                    MailboxReceiptStatus.Durable,
+                    1001,
+                    1002),
+                targetSeed);
+            return crypto.SignQuorumResponse(new MailboxDurableQuorumReceiptV2
+            {
+                CoordinatorId = request.Request.SourceReplicaId,
+                CoordinatorSequence = request.Request.Cursor,
+                FirstReplica = sourceReceipt,
+                SecondReplica = targetReceipt,
+                Signature = ReadOnlyMemory<byte>.Empty
+            }, sourceSeed);
+        }
     }
 
     private static MailboxPeerReplicationRequest Request(
@@ -129,7 +251,8 @@ public sealed class MailboxPeerReplicationContractTests
             SourceReplicaId = source.ReplicaId,
             TargetReplicaId = target.ReplicaId,
             MembershipCommitment = Range(0x80, 32),
-            PlacementCommitment = Range(0xa0, 32),
+            PlacementCommitment = MailboxPlacementCommitment.Compute(
+                new BlindedPlacementId(Range(0xa0, 32))),
             BlindedMailboxId = Range(0xc0, 32),
             Cursor = operation == MailboxPeerReplicationOperation.Store ? 42UL : 43UL,
             ExpiresAtUnixSeconds = 1120,
@@ -179,65 +302,6 @@ public sealed class MailboxPeerReplicationContractTests
             Ciphertext = Range(1, 64)
         };
 
-    private static MailboxDurableQuorumExpectationV2 Expectation(ulong cursor) =>
-        new()
-        {
-            OperationId = Range(0x70, 16),
-            Epoch = 7,
-            Cursor = cursor,
-            Disposition = MailboxReplicaDisposition.Tombstone,
-            BlindedMailboxId = Range(0xc0, 32),
-            PlacementCommitment = Range(0xa0, 32),
-            MembershipCommitment = Range(0x80, 32),
-            EnvelopeDigest = cursor == 42 ? Range(0xe0, 32) : Range(0x01, 32),
-            ExpiresAtUnixSeconds = 1120
-        };
-
-    private static MailboxDurableQuorumReceiptV2 BuildTombstoneQuorum(
-        MailboxDurableQuorumExpectationV2 expectation,
-        DeterministicReceiptCrypto crypto)
-    {
-        MailboxReplicaReceiptV2 Replica(byte[] id)
-        {
-            var value = new MailboxReplicaReceiptV2
-            {
-                Status = MailboxReceiptStatus.Durable,
-                Disposition = MailboxReplicaDisposition.Tombstone,
-                ReplicaId = id,
-                OperationId = expectation.OperationId,
-                Epoch = expectation.Epoch,
-                Cursor = expectation.Cursor,
-                AcceptedAtUnixSeconds = 1001,
-                DurableAtUnixSeconds = 1002,
-                ExpiresAtUnixSeconds = expectation.ExpiresAtUnixSeconds,
-                BlindedMailboxId = expectation.BlindedMailboxId,
-                PlacementCommitment = expectation.PlacementCommitment,
-                MembershipCommitment = expectation.MembershipCommitment,
-                EnvelopeDigest = expectation.EnvelopeDigest,
-                Signature = ReadOnlyMemory<byte>.Empty
-            };
-            return value with
-            {
-                Signature = crypto.Sign(id, MailboxReceiptV2Codec.GetReplicaSigningBytes(value))
-            };
-        }
-
-        var quorum = new MailboxDurableQuorumReceiptV2
-        {
-            CoordinatorId = Range(0x50, 32),
-            CoordinatorSequence = expectation.Cursor,
-            FirstReplica = Replica(Range(0x10, 32)),
-            SecondReplica = Replica(Range(0x30, 32)),
-            Signature = ReadOnlyMemory<byte>.Empty
-        };
-        return quorum with
-        {
-            Signature = crypto.Sign(
-                quorum.CoordinatorId.Span,
-                MailboxReceiptV2Codec.GetQuorumSigningBytes(quorum, crypto))
-        };
-    }
-
     private static byte[] Range(int start, int length) =>
         Enumerable.Range(start, length).Select(static value => unchecked((byte)value)).ToArray();
 
@@ -254,14 +318,4 @@ public sealed class MailboxPeerReplicationContractTests
         }
     }
 
-    private sealed class DeterministicReceiptCrypto : IMailboxReceiptCrypto
-    {
-        public byte[] Digest(ReadOnlySpan<byte> statement) => SHA256.HashData(statement);
-        public bool VerifyReplica(ReadOnlySpan<byte> replicaId, ReadOnlySpan<byte> signingBytes, ReadOnlySpan<byte> signature) =>
-            CryptographicOperations.FixedTimeEquals(Sign(replicaId, signingBytes), signature);
-        public bool VerifyCoordinator(ReadOnlySpan<byte> coordinatorId, ReadOnlySpan<byte> signingBytes, ReadOnlySpan<byte> signature) =>
-            CryptographicOperations.FixedTimeEquals(Sign(coordinatorId, signingBytes), signature);
-        public byte[] Sign(ReadOnlySpan<byte> id, ReadOnlySpan<byte> bytes) =>
-            SHA256.HashData([.. id, .. bytes]);
-    }
 }

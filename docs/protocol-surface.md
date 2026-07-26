@@ -115,7 +115,9 @@ An offline/self-hosted, mailbox/domain-scoped Ed25519 issuer signs fixed `MCG2`;
 holder signs an exact Store/Retrieve/Ack `MCP2`. Both bind network, epoch, generation, membership,
 placement, validity, operation ID, replay counter and canonical request digest. Deposit authorizes
 only Store; retrieve authorizes only Retrieve/Ack. A host supplies trusted issuer keys, durable
-revocation state and an atomic replay journal. No Session ID, payer, wallet, subscription or
+revocation state and an atomic replay journal. Typed MEO1/MBR2/MBA2 transcripts and the strict
+`MAU2` carrier prevent a caller-supplied digest or mixed V1/V2 outer wrapper. Issuer authority
+entries constrain key/domain/generation/lifecycle/hard validity. No Session ID, payer, wallet, subscription or
 payment entitlement is present.
 
 P09C extends that dormant surface additively. Fixed 32-byte `BlindedMailboxId` and
@@ -135,7 +137,9 @@ It is not byte-compatible with the implementation-local xnode JSON receipt. See
 membership-proven storage replicas. `MIP1` has a concrete `RIP1` adapter in
 `Deep.Protocol.MembershipRoutes`, verifying replica identity, Ed25519 key, Storage role/capability,
 epoch, validity and MRL1 Merkle inclusion against the exact commitment. Responses remain signed
-`MRR2`/`MQR2`. `MAR1` orders at most 100 exact tombstone `MQR2` receipts and adds no new durability
+`MRR2`/`MQR2`, with factories/verification derived from PRQ1 and exact MIP1 keys; RouterId and
+Ed25519 key are independent fields. Placement commitment is one domain-separated SHA-256 of the
+blinded placement ID. `MAR1` orders at most 100 exact tombstone `MQR2` receipts and adds no new durability
 meaning.
 
 P03C adds fixed `NRV1` advertisements and bounded `NHS1` initiator/responder frames. The public

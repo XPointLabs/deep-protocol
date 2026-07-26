@@ -80,37 +80,40 @@ public static class MailboxAggregateAckCodec
 
     public static IReadOnlyList<VerifiedMailboxDurableQuorumV2> Verify(
         ReadOnlySpan<byte> encoded,
-        ReadOnlySpan<byte> expectedOperationId,
-        ulong expectedEpoch,
-        IReadOnlyList<MailboxDurableQuorumExpectationV2> orderedExpectations,
-        IMailboxReceiptCrypto crypto)
+        IReadOnlyList<VerifiedMailboxPeerReplicationRequest> orderedAckReplications,
+        IMailboxPeerReplicationCrypto crypto)
     {
-        ArgumentNullException.ThrowIfNull(orderedExpectations);
+        ArgumentNullException.ThrowIfNull(orderedAckReplications);
         ArgumentNullException.ThrowIfNull(crypto);
+        if (orderedAckReplications.Count is 0 or > MailboxClientLimits.MaximumPageItems ||
+            orderedAckReplications.Any(static value =>
+                value is null ||
+                value.Request.Operation != MailboxPeerReplicationOperation.Tombstone))
+            throw Error(MailboxPeerReplicationError.BindingMismatch, "MAR1 requires ordered verified tombstone PRQ1 inputs.");
         var response = Decode(encoded);
-        if (response.Epoch != expectedEpoch ||
-            expectedOperationId.Length != 16 ||
-            !CryptographicOperations.FixedTimeEquals(response.OperationId.Span, expectedOperationId) ||
-            response.TombstoneQuorums.Count != orderedExpectations.Count)
-            throw Error(MailboxPeerReplicationError.BindingMismatch, "MAR1 does not match exact ACK operation.");
-        var verified = new List<VerifiedMailboxDurableQuorumV2>(orderedExpectations.Count);
-        for (var index = 0; index < orderedExpectations.Count; index++)
-        {
-            var expectation = orderedExpectations[index];
-            if (expectation.Disposition != MailboxReplicaDisposition.Tombstone ||
-                expectation.Epoch != expectedEpoch ||
+        var first = orderedAckReplications[0].Request;
+        if (response.Epoch != first.Epoch ||
+            !CryptographicOperations.FixedTimeEquals(
+                response.OperationId.Span,
+                first.OperationId.Span) ||
+            response.TombstoneQuorums.Count != orderedAckReplications.Count ||
+            orderedAckReplications.Any(value =>
+                value.Request.Epoch != first.Epoch ||
                 !CryptographicOperations.FixedTimeEquals(
-                    expectation.OperationId.Span,
-                    expectedOperationId))
-                throw Error(MailboxPeerReplicationError.BindingMismatch, "MAR1 expectation is not an exact tombstone ACK.");
+                    value.Request.OperationId.Span,
+                    first.OperationId.Span)))
+            throw Error(MailboxPeerReplicationError.BindingMismatch, "MAR1 does not match exact ACK operation.");
+        var verified = new List<VerifiedMailboxDurableQuorumV2>(orderedAckReplications.Count);
+        for (var index = 0; index < orderedAckReplications.Count; index++)
+        {
             try
             {
-                verified.Add(MailboxReceiptV2Codec.VerifyDurableQuorum(
+                verified.Add(MailboxPeerReplicationCodec.VerifyDurableQuorumResponse(
                     response.TombstoneQuorums[index].Span,
-                    crypto,
-                    expectation));
+                    orderedAckReplications[index],
+                    crypto));
             }
-            catch (MailboxReceiptException exception)
+            catch (MailboxPeerReplicationException exception)
             {
                 throw new MailboxPeerReplicationException(
                     MailboxPeerReplicationError.InvalidReceipt,

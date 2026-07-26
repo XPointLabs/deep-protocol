@@ -59,11 +59,24 @@ public sealed record MailboxAuthenticatedGrant
     public required ReadOnlyMemory<byte> IssuerSignature { get; init; }
 }
 
-public sealed record MailboxAuthenticatedRequestBinding
+public sealed class MailboxAuthenticatedRequestBinding
 {
-    public required MailboxAuthenticatedOperation Operation { get; init; }
-    public required ReadOnlyMemory<byte> OperationId { get; init; }
-    public required ReadOnlyMemory<byte> RequestDigest { get; init; }
+    internal MailboxAuthenticatedRequestBinding(
+        MailboxAuthenticatedOperation operation,
+        ReadOnlyMemory<byte> operationId,
+        ReadOnlyMemory<byte> requestDigest,
+        ReadOnlyMemory<byte> canonicalRequest = default)
+    {
+        Operation = operation;
+        OperationId = operationId.ToArray();
+        RequestDigest = requestDigest.ToArray();
+        CanonicalRequest = canonicalRequest.ToArray();
+    }
+
+    public MailboxAuthenticatedOperation Operation { get; }
+    public ReadOnlyMemory<byte> OperationId { get; }
+    public ReadOnlyMemory<byte> RequestDigest { get; }
+    public ReadOnlyMemory<byte> CanonicalRequest { get; }
 }
 
 public sealed record MailboxAuthenticatedPresentation
@@ -84,7 +97,18 @@ public sealed record MailboxAuthenticatedVerificationPolicy
     public required ReadOnlyMemory<byte> MembershipCommitment { get; init; }
     public required ulong NowUnixSeconds { get; init; }
     public required ulong MinimumGeneration { get; init; }
-    public required IReadOnlyList<ReadOnlyMemory<byte>> TrustedIssuerPublicKeys { get; init; }
+    public required IReadOnlyList<MailboxCapabilityIssuerAuthority> TrustedIssuers { get; init; }
+}
+
+public sealed record MailboxCapabilityIssuerAuthority
+{
+    public required ReadOnlyMemory<byte> PublicKey { get; init; }
+    public required MailboxCapabilityDomain Domain { get; init; }
+    public required MailboxCapabilityLifecycle AllowedLifecycle { get; init; }
+    public required ulong MinimumGeneration { get; init; }
+    public required ulong MaximumGeneration { get; init; }
+    public required ulong ValidFromUnixSeconds { get; init; }
+    public required ulong ValidUntilUnixSeconds { get; init; }
 }
 
 public sealed record MailboxCapabilityRevocationQuery
@@ -107,10 +131,26 @@ public sealed record MailboxCapabilityAtomicReplayClaim
     public required ReadOnlyMemory<byte> ClaimDigest { get; init; }
     public required ReadOnlyMemory<byte> IssuerPublicKey { get; init; }
     public required ReadOnlyMemory<byte> Serial { get; init; }
+    public required ulong Epoch { get; init; }
+    public required ulong Generation { get; init; }
     public required MailboxAuthenticatedOperation Operation { get; init; }
     public required ReadOnlyMemory<byte> OperationId { get; init; }
     public required ulong ReplayCounter { get; init; }
     public required ReadOnlyMemory<byte> RequestDigest { get; init; }
+}
+
+public enum MailboxCapabilityReplayRecordStatus : byte
+{
+    Pending = 1,
+    Completed = 2
+}
+
+public sealed record MailboxCapabilityReplaySnapshot
+{
+    public required ulong HighestCounter { get; init; }
+    public required ReadOnlyMemory<byte> ClaimDigest { get; init; }
+    public required MailboxCapabilityReplayRecordStatus Status { get; init; }
+    public required ReadOnlyMemory<byte> CanonicalOutcome { get; init; }
 }
 
 public enum MailboxCapabilityAtomicReplayState
@@ -129,9 +169,10 @@ public sealed record MailboxCapabilityAtomicReplayEvaluation
 }
 
 /// <summary>
-/// Host implementations must make each method durable and atomic. EvaluateAndReserve must never
-/// return NewReserved twice for the same issuer/serial/operation/replay tuple, including after a
-/// crash. An unfinished reservation remains PendingSame until explicit host recovery.
+/// Host implementations must partition records by MailboxCapabilityReplayStateMachine.ComputeScopeKey,
+/// persist the canonical snapshot transition atomically, and never return NewReserved twice for a
+/// scope/counter, including after a crash. An unfinished reservation remains PendingSame until
+/// explicit host recovery.
 /// </summary>
 public interface IMailboxCapabilityReplayJournal
 {
@@ -180,4 +221,3 @@ public sealed class MailboxAuthenticatedCapabilityException(
 {
     public MailboxAuthenticatedCapabilityError Error { get; } = error;
 }
-

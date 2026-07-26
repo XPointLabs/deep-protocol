@@ -33,7 +33,10 @@ public static class MailboxPeerReplicationCodec
         if (encoded.Slice(6, 2).IndexOfAnyExcept((byte)0) >= 0 ||
             encoded.Slice(250, 6).IndexOfAnyExcept((byte)0) >= 0)
             throw Error(MailboxPeerReplicationError.ReservedFieldNotZero, "PRQ1 reserved bytes must be zero.");
-        var payloadLength = checked((int)BinaryPrimitives.ReadUInt32BigEndian(encoded.Slice(240, 4)));
+        var rawPayloadLength = BinaryPrimitives.ReadUInt32BigEndian(encoded.Slice(240, 4));
+        if (rawPayloadLength > MailboxClientLimits.MaximumEncryptedEnvelopeLength)
+            throw Error(MailboxPeerReplicationError.InvalidLength, "PRQ1 payload length exceeds its bound.");
+        var payloadLength = (int)rawPayloadLength;
         var sourceProofLength = BinaryPrimitives.ReadUInt16BigEndian(encoded.Slice(244, 2));
         var targetProofLength = BinaryPrimitives.ReadUInt16BigEndian(encoded.Slice(246, 2));
         var signatureLength = BinaryPrimitives.ReadUInt16BigEndian(encoded.Slice(248, 2));
@@ -123,7 +126,9 @@ public static class MailboxPeerReplicationCodec
             if (envelope.Epoch != request.Epoch ||
                 !FixedEquals(envelope.OperationId.Span, request.OperationId.Span) ||
                 !FixedEquals(envelope.MailboxId.Bytes.Span, request.BlindedMailboxId.Span) ||
-                !FixedEquals(envelope.PlacementId.Bytes.Span, request.PlacementCommitment.Span) ||
+                !FixedEquals(
+                    MailboxPlacementCommitment.Compute(envelope.PlacementId),
+                    request.PlacementCommitment.Span) ||
                 envelope.ExpiresAtUnixSeconds != request.ExpiresAtUnixSeconds)
                 throw Error(MailboxPeerReplicationError.BindingMismatch, "PRQ1 Store and exact MEO1 payload disagree.");
         }
@@ -132,6 +137,112 @@ public static class MailboxPeerReplicationCodec
             Request = request,
             Envelope = envelope
         };
+    }
+
+    public static MailboxReplicaReceiptV2 CreateUnsignedReplicaResponse(
+        VerifiedMailboxPeerReplicationRequest verifiedRequest,
+        MailboxPeerResponseReplica replica,
+        MailboxReceiptStatus status,
+        ulong acceptedAtUnixSeconds,
+        ulong durableAtUnixSeconds)
+    {
+        ArgumentNullException.ThrowIfNull(verifiedRequest);
+        var request = verifiedRequest.Request;
+        if (replica is not (MailboxPeerResponseReplica.Source or MailboxPeerResponseReplica.Target) ||
+            status is not (MailboxReceiptStatus.Accepted or MailboxReceiptStatus.Durable) ||
+            acceptedAtUnixSeconds == 0 ||
+            acceptedAtUnixSeconds >= request.ExpiresAtUnixSeconds ||
+            status == MailboxReceiptStatus.Accepted && durableAtUnixSeconds != 0 ||
+            status == MailboxReceiptStatus.Durable &&
+            (durableAtUnixSeconds < acceptedAtUnixSeconds ||
+             durableAtUnixSeconds >= request.ExpiresAtUnixSeconds))
+            throw Error(MailboxPeerReplicationError.InvalidReceipt, "Peer receipt timestamps/status are invalid.");
+        return new MailboxReplicaReceiptV2
+        {
+            Status = status,
+            Disposition = ExpectedDisposition(request),
+            ReplicaId = (replica == MailboxPeerResponseReplica.Source
+                ? request.SourceReplicaId
+                : request.TargetReplicaId).ToArray(),
+            OperationId = request.OperationId.ToArray(),
+            Epoch = request.Epoch,
+            Cursor = request.Cursor,
+            AcceptedAtUnixSeconds = acceptedAtUnixSeconds,
+            DurableAtUnixSeconds = durableAtUnixSeconds,
+            ExpiresAtUnixSeconds = request.ExpiresAtUnixSeconds,
+            BlindedMailboxId = request.BlindedMailboxId.ToArray(),
+            PlacementCommitment = request.PlacementCommitment.ToArray(),
+            MembershipCommitment = request.MembershipCommitment.ToArray(),
+            EnvelopeDigest = ExpectedEnvelopeDigest(verifiedRequest),
+            Signature = ReadOnlyMemory<byte>.Empty
+        };
+    }
+
+    public static MailboxReplicaReceiptV2 VerifyReplicaResponse(
+        ReadOnlySpan<byte> encoded,
+        VerifiedMailboxPeerReplicationRequest verifiedRequest,
+        IMailboxPeerReplicationCrypto crypto)
+    {
+        ArgumentNullException.ThrowIfNull(verifiedRequest);
+        ArgumentNullException.ThrowIfNull(crypto);
+        var receipt = MailboxReceiptV2Codec.DecodeReplica(encoded);
+        if (!MatchesRequest(receipt, verifiedRequest, allowSource: false) ||
+            !crypto.Verify(
+                verifiedRequest.Request.TargetMembershipProof.SigningPublicKey.Span,
+                MailboxReceiptV2Codec.GetReplicaSigningBytes(receipt),
+                receipt.Signature.Span))
+            throw Error(MailboxPeerReplicationError.InvalidReceipt, "MRR2 is not the exact target response to PRQ1.");
+        return receipt;
+    }
+
+    public static VerifiedMailboxDurableQuorumV2 VerifyDurableQuorumResponse(
+        ReadOnlySpan<byte> encoded,
+        VerifiedMailboxPeerReplicationRequest verifiedRequest,
+        IMailboxPeerReplicationCrypto crypto)
+    {
+        ArgumentNullException.ThrowIfNull(verifiedRequest);
+        ArgumentNullException.ThrowIfNull(crypto);
+        var quorum = MailboxReceiptV2Codec.DecodeDurableQuorum(encoded);
+        var request = verifiedRequest.Request;
+        var replicas = new[] { quorum.FirstReplica, quorum.SecondReplica };
+        if (replicas.Any(receipt =>
+                receipt.Status != MailboxReceiptStatus.Durable ||
+                !MatchesRequest(receipt, verifiedRequest, allowSource: true)) ||
+            !ContainsExactly(
+                replicas.Select(static receipt => receipt.ReplicaId).ToArray(),
+                request.SourceReplicaId,
+                request.TargetReplicaId))
+            throw Error(MailboxPeerReplicationError.InvalidReceipt, "MQR2 is not the exact selected replica set.");
+        foreach (var receipt in replicas)
+        {
+            var key = FixedEquals(receipt.ReplicaId.Span, request.SourceReplicaId.Span)
+                ? request.SourceMembershipProof.SigningPublicKey
+                : request.TargetMembershipProof.SigningPublicKey;
+            if (!crypto.Verify(
+                    key.Span,
+                    MailboxReceiptV2Codec.GetReplicaSigningBytes(receipt),
+                    receipt.Signature.Span))
+                throw Error(MailboxPeerReplicationError.InvalidReceipt, "MQR2 has an invalid selected-replica signature.");
+        }
+        ReadOnlyMemory<byte> coordinatorKey;
+        if (FixedEquals(quorum.CoordinatorId.Span, request.SourceReplicaId.Span))
+            coordinatorKey = request.SourceMembershipProof.SigningPublicKey;
+        else if (FixedEquals(quorum.CoordinatorId.Span, request.TargetReplicaId.Span))
+            coordinatorKey = request.TargetMembershipProof.SigningPublicKey;
+        else
+            throw Error(MailboxPeerReplicationError.InvalidReceipt, "MQR2 coordinator is not selected by PRQ1.");
+        if (!crypto.Verify(
+                coordinatorKey.Span,
+                MailboxReceiptV2Codec.GetQuorumSigningBytes(
+                    quorum,
+                    new PeerReceiptDigestAdapter(crypto)),
+                quorum.Signature.Span))
+            throw Error(MailboxPeerReplicationError.InvalidReceipt, "MQR2 coordinator signature is invalid.");
+        return new VerifiedMailboxDurableQuorumV2(
+            request.Cursor,
+            ExpectedDisposition(request),
+            replicas,
+            quorum);
     }
 
     public static byte[] EncodeMembershipProof(MailboxReplicaMembershipProof proof)
@@ -303,6 +414,50 @@ public static class MailboxPeerReplicationCodec
         return envelope;
     }
 
+    private static bool MatchesRequest(
+        MailboxReplicaReceiptV2 receipt,
+        VerifiedMailboxPeerReplicationRequest verifiedRequest,
+        bool allowSource)
+    {
+        var request = verifiedRequest.Request;
+        var selectedReplica =
+            FixedEquals(receipt.ReplicaId.Span, request.TargetReplicaId.Span) ||
+            allowSource && FixedEquals(receipt.ReplicaId.Span, request.SourceReplicaId.Span);
+        return selectedReplica &&
+               receipt.Status is (MailboxReceiptStatus.Accepted or MailboxReceiptStatus.Durable) &&
+               receipt.Disposition == ExpectedDisposition(request) &&
+               receipt.OperationId.Span.SequenceEqual(request.OperationId.Span) &&
+               receipt.Epoch == request.Epoch &&
+               receipt.Cursor == request.Cursor &&
+               receipt.ExpiresAtUnixSeconds == request.ExpiresAtUnixSeconds &&
+               receipt.BlindedMailboxId.Span.SequenceEqual(request.BlindedMailboxId.Span) &&
+               receipt.PlacementCommitment.Span.SequenceEqual(request.PlacementCommitment.Span) &&
+               receipt.MembershipCommitment.Span.SequenceEqual(request.MembershipCommitment.Span) &&
+               receipt.EnvelopeDigest.Span.SequenceEqual(ExpectedEnvelopeDigest(verifiedRequest).Span);
+    }
+
+    private static MailboxReplicaDisposition ExpectedDisposition(
+        MailboxPeerReplicationRequest request) =>
+        request.Operation == MailboxPeerReplicationOperation.Store
+            ? MailboxReplicaDisposition.Stored
+            : MailboxReplicaDisposition.Tombstone;
+
+    private static ReadOnlyMemory<byte> ExpectedEnvelopeDigest(
+        VerifiedMailboxPeerReplicationRequest verifiedRequest) =>
+        verifiedRequest.Request.Operation == MailboxPeerReplicationOperation.Store
+            ? verifiedRequest.Envelope?.DeduplicationDigest.ToArray() ??
+              throw Error(MailboxPeerReplicationError.InvalidPayload, "Verified Store has no MEO1.")
+            : verifiedRequest.Request.Payload.ToArray();
+
+    private static bool ContainsExactly(
+        IReadOnlyList<ReadOnlyMemory<byte>> actual,
+        ReadOnlyMemory<byte> first,
+        ReadOnlyMemory<byte> second) =>
+        actual.Count == 2 &&
+        !FixedEquals(actual[0].Span, actual[1].Span) &&
+        actual.Any(value => FixedEquals(value.Span, first.Span)) &&
+        actual.Any(value => FixedEquals(value.Span, second.Span));
+
     private static ReadOnlySpan<byte> OperationTag(MailboxPeerReplicationOperation operation) =>
         operation switch
         {
@@ -323,4 +478,20 @@ public static class MailboxPeerReplicationCodec
     private static MailboxPeerReplicationException Error(
         MailboxPeerReplicationError error,
         string message) => new(error, message);
+
+    private sealed class PeerReceiptDigestAdapter(IMailboxPeerReplicationCrypto crypto)
+        : IMailboxReceiptCrypto
+    {
+        public byte[] Digest(ReadOnlySpan<byte> statement) => crypto.Digest(statement);
+
+        public bool VerifyReplica(
+            ReadOnlySpan<byte> replicaId,
+            ReadOnlySpan<byte> signingBytes,
+            ReadOnlySpan<byte> signature) => false;
+
+        public bool VerifyCoordinator(
+            ReadOnlySpan<byte> coordinatorId,
+            ReadOnlySpan<byte> signingBytes,
+            ReadOnlySpan<byte> signature) => false;
+    }
 }

@@ -29,6 +29,34 @@ public sealed class SodiumMailboxPeerReplicationCrypto : IMailboxPeerReplication
         };
     }
 
+    public MailboxReplicaReceiptV2 SignReplicaResponse(
+        MailboxReplicaReceiptV2 unsignedReceipt,
+        ReadOnlySpan<byte> replicaSeedOrPrivateKey)
+    {
+        ArgumentNullException.ThrowIfNull(unsignedReceipt);
+        return unsignedReceipt with
+        {
+            Signature = PublicKeyAuth.SignDetached(
+                MailboxReceiptV2Codec.GetReplicaSigningBytes(unsignedReceipt),
+                NormalizePrivateKey(replicaSeedOrPrivateKey))
+        };
+    }
+
+    public MailboxDurableQuorumReceiptV2 SignQuorumResponse(
+        MailboxDurableQuorumReceiptV2 unsignedQuorum,
+        ReadOnlySpan<byte> coordinatorSeedOrPrivateKey)
+    {
+        ArgumentNullException.ThrowIfNull(unsignedQuorum);
+        return unsignedQuorum with
+        {
+            Signature = PublicKeyAuth.SignDetached(
+                MailboxReceiptV2Codec.GetQuorumSigningBytes(
+                    unsignedQuorum,
+                    new DigestAdapter(this)),
+                NormalizePrivateKey(coordinatorSeedOrPrivateKey))
+        };
+    }
+
     public bool Verify(
         ReadOnlySpan<byte> publicKey,
         ReadOnlySpan<byte> signingBytes,
@@ -59,5 +87,18 @@ public sealed class SodiumMailboxPeerReplicationCrypto : IMailboxPeerReplication
             64 => value.ToArray(),
             _ => throw new ArgumentException("Ed25519 key material must be a 32-byte seed or 64-byte private key.")
         };
-}
 
+    private sealed class DigestAdapter(SodiumMailboxPeerReplicationCrypto crypto)
+        : IMailboxReceiptCrypto
+    {
+        public byte[] Digest(ReadOnlySpan<byte> statement) => crypto.Digest(statement);
+        public bool VerifyReplica(
+            ReadOnlySpan<byte> replicaId,
+            ReadOnlySpan<byte> signingBytes,
+            ReadOnlySpan<byte> signature) => false;
+        public bool VerifyCoordinator(
+            ReadOnlySpan<byte> coordinatorId,
+            ReadOnlySpan<byte> signingBytes,
+            ReadOnlySpan<byte> signature) => false;
+    }
+}

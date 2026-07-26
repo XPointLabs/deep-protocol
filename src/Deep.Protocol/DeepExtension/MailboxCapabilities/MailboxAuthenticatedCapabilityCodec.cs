@@ -55,12 +55,10 @@ public static class MailboxAuthenticatedCapabilityCodec
     public static byte[] EncodePresentation(MailboxAuthenticatedPresentation presentation)
     {
         ArgumentNullException.ThrowIfNull(presentation);
-        ValidateBinding(new MailboxAuthenticatedRequestBinding
-        {
-            Operation = presentation.Operation,
-            OperationId = presentation.OperationId,
-            RequestDigest = presentation.RequestDigest
-        });
+        ValidateBinding(new MailboxAuthenticatedRequestBinding(
+            presentation.Operation,
+            presentation.OperationId,
+            presentation.RequestDigest));
         if (presentation.ReplayCounter == 0 ||
             presentation.HolderSignature.Length != MailboxAuthenticatedCapabilityLimits.SignatureLength)
             throw Error(MailboxAuthenticatedCapabilityError.InvalidField, "MCP2 replay/signature fields are invalid.");
@@ -94,12 +92,10 @@ public static class MailboxAuthenticatedCapabilityCodec
             Grant = DecodeGrant(encoded.Slice(72, MailboxAuthenticatedCapabilityLimits.GrantLength)),
             HolderSignature = encoded.Slice(PresentationUnsignedLength, 64).ToArray()
         };
-        ValidateBinding(new MailboxAuthenticatedRequestBinding
-        {
-            Operation = presentation.Operation,
-            OperationId = presentation.OperationId,
-            RequestDigest = presentation.RequestDigest
-        });
+        ValidateBinding(new MailboxAuthenticatedRequestBinding(
+            presentation.Operation,
+            presentation.OperationId,
+            presentation.RequestDigest));
         if (presentation.ReplayCounter == 0 || IsAllZero(presentation.HolderSignature.Span))
             throw Error(MailboxAuthenticatedCapabilityError.InvalidField, "MCP2 replay/signature fields are invalid.");
         ValidateOperationDomain(presentation.Operation, presentation.Grant.Domain);
@@ -155,9 +151,18 @@ public static class MailboxAuthenticatedCapabilityCodec
             grant.Lifecycle == MailboxCapabilityLifecycle.Overlap &&
             policy.NowUnixSeconds > grant.OverlapUntilUnixSeconds)
             throw Error(MailboxAuthenticatedCapabilityError.OutsideValidityWindow, "MCG2 is outside its validity window.");
-        if (!policy.TrustedIssuerPublicKeys.Any(key =>
-                key.Length == 32 && FixedEquals(key.Span, grant.IssuerPublicKey.Span)))
+        var authority = policy.TrustedIssuers.FirstOrDefault(candidate =>
+            candidate.PublicKey.Length == 32 &&
+            FixedEquals(candidate.PublicKey.Span, grant.IssuerPublicKey.Span) &&
+            candidate.Domain == grant.Domain);
+        if (authority is null)
             throw Error(MailboxAuthenticatedCapabilityError.UntrustedIssuer, "MCG2 issuer is not trusted for this mailbox.");
+        if (authority.AllowedLifecycle != grant.Lifecycle ||
+            grant.Generation < authority.MinimumGeneration ||
+            grant.Generation > authority.MaximumGeneration ||
+            grant.NotBeforeUnixSeconds < authority.ValidFromUnixSeconds ||
+            grant.ExpiresAtUnixSeconds > authority.ValidUntilUnixSeconds)
+            throw Error(MailboxAuthenticatedCapabilityError.UntrustedIssuer, "MCG2 exceeds issuer rotation authority.");
         if (revocations.IsRevoked(new MailboxCapabilityRevocationQuery
         {
             IssuerPublicKey = grant.IssuerPublicKey.ToArray(),
@@ -184,6 +189,8 @@ public static class MailboxAuthenticatedCapabilityCodec
             ClaimDigest = crypto.Digest(encoded).ToArray(),
             IssuerPublicKey = grant.IssuerPublicKey.ToArray(),
             Serial = grant.Serial.ToArray(),
+            Epoch = grant.Epoch,
+            Generation = grant.Generation,
             Operation = presentation.Operation,
             OperationId = presentation.OperationId.ToArray(),
             ReplayCounter = presentation.ReplayCounter,
@@ -213,11 +220,11 @@ public static class MailboxAuthenticatedCapabilityCodec
         return new VerifiedMailboxAuthenticatedCapability
         {
             Grant = grant,
-            Binding = expectedBinding with
-            {
-                OperationId = expectedBinding.OperationId.ToArray(),
-                RequestDigest = expectedBinding.RequestDigest.ToArray()
-            },
+            Binding = new MailboxAuthenticatedRequestBinding(
+                expectedBinding.Operation,
+                expectedBinding.OperationId,
+                expectedBinding.RequestDigest,
+                expectedBinding.CanonicalRequest),
             ReplayDisposition = disposition,
             ReplayClaim = claim,
             CachedOutcome = evaluation.CachedOutcome.ToArray()
@@ -307,8 +314,27 @@ public static class MailboxAuthenticatedCapabilityCodec
         ValidateNonzero(policy.PlacementCommitment.Span, 32);
         ValidateNonzero(policy.MembershipCommitment.Span, 32);
         if (policy.Epoch == 0 || policy.MinimumGeneration == 0 ||
-            policy.TrustedIssuerPublicKeys is null or { Count: 0 } or { Count: > 8 })
+            policy.TrustedIssuers is null or { Count: 0 } or { Count: > 8 })
             throw Error(MailboxAuthenticatedCapabilityError.InvalidField, "MCP2 verification policy is invalid.");
+        foreach (var issuer in policy.TrustedIssuers)
+        {
+            if (issuer is null ||
+                issuer.PublicKey.Length != 32 ||
+                issuer.PublicKey.Span.IndexOfAnyExcept((byte)0) < 0 ||
+                issuer.Domain is not (MailboxCapabilityDomain.Deposit or MailboxCapabilityDomain.Retrieve) ||
+                issuer.AllowedLifecycle is not (
+                    MailboxCapabilityLifecycle.Active or MailboxCapabilityLifecycle.Overlap) ||
+                issuer.MinimumGeneration == 0 ||
+                issuer.MinimumGeneration > issuer.MaximumGeneration ||
+                issuer.ValidFromUnixSeconds >= issuer.ValidUntilUnixSeconds)
+                throw Error(MailboxAuthenticatedCapabilityError.InvalidField, "Issuer authority is invalid.");
+        }
+        if (policy.TrustedIssuers
+            .GroupBy(static issuer =>
+                $"{(byte)issuer.Domain}:{Convert.ToHexString(issuer.PublicKey.Span)}",
+                StringComparer.Ordinal)
+            .Any(static group => group.Count() != 1))
+            throw Error(MailboxAuthenticatedCapabilityError.InvalidField, "Issuer authorities are duplicated.");
     }
 
     private static void ValidateOperationDomain(
@@ -354,4 +380,3 @@ public static class MailboxAuthenticatedCapabilityCodec
         MailboxAuthenticatedCapabilityError error,
         string message) => new(error, message);
 }
-

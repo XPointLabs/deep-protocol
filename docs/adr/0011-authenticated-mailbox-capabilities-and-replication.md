@@ -24,14 +24,22 @@ Add a strict, non-convertible V2 profile:
   holder public key for one domain, generation, epoch, network, membership commitment, placement
   commitment and bounded validity window.
 - `MCP2` embeds exactly one `MCG2` and adds operation kind, outer operation ID, replay counter and
-  exact canonical request digest. The holder signs the complete presentation.
+  an operation-specific canonical request digest. Store hashes exact `MEO1`; Retrieve hashes exact
+  `MBR2`; Ack hashes exact ordered `MBA2`. Callers cannot construct an arbitrary binding object.
+  The holder signs the complete presentation.
+- `MAU2` is the only strict V2 outer carrier. It contains exactly one MCP2 plus exactly one
+  MEO1/MBR2/MBA2 body. Its parser recomputes the typed transcript and rejects MCP1,
+  MST1/MRT1/MAK1, mixed versions and legacy JSON.
 - deposit grants authorize only `Store`; retrieve grants authorize only `Retrieve` or `Ack`.
 - issuer signatures use distinct fixed tags for deposit and retrieve. Holder signatures use
   distinct fixed tags for Store, Retrieve and Ack.
-- trusted issuer keys and durable revocation state are host-owned inputs. Rotation is monotonic by
-  generation; overlap is explicit and bounded.
-- replay evaluation is an atomic durable reserve/read operation followed by an atomic completion
-  operation. A crash leaves an explicit in-flight reservation; it never silently becomes new.
+- trusted issuer authority entries bind key, domain, exact generation range, allowed lifecycle and
+  a hard validity window. Durable revocation state is host-owned. Rotation is monotonic by
+  generation; overlap is explicit and cannot mint Active grants.
+- replay evaluation uses an executable state machine partitioned by the canonical
+  issuer/serial/epoch/generation/operation scope. Reserve/read and completion transitions are
+  atomic and durable. A crash leaves an explicit in-flight reservation; it never silently becomes
+  new.
 - V1 and V2 magic/version values are not cross-decoded. There is no legacy JSON bridge or raw
   fallback.
 
@@ -39,13 +47,18 @@ Ed25519 is selected because this repository already pins `Sodium.Core`, has nati
 tests, and uses Ed25519 membership keys. SHA-256 is selected only for domain-framed commitments and
 request digests; it is already used by P04/MRL1.
 
-Add `MPR1`, a bounded authenticated peer Store/Tombstone request. It carries the exact source and
+Placement commitment has one definition:
+`SHA-256(len(domain) || "deep.mailbox.placement-commitment.v2" || len(BlindedPlacementId) ||
+BlindedPlacementId)`. Raw placement bytes are never accepted as the commitment.
+
+Add `PRQ1`, a bounded authenticated peer Store/Tombstone request. It carries the exact source and
 target replica identifiers, membership and placement commitments, operation ID, cursor, expiry,
 payload digest, canonical payload and a bounded membership proof. The source replica signs the
 whole request with an operation-specific Ed25519 tag. A membership-proof verifier must prove the
 source signing key and both source/target storage replicas against the exact P04/MRL1 commitment.
-The response is the existing canonical signed `MRR2` replica receipt; a durable coordinator result
-is the existing `MQR2`.
+The response factory derives every MRR2 field from verified PRQ1. The response verifier resolves
+the exact source/target MIP1 Ed25519 keys rather than assuming RouterId equals that key. A durable
+MQR2 must contain exactly those two selected replicas and a coordinator that is one of them.
 
 Add `MAR1`, an ordered bounded aggregate ACK response containing one exact `MQR2` tombstone quorum
 per requested acknowledgement. It introduces no new durability meaning.
@@ -68,4 +81,3 @@ The wire contains only blinded mailbox/placement values and random operation/ser
 not provide network-layer anonymity, hide timing/size, implement quota policy or prove payment.
 
 This ADR does not activate runtime registration, storage, transport, Docker, billing or keys.
-
