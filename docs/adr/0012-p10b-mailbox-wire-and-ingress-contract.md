@@ -10,11 +10,12 @@ P10B is an additive Deep-extension contract. It does not change the P03B2 `MST1`
 routes.
 
 The authenticated peer request is `PRQ2` version 2. It has two operations, Store and Tombstone,
-and no legacy JSON representation or conversion. The peer response is exactly one durable,
-recipient-signed Ed25519 `MRR2`; there is no response wrapper. A public client Store response is
-exactly one durable `MQR2`, Retrieve returns `MRP1`, and ACK returns one `MAR1` containing one
-ordered tombstone `MQR2` for every ordered `MAK1` item. The aggregate ACK choice avoids 100
-independent HTTP outcomes without assigning any new durability meaning to `MAR1`.
+and no legacy JSON representation or conversion. The direct peer response is exactly one durable,
+recipient-signed Ed25519 `MRR2`; there is no response wrapper. The sender combines its own
+persisted `MRR2` and the recipient response into one verified native `MQR2`. A public client Store
+response is exactly one durable `MQR2`, Retrieve returns `MRP1`, and ACK returns one `MAR1`
+containing one ordered tombstone `MQR2` for every ordered `MAK1` item. The aggregate ACK choice
+avoids 100 independent HTTP outcomes without assigning any new durability meaning to `MAR1`.
 
 All integer fields are unsigned big-endian. Reserved bytes are zero. Trailing bytes, unknown
 versions, alternate signature lengths and non-canonical nested frames fail closed.
@@ -74,18 +75,11 @@ The unsigned PRQ2 includes every byte through the ordered nested `MIP1` proofs b
 request identity uses the same length-framing with
 `deep.mailbox.peer.request-identity.v2` over the complete signed `PRQ2`.
 
-The replay scope is:
-
-```text
-SHA-256(
-  U16BE(domain length) || "deep.mailbox.peer.replay-scope.v2" ||
-  senderRouterId || recipientRouterId || replayNonce)
-```
-
-The host must atomically reserve that scope before storage work. Exact pending retries remain
-pending after a crash. An exact completed retry returns the cached canonical `MRR2`. Reusing the
-same scope with different complete request bytes is an equivocation/replay conflict. Completion
-accepts only the exact newly reserved claim and one verified durable recipient `MRR2`.
+The epoch-scoped replay key and finite retention contract are specified below. The host must
+atomically reserve before storage work. Exact pending retries remain pending after a crash. An
+exact completed retry returns the cached canonical `MRR2`. Reusing the same live scope with
+different complete request bytes is an equivocation/replay conflict. Completion accepts only the
+exact newly reserved claim and one verified durable recipient `MRR2`.
 
 `MRR2` itself is intentionally unchanged and does not add the transport replay nonce. It signs the
 business outcome fields: recipient replica, operation, epoch, cursor, blinded mailbox,
@@ -95,13 +89,72 @@ to `MRR2` would silently break P03B2 and was rejected.
 
 Freshness is fixed rather than host-selectable: creation may be at most 120 seconds old or 30
 seconds in the future, and expiry must be strictly after verification time. Expiry is also bound
-to `MEO1` for Store.
+to `MEO1` for Store. Tombstone expiry must be no more than seven days after request creation.
+Every successful `MRR2`, including a validly signed cached response, must have
+`AcceptedAtUnixSeconds >= PRQ2.CreatedAtUnixSeconds`.
 
 P03B2 response signing is preserved exactly: Ed25519 signs the 224-byte `MRR2` signing transcript
 beginning with magic `MRR2` and version `2`. `MQR2` Ed25519 signs its 116-byte transcript beginning
 with magic `MQR2` and version `2`; that transcript contains SHA-256 digests of the two exact
 canonical `MRR2` frames in router-ID order. The magic/version bytes are the frozen response signing
 domains. P10B does not prepend a second domain or reinterpret those signatures.
+
+## PRQ2 durable quorum and aggregate ACK
+
+A PRQ2 durable quorum contains exactly two 296-byte Ed25519 `MRR2` frames. Their router IDs must be
+the distinct sender and recipient from the verified PRQ2 and must appear in ascending byte order.
+Each signature is verified with its own MIP1-authorized key. Both statements must be Durable, use
+the same allowed disposition, and exactly match PRQ2 operation ID, epoch, cursor, blinded mailbox,
+placement/membership commitments, envelope digest, expiry and request creation lower bound.
+
+The MQR2 coordinator must be one of those two routers and its signature is verified with that
+router's MIP1 key. P10B binds the complete signed PRQ2, including nonce and request version, into
+the existing MQR2 `CoordinatorSequence` without changing MQR2 encoding:
+
+```text
+CoordinatorSequence =
+  U64BE(PRQ2 request-identity SHA-256[0..8]) OR 0x8000000000000000
+```
+
+The high bit makes the value nonzero and separates it from the earlier PRQ1 cursor convention.
+A PRQ1 frame, PRQ1 cursor-sequence quorum, noncanonical router order, duplicate/substitute router,
+wrong MIP1 key or changed coordinator fails PRQ2 verification. No PRQ1 request or receipt is
+synthesized by the PRQ2 API.
+
+For ACK, the exact decoded canonical MAK1 acknowledgement order is authoritative. Count is 1..100.
+For each index, the verified PRQ2 must be Tombstone and match MAK1 epoch, operation ID, blinded
+mailbox, placement, cursor and exact envelope digest. All items use one exact sender/recipient
+fanout and membership commitment. Each nested MQR2 passes the PRQ2 durable-quorum verifier before
+MAR1 construction. MAR1 verification repeats those checks by index; duplicate, reordered or
+substituted acknowledgement, PRQ2 or MQR2 bytes fail closed.
+
+## Durable replay retention and GC
+
+Replay scope is epoch-specific:
+
+```text
+SHA-256(
+  U16BE(domain length) || "deep.mailbox.peer.replay-scope.v2" ||
+  U64BE(epoch) || senderRouterId || recipientRouterId || replayNonce)
+```
+
+The verification policy supplies the authoritative epoch expiry. It must be after verification
+time, contain request expiry, and be no more than seven days after request creation. The durable
+claim and snapshot persist exact request creation, request expiry, initial reservation time, epoch
+expiry and:
+
+```text
+RetainUntil = EpochExpiresAt + 7 days
+```
+
+Pending and completed records are retained through that instant, including restart. GC may delete
+either state only at or after `RetainUntil`, in atomic batches of at most 1024. Thus the journal is
+bounded by a hard 1,209,600 records per sender/recipient/epoch partition (120/minute for seven
+days) plus a finite seven-day post-epoch window; capacity exhaustion fails closed. The host must
+retire the epoch before GC; an old exact or conflicting frame is then stale at policy verification
+and never reaches an empty journal. Reusing the same nonce in the same live epoch remains exact
+retry or conflict. Reuse in a later epoch is an explicitly new, domain-separated scope,
+eliminating post-retention nonce ambiguity.
 
 ## Dormant HTTP mapping
 

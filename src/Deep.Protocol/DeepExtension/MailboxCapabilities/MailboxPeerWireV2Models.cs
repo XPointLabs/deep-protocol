@@ -7,6 +7,12 @@ public static class MailboxPeerWireV2Limits
     public const int RequestHeaderLength = 296;
     public const ulong MaximumPastAgeSeconds = 120;
     public const ulong MaximumFutureSkewSeconds = 30;
+    public const ulong MaximumEpochLifetimeSeconds = 7 * 24 * 60 * 60;
+    public const ulong MaximumTombstoneLifetimeSeconds = 7 * 24 * 60 * 60;
+    public const ulong ReplayRetentionSeconds = 7 * 24 * 60 * 60;
+    public const int MaximumReplayCollectionBatch = 1024;
+    public const int MaximumReplayRecordsPerRouterPairPerEpoch =
+        120 * 60 * 24 * 7;
     public const int MinimumMembershipProofLength =
         MailboxPeerReplicationLimits.MembershipProofFixedLength + 1;
     public const int MaximumMembershipProofLength =
@@ -70,6 +76,7 @@ public sealed record MailboxPeerWireVerificationPolicyV2
     public required ReadOnlyMemory<byte> PlacementCommitment { get; init; }
     public required BlindedPlacementId PlacementId { get; init; }
     public required ulong NowUnixSeconds { get; init; }
+    public required ulong EpochExpiresAtUnixSeconds { get; init; }
 }
 
 public enum MailboxPeerReplayRecordStatus : byte
@@ -88,13 +95,25 @@ public sealed record MailboxPeerReplayClaim
     public required ReadOnlyMemory<byte> OperationId { get; init; }
     public required MailboxPeerReplicationOperation Operation { get; init; }
     public required ulong Epoch { get; init; }
+    public required ulong CreatedAtUnixSeconds { get; init; }
+    public required ulong ExpiresAtUnixSeconds { get; init; }
+    public required ulong ReservedAtUnixSeconds { get; init; }
+    public required ulong EpochExpiresAtUnixSeconds { get; init; }
+    public required ulong RetainUntilUnixSeconds { get; init; }
 }
 
 public sealed record MailboxPeerReplaySnapshot
 {
+    public required ReadOnlyMemory<byte> ScopeKey { get; init; }
+    public required ulong Epoch { get; init; }
     public required ReadOnlyMemory<byte> RequestDigest { get; init; }
     public required MailboxPeerReplayRecordStatus Status { get; init; }
     public required ReadOnlyMemory<byte> CanonicalResponse { get; init; }
+    public required ulong CreatedAtUnixSeconds { get; init; }
+    public required ulong ExpiresAtUnixSeconds { get; init; }
+    public required ulong ReservedAtUnixSeconds { get; init; }
+    public required ulong EpochExpiresAtUnixSeconds { get; init; }
+    public required ulong RetainUntilUnixSeconds { get; init; }
 }
 
 public enum MailboxPeerReplayState
@@ -115,6 +134,8 @@ public sealed record MailboxPeerReplayEvaluation
 /// Implementations must atomically partition by <see cref="MailboxPeerReplayClaim.ScopeKey"/>,
 /// persist the pending reservation before storage work, and retain pending state across crashes.
 /// The response may be completed only after the Store or Tombstone mutation is durable.
+/// A sender/recipient/epoch partition must fail closed before exceeding
+/// MailboxPeerWireV2Limits.MaximumReplayRecordsPerRouterPairPerEpoch.
 /// </summary>
 public interface IMailboxPeerReplayJournal
 {
@@ -123,6 +144,13 @@ public interface IMailboxPeerReplayJournal
     void CompleteAtomically(
         MailboxPeerReplayClaim claim,
         ReadOnlyMemory<byte> canonicalMrr2Response);
+
+    /// <summary>
+    /// Deletes at most <paramref name="maximumRecords"/> snapshots for which
+    /// MailboxPeerReplayStateMachine.IsCollectable returns true. Implementations must use a
+    /// bounded transaction and return the number removed.
+    /// </summary>
+    int CollectExpired(ulong nowUnixSeconds, int maximumRecords);
 }
 
 public enum MailboxPeerReplayDisposition
@@ -130,6 +158,12 @@ public enum MailboxPeerReplayDisposition
     NewReserved = 1,
     InFlight = 2,
     IdempotentCompleted = 3
+}
+
+public enum MailboxPeerWireResponseReplicaV2 : byte
+{
+    Sender = 1,
+    Recipient = 2
 }
 
 public sealed record VerifiedMailboxPeerWireRequestV2

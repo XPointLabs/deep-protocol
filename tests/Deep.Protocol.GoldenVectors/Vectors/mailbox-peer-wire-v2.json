@@ -22,6 +22,21 @@
       "id": "deep-extension/mailbox-peer/v2/PRQ2-tombstone-signing-digest",
       "kind": "ed25519-sha256-signing-digest",
       "hex": "4b1de2e47caa72b0214d42402b74506bcded377837885151a6081a3c18530237"
+    },
+    {
+      "id": "deep-extension/mailbox-peer/v2/MQR2-tombstone",
+      "kind": "sha256-complete-canonical-frame",
+      "hex": "f550199681e42ed801016103ff9f43e8e43ae59228971ac865a253ae62a202dd"
+    },
+    {
+      "id": "deep-extension/mailbox-peer/v2/MAR1-ack-1",
+      "kind": "sha256-complete-canonical-frame",
+      "hex": "17d0b25f9ce60b443a26b42541258029185d06709c81df17fdc998a7ad206092"
+    },
+    {
+      "id": "deep-extension/mailbox-peer/v2/MAR1-ack-100",
+      "kind": "sha256-complete-canonical-frame",
+      "hex": "fd916ed636b05711050429c341a7482079be705565f475eff1ad6042101a59a9"
     }
   ]
 }

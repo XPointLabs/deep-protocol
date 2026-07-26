@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Security.Cryptography;
 using Deep.Protocol.DeepExtension.MailboxCapabilities;
 using Deep.Protocol.GoldenVectors;
@@ -382,10 +383,543 @@ public sealed class MailboxPeerWireV2ContractTests
                 MailboxHttpFailure.DependencyUnavailable));
     }
 
+    [Fact]
+    public void DurableQuorum_RequiresExactTwoAuthorizedCanonicalPrq2Replicas()
+    {
+        var fixture = new Fixture(MailboxPeerReplicationOperation.Tombstone);
+        var verified = fixture.Verify(MailboxPeerWireV2Codec.Encode(
+            fixture.Sign(fixture.Request)));
+        var (sender, recipient, quorumBytes) = SignedQuorum(fixture, verified);
+        var quorum = MailboxPeerWireV2Codec.VerifyDurableQuorumResponse(
+            quorumBytes,
+            verified,
+            fixture.Crypto);
+        _ = MailboxPeerWireV2Codec.VerifyDurableQuorumResponse(
+            quorumBytes,
+            verified,
+            new WrongDigestCrypto(fixture.Crypto));
+        Assert.Equal(
+            GoldenVectorLoader.Load("mailbox-peer-wire-v2.json")
+                .GetRequired(
+                    "deep-extension/mailbox-peer/v2/MQR2-tombstone")
+                .Hex,
+            Convert.ToHexString(SHA256.HashData(quorumBytes))
+                .ToLowerInvariant());
+        Assert.Equal(2, quorum.ReplicaReceipts.Count);
+        Assert.True(
+            quorum.ReplicaReceipts[0].ReplicaId.Span.SequenceCompareTo(
+                quorum.ReplicaReceipts[1].ReplicaId.Span) < 0);
+
+        var duplicate = fixture.Crypto.SignQuorumResponse(
+            new MailboxDurableQuorumReceiptV2
+            {
+                CoordinatorId = verified.Request.SenderRouterId,
+                CoordinatorSequence = verified.Request.Cursor,
+                FirstReplica = sender,
+                SecondReplica = sender,
+                Signature = ReadOnlyMemory<byte>.Empty
+            },
+            fixture.SenderSeed);
+        Assert.Throws<MailboxPeerReplicationException>(() =>
+            MailboxPeerWireV2Codec.VerifyDurableQuorumResponse(
+                MailboxReceiptV2Codec.EncodeDurableQuorum(duplicate),
+                verified,
+                fixture.Crypto));
+
+        foreach (var mutation in new Func<MailboxReplicaReceiptV2, MailboxReplicaReceiptV2>[]
+        {
+            value => value with { Cursor = value.Cursor + 1 },
+            value => value with { EnvelopeDigest = Range(1, 32) },
+            value => value with { ExpiresAtUnixSeconds = value.ExpiresAtUnixSeconds + 1 },
+            value => value with { ReplicaId = Range(0x61, 32) }
+        })
+        {
+            var changed = fixture.Crypto.SignReplicaResponse(
+                mutation(recipient),
+                fixture.RecipientSeed);
+            Assert.Throws<MailboxPeerReplicationException>(() =>
+                MailboxPeerWireV2Codec.CreateUnsignedDurableQuorumResponse(
+                    verified,
+                    MailboxReceiptV2Codec.EncodeReplica(sender),
+                    MailboxReceiptV2Codec.EncodeReplica(changed),
+                    verified.Request.SenderRouterId,
+                    fixture.Crypto));
+        }
+
+        var wrongKey = fixture.Crypto.SignReplicaResponse(
+            sender,
+            fixture.RecipientSeed);
+        Assert.Throws<MailboxPeerReplicationException>(() =>
+            MailboxPeerWireV2Codec.CreateUnsignedDurableQuorumResponse(
+                verified,
+                MailboxReceiptV2Codec.EncodeReplica(wrongKey),
+                MailboxReceiptV2Codec.EncodeReplica(recipient),
+                verified.Request.SenderRouterId,
+                fixture.Crypto));
+
+        var decoded = MailboxReceiptV2Codec.DecodeDurableQuorum(quorumBytes);
+        var wrongCoordinator = fixture.Crypto.SignQuorumResponse(
+            decoded with { CoordinatorId = verified.Request.RecipientRouterId },
+            fixture.SenderSeed);
+        Assert.Throws<MailboxPeerReplicationException>(() =>
+            MailboxPeerWireV2Codec.VerifyDurableQuorumResponse(
+                MailboxReceiptV2Codec.EncodeDurableQuorum(wrongCoordinator),
+                verified,
+                fixture.Crypto));
+
+        var reordered = SwapMqr2Replicas(quorumBytes);
+        Assert.Throws<MailboxReceiptException>(() =>
+            MailboxReceiptV2Codec.DecodeDurableQuorum(reordered));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(100)]
+    public void AggregateAck_BindsOrderedMak1TombstonesAndMqr2AtBounds(int count)
+    {
+        var fixture = new Fixture(MailboxPeerReplicationOperation.Tombstone);
+        var (ack, tombstones, quorums) = AckBatch(fixture, count);
+        var encoded = MailboxPeerWireV2AggregateAckCodec.Create(
+            ack,
+            tombstones,
+            quorums,
+            fixture.Crypto);
+        var verified = MailboxPeerWireV2AggregateAckCodec.Verify(
+            encoded,
+            ack,
+            tombstones,
+            fixture.Crypto);
+        Assert.Equal(count, verified.Count);
+        Assert.Equal(
+            count == 1 ? 818 : 77_840,
+            encoded.Length);
+        Assert.Equal(
+            GoldenVectorLoader.Load("mailbox-peer-wire-v2.json")
+                .GetRequired(count == 1
+                    ? "deep-extension/mailbox-peer/v2/MAR1-ack-1"
+                    : "deep-extension/mailbox-peer/v2/MAR1-ack-100")
+                .Hex,
+            Convert.ToHexString(SHA256.HashData(encoded)).ToLowerInvariant());
+    }
+
+    [Fact]
+    public void AggregateAck_RejectsDuplicateReorderAndSubstitution()
+    {
+        var fixture = new Fixture(MailboxPeerReplicationOperation.Tombstone);
+        var (ack, tombstones, quorums) = AckBatch(fixture, 3);
+        var encoded = MailboxPeerWireV2AggregateAckCodec.Create(
+            ack,
+            tombstones,
+            quorums,
+            fixture.Crypto);
+
+        Assert.Throws<MailboxPeerReplicationException>(() =>
+            MailboxPeerWireV2AggregateAckCodec.Verify(
+                encoded,
+                ack,
+                tombstones.Reverse().ToArray(),
+                fixture.Crypto));
+        Assert.Throws<MailboxClientException>(() =>
+            MailboxPeerWireV2AggregateAckCodec.Create(
+                ack with
+                {
+                    Acknowledgements =
+                    [
+                        ack.Acknowledgements[0],
+                        ack.Acknowledgements[0],
+                        ack.Acknowledgements[2]
+                    ]
+                },
+                tombstones,
+                quorums,
+                fixture.Crypto));
+        var substituted = quorums.ToArray();
+        substituted[1] = quorums[0];
+        Assert.Throws<MailboxPeerReplicationException>(() =>
+            MailboxPeerWireV2AggregateAckCodec.Create(
+                ack,
+                tombstones,
+                substituted,
+                fixture.Crypto));
+        var digestChanged = ack with
+        {
+            Acknowledgements = ack.Acknowledgements
+                .Select((value, index) => index == 1
+                    ? value with { EnvelopeDigest = Range(3, 32) }
+                    : value)
+                .ToArray()
+        };
+        Assert.Throws<MailboxPeerReplicationException>(() =>
+            MailboxPeerWireV2AggregateAckCodec.Create(
+                digestChanged,
+                tombstones,
+                quorums,
+                fixture.Crypto));
+        var cursorChanged = ack with
+        {
+            Acknowledgements = ack.Acknowledgements
+                .Select((value, index) => index == 1
+                    ? value with { Cursor = value.Cursor + 10 }
+                    : value)
+                .ToArray()
+        };
+        Assert.Throws<MailboxClientException>(() =>
+            MailboxPeerWireV2AggregateAckCodec.Create(
+                cursorChanged,
+                tombstones,
+                quorums,
+                fixture.Crypto));
+    }
+
+    [Fact]
+    public void MixedPrq1AndPrq2FramesOrReceipts_DoNotDowngrade()
+    {
+        var fixture = new Fixture(MailboxPeerReplicationOperation.Tombstone);
+        var legacy = new MailboxPeerReplicationRequest
+        {
+            Operation = MailboxPeerReplicationOperation.Tombstone,
+            Epoch = fixture.Request.Epoch,
+            OperationId = fixture.Request.OperationId,
+            SourceReplicaId = fixture.Request.SenderRouterId,
+            TargetReplicaId = fixture.Request.RecipientRouterId,
+            MembershipCommitment = fixture.Request.MembershipCommitment,
+            PlacementCommitment = fixture.Request.PlacementCommitment,
+            BlindedMailboxId = fixture.Request.BlindedMailboxId,
+            Cursor = fixture.Request.Cursor,
+            ExpiresAtUnixSeconds = fixture.Request.ExpiresAtUnixSeconds,
+            PayloadDigest = fixture.Request.Payload,
+            Payload = fixture.Request.Payload,
+            SourceMembershipProof = fixture.SenderProof,
+            TargetMembershipProof = fixture.RecipientProof,
+            Signature = ReadOnlyMemory<byte>.Empty
+        };
+        legacy = fixture.Crypto.SignRequest(legacy, fixture.SenderSeed);
+        Assert.Equal(
+            MailboxPeerReplicationError.InvalidMagic,
+            Assert.Throws<MailboxPeerReplicationException>(() =>
+                MailboxPeerWireV2Codec.Decode(
+                    MailboxPeerReplicationCodec.Encode(legacy))).Error);
+
+        var verified = fixture.Verify(MailboxPeerWireV2Codec.Encode(
+            fixture.Sign(fixture.Request)));
+        var forgedLegacyTime = fixture.Crypto.SignReplicaResponse(
+            MailboxPeerWireV2Codec.CreateUnsignedDurableReplicaResponseAfterPersistence(
+                verified,
+                MailboxPeerWireResponseReplicaV2.Sender,
+                MailboxReplicaDisposition.Tombstone,
+                1050,
+                1051) with
+            {
+                AcceptedAtUnixSeconds = 1001,
+                DurableAtUnixSeconds = 1002
+            },
+            fixture.SenderSeed);
+        var recipient = fixture.Crypto.SignReplicaResponse(
+            MailboxPeerWireV2Codec.CreateUnsignedDurableReplicaResponseAfterPersistence(
+                verified,
+                MailboxPeerWireResponseReplicaV2.Recipient,
+                MailboxReplicaDisposition.Tombstone,
+                1050,
+                1051),
+            fixture.RecipientSeed);
+        Assert.Throws<MailboxPeerReplicationException>(() =>
+            MailboxPeerWireV2Codec.CreateUnsignedDurableQuorumResponse(
+                verified,
+                MailboxReceiptV2Codec.EncodeReplica(forgedLegacyTime),
+                MailboxReceiptV2Codec.EncodeReplica(recipient),
+                verified.Request.SenderRouterId,
+                fixture.Crypto));
+
+        var prq2Quorum = MailboxReceiptV2Codec.DecodeDurableQuorum(
+            SignedQuorum(fixture, verified).EncodedQuorum);
+        var prq1SequenceConvention = fixture.Crypto.SignQuorumResponse(
+            prq2Quorum with
+            {
+                CoordinatorSequence = verified.Request.Cursor,
+                Signature = ReadOnlyMemory<byte>.Empty
+            },
+            fixture.SenderSeed);
+        Assert.Throws<MailboxPeerReplicationException>(() =>
+            MailboxPeerWireV2Codec.VerifyDurableQuorumResponse(
+                MailboxReceiptV2Codec.EncodeDurableQuorum(
+                    prq1SequenceConvention),
+                verified,
+                fixture.Crypto));
+    }
+
+    [Fact]
+    public void ReplayRetention_IsEpochScopedFiniteCrashSafeAndBatchBounded()
+    {
+        var fixture = new Fixture(MailboxPeerReplicationOperation.Tombstone);
+        var encoded = MailboxPeerWireV2Codec.Encode(fixture.Sign(fixture.Request));
+        var verified = fixture.Verify(encoded);
+        var snapshot = fixture.Journal.Snapshot(verified.ReplayClaim);
+        Assert.Equal(1050UL, snapshot.ReservedAtUnixSeconds);
+        Assert.Equal(1200UL, snapshot.EpochExpiresAtUnixSeconds);
+        Assert.Equal(
+            1200UL + MailboxPeerWireV2Limits.ReplayRetentionSeconds,
+            snapshot.RetainUntilUnixSeconds);
+        Assert.Equal(
+            1_209_600,
+            MailboxPeerWireV2Limits.MaximumReplayRecordsPerRouterPairPerEpoch);
+        Assert.False(MailboxPeerReplayStateMachine.IsCollectable(
+            snapshot,
+            snapshot.RetainUntilUnixSeconds - 1));
+        Assert.True(MailboxPeerReplayStateMachine.IsCollectable(
+            snapshot,
+            snapshot.RetainUntilUnixSeconds));
+
+        var journal = new InMemoryReplayJournal();
+        for (var index = 0; index < 1100; index++)
+        {
+            var nonce = SHA256.HashData(UInt64Bytes(checked((ulong)index + 1)));
+            var claim = verified.ReplayClaim with
+            {
+                ReplayNonce = nonce,
+                ScopeKey = MailboxPeerReplayStateMachine.ComputeScopeKey(
+                    verified.Request.SenderRouterId.Span,
+                    verified.Request.RecipientRouterId.Span,
+                    verified.Request.Epoch,
+                    nonce),
+                RequestDigest = SHA256.HashData(nonce)
+            };
+            Assert.Equal(
+                MailboxPeerReplayState.NewReserved,
+                journal.EvaluateAndReserve(claim).State);
+        }
+
+        Assert.Equal(
+            MailboxPeerWireV2Limits.MaximumReplayCollectionBatch,
+            journal.CollectExpired(
+                snapshot.RetainUntilUnixSeconds,
+                MailboxPeerWireV2Limits.MaximumReplayCollectionBatch));
+        Assert.Equal(
+            76,
+            journal.CollectExpired(
+                snapshot.RetainUntilUnixSeconds,
+                MailboxPeerWireV2Limits.MaximumReplayCollectionBatch));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            journal.CollectExpired(
+                snapshot.RetainUntilUnixSeconds,
+                MailboxPeerWireV2Limits.MaximumReplayCollectionBatch + 1));
+
+        var nextEpochScope = MailboxPeerReplayStateMachine.ComputeScopeKey(
+            verified.Request.SenderRouterId.Span,
+            verified.Request.RecipientRouterId.Span,
+            verified.Request.Epoch + 1,
+            verified.Request.ReplayNonce.Span);
+        Assert.NotEqual(
+            verified.ReplayClaim.ScopeKey.ToArray(),
+            nextEpochScope);
+    }
+
+    [Fact]
+    public void PostRetentionOldExactAndConflictAreStaleBeforeJournal()
+    {
+        var fixture = new Fixture(MailboxPeerReplicationOperation.Tombstone);
+        var encoded = MailboxPeerWireV2Codec.Encode(fixture.Sign(fixture.Request));
+        var verified = fixture.Verify(encoded);
+        Assert.Equal(
+            1,
+            fixture.Journal.CollectExpired(
+                verified.ReplayClaim.RetainUntilUnixSeconds,
+                1));
+        var lateNow = verified.ReplayClaim.RetainUntilUnixSeconds;
+        Assert.Equal(
+            MailboxPeerReplicationError.ExpiredOrStale,
+            Assert.Throws<MailboxPeerReplicationException>(() =>
+                fixture.VerifyAt(encoded, lateNow, 1200)).Error);
+        var conflicting = fixture.Sign(
+            fixture.Request with { Cursor = fixture.Request.Cursor + 1 });
+        Assert.Equal(
+            MailboxPeerReplicationError.ExpiredOrStale,
+            Assert.Throws<MailboxPeerReplicationException>(() =>
+                fixture.VerifyAt(
+                    MailboxPeerWireV2Codec.Encode(conflicting),
+                    lateNow,
+                    1200)).Error);
+    }
+
+    [Fact]
+    public void TombstoneLifetimeAndForgedAcceptedAtCachedRetry_FailClosed()
+    {
+        var fixture = new Fixture(MailboxPeerReplicationOperation.Tombstone);
+        var tooLong = fixture.Sign(fixture.Request with
+        {
+            ExpiresAtUnixSeconds =
+                fixture.Request.CreatedAtUnixSeconds +
+                MailboxPeerWireV2Limits.MaximumTombstoneLifetimeSeconds +
+                1
+        });
+        Assert.Equal(
+            MailboxPeerReplicationError.ExpiredOrStale,
+            Assert.Throws<MailboxPeerReplicationException>(() =>
+                fixture.VerifyAt(
+                    MailboxPeerWireV2Codec.Encode(tooLong),
+                    1050,
+                    tooLong.ExpiresAtUnixSeconds)).Error);
+
+        var encoded = MailboxPeerWireV2Codec.Encode(fixture.Sign(fixture.Request));
+        var verified = fixture.Verify(encoded);
+        var forged = fixture.Crypto.SignReplicaResponse(
+            MailboxPeerWireV2Codec.CreateUnsignedDurableResponseAfterPersistence(
+                verified,
+                MailboxReplicaDisposition.Tombstone,
+                1050,
+                1051) with
+            {
+                AcceptedAtUnixSeconds = 1049
+            },
+            fixture.RecipientSeed);
+        var forgedBytes = MailboxReceiptV2Codec.EncodeReplica(forged);
+        Assert.Throws<MailboxPeerReplicationException>(() =>
+            MailboxPeerWireV2Codec.VerifyReplicaResponse(
+                forgedBytes,
+                verified,
+                fixture.Crypto));
+        var forgedSnapshot = MailboxPeerReplayStateMachine.Complete(
+            fixture.Journal.Snapshot(verified.ReplayClaim),
+            verified.ReplayClaim,
+            forgedBytes);
+        var recovered = fixture with
+        {
+            Journal = new InMemoryReplayJournal(
+                verified.ReplayClaim.ScopeKey,
+                forgedSnapshot)
+        };
+        Assert.Throws<MailboxPeerReplicationException>(() =>
+            recovered.Verify(encoded));
+    }
+
+    private static (
+        MailboxReplicaReceiptV2 Sender,
+        MailboxReplicaReceiptV2 Recipient,
+        byte[] EncodedQuorum) SignedQuorum(
+        Fixture fixture,
+        VerifiedMailboxPeerWireRequestV2 verified)
+    {
+        var sender = fixture.Crypto.SignReplicaResponse(
+            MailboxPeerWireV2Codec.CreateUnsignedDurableReplicaResponseAfterPersistence(
+                verified,
+                MailboxPeerWireResponseReplicaV2.Sender,
+                MailboxReplicaDisposition.Tombstone,
+                1050,
+                1051),
+            fixture.SenderSeed);
+        var recipient = fixture.Crypto.SignReplicaResponse(
+            MailboxPeerWireV2Codec.CreateUnsignedDurableReplicaResponseAfterPersistence(
+                verified,
+                MailboxPeerWireResponseReplicaV2.Recipient,
+                MailboxReplicaDisposition.Tombstone,
+                1050,
+                1051),
+            fixture.RecipientSeed);
+        var unsigned = MailboxPeerWireV2Codec.CreateUnsignedDurableQuorumResponse(
+            verified,
+            MailboxReceiptV2Codec.EncodeReplica(recipient),
+            MailboxReceiptV2Codec.EncodeReplica(sender),
+            verified.Request.SenderRouterId,
+            fixture.Crypto);
+        var signed = fixture.Crypto.SignQuorumResponse(
+            unsigned,
+            fixture.SenderSeed);
+        return (
+            sender,
+            recipient,
+            MailboxReceiptV2Codec.EncodeDurableQuorum(signed));
+    }
+
+    private static (
+        MailboxAckRequest Ack,
+        VerifiedMailboxPeerWireRequestV2[] Tombstones,
+        ReadOnlyMemory<byte>[] Quorums) AckBatch(
+        Fixture fixture,
+        int count)
+    {
+        var acknowledgements = new MailboxAcknowledgement[count];
+        var tombstones = new VerifiedMailboxPeerWireRequestV2[count];
+        var quorums = new ReadOnlyMemory<byte>[count];
+        for (var index = 0; index < count; index++)
+        {
+            var cursor = checked((ulong)index + 1);
+            var digest = SHA256.HashData(UInt64Bytes(cursor));
+            var nonce = SHA256.HashData([
+                .. "p10b-ack-nonce"u8,
+                .. UInt64Bytes(cursor)
+            ]);
+            var request = fixture.Sign(fixture.Request with
+            {
+                Cursor = cursor,
+                ReplayNonce = nonce,
+                Payload = digest,
+                PayloadDigest = SHA256.HashData(digest)
+            });
+            var verified = fixture.Verify(
+                MailboxPeerWireV2Codec.Encode(request));
+            acknowledgements[index] = new MailboxAcknowledgement
+            {
+                Cursor = cursor,
+                EnvelopeDigest = digest
+            };
+            tombstones[index] = verified;
+            quorums[index] = SignedQuorum(fixture, verified).EncodedQuorum;
+        }
+
+        return (
+            new MailboxAckRequest
+            {
+                Epoch = fixture.Request.Epoch,
+                OperationId = fixture.Request.OperationId,
+                MixedVersion = MailboxMixedVersionMarker.StrictV1,
+                RetrieveCapability = RetrieveCapability(),
+                MailboxId = fixture.Envelope.MailboxId,
+                PlacementId = fixture.Envelope.PlacementId,
+                IsFinalPage = true,
+                ContinuationToken = ReadOnlyMemory<byte>.Empty,
+                Acknowledgements = acknowledgements
+            },
+            tombstones,
+            quorums);
+    }
+
+    private static MailboxCapabilityPresentation RetrieveCapability() =>
+        new()
+        {
+            DomainValue = new RotatingRetrieveCapability(Range(0xb0, 32)),
+            Lifecycle = MailboxCapabilityLifecycle.Active,
+            MixedVersion = MailboxMixedVersionMarker.StrictV1,
+            Generation = 7,
+            NotBeforeBucket = 1000,
+            ExpiresAtBucket = 1100,
+            OverlapUntilBucket = 0,
+            ReplayCounter = 9,
+            IdempotencyKey = Range(0x20, 16)
+        };
+
+    private static byte[] SwapMqr2Replicas(byte[] encoded)
+    {
+        var result = encoded.ToArray();
+        const int firstOffset = MailboxReceiptV2Limits.QuorumFixedHeaderLength;
+        const int replicaLength =
+            MailboxPeerWireV2Limits.Ed25519ReplicaResponseLength;
+        var first = result.AsSpan(firstOffset, replicaLength).ToArray();
+        result.AsSpan(firstOffset + replicaLength, replicaLength)
+            .CopyTo(result.AsSpan(firstOffset, replicaLength));
+        first.CopyTo(result, firstOffset + replicaLength);
+        return result;
+    }
+
     private static byte[] Mutate(byte[] value, int offset)
     {
         var result = value.ToArray();
         result[offset] ^= 1;
+        return result;
+    }
+
+    private static byte[] UInt64Bytes(ulong value)
+    {
+        var result = new byte[8];
+        BinaryPrimitives.WriteUInt64BigEndian(result, value);
         return result;
     }
 
@@ -467,6 +1001,12 @@ public sealed class MailboxPeerWireV2ContractTests
             }, SenderSeed);
 
         public VerifiedMailboxPeerWireRequestV2 Verify(ReadOnlySpan<byte> encoded) =>
+            VerifyAt(encoded, 1050, 1200);
+
+        public VerifiedMailboxPeerWireRequestV2 VerifyAt(
+            ReadOnlySpan<byte> encoded,
+            ulong nowUnixSeconds,
+            ulong epochExpiresAtUnixSeconds) =>
             MailboxPeerWireV2Codec.VerifyAndReserve(
                 encoded,
                 new MailboxPeerWireVerificationPolicyV2
@@ -479,7 +1019,8 @@ public sealed class MailboxPeerWireV2ContractTests
                     MembershipCommitment = Request.MembershipCommitment,
                     PlacementCommitment = Request.PlacementCommitment,
                     PlacementId = Envelope.PlacementId,
-                    NowUnixSeconds = 1050
+                    NowUnixSeconds = nowUnixSeconds,
+                    EpochExpiresAtUnixSeconds = epochExpiresAtUnixSeconds
                 },
                 Crypto,
                 MembershipVerifier,
@@ -511,6 +1052,19 @@ public sealed class MailboxPeerWireV2ContractTests
             return verificationTimeUnixSeconds == 1050 &&
                    proof.CanonicalInclusionProof.Length == 64;
         }
+    }
+
+    private sealed class WrongDigestCrypto(
+        SodiumMailboxPeerReplicationCrypto inner) : IMailboxPeerReplicationCrypto
+    {
+        public bool Verify(
+            ReadOnlySpan<byte> publicKey,
+            ReadOnlySpan<byte> signingBytes,
+            ReadOnlySpan<byte> signature) =>
+            inner.Verify(publicKey, signingBytes, signature);
+
+        public byte[] Digest(ReadOnlySpan<byte> canonicalBytes) =>
+            Range(1, 32);
     }
 
     private sealed class InMemoryReplayJournal : IMailboxPeerReplayJournal
@@ -548,6 +1102,26 @@ public sealed class MailboxPeerWireV2ContractTests
                 snapshots[key],
                 claim,
                 canonicalMrr2Response.Span);
+        }
+
+        public int CollectExpired(
+            ulong nowUnixSeconds,
+            int maximumRecords)
+        {
+            if (maximumRecords is
+                    <= 0 or
+                    > MailboxPeerWireV2Limits.MaximumReplayCollectionBatch)
+                throw new ArgumentOutOfRangeException(nameof(maximumRecords));
+            var keys = snapshots
+                .Where(pair => MailboxPeerReplayStateMachine.IsCollectable(
+                    pair.Value,
+                    nowUnixSeconds))
+                .Take(maximumRecords)
+                .Select(static pair => pair.Key)
+                .ToArray();
+            foreach (var key in keys)
+                _ = snapshots.Remove(key);
+            return keys.Length;
         }
 
         public MailboxPeerReplaySnapshot Snapshot(

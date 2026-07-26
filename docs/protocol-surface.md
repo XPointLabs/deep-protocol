@@ -148,10 +148,13 @@ meaning.
 P10B preserves every P03B2 frame and adds `PRQ2` version 2. It signs a SHA-256
 operation-domain-framed digest with the sender MIP1 Ed25519 key and binds sender/recipient router
 IDs, operation, epoch/cursor, mailbox/placement/membership, exact payload/digest/expiry, creation
-time and a 32-byte durable replay nonce. The recipient returns only one durable native `MRR2`
-after persistence. Dormant public client metadata maps Store to `MQR2`, Retrieve to `MRP1`, and
-ACK to bounded ordered `MAR1(MQR2[])`; exact routes, media types, limits and empty-body error
-statuses are in `adr/0012-p10b-mailbox-wire-and-ingress-contract.md`.
+time and a 32-byte durable replay nonce. Replay records persist through bounded epoch expiry plus
+seven days and use bounded GC. The recipient returns one durable native `MRR2` after persistence;
+two exact MIP1-keyed replicas form an MQR2 whose coordinator sequence binds the complete signed
+PRQ2 and rejects the PRQ1 cursor convention. Dormant public client metadata maps Store to `MQR2`,
+Retrieve to `MRP1`, and exact MAK1 order to bounded verified `MAR1(MQR2[])`; exact routes, media
+types, limits and empty-body error statuses are in
+`adr/0012-p10b-mailbox-wire-and-ingress-contract.md`.
 
 P03C adds fixed `NRV1` advertisements and bounded `NHS1` initiator/responder frames. The public
 orchestrator passes exact canonical transcript bytes, expected contact identity, period,
