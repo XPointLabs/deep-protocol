@@ -48,6 +48,9 @@ Primary upstream areas reviewed:
 - P03B canonical mailbox capability, free-admission and accepted/durable receipt contracts,
   isolated in `Deep.Protocol.DeepExtension.MailboxCapabilities`; crypto, replay and capability
   production remain host-provided interfaces with no production registration
+- dormant P09C client mailbox `MEO1`/`MST1`/`MRT1`/`MRP1`/`MAK1` frames, explicit adjacent
+  `E/E+1` overlap, local-only delivered transition and placement/membership-bound `MRR2`/`MQR2`
+  receipts in the same isolated namespace; no runtime activation or default changes
 - P03C contact-scoped nearby rendezvous, canonical handshake framing, replay scope and
   platform-neutral lifecycle, isolated in `Deep.Protocol.DeepExtension.NearbyHandshakes`; the
   mutually authenticated AKE remains a blocked host adapter with no production implementation
@@ -103,6 +106,16 @@ expected operation/generation/payload/tombstone context. Replay guards distingui
 idempotent-retry, stale-replay and conflict decisions. The library does not claim opaque bytes are
 secret or unlinkable and does not create keys, persist lifecycle/replay state, execute storage,
 choose a signature/digest primitive, apply billing, or enable a runtime feature.
+
+P09C extends that dormant surface additively. Fixed 32-byte `BlindedMailboxId` and
+`BlindedPlacementId` types keep raw Session/user identity out of canonical frames. `MEO1` bounds
+opaque ciphertext to 32..81920 bytes and TTL to 60 seconds..7 days. Store accepts only deposit
+presentations; retrieve and ack accept only retrieve presentations. Pages contain at most 100
+items, continuation tokens are at most 256 bytes, and encoded retrieve pages are at most 1 MiB.
+`MRR2` conceptually maps the xnode `a193dcc` storage-router/mailbox/blob/expiry/stored-at/disposition
+receipt while additionally binding operation, epoch, cursor, placement and membership commitment.
+It is not byte-compatible with the implementation-local xnode JSON receipt. See
+`adr/0005-p09c-client-mailbox-wire-contract.md`.
 
 P03C adds fixed `NRV1` advertisements and bounded `NHS1` initiator/responder frames. The public
 orchestrator passes exact canonical transcript bytes, expected contact identity, period,

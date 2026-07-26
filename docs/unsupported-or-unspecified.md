@@ -143,6 +143,22 @@ verifier vectors reproducible; they are not production cryptography. Production 
 remains blocked until later producer, storage, client integration and external security work
 supplies and verifies those dependencies.
 
+## P09C dormant client mailbox contract gaps
+
+The additive P09C contract defines canonical client frames, bounded opaque encrypted envelopes,
+adjacent epoch overlap, pagination, local delivery transitions and placement/membership-bound V2
+receipts. It deliberately does not implement:
+
+- recipient master-secret generation, capability/identifier derivation, encryption or decryption;
+- proof that caller-provided blinded identifiers are unlinkable or derived without raw identity;
+- durable epoch, replay, idempotency, cursor, continuation-token or acknowledgement persistence;
+- xnode translation from the implementation-local JSON receipt at `a193dcc` to `MRR2`/`MQR2`;
+- replica/coordinator key resolution, production signatures or membership-commitment verification;
+- client outbox/SQLite integration, dual-read/mirror execution, networking, DI or feature activation.
+
+The sender-facing store model intentionally has no retrieve or master material. Test-only
+SHA-256-based signatures produce stable vectors but are not a selected cryptographic scheme.
+
 ## P03C nearby handshake gaps
 
 P03C defines contact-scoped rendezvous framing, a two-message transcript boundary, replay scope and
