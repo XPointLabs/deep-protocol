@@ -9,7 +9,8 @@ public enum MailboxWireFrame
     Mrr2 = 5,
     Mqr2 = 6,
     Mar1 = 7,
-    Prq2 = 8
+    Prq2 = 8,
+    Mqr3 = 9
 }
 
 public sealed record MailboxHttpEndpointContract
@@ -66,6 +67,7 @@ public static class MailboxWireHttpContract
     public const string Mak1ContentType = "application/vnd.deep.mailbox.mak1";
     public const string Mrr2ContentType = "application/vnd.deep.mailbox.mrr2";
     public const string Mqr2ContentType = "application/vnd.deep.mailbox.mqr2";
+    public const string Mqr3ContentType = "application/vnd.deep.mailbox.mqr3";
     public const string Mar1ContentType = "application/vnd.deep.mailbox.mar1";
     public const string Prq2ContentType = "application/vnd.deep.mailbox.prq2";
 
@@ -94,10 +96,10 @@ public static class MailboxWireHttpContract
             MailboxCapabilityLimits.MaximumPresentationLength +
             MailboxClientLimits.MaximumEncryptedEnvelopeLength,
         SuccessStatusCode = 200,
-        ResponseContentType = Mqr2ContentType,
-        ResponseFrame = MailboxWireFrame.Mqr2,
-        MinimumResponseBytes = Ed25519Mqr2Length,
-        MaximumResponseBytes = Ed25519Mqr2Length,
+        ResponseContentType = Mqr3ContentType,
+        ResponseFrame = MailboxWireFrame.Mqr3,
+        MinimumResponseBytes = Ed25519Mqr3Length,
+        MaximumResponseBytes = Ed25519Mqr3Length,
         RequestTimeoutSeconds = 15,
         MaximumConcurrentRequests = 16,
         RequestsPerMinute = 60,
@@ -155,7 +157,7 @@ public static class MailboxWireHttpContract
         MinimumResponseBytes =
             MailboxPeerReplicationLimits.AggregateAckHeaderLength +
             2 +
-            Ed25519Mqr2Length,
+            Ed25519Mqr3Length,
         MaximumResponseBytes = MaximumEd25519Mar1Length,
         RequestTimeoutSeconds = 15,
         MaximumConcurrentRequests = 16,
@@ -202,14 +204,14 @@ public static class MailboxWireHttpContract
                 "Unknown mailbox HTTP failure.")
         };
 
-    private const int Ed25519Mqr2Length =
-        MailboxReceiptV2Limits.QuorumFixedHeaderLength +
+    private const int Ed25519Mqr3Length =
+        MailboxReceiptV3Limits.QuorumFixedHeaderLength +
         (2 * MailboxPeerWireV2Limits.Ed25519ReplicaResponseLength) +
         MailboxPeerReplicationLimits.SignatureLength;
     private const int MaximumEd25519Mar1Length =
         MailboxPeerReplicationLimits.AggregateAckHeaderLength +
         (MailboxClientLimits.MaximumPageItems *
-         (2 + Ed25519Mqr2Length));
+         (2 + Ed25519Mqr3Length));
 
     private static MailboxHttpEndpointContract PeerEndpoint(
         string route,

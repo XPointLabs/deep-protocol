@@ -180,11 +180,18 @@ public sealed class MailboxPeerWireV2ContractTests
             MailboxPeerReplicationError.ExpiredOrStale,
             Assert.Throws<MailboxPeerReplicationException>(() =>
                 fixture.Verify(MailboxPeerWireV2Codec.Encode(stale))).Error);
-        var future = fixture.Sign(request with { CreatedAtUnixSeconds = 1081 });
-        Assert.Equal(
-            MailboxPeerReplicationError.ExpiredOrStale,
-            Assert.Throws<MailboxPeerReplicationException>(() =>
-                fixture.Verify(MailboxPeerWireV2Codec.Encode(future))).Error);
+        Assert.Equal(0UL, MailboxPeerWireV2Limits.MaximumFutureSkewSeconds);
+        foreach (var futureOffset in new ulong[] { 1, 30, 31 })
+        {
+            var future = fixture.Sign(request with
+            {
+                CreatedAtUnixSeconds = 1050 + futureOffset
+            });
+            Assert.Equal(
+                MailboxPeerReplicationError.ExpiredOrStale,
+                Assert.Throws<MailboxPeerReplicationException>(() =>
+                    fixture.Verify(MailboxPeerWireV2Codec.Encode(future))).Error);
+        }
 
         var badDigest = fixture.Sign(request with { PayloadDigest = Range(1, 32) });
         Assert.Equal(
@@ -203,6 +210,45 @@ public sealed class MailboxPeerWireV2ContractTests
                 SenderMembershipProof = fixture.RecipientProof,
                 RecipientMembershipProof = fixture.SenderProof
             }));
+    }
+
+    [Fact]
+    public void SignedCreatedAtBoundary_IsZeroSkewForStoreAndTombstone()
+    {
+        foreach (var operation in new[]
+        {
+            MailboxPeerReplicationOperation.Store,
+            MailboxPeerReplicationOperation.Tombstone
+        })
+        {
+            var atNow = new Fixture(operation);
+            var canonical = MailboxPeerWireV2Codec.Encode(
+                atNow.Sign(atNow.Request with
+                {
+                    CreatedAtUnixSeconds = 1050
+                }));
+            var reserved = atNow.Verify(canonical);
+            Assert.Equal(
+                MailboxPeerReplayDisposition.NewReserved,
+                reserved.ReplayDisposition);
+            Assert.Equal(
+                reserved.ReplayClaim.CreatedAtUnixSeconds,
+                reserved.ReplayClaim.ReservedAtUnixSeconds);
+
+            foreach (var futureOffset in new ulong[] { 1, 30, 31 })
+            {
+                var future = new Fixture(operation);
+                var encoded = MailboxPeerWireV2Codec.Encode(
+                    future.Sign(future.Request with
+                    {
+                        CreatedAtUnixSeconds = 1050 + futureOffset
+                    }));
+                Assert.Equal(
+                    MailboxPeerReplicationError.ExpiredOrStale,
+                    Assert.Throws<MailboxPeerReplicationException>(() =>
+                        future.Verify(encoded)).Error);
+            }
+        }
     }
 
     [Fact]
@@ -304,7 +350,10 @@ public sealed class MailboxPeerWireV2ContractTests
                 Assert.Equal("/api/client/mailbox/v1/store", endpoint.Route);
                 Assert.Equal("POST", endpoint.Method);
                 Assert.Equal(MailboxWireFrame.Mst1, endpoint.RequestFrame);
-                Assert.Equal(MailboxWireFrame.Mqr2, endpoint.ResponseFrame);
+                Assert.Equal(MailboxWireFrame.Mqr3, endpoint.ResponseFrame);
+                Assert.Equal(
+                    "application/vnd.deep.mailbox.mqr3",
+                    endpoint.ResponseContentType);
                 Assert.Equal(82_836, endpoint.MaximumRequestBytes);
                 Assert.Equal(776, endpoint.MaximumResponseBytes);
             },
@@ -401,7 +450,7 @@ public sealed class MailboxPeerWireV2ContractTests
         Assert.Equal(
             GoldenVectorLoader.Load("mailbox-peer-wire-v2.json")
                 .GetRequired(
-                    "deep-extension/mailbox-peer/v2/MQR2-tombstone")
+                    "deep-extension/mailbox-peer/v2/MQR3-tombstone")
                 .Hex,
             Convert.ToHexString(SHA256.HashData(quorumBytes))
                 .ToLowerInvariant());
@@ -411,7 +460,7 @@ public sealed class MailboxPeerWireV2ContractTests
                 quorum.ReplicaReceipts[1].ReplicaId.Span) < 0);
 
         var duplicate = fixture.Crypto.SignQuorumResponse(
-            new MailboxDurableQuorumReceiptV2
+            new MailboxDurableQuorumReceiptV3
             {
                 CoordinatorId = verified.Request.SenderRouterId,
                 CoordinatorSequence = verified.Request.Cursor,
@@ -422,7 +471,7 @@ public sealed class MailboxPeerWireV2ContractTests
             fixture.SenderSeed);
         Assert.Throws<MailboxPeerReplicationException>(() =>
             MailboxPeerWireV2Codec.VerifyDurableQuorumResponse(
-                MailboxReceiptV2Codec.EncodeDurableQuorum(duplicate),
+                MailboxReceiptV3Codec.EncodeDurableQuorum(duplicate),
                 verified,
                 fixture.Crypto));
 
@@ -457,25 +506,25 @@ public sealed class MailboxPeerWireV2ContractTests
                 verified.Request.SenderRouterId,
                 fixture.Crypto));
 
-        var decoded = MailboxReceiptV2Codec.DecodeDurableQuorum(quorumBytes);
+        var decoded = MailboxReceiptV3Codec.DecodeDurableQuorum(quorumBytes);
         var wrongCoordinator = fixture.Crypto.SignQuorumResponse(
             decoded with { CoordinatorId = verified.Request.RecipientRouterId },
             fixture.SenderSeed);
         Assert.Throws<MailboxPeerReplicationException>(() =>
             MailboxPeerWireV2Codec.VerifyDurableQuorumResponse(
-                MailboxReceiptV2Codec.EncodeDurableQuorum(wrongCoordinator),
+                MailboxReceiptV3Codec.EncodeDurableQuorum(wrongCoordinator),
                 verified,
                 fixture.Crypto));
 
-        var reordered = SwapMqr2Replicas(quorumBytes);
+        var reordered = SwapMqr3Replicas(quorumBytes);
         Assert.Throws<MailboxReceiptException>(() =>
-            MailboxReceiptV2Codec.DecodeDurableQuorum(reordered));
+            MailboxReceiptV3Codec.DecodeDurableQuorum(reordered));
     }
 
     [Theory]
     [InlineData(1)]
     [InlineData(100)]
-    public void AggregateAck_BindsOrderedMak1TombstonesAndMqr2AtBounds(int count)
+    public void AggregateAck_BindsOrderedMak1TombstonesAndMqr3AtBounds(int count)
     {
         var fixture = new Fixture(MailboxPeerReplicationOperation.Tombstone);
         var (ack, tombstones, quorums) = AckBatch(fixture, count);
@@ -594,6 +643,11 @@ public sealed class MailboxPeerWireV2ContractTests
             Signature = ReadOnlyMemory<byte>.Empty
         };
         legacy = fixture.Crypto.SignRequest(legacy, fixture.SenderSeed);
+        var legacyVerified = new VerifiedMailboxPeerReplicationRequest
+        {
+            Request = legacy,
+            Envelope = null
+        };
         Assert.Equal(
             MailboxPeerReplicationError.InvalidMagic,
             Assert.Throws<MailboxPeerReplicationException>(() =>
@@ -630,9 +684,9 @@ public sealed class MailboxPeerWireV2ContractTests
                 verified.Request.SenderRouterId,
                 fixture.Crypto));
 
-        var prq2Quorum = MailboxReceiptV2Codec.DecodeDurableQuorum(
+        var prq2Quorum = MailboxReceiptV3Codec.DecodeDurableQuorum(
             SignedQuorum(fixture, verified).EncodedQuorum);
-        var prq1SequenceConvention = fixture.Crypto.SignQuorumResponse(
+        var changedSequence = fixture.Crypto.SignQuorumResponse(
             prq2Quorum with
             {
                 CoordinatorSequence = verified.Request.Cursor,
@@ -641,10 +695,87 @@ public sealed class MailboxPeerWireV2ContractTests
             fixture.SenderSeed);
         Assert.Throws<MailboxPeerReplicationException>(() =>
             MailboxPeerWireV2Codec.VerifyDurableQuorumResponse(
-                MailboxReceiptV2Codec.EncodeDurableQuorum(
-                    prq1SequenceConvention),
+                MailboxReceiptV3Codec.EncodeDurableQuorum(changedSequence),
                 verified,
                 fixture.Crypto));
+
+        var (quorumSender, quorumRecipient, mqr3Bytes) =
+            SignedQuorum(fixture, verified);
+        _ = MailboxPeerWireV2Codec.VerifyDurableQuorumResponse(
+            mqr3Bytes,
+            verified,
+            fixture.Crypto);
+        Assert.Throws<MailboxReceiptException>(() =>
+            MailboxPeerReplicationCodec.VerifyDurableQuorumResponse(
+                mqr3Bytes,
+                legacyVerified,
+                fixture.Crypto));
+
+        var mqr3 = MailboxReceiptV3Codec.DecodeDurableQuorum(mqr3Bytes);
+        var mqr2 = fixture.Crypto.SignQuorumResponse(
+            new MailboxDurableQuorumReceiptV2
+            {
+                CoordinatorId = mqr3.CoordinatorId,
+                CoordinatorSequence = mqr3.CoordinatorSequence,
+                FirstReplica = quorumSender,
+                SecondReplica = quorumRecipient,
+                Signature = ReadOnlyMemory<byte>.Empty
+            },
+            fixture.SenderSeed);
+        var mqr2Bytes = MailboxReceiptV2Codec.EncodeDurableQuorum(mqr2);
+        _ = MailboxPeerReplicationCodec.VerifyDurableQuorumResponse(
+            mqr2Bytes,
+            legacyVerified,
+            fixture.Crypto);
+        Assert.Throws<MailboxReceiptException>(() =>
+            MailboxPeerWireV2Codec.VerifyDurableQuorumResponse(
+                mqr2Bytes,
+                verified,
+                fixture.Crypto));
+
+        var recastAsMqr3 = mqr2Bytes.ToArray();
+        "MQR3"u8.CopyTo(recastAsMqr3);
+        recastAsMqr3[4] = 3;
+        Assert.Equal(
+            MailboxPeerReplicationError.InvalidReceipt,
+            Assert.Throws<MailboxPeerReplicationException>(() =>
+                MailboxPeerWireV2Codec.VerifyDurableQuorumResponse(
+                    recastAsMqr3,
+                    verified,
+                    fixture.Crypto)).Error);
+
+        var recastAsMqr2 = mqr3Bytes.ToArray();
+        "MQR2"u8.CopyTo(recastAsMqr2);
+        recastAsMqr2[4] = 2;
+        Assert.Equal(
+            MailboxPeerReplicationError.InvalidReceipt,
+            Assert.Throws<MailboxPeerReplicationException>(() =>
+                MailboxPeerReplicationCodec.VerifyDurableQuorumResponse(
+                    recastAsMqr2,
+                    legacyVerified,
+                    fixture.Crypto)).Error);
+
+        var legacyMar1 = MailboxAggregateAckCodec.Encode(
+            new MailboxAggregateAckResponse
+            {
+                Epoch = legacy.Epoch,
+                OperationId = legacy.OperationId,
+                TombstoneQuorums = [mqr2Bytes]
+            });
+        _ = MailboxAggregateAckCodec.Decode(legacyMar1);
+        Assert.Throws<MailboxReceiptException>(() =>
+            MailboxAggregateAckCodec.DecodeMqr3(legacyMar1));
+
+        var prq2Mar1 = MailboxAggregateAckCodec.EncodeMqr3(
+            new MailboxAggregateAckResponse
+            {
+                Epoch = verified.Request.Epoch,
+                OperationId = verified.Request.OperationId,
+                TombstoneQuorums = [mqr3Bytes]
+            });
+        _ = MailboxAggregateAckCodec.DecodeMqr3(prq2Mar1);
+        Assert.Throws<MailboxReceiptException>(() =>
+            MailboxAggregateAckCodec.Decode(prq2Mar1));
     }
 
     [Fact]
@@ -826,7 +957,7 @@ public sealed class MailboxPeerWireV2ContractTests
         return (
             sender,
             recipient,
-            MailboxReceiptV2Codec.EncodeDurableQuorum(signed));
+            MailboxReceiptV3Codec.EncodeDurableQuorum(signed));
     }
 
     private static (
@@ -896,10 +1027,10 @@ public sealed class MailboxPeerWireV2ContractTests
             IdempotencyKey = Range(0x20, 16)
         };
 
-    private static byte[] SwapMqr2Replicas(byte[] encoded)
+    private static byte[] SwapMqr3Replicas(byte[] encoded)
     {
         var result = encoded.ToArray();
-        const int firstOffset = MailboxReceiptV2Limits.QuorumFixedHeaderLength;
+        const int firstOffset = MailboxReceiptV3Limits.QuorumFixedHeaderLength;
         const int replicaLength =
             MailboxPeerWireV2Limits.Ed25519ReplicaResponseLength;
         var first = result.AsSpan(firstOffset, replicaLength).ToArray();

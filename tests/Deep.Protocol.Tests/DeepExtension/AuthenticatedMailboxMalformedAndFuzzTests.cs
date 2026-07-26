@@ -36,6 +36,8 @@ public sealed class AuthenticatedMailboxMalformedAndFuzzTests
             TryDecode(() => MailboxPeerReplicationCodec.Decode(bytes));
             TryDecode(() => MailboxPeerReplicationCodec.DecodeMembershipProof(bytes));
             TryDecode(() => MailboxAggregateAckCodec.Decode(bytes));
+            TryDecode(() => MailboxAggregateAckCodec.DecodeMqr3(bytes));
+            TryDecode(() => MailboxReceiptV3Codec.DecodeDurableQuorum(bytes));
         }
     }
 

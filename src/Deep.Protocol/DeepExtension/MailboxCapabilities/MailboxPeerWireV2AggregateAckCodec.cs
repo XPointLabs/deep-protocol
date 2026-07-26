@@ -7,33 +7,33 @@ public static class MailboxPeerWireV2AggregateAckCodec
     public static byte[] Create(
         MailboxAckRequest acknowledgementRequest,
         IReadOnlyList<VerifiedMailboxPeerWireRequestV2> orderedTombstones,
-        IReadOnlyList<ReadOnlyMemory<byte>> orderedSignedMqr2,
+        IReadOnlyList<ReadOnlyMemory<byte>> orderedSignedMqr3,
         IMailboxPeerReplicationCrypto crypto)
     {
         ValidateInputs(
             acknowledgementRequest,
             orderedTombstones,
-            orderedSignedMqr2,
+            orderedSignedMqr3,
             crypto);
         for (var index = 0; index < orderedTombstones.Count; index++)
         {
             _ = MailboxPeerWireV2Codec.VerifyDurableQuorumResponse(
-                orderedSignedMqr2[index].Span,
+                orderedSignedMqr3[index].Span,
                 orderedTombstones[index],
                 crypto);
         }
 
-        return MailboxAggregateAckCodec.Encode(new MailboxAggregateAckResponse
+        return MailboxAggregateAckCodec.EncodeMqr3(new MailboxAggregateAckResponse
         {
             Epoch = acknowledgementRequest.Epoch,
             OperationId = acknowledgementRequest.OperationId.ToArray(),
-            TombstoneQuorums = orderedSignedMqr2
+            TombstoneQuorums = orderedSignedMqr3
                 .Select(static value => (ReadOnlyMemory<byte>)value.ToArray())
                 .ToArray()
         });
     }
 
-    public static IReadOnlyList<VerifiedMailboxDurableQuorumV2> Verify(
+    public static IReadOnlyList<VerifiedMailboxDurableQuorumV3> Verify(
         ReadOnlySpan<byte> encodedMar1,
         MailboxAckRequest acknowledgementRequest,
         IReadOnlyList<VerifiedMailboxPeerWireRequestV2> orderedTombstones,
@@ -42,7 +42,7 @@ public static class MailboxPeerWireV2AggregateAckCodec
         ArgumentNullException.ThrowIfNull(acknowledgementRequest);
         ArgumentNullException.ThrowIfNull(orderedTombstones);
         ArgumentNullException.ThrowIfNull(crypto);
-        var response = MailboxAggregateAckCodec.Decode(encodedMar1);
+        var response = MailboxAggregateAckCodec.DecodeMqr3(encodedMar1);
         ValidateInputs(
             acknowledgementRequest,
             orderedTombstones,
@@ -54,7 +54,7 @@ public static class MailboxPeerWireV2AggregateAckCodec
                 acknowledgementRequest.OperationId.Span))
             throw Error("MAR1 does not match the exact MAK1 operation.");
 
-        var verified = new List<VerifiedMailboxDurableQuorumV2>(
+        var verified = new List<VerifiedMailboxDurableQuorumV3>(
             orderedTombstones.Count);
         for (var index = 0; index < orderedTombstones.Count; index++)
         {
@@ -70,20 +70,20 @@ public static class MailboxPeerWireV2AggregateAckCodec
     private static void ValidateInputs(
         MailboxAckRequest acknowledgementRequest,
         IReadOnlyList<VerifiedMailboxPeerWireRequestV2> orderedTombstones,
-        IReadOnlyList<ReadOnlyMemory<byte>> orderedSignedMqr2,
+        IReadOnlyList<ReadOnlyMemory<byte>> orderedSignedMqr3,
         IMailboxPeerReplicationCrypto crypto)
     {
         ArgumentNullException.ThrowIfNull(acknowledgementRequest);
         ArgumentNullException.ThrowIfNull(orderedTombstones);
-        ArgumentNullException.ThrowIfNull(orderedSignedMqr2);
+        ArgumentNullException.ThrowIfNull(orderedSignedMqr3);
         ArgumentNullException.ThrowIfNull(crypto);
         _ = MailboxClientCodec.EncodeAck(acknowledgementRequest);
         if (acknowledgementRequest.Acknowledgements.Count is
                 0 or > MailboxClientLimits.MaximumPageItems ||
             orderedTombstones.Count !=
                 acknowledgementRequest.Acknowledgements.Count ||
-            orderedSignedMqr2.Count != orderedTombstones.Count)
-            throw Error("MAK1, PRQ2 and MQR2 counts do not match.");
+            orderedSignedMqr3.Count != orderedTombstones.Count)
+            throw Error("MAK1, PRQ2 and MQR3 counts do not match.");
 
         var placementCommitment = MailboxPlacementCommitment.Compute(
             acknowledgementRequest.PlacementId);

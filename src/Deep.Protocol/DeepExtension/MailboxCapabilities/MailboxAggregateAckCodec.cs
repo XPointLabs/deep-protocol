@@ -9,6 +9,14 @@ public static class MailboxAggregateAckCodec
     private static ReadOnlySpan<byte> Magic => "MAR1"u8;
 
     public static byte[] Encode(MailboxAggregateAckResponse response)
+        => EncodeCore(response, useMqr3: false);
+
+    public static byte[] EncodeMqr3(MailboxAggregateAckResponse response)
+        => EncodeCore(response, useMqr3: true);
+
+    private static byte[] EncodeCore(
+        MailboxAggregateAckResponse response,
+        bool useMqr3)
     {
         ArgumentNullException.ThrowIfNull(response);
         ValidateFixed(response.Epoch, response.OperationId.Span, response.TombstoneQuorums);
@@ -27,7 +35,10 @@ public static class MailboxAggregateAckCodec
         var offset = MailboxPeerReplicationLimits.AggregateAckHeaderLength;
         foreach (var receipt in response.TombstoneQuorums)
         {
-            _ = MailboxReceiptV2Codec.DecodeDurableQuorum(receipt.Span);
+            if (useMqr3)
+                _ = MailboxReceiptV3Codec.DecodeDurableQuorum(receipt.Span);
+            else
+                _ = MailboxReceiptV2Codec.DecodeDurableQuorum(receipt.Span);
             BinaryPrimitives.WriteUInt16BigEndian(output.AsSpan(offset), checked((ushort)receipt.Length));
             offset += 2;
             receipt.Span.CopyTo(output.AsSpan(offset));
@@ -37,6 +48,14 @@ public static class MailboxAggregateAckCodec
     }
 
     public static MailboxAggregateAckResponse Decode(ReadOnlySpan<byte> encoded)
+        => DecodeCore(encoded, useMqr3: false);
+
+    public static MailboxAggregateAckResponse DecodeMqr3(ReadOnlySpan<byte> encoded)
+        => DecodeCore(encoded, useMqr3: true);
+
+    private static MailboxAggregateAckResponse DecodeCore(
+        ReadOnlySpan<byte> encoded,
+        bool useMqr3)
     {
         if (encoded.Length < MailboxPeerReplicationLimits.AggregateAckHeaderLength ||
             encoded.Length > MailboxPeerReplicationLimits.MaximumAggregateAckLength)
@@ -62,7 +81,10 @@ public static class MailboxAggregateAckCodec
             if (length == 0 || offset + length > encoded.Length)
                 throw Error(MailboxPeerReplicationError.InvalidLength, "MAR1 nested receipt length is invalid.");
             var receipt = encoded.Slice(offset, length).ToArray();
-            _ = MailboxReceiptV2Codec.DecodeDurableQuorum(receipt);
+            if (useMqr3)
+                _ = MailboxReceiptV3Codec.DecodeDurableQuorum(receipt);
+            else
+                _ = MailboxReceiptV2Codec.DecodeDurableQuorum(receipt);
             receipts.Add(receipt);
             offset += length;
         }

@@ -145,14 +145,16 @@ Ed25519 key are independent fields. Placement commitment is one domain-separated
 blinded placement ID. `MAR1` orders at most 100 exact tombstone `MQR2` receipts and adds no new durability
 meaning.
 
-P10B preserves every P03B2 frame and adds `PRQ2` version 2. It signs a SHA-256
+P10B preserves every P03B2 frame and adds `PRQ2` version 2 plus the PRQ2-only `MQR3` quorum domain. It signs a SHA-256
 operation-domain-framed digest with the sender MIP1 Ed25519 key and binds sender/recipient router
 IDs, operation, epoch/cursor, mailbox/placement/membership, exact payload/digest/expiry, creation
-time and a 32-byte durable replay nonce. Replay records persist through bounded epoch expiry plus
+time and a 32-byte durable replay nonce. Creation after verification time is rejected (zero
+future skew). Replay records persist through bounded epoch expiry plus
 seven days and use bounded GC. The recipient returns one durable native `MRR2` after persistence;
-two exact MIP1-keyed replicas form an MQR2 whose coordinator sequence binds the complete signed
-PRQ2 and rejects the PRQ1 cursor convention. Dormant public client metadata maps Store to `MQR2`,
-Retrieve to `MRP1`, and exact MAK1 order to bounded verified `MAR1(MQR2[])`; exact routes, media
+two exact MIP1-keyed replicas form an `MQR3` whose distinct magic/version/signing transcript
+prevents PRQ1/MQR2 cross-verification and whose coordinator sequence binds the complete signed
+PRQ2. Dormant public client metadata maps Store to `MQR3`, Retrieve to `MRP1`, and exact MAK1
+order to bounded verified `MAR1(MQR3[])`; exact routes, media
 types, limits and empty-body error statuses are in
 `adr/0012-p10b-mailbox-wire-and-ingress-contract.md`.
 

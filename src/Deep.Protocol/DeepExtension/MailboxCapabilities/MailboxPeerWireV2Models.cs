@@ -6,7 +6,7 @@ public static class MailboxPeerWireV2Limits
     public const int ReplayNonceLength = 32;
     public const int RequestHeaderLength = 296;
     public const ulong MaximumPastAgeSeconds = 120;
-    public const ulong MaximumFutureSkewSeconds = 30;
+    public const ulong MaximumFutureSkewSeconds = 0;
     public const ulong MaximumEpochLifetimeSeconds = 7 * 24 * 60 * 60;
     public const ulong MaximumTombstoneLifetimeSeconds = 7 * 24 * 60 * 60;
     public const ulong ReplayRetentionSeconds = 7 * 24 * 60 * 60;

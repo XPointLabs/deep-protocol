@@ -77,6 +77,19 @@ public sealed class SodiumMailboxPeerReplicationCrypto : IMailboxPeerReplication
         };
     }
 
+    public MailboxDurableQuorumReceiptV3 SignQuorumResponse(
+        MailboxDurableQuorumReceiptV3 unsignedQuorum,
+        ReadOnlySpan<byte> coordinatorSeedOrPrivateKey)
+    {
+        ArgumentNullException.ThrowIfNull(unsignedQuorum);
+        return unsignedQuorum with
+        {
+            Signature = PublicKeyAuth.SignDetached(
+                MailboxReceiptV3Codec.GetQuorumSigningBytes(unsignedQuorum),
+                NormalizePrivateKey(coordinatorSeedOrPrivateKey))
+        };
+    }
+
     public bool Verify(
         ReadOnlySpan<byte> publicKey,
         ReadOnlySpan<byte> signingBytes,
