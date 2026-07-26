@@ -109,9 +109,12 @@ choose a signature/digest primitive, apply billing, or enable a runtime feature.
 
 P09C extends that dormant surface additively. Fixed 32-byte `BlindedMailboxId` and
 `BlindedPlacementId` types keep raw Session/user identity out of canonical frames. `MEO1` bounds
-opaque ciphertext to 32..81920 bytes and TTL to 60 seconds..7 days. Store accepts only deposit
+opaque ciphertext to 32..81768 bytes, the complete frame to 81920 bytes, and TTL to 60
+seconds..7 days. Store accepts only deposit
 presentations; retrieve and ack accept only retrieve presentations. Pages contain at most 100
 items, continuation tokens are at most 256 bytes, and encoded retrieve pages are at most 1 MiB.
+Every retrieved item binds a strictly increasing cursor to its envelope and derives the matching
+ack entry from the envelope's exact deduplication/ack digest.
 `MRR2` conceptually maps the xnode `a193dcc` storage-router/mailbox/blob/expiry/stored-at/disposition
 receipt while additionally binding operation, epoch, cursor, placement and membership commitment.
 It is not byte-compatible with the implementation-local xnode JSON receipt. See

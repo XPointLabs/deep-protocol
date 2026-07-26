@@ -44,14 +44,19 @@ operation ID.
 ## Envelope, pagination and state
 
 `MEO1` carries blinded mailbox and placement identifiers, a 16-byte operation ID, a 32-byte
-end-to-end deduplication digest, creation/expiry seconds and 32..81920 bytes of opaque ciphertext.
-TTL is 60 seconds through 7 days. The protocol library does not encrypt, decrypt or inspect the
-ciphertext.
+end-to-end deduplication/ack digest, creation/expiry seconds and 32..81768 bytes of opaque
+ciphertext. The complete canonical `MEO1` frame is therefore at most 81920 bytes, matching xnode
+`a193dcc`'s default `MaxBlobBytes`; the earlier 81920-byte ciphertext limit produced an
+incompatible 82072-byte frame and is rejected by the corrected contract. TTL is 60 seconds through
+7 days. The protocol library does not encrypt, decrypt or inspect the ciphertext.
 
 Retrieve and ack page sizes are 1..100. Continuation tokens are opaque and at most 256 bytes.
 Retrieve responses are at most 1 MiB including framing and nested envelopes. Ack entries use
-strictly increasing nonzero cursors and fixed envelope digests. A final ack page has no continuation
-token; a non-final page must have one.
+strictly increasing nonzero cursors and fixed envelope digests. Every `MRP1` item canonically binds
+one cursor to one nested `MEO1`; its acknowledgement uses that cursor and the exact nested
+deduplication/ack digest. Item cursors are unique and strictly increasing, and `nextCursor` equals
+the last item cursor. Pre-correction `MRP1` bytes without item cursors fail canonical decoding. A
+final ack page has no continuation token; a non-final page must have one.
 
 `accepted`, `durable` and `delivered` are deliberately distinct:
 

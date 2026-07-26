@@ -56,8 +56,7 @@ public static class MailboxClientCodec
             encoded,
             EnvelopeMagic,
             MailboxClientLimits.EncryptedEnvelopeHeaderLength,
-            MailboxClientLimits.EncryptedEnvelopeHeaderLength +
-            MailboxClientLimits.MaximumCiphertextLength);
+            MailboxClientLimits.MaximumEncryptedEnvelopeLength);
         if (encoded.Slice(5, 3).IndexOfAnyExcept((byte)0) >= 0 ||
             encoded.Slice(148, 4).IndexOfAnyExcept((byte)0) >= 0)
         {
@@ -302,20 +301,46 @@ public static class MailboxClientCodec
     {
         ArgumentNullException.ThrowIfNull(page);
         ValidateOperationId(page.OperationId.Span);
+        ArgumentNullException.ThrowIfNull(page.Items);
         if (page.Epoch == 0 ||
-            page.Envelopes.Count > MailboxClientLimits.MaximumPageItems ||
+            page.Items.Count > MailboxClientLimits.MaximumPageItems ||
             page.ContinuationToken.Length > MailboxClientLimits.MaximumContinuationTokenLength ||
             page.HasMore != !page.ContinuationToken.IsEmpty ||
-            page.HasMore && page.NextCursor == 0)
+            page.HasMore && page.Items.Count == 0)
         {
             throw Error(MailboxClientError.PaginationOutOfRange, "Retrieve page metadata is not canonical.");
         }
 
-        var envelopes = page.Envelopes.Select(EncodeEncryptedEnvelope).ToArray();
+        var encodedItems = new List<(ulong Cursor, byte[] Envelope)>(page.Items.Count);
+        ulong priorCursor = 0;
+        foreach (var item in page.Items)
+        {
+            ArgumentNullException.ThrowIfNull(item);
+            ArgumentNullException.ThrowIfNull(item.Envelope);
+            if (item.Cursor == 0 || item.Cursor <= priorCursor || item.Envelope.Epoch != page.Epoch)
+            {
+                throw Error(
+                    MailboxClientError.PaginationOutOfRange,
+                    "Retrieve items require strictly increasing unique cursors in the page epoch.");
+            }
+
+            encodedItems.Add((item.Cursor, EncodeEncryptedEnvelope(item.Envelope)));
+            priorCursor = item.Cursor;
+        }
+
+        if (page.Items.Count == 0
+                ? page.NextCursor != 0
+                : page.NextCursor != priorCursor)
+        {
+            throw Error(
+                MailboxClientError.PaginationOutOfRange,
+                "Next cursor must equal the final retrieved item cursor, or zero for an empty page.");
+        }
+
         var length = checked(
             PageHeaderLength +
             page.ContinuationToken.Length +
-            envelopes.Sum(static value => 4 + value.Length));
+            encodedItems.Sum(static value => 12 + value.Envelope.Length));
         if (length > MailboxClientLimits.MaximumPageBytes)
         {
             throw Error(MailboxClientError.EncodedLengthOutOfRange, "Retrieve page exceeds its byte bound.");
@@ -331,15 +356,18 @@ public static class MailboxClientCodec
         BinaryPrimitives.WriteUInt16BigEndian(
             encoded.AsSpan(40, 2),
             checked((ushort)page.ContinuationToken.Length));
-        BinaryPrimitives.WriteUInt16BigEndian(encoded.AsSpan(42, 2), checked((ushort)envelopes.Length));
+        BinaryPrimitives.WriteUInt16BigEndian(encoded.AsSpan(42, 2), checked((ushort)encodedItems.Count));
         page.ContinuationToken.Span.CopyTo(encoded.AsSpan(PageHeaderLength));
         var offset = PageHeaderLength + page.ContinuationToken.Length;
-        foreach (var envelope in envelopes)
+        foreach (var item in encodedItems)
         {
-            BinaryPrimitives.WriteUInt32BigEndian(encoded.AsSpan(offset, 4), checked((uint)envelope.Length));
-            offset += 4;
-            envelope.CopyTo(encoded, offset);
-            offset += envelope.Length;
+            BinaryPrimitives.WriteUInt64BigEndian(encoded.AsSpan(offset, 8), item.Cursor);
+            BinaryPrimitives.WriteUInt32BigEndian(
+                encoded.AsSpan(offset + 8, 4),
+                checked((uint)item.Envelope.Length));
+            offset += 12;
+            item.Envelope.CopyTo(encoded, offset);
+            offset += item.Envelope.Length;
         }
 
         return encoded;
@@ -377,19 +405,27 @@ public static class MailboxClientCodec
 
         var token = encoded.Slice(PageHeaderLength, tokenLength).ToArray();
         var offset = PageHeaderLength + tokenLength;
-        var envelopes = new List<MailboxEncryptedEnvelope>(count);
+        var items = new List<MailboxRetrievedEnvelope>(count);
+        ulong priorCursor = 0;
         for (var index = 0; index < count; index++)
         {
-            if (offset > encoded.Length - 4)
+            if (offset > encoded.Length - 12)
             {
-                throw Error(MailboxClientError.MalformedLength, "A retrieve item length is truncated.");
+                throw Error(MailboxClientError.MalformedLength, "A retrieve item cursor/length is truncated.");
             }
 
-            var length = BinaryPrimitives.ReadUInt32BigEndian(encoded.Slice(offset, 4));
-            offset += 4;
+            var cursor = BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(offset, 8));
+            var length = BinaryPrimitives.ReadUInt32BigEndian(encoded.Slice(offset + 8, 4));
+            offset += 12;
+            if (cursor == 0 || cursor <= priorCursor)
+            {
+                throw Error(
+                    MailboxClientError.PaginationOutOfRange,
+                    "Retrieve item cursors must be strictly increasing and unique.");
+            }
+
             if (length >
-                    MailboxClientLimits.EncryptedEnvelopeHeaderLength +
-                    MailboxClientLimits.MaximumCiphertextLength ||
+                    MailboxClientLimits.MaximumEncryptedEnvelopeLength ||
                 length > encoded.Length - offset)
             {
                 throw Error(MailboxClientError.MalformedLength, "A retrieve item length is invalid.");
@@ -401,13 +437,27 @@ public static class MailboxClientCodec
                 throw Error(MailboxClientError.InvalidEpoch, "A page item belongs to another epoch.");
             }
 
-            envelopes.Add(envelope);
+            items.Add(new MailboxRetrievedEnvelope
+            {
+                Cursor = cursor,
+                Envelope = envelope
+            });
+            priorCursor = cursor;
             offset += checked((int)length);
         }
 
         if (offset != encoded.Length)
         {
             throw Error(MailboxClientError.MalformedLength, "The retrieve page has trailing bytes.");
+        }
+
+        if (items.Count == 0
+                ? nextCursor != 0 || hasMore
+                : nextCursor != priorCursor)
+        {
+            throw Error(
+                MailboxClientError.PaginationOutOfRange,
+                "Next cursor does not bind the final retrieved item.");
         }
 
         return new MailboxRetrievePage
@@ -417,7 +467,7 @@ public static class MailboxClientCodec
             NextCursor = nextCursor,
             HasMore = hasMore,
             ContinuationToken = token,
-            Envelopes = envelopes
+            Items = items
         };
     }
 

@@ -146,8 +146,10 @@ supplies and verifies those dependencies.
 ## P09C dormant client mailbox contract gaps
 
 The additive P09C contract defines canonical client frames, bounded opaque encrypted envelopes,
-adjacent epoch overlap, pagination, local delivery transitions and placement/membership-bound V2
-receipts. It deliberately does not implement:
+adjacent epoch overlap, cursor-bound pagination, local delivery transitions and
+placement/membership-bound V2 receipts. The full `MEO1` frame is bounded to xnode's current
+81920-byte default rather than treating that storage bound as payload-only. It deliberately does
+not implement:
 
 - recipient master-secret generation, capability/identifier derivation, encryption or decryption;
 - proof that caller-provided blinded identifiers are unlinkable or derived without raw identity;

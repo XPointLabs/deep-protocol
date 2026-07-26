@@ -18,11 +18,13 @@ public sealed class MailboxClientContractTests
         var envelope = Envelope();
         var store = Store(envelope);
         var retrieve = Retrieve();
+        var page = Page(envelope);
         var ack = Ack();
 
         AssertGolden(vectors, "deep-extension/mailbox-client/v1/envelope", MailboxClientCodec.EncodeEncryptedEnvelope(envelope));
         AssertGolden(vectors, "deep-extension/mailbox-client/v1/store", MailboxClientCodec.EncodeStore(store));
         AssertGolden(vectors, "deep-extension/mailbox-client/v1/retrieve", MailboxClientCodec.EncodeRetrieve(retrieve));
+        AssertGolden(vectors, "deep-extension/mailbox-client/v1/retrieve-page", MailboxClientCodec.EncodeRetrievePage(page));
         AssertGolden(vectors, "deep-extension/mailbox-client/v1/ack", MailboxClientCodec.EncodeAck(ack));
 
         var decodedStore = MailboxClientCodec.DecodeStore(
@@ -38,6 +40,13 @@ public sealed class MailboxClientContractTests
             new AlwaysAcceptReplayGuard());
         Assert.IsType<RotatingRetrieveCapability>(decodedRetrieve.RetrieveCapability.DomainValue);
         Assert.Equal(25, decodedRetrieve.MaximumItems);
+
+        var decodedPage = MailboxClientCodec.DecodeRetrievePage(
+            MailboxClientCodec.EncodeRetrievePage(page),
+            Policy());
+        var acknowledgement = Assert.Single(decodedPage.Items).ToAcknowledgement();
+        Assert.Equal(42UL, acknowledgement.Cursor);
+        Assert.Equal(EnvelopeDigest, acknowledgement.EnvelopeDigest.ToArray());
 
         var decodedAck = MailboxClientCodec.DecodeAck(
             MailboxClientCodec.EncodeAck(ack),
@@ -99,11 +108,12 @@ public sealed class MailboxClientContractTests
             Ciphertext = Range(0, MailboxClientLimits.MinimumCiphertextLength),
             ExpiresAtUnixSeconds = 1060
         });
-        _ = MailboxClientCodec.EncodeEncryptedEnvelope(Envelope() with
+        var maximum = MailboxClientCodec.EncodeEncryptedEnvelope(Envelope() with
         {
             Ciphertext = Enumerable.Repeat((byte)0x5a, MailboxClientLimits.MaximumCiphertextLength).ToArray(),
             ExpiresAtUnixSeconds = 1000 + MailboxClientLimits.MaximumTtlSeconds
         });
+        Assert.Equal(MailboxClientLimits.MaximumEncryptedEnvelopeLength, maximum.Length);
 
         Assert.Equal(
             MailboxClientError.InvalidCiphertext,
@@ -111,6 +121,13 @@ public sealed class MailboxClientContractTests
                 MailboxClientCodec.EncodeEncryptedEnvelope(Envelope() with
                 {
                     Ciphertext = new byte[MailboxClientLimits.MinimumCiphertextLength - 1]
+                })).Error);
+        Assert.Equal(
+            MailboxClientError.InvalidCiphertext,
+            Assert.Throws<MailboxClientException>(() =>
+                MailboxClientCodec.EncodeEncryptedEnvelope(Envelope() with
+                {
+                    Ciphertext = new byte[MailboxClientLimits.MaximumCiphertextLength + 1]
                 })).Error);
         Assert.Equal(
             MailboxClientError.InvalidTtl,
@@ -183,19 +200,13 @@ public sealed class MailboxClientContractTests
     [Fact]
     public void RetrieveAndAckPagination_AreCanonicalAndBounded()
     {
-        var page = new MailboxRetrievePage
-        {
-            Epoch = 7,
-            OperationId = OperationId,
-            NextCursor = 42,
-            HasMore = true,
-            ContinuationToken = Range(0xe0, 8),
-            Envelopes = [Envelope()]
-        };
+        var page = Page(Envelope());
         var encoded = MailboxClientCodec.EncodeRetrievePage(page);
         var decoded = MailboxClientCodec.DecodeRetrievePage(encoded, Policy());
         Assert.True(decoded.HasMore);
-        Assert.Single(decoded.Envelopes);
+        var item = Assert.Single(decoded.Items);
+        Assert.Equal(42UL, item.Cursor);
+        Assert.Equal(EnvelopeDigest, item.ToAcknowledgement().EnvelopeDigest.ToArray());
 
         Assert.Throws<MailboxClientException>(() =>
             MailboxClientCodec.EncodeRetrieve(Retrieve() with { MaximumItems = 101 }));
@@ -203,6 +214,20 @@ public sealed class MailboxClientContractTests
             MailboxClientCodec.EncodeRetrievePage(page with
             {
                 ContinuationToken = ReadOnlyMemory<byte>.Empty
+            }));
+        Assert.Throws<MailboxClientException>(() =>
+            MailboxClientCodec.EncodeRetrievePage(page with
+            {
+                Items =
+                [
+                    new MailboxRetrievedEnvelope { Cursor = 42, Envelope = Envelope() },
+                    new MailboxRetrievedEnvelope { Cursor = 42, Envelope = Envelope() }
+                ]
+            }));
+        Assert.Throws<MailboxClientException>(() =>
+            MailboxClientCodec.EncodeRetrievePage(page with
+            {
+                NextCursor = 43
             }));
         Assert.Throws<MailboxClientException>(() =>
             MailboxClientCodec.EncodeAck(Ack() with
@@ -215,6 +240,42 @@ public sealed class MailboxClientContractTests
             }));
         Assert.Throws<MailboxClientException>(() =>
             MailboxClientCodec.DecodeRetrievePage([.. encoded, (byte)0], Policy()));
+
+        var itemOffset = 48 + page.ContinuationToken.Length;
+        var zeroCursor = encoded.ToArray();
+        Array.Clear(zeroCursor, itemOffset, 8);
+        Assert.Throws<MailboxClientException>(() =>
+            MailboxClientCodec.DecodeRetrievePage(zeroCursor, Policy()));
+
+        var mismatchedNextCursor = encoded.ToArray();
+        mismatchedNextCursor[39] = 43;
+        Assert.Throws<MailboxClientException>(() =>
+            MailboxClientCodec.DecodeRetrievePage(mismatchedNextCursor, Policy()));
+
+        var legacyWithoutCursor = encoded
+            .AsSpan(0, itemOffset)
+            .ToArray()
+            .Concat(encoded.AsSpan(itemOffset + 8).ToArray())
+            .ToArray();
+        Assert.Throws<MailboxClientException>(() =>
+            MailboxClientCodec.DecodeRetrievePage(legacyWithoutCursor, Policy()));
+
+        var maximumEnvelope = Envelope() with
+        {
+            Ciphertext = new byte[MailboxClientLimits.MaximumCiphertextLength]
+        };
+        Assert.Throws<MailboxClientException>(() =>
+            MailboxClientCodec.EncodeRetrievePage(page with
+            {
+                NextCursor = 13,
+                Items = Enumerable.Range(1, 13)
+                    .Select(cursor => new MailboxRetrievedEnvelope
+                    {
+                        Cursor = checked((ulong)cursor),
+                        Envelope = maximumEnvelope
+                    })
+                    .ToArray()
+            }));
     }
 
     [Fact]
@@ -341,6 +402,24 @@ public sealed class MailboxClientContractTests
             [
                 new MailboxAcknowledgement { Cursor = 41, EnvelopeDigest = EnvelopeDigest },
                 new MailboxAcknowledgement { Cursor = 42, EnvelopeDigest = Range(0x90, 32) }
+            ]
+        };
+
+    private static MailboxRetrievePage Page(MailboxEncryptedEnvelope envelope) =>
+        new()
+        {
+            Epoch = 7,
+            OperationId = OperationId,
+            NextCursor = 42,
+            HasMore = true,
+            ContinuationToken = Range(0xe0, 8),
+            Items =
+            [
+                new MailboxRetrievedEnvelope
+                {
+                    Cursor = 42,
+                    Envelope = envelope
+                }
             ]
         };
 

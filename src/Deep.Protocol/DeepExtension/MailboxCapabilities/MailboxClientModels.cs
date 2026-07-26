@@ -6,7 +6,9 @@ public static class MailboxClientLimits
     public const int OperationIdLength = 16;
     public const int DigestLength = 32;
     public const int MinimumCiphertextLength = 32;
-    public const int MaximumCiphertextLength = 80 * 1024;
+    public const int MaximumEncryptedEnvelopeLength = 80 * 1024;
+    public const int MaximumCiphertextLength =
+        MaximumEncryptedEnvelopeLength - EncryptedEnvelopeHeaderLength;
     public const int MaximumPageBytes = 1024 * 1024;
     public const int MaximumPageItems = 100;
     public const int MaximumContinuationTokenLength = 256;
@@ -126,7 +128,38 @@ public sealed record MailboxRetrievePage
     public required ulong NextCursor { get; init; }
     public required bool HasMore { get; init; }
     public required ReadOnlyMemory<byte> ContinuationToken { get; init; }
-    public required IReadOnlyList<MailboxEncryptedEnvelope> Envelopes { get; init; }
+    public required IReadOnlyList<MailboxRetrievedEnvelope> Items { get; init; }
+}
+
+public sealed record MailboxRetrievedEnvelope
+{
+    public required ulong Cursor { get; init; }
+    public required MailboxEncryptedEnvelope Envelope { get; init; }
+
+    public MailboxAcknowledgement ToAcknowledgement()
+    {
+        ArgumentNullException.ThrowIfNull(Envelope);
+        if (Cursor == 0)
+        {
+            throw new MailboxClientException(
+                MailboxClientError.PaginationOutOfRange,
+                "A retrieved item must have a nonzero cursor before acknowledgement.");
+        }
+
+        if (Envelope.DeduplicationDigest.Length != MailboxClientLimits.DigestLength ||
+            Envelope.DeduplicationDigest.Span.IndexOfAnyExcept((byte)0) < 0)
+        {
+            throw new MailboxClientException(
+                MailboxClientError.InvalidDigest,
+                "A retrieved item must bind a canonical nonzero acknowledgement digest.");
+        }
+
+        return new MailboxAcknowledgement
+        {
+            Cursor = Cursor,
+            EnvelopeDigest = Envelope.DeduplicationDigest.ToArray()
+        };
+    }
 }
 
 public sealed record MailboxAcknowledgement
