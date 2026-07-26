@@ -29,6 +29,26 @@ public sealed class SodiumMailboxPeerReplicationCrypto : IMailboxPeerReplication
         };
     }
 
+    public MailboxPeerWireRequestV2 SignRequest(
+        MailboxPeerWireRequestV2 unsignedRequest,
+        ReadOnlySpan<byte> senderSeedOrPrivateKey)
+    {
+        ArgumentNullException.ThrowIfNull(unsignedRequest);
+        var publicKey = GetPublicKey(senderSeedOrPrivateKey);
+        if (!CryptographicOperations.FixedTimeEquals(
+                publicKey,
+                unsignedRequest.SenderMembershipProof.SigningPublicKey.Span))
+            throw new ArgumentException(
+                "Sender key does not match the PRQ2 MIP1 proof.",
+                nameof(senderSeedOrPrivateKey));
+        return unsignedRequest with
+        {
+            Signature = PublicKeyAuth.SignDetached(
+                MailboxPeerWireV2Codec.GetSigningDigest(unsignedRequest),
+                NormalizePrivateKey(senderSeedOrPrivateKey))
+        };
+    }
+
     public MailboxReplicaReceiptV2 SignReplicaResponse(
         MailboxReplicaReceiptV2 unsignedReceipt,
         ReadOnlySpan<byte> replicaSeedOrPrivateKey)

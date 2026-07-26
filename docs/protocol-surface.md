@@ -54,6 +54,9 @@ Primary upstream areas reviewed:
 - dormant P09C client mailbox `MEO1`/`MST1`/`MRT1`/`MRP1`/`MAK1` frames, explicit adjacent
   `E/E+1` overlap, local-only delivered transition and placement/membership-bound `MRR2`/`MQR2`
   receipts in the same isolated namespace; no runtime activation or default changes
+- additive P10B `PRQ2` peer Store/Tombstone request with Ed25519/SHA-256 router, freshness and
+  durable replay binding, plus dormant exact HTTP metadata for `MST1`/`MRT1`/`MAK1` and native
+  `MQR2`/`MRP1`/`MAR1` responses
 - P03C contact-scoped nearby rendezvous, canonical handshake framing, replay scope and
   platform-neutral lifecycle, isolated in `Deep.Protocol.DeepExtension.NearbyHandshakes`; the
   mutually authenticated AKE remains a blocked host adapter with no production implementation
@@ -141,6 +144,14 @@ epoch, validity and MRL1 Merkle inclusion against the exact commitment. Response
 Ed25519 key are independent fields. Placement commitment is one domain-separated SHA-256 of the
 blinded placement ID. `MAR1` orders at most 100 exact tombstone `MQR2` receipts and adds no new durability
 meaning.
+
+P10B preserves every P03B2 frame and adds `PRQ2` version 2. It signs a SHA-256
+operation-domain-framed digest with the sender MIP1 Ed25519 key and binds sender/recipient router
+IDs, operation, epoch/cursor, mailbox/placement/membership, exact payload/digest/expiry, creation
+time and a 32-byte durable replay nonce. The recipient returns only one durable native `MRR2`
+after persistence. Dormant public client metadata maps Store to `MQR2`, Retrieve to `MRP1`, and
+ACK to bounded ordered `MAR1(MQR2[])`; exact routes, media types, limits and empty-body error
+statuses are in `adr/0012-p10b-mailbox-wire-and-ingress-contract.md`.
 
 P03C adds fixed `NRV1` advertisements and bounded `NHS1` initiator/responder frames. The public
 orchestrator passes exact canonical transcript bytes, expected contact identity, period,

@@ -1,0 +1,30 @@
+{
+  "name": "P10B canonical peer mailbox wire V2 negative vectors",
+  "sourceRepository": "XPointLabs/deep-protocol",
+  "sourceCommit": "P10B deterministic structural mutations over the canonical Store fixture",
+  "vectors": [
+    {
+      "id": "deep-extension/mailbox-peer/v2/negative/unsupported-version",
+      "kind": "decode-xor-offset",
+      "mutationOffset": 4,
+      "expectedError": "UnsupportedVersion"
+    },
+    {
+      "id": "deep-extension/mailbox-peer/v2/negative/nonzero-reserved",
+      "kind": "decode-xor-offset",
+      "mutationOffset": 290,
+      "expectedError": "ReservedFieldNotZero"
+    },
+    {
+      "id": "deep-extension/mailbox-peer/v2/negative/signature-tamper",
+      "kind": "verify-xor-offset",
+      "mutationOffset": 943,
+      "expectedError": "InvalidSignature"
+    },
+    {
+      "id": "deep-extension/mailbox-peer/v2/negative/trailing-byte",
+      "kind": "decode-append-zero",
+      "expectedError": "InvalidLength"
+    }
+  ]
+}

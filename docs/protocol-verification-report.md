@@ -36,6 +36,7 @@ Any regression in these suites fails CI.
 | Robustness on malformed/random protocol payloads | `ProtocolFuzzSmokeTests`, `ProtocolParserCodecFuzzTests` | Covered |
 | DPB1 structured failure branches | `OpaqueBundleMalformedAndFuzzTests.DeterministicStructuredMutations_ReachNamedFailureBranches`, truncation and encoder separation tests | Covered by deterministic structural mutations |
 | DPF1 exact carrier compatibility and malformed input | `ProfileCarrierContractRedTests`, `ProfileCarrierMalformedRedTests`, accepted XNode `eff4523` public synthetic golden vector | Covered by exact bytes, full truncation, structured mutations, deterministic random smoke and reachable maximum bounds |
+| P10B PRQ2 Store/Tombstone and ingress metadata | `MailboxPeerWireV2ContractTests`, `mailbox-peer-wire-v2.json` | Covered by complete-frame/signing-digest identities, canonical length/order, freshness, digest/signature/router tamper, durable replay/crash/equivocation and exact HTTP metadata/status tests |
 
 ## Remaining Risk Areas
 

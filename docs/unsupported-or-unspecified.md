@@ -172,6 +172,26 @@ PRQ1 uses real Ed25519. The optional MembershipRoutes RIP1 adapter verifies stor
 membership, but catalog acquisition, last-known-good persistence, transport and runtime wiring
 remain downstream work.
 
+## P10B mailbox wire and ingress gaps
+
+P10B freezes a canonical PRQ2 Store/Tombstone request, native durable MRR2 response and dormant
+MST1/MRT1/MAK1 HTTP metadata. It also freezes the aggregate ACK choice as ordered bounded MAR1
+containing native tombstone MQR2 receipts. It deliberately does not implement:
+
+- route registration, listeners, HTTP parsing, rate limiting, concurrency control or telemetry;
+- durable atomic peer replay journal, storage transaction, cursor allocation, tombstone/GC,
+  repair, quorum fanout, failover or crash recovery implementation;
+- issuer/holder/router/coordinator key generation, custody, injection, distribution, rotation,
+  last-known-good or compromise recovery;
+- authoritative P04 catalog acquisition, placement-to-replica selection or membership LKG;
+- capability production/revocation authority, client outbox/delivered-state integration,
+  networking, Android/Windows E2E or deployment activation.
+
+The replay port requires exact pending state to survive restart and exact completed retries to
+return the cached verified MRR2. No implementation may derive issuer authority or activation from
+PRQ2, a capability, configuration, a legacy JSON request or this contract package. XNode's legacy
+`/api/peer/mailbox/replica` JSON transcript remains non-convertible.
+
 ## P03C nearby handshake gaps
 
 P03C defines contact-scoped rendezvous framing, a two-message transcript boundary, replay scope and

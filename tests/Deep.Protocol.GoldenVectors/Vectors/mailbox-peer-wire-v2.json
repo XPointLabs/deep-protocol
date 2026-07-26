@@ -1,0 +1,27 @@
+{
+  "name": "P10B canonical peer mailbox wire V2 vectors",
+  "sourceRepository": "XPointLabs/deep-protocol",
+  "sourceCommit": "P10B deterministic fixtures; complete-frame SHA-256 and exact signing digests",
+  "vectors": [
+    {
+      "id": "deep-extension/mailbox-peer/v2/PRQ2-store",
+      "kind": "sha256-complete-frame",
+      "hex": "6c5d5065e52c3b8eb1d7eae30044d736fe36107eadcce4384a4ae220f4e28044"
+    },
+    {
+      "id": "deep-extension/mailbox-peer/v2/PRQ2-store-signing-digest",
+      "kind": "ed25519-sha256-signing-digest",
+      "hex": "66da25dfbd69aa58d7a00c761a5b295131d17ed2658ae8691aaf1fe1c574d7cc"
+    },
+    {
+      "id": "deep-extension/mailbox-peer/v2/PRQ2-tombstone",
+      "kind": "sha256-complete-frame",
+      "hex": "2c3aeb583419520fb76830469122f7988361933543ecc3a2604b45f43ef6cfec"
+    },
+    {
+      "id": "deep-extension/mailbox-peer/v2/PRQ2-tombstone-signing-digest",
+      "kind": "ed25519-sha256-signing-digest",
+      "hex": "4b1de2e47caa72b0214d42402b74506bcded377837885151a6081a3c18530237"
+    }
+  ]
+}

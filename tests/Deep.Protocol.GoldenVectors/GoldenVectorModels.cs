@@ -25,6 +25,8 @@ public sealed record GoldenVector
     public string? SeedHex { get; init; }
     public string? Ed25519PublicKeyHex { get; init; }
     public string? X25519PublicKeyHex { get; init; }
+    public int? MutationOffset { get; init; }
+    public string? ExpectedError { get; init; }
 }
 
 public static class GoldenVectorLoader

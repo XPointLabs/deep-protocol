@@ -43,7 +43,9 @@ public enum MailboxPeerReplicationError
     InvalidPayload,
     InvalidMembershipProof,
     InvalidSignature,
-    InvalidReceipt
+    InvalidReceipt,
+    ExpiredOrStale,
+    ReplayConflict
 }
 
 public sealed record MailboxReplicaMembershipProof
