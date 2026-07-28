@@ -1,7 +1,7 @@
 {
   "schema": "deep-protocol-profile-carrier-package-provenance.v1",
   "contract": "P10B3-profile-carrier-unified-graph",
-  "carrierSourceCommit": "91f4b9130fb186b0f6db682eb1e1f567734d9705",
+  "carrierSourceCommit": "7ef12b57a70b3e9bf247dd64e7e69d8f9e83718e",
   "protocolContractSourceCommit": "60ce2e3a5140f245d6bcfecf60fa456c26ffe730",
   "protocolPackageProvenanceCommit": "c84c154",
   "carrierPackageVersion": "0.2.0-p10b3.60ce2e3",
@@ -17,9 +17,9 @@
   "package": {
     "id": "Deep.Protocol.ProfileCarrier",
     "file": "artifacts/survival/P10B3/60ce2e3/profile-carrier/Deep.Protocol.ProfileCarrier.0.2.0-p10b3.60ce2e3.nupkg",
-    "bytes": 39960,
-    "sha256": "42d11b1f85b9a062c7448ed8d8579a15fd4d2b700c2003784e6084afd037de91",
-    "sha512": "4764ca1edf71b2924f4fc20a56de41d9a5d979988e525894cb58b989cb6c10ca03b194dfe9804d202d47be2e4b46cd2b23a96956e2f32b5d1d231efc3df9cc80"
+    "bytes": 39964,
+    "sha256": "1f3dbabb37980d01eb0e42571bd2abe94871cb297e03cbe915a959729e7b8c52",
+    "sha512": "40e1fba37d8cd1e2b21226475cffda1c406b54ac223a0507cf6ebaf17f63d3cec131bfad1be0bb3052c1cddf8184f5042a2a7a19117aa90d1a1d88cb2da6a0e2"
   },
   "lockedInstallSmoke": {
     "artifact": "artifacts/survival/P10B3/60ce2e3/profile-carrier/install-smoke.packages.lock.json",
