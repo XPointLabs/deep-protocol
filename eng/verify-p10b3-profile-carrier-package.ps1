@@ -117,6 +117,7 @@ foreach ($label in @("pack-a", "pack-b")) {
         "-p:Version=$carrierVersion",
         "-p:PackageVersion=$carrierVersion",
         "-p:RepositoryCommit=$contractCommit",
+        "-p:SourceRevisionId=$contractCommit",
         "-p:DeepProtocolPackageVersion=[$protocolVersion]",
         "-p:Deterministic=true",
         "-p:ContinuousIntegrationBuild=true",
