@@ -1,4 +1,5 @@
 using System.Xml.Linq;
+using System.Text.Json;
 using Deep.Protocol.DeepExtension.SelfHostedProfiles;
 
 namespace Deep.Protocol.ProfileCarrier.Tests;
@@ -108,6 +109,31 @@ public sealed class ProfileCarrierDeterminismRedTests
         Assert.Contains("source-drift-rejection=PASS", script, StringComparison.Ordinal);
         Assert.DoesNotContain("$workingPath", script, StringComparison.Ordinal);
         Assert.DoesNotContain("-p:XNodeRoot=$XNodeRoot", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void P10b3CarrierPackageProvenancePinsTheUnifiedProtocolDependency()
+    {
+        using var provenance = JsonDocument.Parse(File.ReadAllText(Path.Combine(
+            RepositoryRoot(),
+            "eng",
+            "p10b3-profile-carrier-package-provenance.json")));
+        var root = provenance.RootElement;
+        Assert.Equal(
+            "0.2.0-p10b3.60ce2e3",
+            root.GetProperty("carrierPackageVersion").GetString());
+        Assert.Equal(
+            "[0.3.0-p10b3.60ce2e3]",
+            root.GetProperty("protocolDependency").GetString());
+        Assert.True(root.GetProperty("normalization")
+            .GetProperty("independentRebuildByteIdentical")
+            .GetBoolean());
+        Assert.Contains(
+            "Deep.Protocol.ProfileCarrier [0.2.0-p10b3.60ce2e3]",
+            root.GetProperty("lockedInstallSmoke")
+                .GetProperty("direct")
+                .EnumerateArray()
+                .Select(static value => value.GetString()));
     }
 
     [Fact]
