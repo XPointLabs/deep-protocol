@@ -28,6 +28,7 @@ public sealed class ProfileCarrierDeterminismRedTests
         AssertProperty(project, "RepositoryType", "git");
         AssertProperty(project, "PublishRepositoryUrl", "true");
         AssertProperty(project, "DebugType", "portable");
+        AssertProperty(project, "DeepProtocolPackageVersion", "[0.3.0-p04.b887fa0]");
         Assert.Contains(
             project.Descendants("AllowedOutputExtensionsInPackageBuildOutputFolder"),
             element => element.Value.Contains(".pdb", StringComparison.Ordinal));
@@ -80,6 +81,18 @@ public sealed class ProfileCarrierDeterminismRedTests
             "PASS version=$version package=$($nupkg.FullName) sha256=",
             offline,
             StringComparison.Ordinal);
+
+        var p10b3 = Path.Combine(
+            root,
+            "eng",
+            "verify-p10b3-profile-carrier-package.ps1");
+        Assert.True(File.Exists(p10b3));
+        var p10b3Gate = File.ReadAllText(p10b3);
+        Assert.Contains("DeepProtocolPackageVersion", p10b3Gate, StringComparison.Ordinal);
+        Assert.Contains("0.3.0-p10b3.60ce2e3", p10b3Gate, StringComparison.Ordinal);
+        Assert.Contains("Normalize-NuGetPackage.ps1", p10b3Gate, StringComparison.Ordinal);
+        Assert.Contains("--locked-mode", p10b3Gate, StringComparison.Ordinal);
+        Assert.Contains("byte-identical", p10b3Gate, StringComparison.Ordinal);
     }
 
     [Fact]
