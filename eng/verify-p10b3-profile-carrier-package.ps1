@@ -134,7 +134,7 @@ function Invoke-CarrierBuild {
         "archive", "--format=zip",
         "-o", $archive,
         $CarrierSourceCommit
-    ) $RepositoryRoot
+    ) $RepositoryRoot | Out-Host
     Expand-Archive -LiteralPath $archive -DestinationPath $source
 
     $normalizer = Join-Path $source "eng\Normalize-NuGetPackage.ps1"
@@ -170,26 +170,26 @@ function Invoke-CarrierBuild {
         "--configfile", $config,
         "--packages", $env:NUGET_PACKAGES,
         "--force-evaluate"
-    ) + $properties) $source
+    ) + $properties) $source | Out-Host
     Invoke-Checked "dotnet" (@(
         "build", $project,
         "--no-restore",
         "--configuration", "Release"
-    ) + $properties) $source
+    ) + $properties) $source | Out-Host
     Invoke-Checked "dotnet" (@(
         "pack", $project,
         "--no-restore",
         "--no-build",
         "--configuration", "Release",
         "--output", $output
-    ) + $properties) $source
+    ) + $properties) $source | Out-Host
     $package = Join-Path $output `
         "Deep.Protocol.ProfileCarrier.$carrierVersion.nupkg"
     Invoke-Checked "powershell" @(
         "-NoProfile", "-ExecutionPolicy", "Bypass",
         "-File", $normalizer,
         "-Path", $package
-    ) $source
+    ) $source | Out-Host
     return [PSCustomObject]@{
         Root = $root
         Source = $source
