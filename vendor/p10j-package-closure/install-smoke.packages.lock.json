@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "Deep.Protocol": {
+        "type": "Direct",
+        "requested": "[0.3.0-p10j.2886880, 0.3.0-p10j.2886880]",
+        "resolved": "0.3.0-p10j.2886880",
+        "contentHash": "8nktp5tV9oPxOZbq9g9YDq0I8tmkkqY4mdXP9hZgBEnZi1xlfPq6j6I/s1xUFt0+4/ModMlGv9X/RU0iJ/vFbw==",
+        "dependencies": {
+          "Deep.Protocol.Abstractions": "0.3.0-p10j.2886880",
+          "Deep.Protocol.Protobuf": "0.3.0-p10j.2886880",
+          "Sodium.Core": "1.4.1"
+        }
+      },
+      "Deep.Protocol.MembershipRoutes": {
+        "type": "Direct",
+        "requested": "[0.3.0-p10j.2886880, 0.3.0-p10j.2886880]",
+        "resolved": "0.3.0-p10j.2886880",
+        "contentHash": "YqMECr+ZDVI97sv9Ly13rSrYx6azu9xwRhGcD4X4zc4AFxeQEcM4vPxtA3bIN9qOKqNAk+/KlZx+uWWLVTvC9w==",
+        "dependencies": {
+          "Deep.Protocol": "0.3.0-p10j.2886880"
+        }
+      },
+      "Deep.Protocol.ProfileCarrier": {
+        "type": "Direct",
+        "requested": "[0.2.0-p10j.2886880, 0.2.0-p10j.2886880]",
+        "resolved": "0.2.0-p10j.2886880",
+        "contentHash": "jx7NqNpTfqklFuNoZYIyrwunwH5q/a0aj5fgOlf7rLpaOU+Z7IGoZ6H+qKbHyLOtU0lHMZYRe1l4IYQGXSBK3w==",
+        "dependencies": {
+          "Deep.Protocol": "[0.3.0-p10j.2886880]",
+          "Sodium.Core": "[1.4.1]",
+          "libsodium": "[1.0.22]"
+        }
+      },
+      "Deep.Protocol.Abstractions": {
+        "type": "Transitive",
+        "resolved": "0.3.0-p10j.2886880",
+        "contentHash": "TISUMPw1EdqdMuBg40Etd2cJEIWDRd6GTvOWXqKhMdVNsNsqfQOTYqN8hwfJl91bmm08zwsRBggpU27gG5MgbA=="
+      },
+      "Deep.Protocol.Protobuf": {
+        "type": "Transitive",
+        "resolved": "0.3.0-p10j.2886880",
+        "contentHash": "imPhQvJe1Nxn4PfR43q+4HbKnoBAmTWnyMoqFLsBvCiWKgl8ADyOhK0BuTChu8j15pQGdaUWVP7XA1MHgwXqzA==",
+        "dependencies": {
+          "Google.Protobuf": "3.32.1"
+        }
+      },
+      "Google.Protobuf": {
+        "type": "Transitive",
+        "resolved": "3.32.1",
+        "contentHash": "HbFFRNU46e1E+qhGvwCDAO2EZ80WADqlkNqlOBYvGi7SNxwMPkTrReZgCg9/TrXwLO/n0za+AIiT2IplzqrjZw=="
+      },
+      "libsodium": {
+        "type": "Transitive",
+        "resolved": "1.0.22",
+        "contentHash": "KPD9SloJFclrsjnhABu7dzWrcyYkwPbvx5l1gRSPAX/0n+OBtSiVCKtGFv4n+ecWUHU0tCG9LSSwoZZx673zBQ=="
+      },
+      "Sodium.Core": {
+        "type": "Transitive",
+        "resolved": "1.4.1",
+        "contentHash": "K1Xhi20h9H15UPOa6NDNgW81NYN6AAvVT+v0Jz3n1qLS/nqiWzamWCyHyFxgoriCEMA90L1KQbYrIqBH+zKbrg==",
+        "dependencies": {
+          "libsodium": "[1.0.22, 1.0.23)"
+        }
+      }
+    }
+  }
+}
