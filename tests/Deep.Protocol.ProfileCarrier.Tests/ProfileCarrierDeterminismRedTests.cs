@@ -1,5 +1,4 @@
 using System.Xml.Linq;
-using System.Text.Json;
 using Deep.Protocol.DeepExtension.SelfHostedProfiles;
 
 namespace Deep.Protocol.ProfileCarrier.Tests;
@@ -93,7 +92,16 @@ public sealed class ProfileCarrierDeterminismRedTests
         Assert.Contains("0.3.0-p10b3.60ce2e3", p10b3Gate, StringComparison.Ordinal);
         Assert.Contains("Normalize-NuGetPackage.ps1", p10b3Gate, StringComparison.Ordinal);
         Assert.Contains("--locked-mode", p10b3Gate, StringComparison.Ordinal);
-        Assert.Contains("byte-identical", p10b3Gate, StringComparison.Ordinal);
+        Assert.Contains("CarrierSourceCommit", p10b3Gate, StringComparison.Ordinal);
+        Assert.Contains("SourceRevisionId=$CarrierSourceCommit", p10b3Gate, StringComparison.Ordinal);
+        Assert.Contains("RepositoryCommit=$CarrierSourceCommit", p10b3Gate, StringComparison.Ordinal);
+        Assert.Contains("external-a-b-final-byte-identical", p10b3Gate, StringComparison.Ordinal);
+        Assert.Contains("--self-test", p10b3Gate, StringComparison.Ordinal);
+        Assert.Contains("Assert-ExternalDistinctRoots", p10b3Gate, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "SourceRevisionId=$protocolSourceCommit",
+            p10b3Gate,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -112,28 +120,20 @@ public sealed class ProfileCarrierDeterminismRedTests
     }
 
     [Fact]
-    public void P10b3CarrierPackageProvenancePinsTheUnifiedProtocolDependency()
+    public void P10b3IdentityVerifierRejectsCarrierPackageAndLockDrift()
     {
-        using var provenance = JsonDocument.Parse(File.ReadAllText(Path.Combine(
+        var verifier = File.ReadAllText(Path.Combine(
             RepositoryRoot(),
             "eng",
-            "p10b3-profile-carrier-package-provenance.json")));
-        var root = provenance.RootElement;
-        Assert.Equal(
-            "0.2.0-p10b3.60ce2e3",
-            root.GetProperty("carrierPackageVersion").GetString());
-        Assert.Equal(
-            "[0.3.0-p10b3.60ce2e3]",
-            root.GetProperty("protocolDependency").GetString());
-        Assert.True(root.GetProperty("normalization")
-            .GetProperty("independentRebuildByteIdentical")
-            .GetBoolean());
-        Assert.Contains(
-            "Deep.Protocol.ProfileCarrier [0.2.0-p10b3.60ce2e3]",
-            root.GetProperty("lockedInstallSmoke")
-                .GetProperty("direct")
-                .EnumerateArray()
-                .Select(static value => value.GetString()));
+            "P10B3ProfileCarrier.Identity",
+            "Program.cs"));
+        Assert.Contains("The PDB SourceLink URLs do not pin", verifier, StringComparison.Ordinal);
+        Assert.Contains("PE CodeView identity", verifier, StringComparison.Ordinal);
+        Assert.Contains("nuspec repository commit", verifier, StringComparison.Ordinal);
+        Assert.Contains("carrier-source-drift", verifier, StringComparison.Ordinal);
+        Assert.Contains("package-byte-drift", verifier, StringComparison.Ordinal);
+        Assert.Contains("install-lock-drift", verifier, StringComparison.Ordinal);
+        Assert.Contains("ValidateProvenance", verifier, StringComparison.Ordinal);
     }
 
     [Fact]

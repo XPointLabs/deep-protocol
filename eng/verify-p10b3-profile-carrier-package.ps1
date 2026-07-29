@@ -1,45 +1,65 @@
 [CmdletBinding()]
 param(
+    [Parameter(Mandatory = $true)]
+    [string]$CarrierSourceCommit,
     [string]$RepositoryRoot = "",
     [string]$ProtocolPackageRoot = "",
-    [string]$WorkRoot = ""
+    [string]$WorkRootA = "",
+    [string]$WorkRootB = "",
+    [string]$PublishedRoot = "",
+    [string]$ProvenancePath = ""
 )
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
-$contractCommit = "60ce2e3a5140f245d6bcfecf60fa456c26ffe730"
+$protocolSourceCommit = "60ce2e3a5140f245d6bcfecf60fa456c26ffe730"
 $protocolVersion = "0.3.0-p10b3.60ce2e3"
 $carrierVersion = "0.2.0-p10b3.60ce2e3"
 $normalizerSha256 = "237891f23c12f04bc799ab485ff4a297dca78af9bb0d0bb4002a8d507c1c0343"
 $normalizerSha512 = "53b31b3f1e353a8b746a54750d1711f1ed328897eb186487a6e33a848380675bf07494c68b7f611eedaa25c077061ee1eb71fcac0fa49b2ba371ddb6b0deb044"
-$protocolPackages = @(
-    "Deep.Protocol.$protocolVersion.nupkg",
-    "Deep.Protocol.Abstractions.$protocolVersion.nupkg",
-    "Deep.Protocol.Protobuf.$protocolVersion.nupkg"
-)
 
 if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
     $RepositoryRoot = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
 }
 $RepositoryRoot = (Resolve-Path -LiteralPath $RepositoryRoot).Path
+$workspaceRoot = Split-Path -Parent (Split-Path -Parent $RepositoryRoot)
 if ([string]::IsNullOrWhiteSpace($ProtocolPackageRoot)) {
-    $ProtocolPackageRoot = Join-Path $RepositoryRoot "artifacts\survival\P10B3\60ce2e3\packages"
+    $ProtocolPackageRoot = Join-Path $RepositoryRoot `
+        "artifacts\survival\P10B3\60ce2e3\packages"
 }
 $ProtocolPackageRoot = (Resolve-Path -LiteralPath $ProtocolPackageRoot).Path
-if ([string]::IsNullOrWhiteSpace($WorkRoot)) {
-    $WorkRoot = Join-Path $RepositoryRoot "artifacts\survival\P10B3\60ce2e3\profile-carrier"
+if ([string]::IsNullOrWhiteSpace($WorkRootA)) {
+    $WorkRootA = Join-Path $workspaceRoot `
+        "artifacts\deep-protocol-p10b3-carrier\external-a"
 }
-$WorkRoot = [IO.Path]::GetFullPath($WorkRoot)
+if ([string]::IsNullOrWhiteSpace($WorkRootB)) {
+    $WorkRootB = Join-Path $workspaceRoot `
+        "artifacts\deep-protocol-p10b3-carrier\external-b"
+}
+if ([string]::IsNullOrWhiteSpace($PublishedRoot)) {
+    $PublishedRoot = Join-Path $RepositoryRoot `
+        "artifacts\survival\P10B3\60ce2e3\profile-carrier"
+}
+$WorkRootA = [IO.Path]::GetFullPath($WorkRootA)
+$WorkRootB = [IO.Path]::GetFullPath($WorkRootB)
+$PublishedRoot = [IO.Path]::GetFullPath($PublishedRoot)
+if (![string]::IsNullOrWhiteSpace($ProvenancePath)) {
+    $ProvenancePath = (Resolve-Path -LiteralPath $ProvenancePath).Path
+}
 
 function Invoke-Checked {
     param([string]$File, [string[]]$Arguments, [string]$WorkingDirectory)
     Push-Location $WorkingDirectory
     try {
         & $File @Arguments
-        if ($LASTEXITCODE -ne 0) { throw "$File failed with exit code $LASTEXITCODE." }
+        if ($LASTEXITCODE -ne 0) {
+            throw "$File failed with exit code $LASTEXITCODE."
+        }
     }
-    finally { Pop-Location }
+    finally {
+        Pop-Location
+    }
 }
 
 function Get-Hash {
@@ -49,62 +69,39 @@ function Get-Hash {
 
 function Assert-Equal {
     param([string]$Expected, [string]$Actual, [string]$Label)
-    if ($Expected -ne $Actual) { throw "$Label differs; the two normalized packages are not byte-identical." }
+    if ($Expected -ne $Actual) {
+        throw "$Label differs."
+    }
 }
 
-function Copy-FileSet {
+function Assert-ExternalDistinctRoots {
+    $repositoryPrefix = $RepositoryRoot.TrimEnd("\") + "\"
+    foreach ($root in @($WorkRootA, $WorkRootB)) {
+        if ($root.StartsWith($repositoryPrefix, [StringComparison]::OrdinalIgnoreCase) -or
+            $root.Equals($RepositoryRoot, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Both build WorkRoots must be external to the repository."
+        }
+    }
+    if ($WorkRootA.Equals($WorkRootB, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "The two external build WorkRoots must be distinct."
+    }
+}
+
+function Copy-PackageSet {
     param([string]$From, [string]$To)
-    Get-ChildItem -LiteralPath $From -File -Filter "*.nupkg" | ForEach-Object {
-        Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $To $_.Name) -Force
-    }
+    Get-ChildItem -LiteralPath $From -File -Filter "*.nupkg" |
+        ForEach-Object {
+            Copy-Item -LiteralPath $_.FullName `
+                -Destination (Join-Path $To $_.Name) -Force
+        }
 }
 
-$normalizer = Join-Path $RepositoryRoot "eng\Normalize-NuGetPackage.ps1"
-Assert-Equal $normalizerSha256 (Get-Hash $normalizer "SHA256") "Normalize-NuGetPackage.ps1 SHA-256"
-Assert-Equal $normalizerSha512 (Get-Hash $normalizer "SHA512") "Normalize-NuGetPackage.ps1 SHA-512"
-foreach ($package in $protocolPackages) {
-    if (!(Test-Path -LiteralPath (Join-Path $ProtocolPackageRoot $package))) {
-        throw "The accepted P10B3 protocol package is unavailable: $package"
-    }
-}
-
-$dirty = & git -C $RepositoryRoot status --porcelain=v1
-if ($LASTEXITCODE -ne 0 -or $null -ne $dirty) {
-    throw "The P10B3 carrier package gate requires an exact clean committed HEAD."
-}
-$head = (& git -C $RepositoryRoot rev-parse HEAD).Trim()
-if ($LASTEXITCODE -ne 0 -or $head -notmatch "^[0-9a-f]{40}$") {
-    throw "The current reviewed carrier source commit could not be resolved."
-}
-
-New-Item -ItemType Directory -Path $WorkRoot -Force | Out-Null
-$runRoot = Join-Path $WorkRoot "run-$([Guid]::NewGuid().ToString('N'))"
-New-Item -ItemType Directory -Path $runRoot | Out-Null
-$results = @()
-
-foreach ($label in @("pack-a", "pack-b")) {
-    $root = Join-Path $runRoot $label
-    $archive = Join-Path $root "source.zip"
-    $source = Join-Path $root "source"
-    $feed = Join-Path $root "feed"
-    $output = Join-Path $root "output"
-    $cliHome = Join-Path $root "cli-home"
-    $packagesHome = Join-Path $root "packages-home"
-    New-Item -ItemType Directory -Path $source, $feed, $output, $cliHome, $packagesHome -Force | Out-Null
-    Invoke-Checked "git" @("-C", $RepositoryRoot, "archive", "--format=zip", "-o", $archive, $head) $RepositoryRoot
-    Expand-Archive -LiteralPath $archive -DestinationPath $source
-    Copy-FileSet (Join-Path $source "vendor\p14-profile-carrier\packages") $feed
-    Copy-FileSet $ProtocolPackageRoot $feed
-    $config = Join-Path $root "NuGet.Config"
-    $feedUri = [Uri]::new($feed).AbsoluteUri
-    Set-Content -LiteralPath $config -NoNewline -Encoding utf8 @"
-<?xml version="1.0" encoding="utf-8"?>
-<configuration><packageSources><clear /><add key="local" value="$feedUri" /></packageSources></configuration>
-"@
-    $env:DOTNET_CLI_HOME = $cliHome
-    $env:APPDATA = (Join-Path $root "appdata")
-    $env:NUGET_PACKAGES = $packagesHome
-    $env:NUGET_HTTP_CACHE_PATH = (Join-Path $root "http-cache")
+function Set-IsolatedEnvironment {
+    param([string]$Root)
+    $env:DOTNET_CLI_HOME = Join-Path $Root "cli-home"
+    $env:APPDATA = Join-Path $Root "appdata"
+    $env:NUGET_PACKAGES = Join-Path $Root "packages-home"
+    $env:NUGET_HTTP_CACHE_PATH = Join-Path $Root "http-cache"
     $env:HTTP_PROXY = "http://127.0.0.1:9"
     $env:HTTPS_PROXY = "http://127.0.0.1:9"
     $env:ALL_PROXY = "http://127.0.0.1:9"
@@ -112,75 +109,258 @@ foreach ($label in @("pack-a", "pack-b")) {
     $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE = "1"
     $env:DOTNET_CLI_TELEMETRY_OPTOUT = "1"
     $env:DOTNET_NOLOGO = "1"
-    $project = Join-Path $source "src\Deep.Protocol.ProfileCarrier\Deep.Protocol.ProfileCarrier.csproj"
+}
+
+function New-LocalConfig {
+    param([string]$Path, [string]$Feed)
+    $feedUri = [Uri]::new($Feed).AbsoluteUri
+    Set-Content -LiteralPath $Path -NoNewline -Encoding utf8 @"
+<?xml version="1.0" encoding="utf-8"?>
+<configuration><packageSources><clear /><add key="local" value="$feedUri" /></packageSources></configuration>
+"@
+}
+
+function Invoke-CarrierBuild {
+    param([string]$ExternalRoot, [string]$Label, [string]$InvocationId)
+    $root = Join-Path $ExternalRoot "$InvocationId-$Label"
+    $source = Join-Path $root "source"
+    $feed = Join-Path $root "feed"
+    $output = Join-Path $root "output"
+    New-Item -ItemType Directory -Path $source, $feed, $output -Force |
+        Out-Null
+    $archive = Join-Path $root "accepted-carrier-source.zip"
+    Invoke-Checked "git" @(
+        "-C", $RepositoryRoot,
+        "archive", "--format=zip",
+        "-o", $archive,
+        $CarrierSourceCommit
+    ) $RepositoryRoot
+    Expand-Archive -LiteralPath $archive -DestinationPath $source
+
+    $normalizer = Join-Path $source "eng\Normalize-NuGetPackage.ps1"
+    Assert-Equal $normalizerSha256 `
+        (Get-Hash $normalizer "SHA256") `
+        "$Label accepted normalizer SHA-256"
+    Assert-Equal $normalizerSha512 `
+        (Get-Hash $normalizer "SHA512") `
+        "$Label accepted normalizer SHA-512"
+
+    Copy-PackageSet `
+        (Join-Path $source "vendor\p14-profile-carrier\packages") `
+        $feed
+    Copy-PackageSet $ProtocolPackageRoot $feed
+    $config = Join-Path $root "NuGet.Config"
+    New-LocalConfig $config $feed
+    Set-IsolatedEnvironment $root
+
+    $project = Join-Path $source `
+        "src\Deep.Protocol.ProfileCarrier\Deep.Protocol.ProfileCarrier.csproj"
     $properties = @(
         "-p:Version=$carrierVersion",
         "-p:PackageVersion=$carrierVersion",
-        "-p:RepositoryCommit=$contractCommit",
-        "-p:SourceRevisionId=$contractCommit",
+        "-p:RepositoryCommit=$CarrierSourceCommit",
+        "-p:SourceRevisionId=$CarrierSourceCommit",
         "-p:DeepProtocolPackageVersion=[$protocolVersion]",
         "-p:Deterministic=true",
         "-p:ContinuousIntegrationBuild=true",
         "-p:RestoreLockedMode=false"
     )
-    Invoke-Checked "dotnet" (@("restore", $project, "--configfile", $config, "--packages", $packagesHome, "--force-evaluate") + $properties) $source
-    Invoke-Checked "dotnet" (@("build", $project, "--no-restore", "--configuration", "Release") + $properties) $source
-    Invoke-Checked "dotnet" (@("pack", $project, "--no-restore", "--no-build", "--configuration", "Release", "--output", $output) + $properties) $source
-    $package = Join-Path $output "Deep.Protocol.ProfileCarrier.$carrierVersion.nupkg"
-    Invoke-Checked "powershell" @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $normalizer, "-Path", $package) $source
-    $results += [PSCustomObject]@{
+    Invoke-Checked "dotnet" (@(
+        "restore", $project,
+        "--configfile", $config,
+        "--packages", $env:NUGET_PACKAGES,
+        "--force-evaluate"
+    ) + $properties) $source
+    Invoke-Checked "dotnet" (@(
+        "build", $project,
+        "--no-restore",
+        "--configuration", "Release"
+    ) + $properties) $source
+    Invoke-Checked "dotnet" (@(
+        "pack", $project,
+        "--no-restore",
+        "--no-build",
+        "--configuration", "Release",
+        "--output", $output
+    ) + $properties) $source
+    $package = Join-Path $output `
+        "Deep.Protocol.ProfileCarrier.$carrierVersion.nupkg"
+    Invoke-Checked "powershell" @(
+        "-NoProfile", "-ExecutionPolicy", "Bypass",
+        "-File", $normalizer,
+        "-Path", $package
+    ) $source
+    return [PSCustomObject]@{
+        Root = $root
+        Source = $source
+        Feed = $feed
+        Config = $config
         Package = $package
+        Bytes = (Get-Item -LiteralPath $package).Length
         Sha256 = Get-Hash $package "SHA256"
         Sha512 = Get-Hash $package "SHA512"
-        Bytes = (Get-Item -LiteralPath $package).Length
     }
 }
 
-Assert-Equal $results[0].Sha256 $results[1].Sha256 "normalized package SHA-256"
-Assert-Equal $results[0].Sha512 $results[1].Sha512 "normalized package SHA-512"
-Assert-Equal ([string]$results[0].Bytes) ([string]$results[1].Bytes) "normalized package byte length"
+Assert-ExternalDistinctRoots
+$dirty = & git -C $RepositoryRoot status --porcelain=v1
+if ($LASTEXITCODE -ne 0 -or $null -ne $dirty) {
+    throw "The gate requires a clean current repository."
+}
+$resolvedCarrierCommit = (& git -C $RepositoryRoot rev-parse `
+    "$CarrierSourceCommit`^{commit}").Trim()
+if ($LASTEXITCODE -ne 0 -or $resolvedCarrierCommit -ne $CarrierSourceCommit -or
+    $CarrierSourceCommit -notmatch "^[0-9a-f]{40}$") {
+    throw "CarrierSourceCommit must be an available exact full commit."
+}
+if ($CarrierSourceCommit -eq $protocolSourceCommit) {
+    throw "Carrier and protocol source commits must remain separate identities."
+}
+& git -C $RepositoryRoot merge-base --is-ancestor `
+    $CarrierSourceCommit HEAD
+if ($LASTEXITCODE -ne 0) {
+    throw "The accepted carrier source commit must be an ancestor of current HEAD."
+}
 
-$smokeRoot = Join-Path $runRoot "locked-install-smoke"
+$protocolProvenance = Get-Content -LiteralPath `
+    (Join-Path $RepositoryRoot "eng\p10b3-package-provenance.json") `
+    -Raw | ConvertFrom-Json
+Assert-Equal $protocolSourceCommit `
+    ([string]$protocolProvenance.sourceCommit) `
+    "Protocol contract source commit"
+foreach ($id in @(
+    "Deep.Protocol",
+    "Deep.Protocol.Abstractions",
+    "Deep.Protocol.Protobuf"
+)) {
+    $entry = @($protocolProvenance.packages |
+        Where-Object { $_.id -eq $id })
+    if ($entry.Count -ne 1) {
+        throw "The P10B3 package provenance is missing $id."
+    }
+    $path = Join-Path $ProtocolPackageRoot $entry[0].file
+    Assert-Equal ([string]$entry[0].bytes) `
+        ([string](Get-Item -LiteralPath $path).Length) `
+        "$id package byte length"
+    Assert-Equal ([string]$entry[0].sha256) `
+        (Get-Hash $path "SHA256") `
+        "$id package SHA-256"
+    Assert-Equal ([string]$entry[0].sha512) `
+        (Get-Hash $path "SHA512") `
+        "$id package SHA-512"
+}
+
+New-Item -ItemType Directory -Path `
+    $WorkRootA, $WorkRootB, $PublishedRoot -Force | Out-Null
+$invocationId = [Guid]::NewGuid().ToString("N")
+$a = Invoke-CarrierBuild $WorkRootA "a" $invocationId
+$b = Invoke-CarrierBuild $WorkRootB "b" $invocationId
+Assert-Equal ([string]$a.Bytes) ([string]$b.Bytes) `
+    "External build A/B byte length"
+Assert-Equal $a.Sha256 $b.Sha256 "External build A/B SHA-256"
+Assert-Equal $a.Sha512 $b.Sha512 "External build A/B SHA-512"
+
+$publishedPackage = Join-Path $PublishedRoot `
+    "Deep.Protocol.ProfileCarrier.$carrierVersion.nupkg"
+Copy-Item -LiteralPath $a.Package -Destination $publishedPackage -Force
+Assert-Equal ([string]$a.Bytes) `
+    ([string](Get-Item -LiteralPath $publishedPackage).Length) `
+    "Published package byte length"
+Assert-Equal $a.Sha256 `
+    (Get-Hash $publishedPackage "SHA256") `
+    "Published package SHA-256"
+Assert-Equal $b.Sha512 `
+    (Get-Hash $publishedPackage "SHA512") `
+    "Published package SHA-512"
+
+$smokeRoot = Join-Path $a.Root "locked-install-smoke"
 $smokeFeed = Join-Path $smokeRoot "feed"
-$smokePackages = Join-Path $smokeRoot "packages-home"
-New-Item -ItemType Directory -Path $smokeRoot, $smokeFeed, $smokePackages -Force | Out-Null
-Copy-FileSet (Join-Path $RepositoryRoot "vendor\p14-profile-carrier\packages") $smokeFeed
-Copy-FileSet $ProtocolPackageRoot $smokeFeed
-Copy-Item -LiteralPath $results[0].Package -Destination (Join-Path $smokeFeed "Deep.Protocol.ProfileCarrier.$carrierVersion.nupkg") -Force
+New-Item -ItemType Directory -Path $smokeRoot, $smokeFeed -Force |
+    Out-Null
+Copy-PackageSet `
+    (Join-Path $a.Source "vendor\p14-profile-carrier\packages") `
+    $smokeFeed
+Copy-PackageSet $ProtocolPackageRoot $smokeFeed
+Copy-Item -LiteralPath $publishedPackage `
+    -Destination (Join-Path $smokeFeed `
+        "Deep.Protocol.ProfileCarrier.$carrierVersion.nupkg") `
+    -Force
 $smokeConfig = Join-Path $smokeRoot "NuGet.Config"
-$smokeFeedUri = [Uri]::new($smokeFeed).AbsoluteUri
-Set-Content -LiteralPath $smokeConfig -NoNewline -Encoding utf8 @"
-<?xml version="1.0" encoding="utf-8"?>
-<configuration><packageSources><clear /><add key="local" value="$smokeFeedUri" /></packageSources></configuration>
-"@
+New-LocalConfig $smokeConfig $smokeFeed
 $smokeProject = Join-Path $smokeRoot "locked-install-smoke.csproj"
 Set-Content -LiteralPath $smokeProject -NoNewline -Encoding utf8 @"
 <Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile></PropertyGroup><ItemGroup><PackageReference Include="Deep.Protocol.ProfileCarrier" Version="[$carrierVersion]" /><PackageReference Include="Deep.Protocol" Version="[$protocolVersion]" /></ItemGroup></Project>
 "@
-Set-Content -LiteralPath (Join-Path $smokeRoot "Program.cs") -NoNewline -Encoding utf8 "System.Console.WriteLine(typeof(Program).Assembly.GetName().Name);"
-$env:DOTNET_CLI_HOME = Join-Path $smokeRoot "cli-home"
-$env:APPDATA = Join-Path $smokeRoot "appdata"
-$env:NUGET_PACKAGES = $smokePackages
-$env:NUGET_HTTP_CACHE_PATH = Join-Path $smokeRoot "http-cache"
-Invoke-Checked "dotnet" @("restore", $smokeProject, "--configfile", $smokeConfig, "--packages", $smokePackages, "--force-evaluate") $smokeRoot
-Invoke-Checked "dotnet" @("restore", $smokeProject, "--configfile", $smokeConfig, "--packages", $smokePackages, "--locked-mode") $smokeRoot
-Invoke-Checked "dotnet" @("build", $smokeProject, "--no-restore", "--configuration", "Release") $smokeRoot
-Invoke-Checked "dotnet" @("run", "--project", $smokeProject, "--no-build", "--configuration", "Release") $smokeRoot
-$lockPath = Join-Path $smokeRoot "packages.lock.json"
-$lock = Get-Content -LiteralPath $lockPath -Raw
-if ($lock -notmatch [regex]::Escape('"Deep.Protocol.ProfileCarrier": {') -or
-    $lock -notmatch [regex]::Escape("$protocolVersion")) {
-    throw "The locked install smoke did not resolve the exact P10B3 carrier and protocol graph."
-}
+Set-Content -LiteralPath (Join-Path $smokeRoot "Program.cs") `
+    -NoNewline -Encoding utf8 `
+    "System.Console.WriteLine(typeof(Program).Assembly.GetName().Name);"
+Set-IsolatedEnvironment $smokeRoot
+Invoke-Checked "dotnet" @(
+    "restore", $smokeProject,
+    "--configfile", $smokeConfig,
+    "--packages", $env:NUGET_PACKAGES,
+    "--force-evaluate"
+) $smokeRoot
+Invoke-Checked "dotnet" @(
+    "restore", $smokeProject,
+    "--configfile", $smokeConfig,
+    "--packages", $env:NUGET_PACKAGES,
+    "--locked-mode"
+) $smokeRoot
+Invoke-Checked "dotnet" @(
+    "build", $smokeProject,
+    "--no-restore",
+    "--configuration", "Release"
+) $smokeRoot
+Invoke-Checked "dotnet" @(
+    "run", "--project", $smokeProject,
+    "--no-build",
+    "--configuration", "Release"
+) $smokeRoot
+$smokeLock = Join-Path $smokeRoot "packages.lock.json"
+$publishedLock = Join-Path $PublishedRoot `
+    "install-smoke.packages.lock.json"
+Copy-Item -LiteralPath $smokeLock -Destination $publishedLock -Force
 
-$finalOutput = Join-Path $WorkRoot "Deep.Protocol.ProfileCarrier.$carrierVersion.nupkg"
-Copy-Item -LiteralPath $results[0].Package -Destination $finalOutput -Force
-$finalLock = Join-Path $WorkRoot "install-smoke.packages.lock.json"
-Copy-Item -LiteralPath $lockPath -Destination $finalLock -Force
-Write-Output "PASS carrier-source-commit=$head protocol-source-commit=$contractCommit"
-Write-Output "package=$finalOutput"
-Write-Output "bytes=$($results[0].Bytes)"
-Write-Output "sha256=$($results[0].Sha256)"
-Write-Output "sha512=$($results[0].Sha512)"
-Write-Output "independent-rebuild-byte-identical=true"
-Write-Output "locked-install-smoke-lock=$finalLock"
+$identityProject = Join-Path $a.Source `
+    "eng\P10B3ProfileCarrier.Identity\P10B3ProfileCarrier.Identity.csproj"
+Set-IsolatedEnvironment (Join-Path $a.Root "identity")
+Invoke-Checked "dotnet" @(
+    "restore", $identityProject,
+    "--configfile", $a.Config,
+    "--packages", $env:NUGET_PACKAGES
+) $a.Source
+$identityArguments = @(
+    "run", "--project", $identityProject,
+    "--no-restore",
+    "--configuration", "Release",
+    "--",
+    "--package", $publishedPackage,
+    "--lock", $publishedLock,
+    "--carrier-source", $CarrierSourceCommit,
+    "--protocol-source", $protocolSourceCommit,
+    "--carrier-version", $carrierVersion,
+    "--protocol-version", $protocolVersion,
+    "--package-sha256", $a.Sha256,
+    "--package-sha512", $a.Sha512,
+    "--lock-sha256", (Get-Hash $publishedLock "SHA256"),
+    "--lock-sha512", (Get-Hash $publishedLock "SHA512"),
+    "--self-test"
+)
+if (![string]::IsNullOrWhiteSpace($ProvenancePath)) {
+    $identityArguments += @("--provenance", $ProvenancePath)
+}
+Invoke-Checked "dotnet" $identityArguments $a.Source
+
+Write-Output "PASS carrier-source-commit=$CarrierSourceCommit protocol-source-commit=$protocolSourceCommit"
+Write-Output "external-work-root-a=$($a.Root)"
+Write-Output "external-work-root-b=$($b.Root)"
+Write-Output "package=$publishedPackage"
+Write-Output "bytes=$($a.Bytes)"
+Write-Output "sha256=$($a.Sha256)"
+Write-Output "sha512=$($a.Sha512)"
+Write-Output "external-a-b-final-byte-identical=true"
+Write-Output "locked-install-smoke-lock=$publishedLock"
+Write-Output "lock-bytes=$((Get-Item -LiteralPath $publishedLock).Length)"
+Write-Output "lock-sha256=$(Get-Hash $publishedLock 'SHA256')"
+Write-Output "lock-sha512=$(Get-Hash $publishedLock 'SHA512')"
