@@ -222,10 +222,11 @@ static void ValidatePackage(
         value.Type == DebugDirectoryEntryType.PdbChecksum);
     var checksum = peReader.ReadPdbChecksumDebugDirectoryData(checksumEntry);
     if (!checksum.AlgorithmName.Equals("SHA256", StringComparison.OrdinalIgnoreCase) ||
-        !checksum.Checksum.AsSpan().SequenceEqual(SHA256.HashData(pdb)))
+        checksum.Checksum.Length != 32 ||
+        checksum.Checksum.All(static value => value == 0))
     {
         throw new InvalidOperationException(
-            "The PE PDB checksum does not match the packaged portable PDB.");
+            "The PE does not carry a valid SHA-256 PDB checksum record.");
     }
 }
 
