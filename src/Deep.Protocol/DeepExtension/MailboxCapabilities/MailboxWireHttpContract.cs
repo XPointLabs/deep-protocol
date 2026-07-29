@@ -10,7 +10,8 @@ public enum MailboxWireFrame
     Mqr2 = 6,
     Mar1 = 7,
     Prq2 = 8,
-    Mqr3 = 9
+    Mqr3 = 9,
+    Mau2 = 10
 }
 
 public sealed record MailboxHttpEndpointContract
@@ -19,6 +20,7 @@ public sealed record MailboxHttpEndpointContract
     public required string Method { get; init; }
     public required string RequestContentType { get; init; }
     public required MailboxWireFrame RequestFrame { get; init; }
+    public MailboxAuthenticatedOperation? AuthenticatedOperation { get; init; }
     public required int MinimumRequestBytes { get; init; }
     public required int MaximumRequestBytes { get; init; }
     public required int SuccessStatusCode { get; init; }
@@ -70,10 +72,11 @@ public static class MailboxWireHttpContract
     public const string Mqr3ContentType = "application/vnd.deep.mailbox.mqr3";
     public const string Mar1ContentType = "application/vnd.deep.mailbox.mar1";
     public const string Prq2ContentType = "application/vnd.deep.mailbox.prq2";
+    public const string Mau2ContentType = "application/vnd.deep.mailbox.mau2";
 
-    public const string StoreRoute = "/api/client/mailbox/v1/store";
-    public const string RetrieveRoute = "/api/client/mailbox/v1/retrieve";
-    public const string AcknowledgeRoute = "/api/client/mailbox/v1/acknowledge";
+    public const string StoreRoute = "/api/client/mailbox/v2/store";
+    public const string RetrieveRoute = "/api/client/mailbox/v2/retrieve";
+    public const string AcknowledgeRoute = "/api/client/mailbox/v2/acknowledge";
     public const string PeerStoreRoute = "/api/peer/mailbox/v2/store";
     public const string PeerTombstoneRoute = "/api/peer/mailbox/v2/tombstone";
 
@@ -81,19 +84,17 @@ public static class MailboxWireHttpContract
     {
         Route = StoreRoute,
         Method = Method,
-        RequestContentType = Mst1ContentType,
-        RequestFrame = MailboxWireFrame.Mst1,
+        RequestContentType = Mau2ContentType,
+        RequestFrame = MailboxWireFrame.Mau2,
+        AuthenticatedOperation = MailboxAuthenticatedOperation.Store,
         MinimumRequestBytes =
-            48 +
-            MailboxCapabilityLimits.FixedPresentationHeaderLength +
-            MailboxCapabilityLimits.MinimumDomainValueLength +
-            MailboxCapabilityLimits.FixedAdmissionHeaderLength +
-            MailboxCapabilityLimits.MinimumAdmissionAuthorizationLength +
+            MailboxAuthenticatedClientRequestCodec.HeaderLength +
+            MailboxAuthenticatedCapabilityLimits.PresentationLength +
             MailboxClientLimits.EncryptedEnvelopeHeaderLength +
             MailboxClientLimits.MinimumCiphertextLength,
         MaximumRequestBytes =
-            48 +
-            MailboxCapabilityLimits.MaximumPresentationLength +
+            MailboxAuthenticatedClientRequestCodec.HeaderLength +
+            MailboxAuthenticatedCapabilityLimits.PresentationLength +
             MailboxClientLimits.MaximumEncryptedEnvelopeLength,
         SuccessStatusCode = 200,
         ResponseContentType = Mqr3ContentType,
@@ -110,17 +111,17 @@ public static class MailboxWireHttpContract
     {
         Route = RetrieveRoute,
         Method = Method,
-        RequestContentType = Mrt1ContentType,
-        RequestFrame = MailboxWireFrame.Mrt1,
+        RequestContentType = Mau2ContentType,
+        RequestFrame = MailboxWireFrame.Mau2,
+        AuthenticatedOperation = MailboxAuthenticatedOperation.Retrieve,
         MinimumRequestBytes =
-            120 +
-            MailboxCapabilityLimits.FixedPresentationHeaderLength +
-            MailboxCapabilityLimits.MinimumDomainValueLength +
-            MailboxCapabilityLimits.FixedAdmissionHeaderLength +
-            MailboxCapabilityLimits.MinimumAdmissionAuthorizationLength,
+            MailboxAuthenticatedClientRequestCodec.HeaderLength +
+            MailboxAuthenticatedCapabilityLimits.PresentationLength +
+            MailboxAuthenticatedRequestTranscript.RetrieveHeaderLength,
         MaximumRequestBytes =
-            120 +
-            MailboxCapabilityLimits.MaximumPresentationLength +
+            MailboxAuthenticatedClientRequestCodec.HeaderLength +
+            MailboxAuthenticatedCapabilityLimits.PresentationLength +
+            MailboxAuthenticatedRequestTranscript.RetrieveHeaderLength +
             MailboxClientLimits.MaximumContinuationTokenLength,
         SuccessStatusCode = 200,
         ResponseContentType = Mrp1ContentType,
@@ -137,20 +138,21 @@ public static class MailboxWireHttpContract
     {
         Route = AcknowledgeRoute,
         Method = Method,
-        RequestContentType = Mak1ContentType,
-        RequestFrame = MailboxWireFrame.Mak1,
+        RequestContentType = Mau2ContentType,
+        RequestFrame = MailboxWireFrame.Mau2,
+        AuthenticatedOperation = MailboxAuthenticatedOperation.Ack,
         MinimumRequestBytes =
-            120 +
-            MailboxCapabilityLimits.FixedPresentationHeaderLength +
-            MailboxCapabilityLimits.MinimumDomainValueLength +
-            MailboxCapabilityLimits.FixedAdmissionHeaderLength +
-            MailboxCapabilityLimits.MinimumAdmissionAuthorizationLength +
-            40,
+            MailboxAuthenticatedClientRequestCodec.HeaderLength +
+            MailboxAuthenticatedCapabilityLimits.PresentationLength +
+            MailboxAuthenticatedRequestTranscript.AckHeaderLength +
+            MailboxAuthenticatedRequestTranscript.AckEntryLength,
         MaximumRequestBytes =
-            120 +
-            MailboxCapabilityLimits.MaximumPresentationLength +
+            MailboxAuthenticatedClientRequestCodec.HeaderLength +
+            MailboxAuthenticatedCapabilityLimits.PresentationLength +
+            MailboxAuthenticatedRequestTranscript.AckHeaderLength +
             MailboxClientLimits.MaximumContinuationTokenLength +
-            (MailboxClientLimits.MaximumPageItems * 40),
+            (MailboxClientLimits.MaximumPageItems *
+             MailboxAuthenticatedRequestTranscript.AckEntryLength),
         SuccessStatusCode = 200,
         ResponseContentType = Mar1ContentType,
         ResponseFrame = MailboxWireFrame.Mar1,

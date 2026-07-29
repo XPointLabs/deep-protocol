@@ -354,34 +354,78 @@ public sealed class MailboxPeerWireV2ContractTests
             MailboxWireHttpContract.ClientEndpoints,
             endpoint =>
             {
-                Assert.Equal("/api/client/mailbox/v1/store", endpoint.Route);
+                Assert.Equal("/api/client/mailbox/v2/store", endpoint.Route);
                 Assert.Equal("POST", endpoint.Method);
-                Assert.Equal(MailboxWireFrame.Mst1, endpoint.RequestFrame);
+                Assert.Equal(MailboxWireFrame.Mau2, endpoint.RequestFrame);
+                Assert.Equal(
+                    MailboxAuthenticatedOperation.Store,
+                    endpoint.AuthenticatedOperation);
+                Assert.Equal(
+                    "application/vnd.deep.mailbox.mau2",
+                    endpoint.RequestContentType);
+                Assert.Equal(
+                    MailboxAuthenticatedClientRequestCodec.HeaderLength +
+                    MailboxAuthenticatedCapabilityLimits.PresentationLength +
+                    MailboxClientLimits.EncryptedEnvelopeHeaderLength +
+                    MailboxClientLimits.MinimumCiphertextLength,
+                    endpoint.MinimumRequestBytes);
                 Assert.Equal(MailboxWireFrame.Mqr3, endpoint.ResponseFrame);
                 Assert.Equal(
                     "application/vnd.deep.mailbox.mqr3",
                     endpoint.ResponseContentType);
-                Assert.Equal(82_836, endpoint.MaximumRequestBytes);
+                Assert.Equal(608, endpoint.MinimumRequestBytes);
+                Assert.Equal(82_344, endpoint.MaximumRequestBytes);
                 Assert.Equal(776, endpoint.MaximumResponseBytes);
             },
             endpoint =>
             {
-                Assert.Equal("/api/client/mailbox/v1/retrieve", endpoint.Route);
-                Assert.Equal(MailboxWireFrame.Mrt1, endpoint.RequestFrame);
+                Assert.Equal("/api/client/mailbox/v2/retrieve", endpoint.Route);
+                Assert.Equal(MailboxWireFrame.Mau2, endpoint.RequestFrame);
+                Assert.Equal(
+                    MailboxAuthenticatedOperation.Retrieve,
+                    endpoint.AuthenticatedOperation);
+                Assert.Equal(
+                    "application/vnd.deep.mailbox.mau2",
+                    endpoint.RequestContentType);
+                Assert.Equal(
+                    MailboxAuthenticatedClientRequestCodec.HeaderLength +
+                    MailboxAuthenticatedCapabilityLimits.PresentationLength +
+                    MailboxAuthenticatedRequestTranscript.RetrieveHeaderLength +
+                    MailboxClientLimits.MaximumContinuationTokenLength,
+                    endpoint.MaximumRequestBytes);
                 Assert.Equal(MailboxWireFrame.Mrp1, endpoint.ResponseFrame);
-                Assert.Equal(1_244, endpoint.MaximumRequestBytes);
+                Assert.Equal(536, endpoint.MinimumRequestBytes);
+                Assert.Equal(792, endpoint.MaximumRequestBytes);
                 Assert.Equal(1_048_576, endpoint.MaximumResponseBytes);
             },
             endpoint =>
             {
                 Assert.Equal(
-                    "/api/client/mailbox/v1/acknowledge",
+                    "/api/client/mailbox/v2/acknowledge",
                     endpoint.Route);
-                Assert.Equal(MailboxWireFrame.Mak1, endpoint.RequestFrame);
+                Assert.Equal(MailboxWireFrame.Mau2, endpoint.RequestFrame);
+                Assert.Equal(
+                    MailboxAuthenticatedOperation.Ack,
+                    endpoint.AuthenticatedOperation);
+                Assert.Equal(
+                    "application/vnd.deep.mailbox.mau2",
+                    endpoint.RequestContentType);
+                Assert.Equal(
+                    MailboxAuthenticatedClientRequestCodec.HeaderLength +
+                    MailboxAuthenticatedCapabilityLimits.PresentationLength +
+                    MailboxAuthenticatedRequestTranscript.AckHeaderLength +
+                    MailboxClientLimits.MaximumContinuationTokenLength +
+                    (MailboxClientLimits.MaximumPageItems *
+                     MailboxAuthenticatedRequestTranscript.AckEntryLength),
+                    endpoint.MaximumRequestBytes);
                 Assert.Equal(MailboxWireFrame.Mar1, endpoint.ResponseFrame);
-                Assert.Equal(5_244, endpoint.MaximumRequestBytes);
+                Assert.Equal(576, endpoint.MinimumRequestBytes);
+                Assert.Equal(4_792, endpoint.MaximumRequestBytes);
                 Assert.Equal(77_840, endpoint.MaximumResponseBytes);
             });
+        Assert.DoesNotContain(
+            MailboxWireHttpContract.ClientEndpoints,
+            endpoint => endpoint.Route.Contains("/v1/", StringComparison.Ordinal));
         Assert.All(
             MailboxWireHttpContract.ClientEndpoints,
             endpoint => Assert.Equal(200, endpoint.SuccessStatusCode));
@@ -389,6 +433,7 @@ public sealed class MailboxPeerWireV2ContractTests
             MailboxWireHttpContract.PeerEndpoints,
             endpoint =>
             {
+                Assert.Null(endpoint.AuthenticatedOperation);
                 Assert.Equal("/api/peer/mailbox/v2/store", endpoint.Route);
                 Assert.Equal(
                     MailboxPeerWireV2Limits.MaximumRequestLength,
@@ -397,6 +442,7 @@ public sealed class MailboxPeerWireV2ContractTests
             },
             endpoint =>
             {
+                Assert.Null(endpoint.AuthenticatedOperation);
                 Assert.Equal(
                     "/api/peer/mailbox/v2/tombstone",
                     endpoint.Route);

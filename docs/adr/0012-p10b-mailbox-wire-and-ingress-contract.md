@@ -1,20 +1,23 @@
-# ADR 0012: P10B mailbox peer wire and dormant public ingress
+# ADR 0012: P10B mailbox peer wire and native authenticated public ingress
 
 Status: accepted for contract implementation; production activation blocked. Date: 2026-07-27.
+Native MAU2 client-ingress amendment: 2026-07-30.
 Human owner: **Mr. X**.
 
 ## Decision
 
-P10B is an additive Deep-extension contract. It does not change the P03B2 `MST1`, `MRT1`,
+P10B is an additive Deep-extension contract. It does not change the historical P03B2 `MST1`, `MRT1`,
 `MAK1`, `MRP1`, `MRR2`, `MQR2`, `MAR1`, `MIP1` or `PRQ1` encodings and does not register runtime
-routes. It adds the PRQ2-only `MQR3` quorum domain; legacy PRQ1 continues to use `MQR2`.
+routes. Those V1 client request codecs remain dormant library history and have no public runtime
+mapping. Native authenticated client ingress accepts only non-convertible `MAU2`. P10B also adds
+the PRQ2-only `MQR3` quorum domain; legacy PRQ1 continues to use `MQR2`.
 
 The authenticated peer request is `PRQ2` version 2. It has two operations, Store and Tombstone,
 and no legacy JSON representation or conversion. The direct peer response is exactly one durable,
 recipient-signed Ed25519 `MRR2`; there is no response wrapper. The sender combines its own
 persisted `MRR2` and the recipient response into one verified `MQR3`. A public client Store
 response is exactly one durable `MQR3`, Retrieve returns `MRP1`, and ACK returns one `MAR1`
-containing one ordered tombstone `MQR3` for every ordered `MAK1` item. The aggregate ACK choice
+containing one ordered tombstone `MQR3` for every ordered `MBA2` item authenticated by MAU2. The aggregate ACK choice
 avoids 100 independent HTTP outcomes without assigning any new durability meaning to `MAR1`.
 
 All integer fields are unsigned big-endian. Reserved bytes are zero. Trailing bytes, unknown
@@ -198,9 +201,9 @@ above the endpoint maximum is too large.
 
 | Route | Request | Success response | Request bytes | Response bytes | Deadline | Concurrency | Rate |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| `/api/client/mailbox/v1/store` | `MST1`, `application/vnd.deep.mailbox.mst1` | 200 `MQR3`, `application/vnd.deep.mailbox.mqr3` | 380..82836 | 776 | 15 s | 16 | 60/min/capability scope |
-| `/api/client/mailbox/v1/retrieve` | `MRT1`, `application/vnd.deep.mailbox.mrt1` | 200 `MRP1`, `application/vnd.deep.mailbox.mrp1` | 268..1244 | 48..1048576 | 10 s | 16 | 120/min/capability scope |
-| `/api/client/mailbox/v1/acknowledge` | `MAK1`, `application/vnd.deep.mailbox.mak1` | 200 `MAR1`, `application/vnd.deep.mailbox.mar1` | 308..5244 | 818..77840 | 15 s | 16 | 60/min/capability scope |
+| `/api/client/mailbox/v2/store` | Store `MAU2(MCP2,MEO1)`, `application/vnd.deep.mailbox.mau2` | 200 `MQR3`, `application/vnd.deep.mailbox.mqr3` | 608..82344 | 776 | 15 s | 16 | 60/min/capability scope |
+| `/api/client/mailbox/v2/retrieve` | Retrieve `MAU2(MCP2,MBR2)`, `application/vnd.deep.mailbox.mau2` | 200 `MRP1`, `application/vnd.deep.mailbox.mrp1` | 536..792 | 48..1048576 | 10 s | 16 | 120/min/capability scope |
+| `/api/client/mailbox/v2/acknowledge` | Ack `MAU2(MCP2,MBA2)`, `application/vnd.deep.mailbox.mau2` | 200 `MAR1`, `application/vnd.deep.mailbox.mar1` | 576..4792 | 818..77840 | 15 s | 16 | 60/min/capability scope |
 | `/api/peer/mailbox/v2/store` | Store `PRQ2`, `application/vnd.deep.mailbox.prq2` | 200 `MRR2`, `application/vnd.deep.mailbox.mrr2` | 786..90712 | 296 | 15 s | 32 | 120/min/sender router |
 | `/api/peer/mailbox/v2/tombstone` | Tombstone `PRQ2`, `application/vnd.deep.mailbox.prq2` | 200 `MRR2`, `application/vnd.deep.mailbox.mrr2` | 634..8824 | 296 | 15 s | 32 | 120/min/sender router |
 
@@ -228,8 +231,9 @@ This contract is not Session wire, does not modify protobuf, and is not compatib
 legacy `/api/peer/mailbox/replica` JSON request or receipt. That route must not translate to or
 from `PRQ2`, `MRR2`, `MQR3` or `MAR1`.
 
-The public `MST1`/`MRT1`/`MAK1` metadata freezes transport interop only. Those V1 frames still carry
-opaque `MCP1`; strict authenticated V2 uses `MAU2` and remains non-convertible. Neither surface is
+The public client contract is strict authenticated V2 and accepts only `MAU2`. Historical
+`MST1`/`MRT1`/`MAK1` frames still carry opaque `MCP1`, remain non-convertible and are deliberately
+unmapped. There is no compatibility envelope, synthesis or fallback. The HTTP metadata is not
 activation authority. Issuer/key custody, authority distribution, durable membership LKG,
 revocation, persistent replay/outbox/storage, placement selection, coordinator operation,
 transport registration and Android/Windows E2E remain required before runtime activation.

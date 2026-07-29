@@ -18,7 +18,7 @@ public sealed record VerifiedMailboxAuthenticatedClientRequest
 public static class MailboxAuthenticatedClientRequestCodec
 {
     private const byte Version = 2;
-    private const int HeaderLength = 16;
+    public const int HeaderLength = 16;
     private static ReadOnlySpan<byte> Magic => "MAU2"u8;
 
     public static byte[] Encode(MailboxAuthenticatedClientRequest request)

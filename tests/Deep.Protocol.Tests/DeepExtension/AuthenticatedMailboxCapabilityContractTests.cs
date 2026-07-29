@@ -213,6 +213,62 @@ public sealed class AuthenticatedMailboxCapabilityContractTests
     }
 
     [Fact]
+    public void StrictBodyDecoders_ReturnTypedCanonicalBodiesAndRejectMutations()
+    {
+        var storeBinding = Binding(MailboxAuthenticatedOperation.Store);
+        var store = MailboxAuthenticatedRequestTranscript.DecodeStoreBody(
+            storeBinding.CanonicalRequest.Span);
+        Assert.Equal(11UL, store.Epoch);
+        Assert.Equal(Range(0xd0, 16), store.OperationId.ToArray());
+        Assert.Equal(Range(0x01, 64), store.Ciphertext.ToArray());
+
+        var retrieveBinding = Binding(MailboxAuthenticatedOperation.Retrieve);
+        var retrieve = MailboxAuthenticatedRequestTranscript.DecodeRetrieveBody(
+            retrieveBinding.CanonicalRequest.Span);
+        Assert.Equal(11UL, retrieve.Epoch);
+        Assert.Equal(42UL, retrieve.AfterCursor);
+        Assert.Equal(10, retrieve.MaximumItems);
+        Assert.Equal(Range(1, 8), retrieve.ContinuationToken.ToArray());
+
+        var ackBinding = Binding(MailboxAuthenticatedOperation.Ack);
+        var ack = MailboxAuthenticatedRequestTranscript.DecodeAckBody(
+            ackBinding.CanonicalRequest.Span);
+        Assert.True(ack.IsFinalPage);
+        Assert.Empty(ack.ContinuationToken.ToArray());
+        var acknowledgement = Assert.Single(ack.Acknowledgements);
+        Assert.Equal(42UL, acknowledgement.Cursor);
+        Assert.Equal(Range(0xe0, 32), acknowledgement.EnvelopeDigest.ToArray());
+
+        var malformedStore = storeBinding.CanonicalRequest.ToArray();
+        malformedStore[0] ^= 1;
+        Assert.Throws<MailboxAuthenticatedCapabilityException>(() =>
+            MailboxAuthenticatedRequestTranscript.DecodeStoreBody(malformedStore));
+
+        var wrongMagicRetrieve = retrieveBinding.CanonicalRequest.ToArray();
+        wrongMagicRetrieve[0] ^= 1;
+        Assert.Throws<MailboxAuthenticatedCapabilityException>(() =>
+            MailboxAuthenticatedRequestTranscript.DecodeRetrieveBody(
+                wrongMagicRetrieve));
+
+        var wrongMagicAck = ackBinding.CanonicalRequest.ToArray();
+        wrongMagicAck[0] ^= 1;
+        Assert.Throws<MailboxAuthenticatedCapabilityException>(() =>
+            MailboxAuthenticatedRequestTranscript.DecodeAckBody(wrongMagicAck));
+
+        var malformedRetrieve = retrieveBinding.CanonicalRequest.ToArray();
+        malformedRetrieve[108] = 1;
+        Assert.Throws<MailboxAuthenticatedCapabilityException>(() =>
+            MailboxAuthenticatedRequestTranscript.DecodeRetrieveBody(
+                malformedRetrieve));
+
+        var malformedAck = ackBinding.CanonicalRequest.ToArray();
+        malformedAck[100] = 0;
+        malformedAck[101] = 2;
+        Assert.Throws<MailboxAuthenticatedCapabilityException>(() =>
+            MailboxAuthenticatedRequestTranscript.DecodeAckBody(malformedAck));
+    }
+
+    [Fact]
     public void Mau2CarriesExactMcp2AndCanonicalBody_ForAllOperations()
     {
         var crypto = new SodiumMailboxCapabilityCrypto();

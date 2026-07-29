@@ -55,8 +55,9 @@ Primary upstream areas reviewed:
   `E/E+1` overlap, local-only delivered transition and placement/membership-bound `MRR2`/`MQR2`
   receipts in the same isolated namespace; no runtime activation or default changes
 - additive P10B `PRQ2` peer Store/Tombstone request with Ed25519/SHA-256 router, freshness and
-  durable replay binding, plus dormant exact HTTP metadata for `MST1`/`MRT1`/`MAK1` and native
-  `MQR2`/`MRP1`/`MAR1` responses
+  durable replay binding, plus native authenticated public client HTTP metadata for strict
+  `MAU2(MCP2,MEO1|MBR2|MBA2)` and `MQR3`/`MRP1`/`MAR1` responses; historical
+  `MST1`/`MRT1`/`MAK1` codecs are unmapped
 - P03C contact-scoped nearby rendezvous, canonical handshake framing, replay scope and
   platform-neutral lifecycle, isolated in `Deep.Protocol.DeepExtension.NearbyHandshakes`; the
   mutually authenticated AKE remains a blocked host adapter with no production implementation
@@ -153,10 +154,11 @@ future skew). Replay records persist through bounded epoch expiry plus
 seven days and use bounded GC. The recipient returns one durable native `MRR2` after persistence;
 two exact MIP1-keyed replicas form an `MQR3` whose distinct magic/version/signing transcript
 prevents PRQ1/MQR2 cross-verification and whose coordinator sequence binds the complete signed
-PRQ2. Dormant public client metadata maps Store to `MQR3`, Retrieve to `MRP1`, and exact MAK1
-order to bounded verified `MAR1(MQR3[])`; exact routes, media
+PRQ2. Native public client metadata accepts only operation-specific `MAU2`, maps Store to `MQR3`,
+Retrieve to `MRP1`, and exact MBA2 order to bounded verified `MAR1(MQR3[])`; exact routes, media
 types, limits and empty-body error statuses are in
 `adr/0012-p10b-mailbox-wire-and-ingress-contract.md`.
+Opaque MCP1 client frames are not translated and have no public runtime route.
 
 P03C adds fixed `NRV1` advertisements and bounded `NHS1` initiator/responder frames. The public
 orchestrator passes exact canonical transcript bytes, expected contact identity, period,

@@ -175,8 +175,9 @@ remain downstream work.
 ## P10B mailbox wire and ingress gaps
 
 P10B freezes a canonical zero-future-skew PRQ2 Store/Tombstone request, native durable MRR2
-response, exact two-MIP1-key PRQ2-only MQR3 verification, epoch-scoped finite replay/GC decisions and dormant
-MST1/MRT1/MAK1 HTTP metadata. It also freezes the aggregate ACK choice as exact MAK1 order mapped
+response, exact two-MIP1-key PRQ2-only MQR3 verification, epoch-scoped finite replay/GC decisions
+and native operation-specific MAU2 HTTP metadata. Historical MST1/MRT1/MAK1 client codecs are
+non-convertible and unmapped. It also freezes the aggregate ACK choice as exact MBA2 order mapped
 to bounded verified MAR1 containing native tombstone MQR3 receipts. Legacy PRQ1/MQR2 and
 MAR1(MQR2[]) remain unchanged and cross-domain frames fail closed. It deliberately does not
 implement:

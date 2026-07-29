@@ -3,8 +3,87 @@ using System.Security.Cryptography;
 
 namespace Deep.Protocol.DeepExtension.MailboxCapabilities;
 
+public sealed class MailboxAuthenticatedRetrieveBody
+{
+    private readonly byte[] operationId;
+    private readonly byte[] continuationToken;
+
+    internal MailboxAuthenticatedRetrieveBody(
+        ulong epoch,
+        ReadOnlySpan<byte> operationId,
+        BlindedMailboxId mailboxId,
+        BlindedPlacementId placementId,
+        ulong afterCursor,
+        ushort maximumItems,
+        ReadOnlySpan<byte> continuationToken)
+    {
+        Epoch = epoch;
+        this.operationId = operationId.ToArray();
+        MailboxId = mailboxId;
+        PlacementId = placementId;
+        AfterCursor = afterCursor;
+        MaximumItems = maximumItems;
+        this.continuationToken = continuationToken.ToArray();
+    }
+
+    public ulong Epoch { get; }
+    public ReadOnlyMemory<byte> OperationId => operationId.ToArray();
+    public BlindedMailboxId MailboxId { get; }
+    public BlindedPlacementId PlacementId { get; }
+    public ulong AfterCursor { get; }
+    public ushort MaximumItems { get; }
+    public ReadOnlyMemory<byte> ContinuationToken => continuationToken.ToArray();
+}
+
+public sealed class MailboxAuthenticatedAckBody
+{
+    private readonly byte[] operationId;
+    private readonly byte[] continuationToken;
+    private readonly MailboxAcknowledgement[] acknowledgements;
+
+    internal MailboxAuthenticatedAckBody(
+        ulong epoch,
+        ReadOnlySpan<byte> operationId,
+        BlindedMailboxId mailboxId,
+        BlindedPlacementId placementId,
+        bool isFinalPage,
+        ReadOnlySpan<byte> continuationToken,
+        IReadOnlyList<MailboxAcknowledgement> acknowledgements)
+    {
+        Epoch = epoch;
+        this.operationId = operationId.ToArray();
+        MailboxId = mailboxId;
+        PlacementId = placementId;
+        IsFinalPage = isFinalPage;
+        this.continuationToken = continuationToken.ToArray();
+        this.acknowledgements = acknowledgements
+            .Select(Clone)
+            .ToArray();
+    }
+
+    public ulong Epoch { get; }
+    public ReadOnlyMemory<byte> OperationId => operationId.ToArray();
+    public BlindedMailboxId MailboxId { get; }
+    public BlindedPlacementId PlacementId { get; }
+    public bool IsFinalPage { get; }
+    public ReadOnlyMemory<byte> ContinuationToken => continuationToken.ToArray();
+    public IReadOnlyList<MailboxAcknowledgement> Acknowledgements =>
+        Array.AsReadOnly(acknowledgements.Select(Clone).ToArray());
+
+    private static MailboxAcknowledgement Clone(MailboxAcknowledgement value) =>
+        new()
+        {
+            Cursor = value.Cursor,
+            EnvelopeDigest = value.EnvelopeDigest.ToArray()
+        };
+}
+
 public static class MailboxAuthenticatedRequestTranscript
 {
+    public const int RetrieveHeaderLength = 112;
+    public const int AckHeaderLength = 112;
+    public const int AckEntryLength = 40;
+
     private static ReadOnlySpan<byte> StoreTag => "DEEP-MBND-STR-V2"u8;
     private static ReadOnlySpan<byte> RetrieveTag => "DEEP-MBND-GET-V2"u8;
     private static ReadOnlySpan<byte> AckTag => "DEEP-MBND-ACK-V2"u8;
@@ -17,9 +96,9 @@ public static class MailboxAuthenticatedRequestTranscript
         {
             return operation switch
             {
-                MailboxAuthenticatedOperation.Store => ForStore(ParseEnvelope(canonical)),
-                MailboxAuthenticatedOperation.Retrieve => ParseRetrieve(canonical),
-                MailboxAuthenticatedOperation.Ack => ParseAck(canonical),
+                MailboxAuthenticatedOperation.Store => ForStore(DecodeStoreBody(canonical)),
+                MailboxAuthenticatedOperation.Retrieve => ForRetrieve(DecodeRetrieveBody(canonical)),
+                MailboxAuthenticatedOperation.Ack => ForAck(DecodeAckBody(canonical)),
                 _ => throw Error("Authenticated request operation is unsupported.")
             };
         }
@@ -48,6 +127,9 @@ public static class MailboxAuthenticatedRequestTranscript
             canonical);
     }
 
+    public static MailboxEncryptedEnvelope DecodeStoreBody(ReadOnlySpan<byte> canonical) =>
+        ParseEnvelope(canonical);
+
     public static MailboxAuthenticatedRequestBinding ForRetrieve(
         ulong epoch,
         ReadOnlySpan<byte> operationId,
@@ -62,7 +144,7 @@ public static class MailboxAuthenticatedRequestTranscript
         ValidateCommon(epoch, operationId, continuationToken);
         if (maximumItems is 0 or > MailboxClientLimits.MaximumPageItems)
             throw Error("Retrieve maximum-items is outside strict bounds.");
-        var canonical = new byte[112 + continuationToken.Length];
+        var canonical = new byte[RetrieveHeaderLength + continuationToken.Length];
         "MBR2"u8.CopyTo(canonical);
         canonical[4] = 2;
         BinaryPrimitives.WriteUInt64BigEndian(canonical.AsSpan(8), epoch);
@@ -74,7 +156,7 @@ public static class MailboxAuthenticatedRequestTranscript
         BinaryPrimitives.WriteUInt16BigEndian(
             canonical.AsSpan(106),
             checked((ushort)continuationToken.Length));
-        continuationToken.CopyTo(canonical.AsSpan(112));
+        continuationToken.CopyTo(canonical.AsSpan(RetrieveHeaderLength));
         return Create(
             MailboxAuthenticatedOperation.Retrieve,
             operationId,
@@ -99,7 +181,10 @@ public static class MailboxAuthenticatedRequestTranscript
             throw Error("ACK entry count is outside strict bounds.");
         if (isFinalPage != continuationToken.IsEmpty)
             throw Error("Final ACK must have no continuation token; non-final ACK must have one.");
-        var canonical = new byte[112 + continuationToken.Length + acknowledgements.Count * 40];
+        var canonical = new byte[
+            AckHeaderLength +
+            continuationToken.Length +
+            acknowledgements.Count * AckEntryLength];
         "MBA2"u8.CopyTo(canonical);
         canonical[4] = 2;
         BinaryPrimitives.WriteUInt64BigEndian(canonical.AsSpan(8), epoch);
@@ -113,8 +198,8 @@ public static class MailboxAuthenticatedRequestTranscript
         BinaryPrimitives.WriteUInt16BigEndian(
             canonical.AsSpan(102),
             checked((ushort)continuationToken.Length));
-        continuationToken.CopyTo(canonical.AsSpan(112));
-        var offset = 112 + continuationToken.Length;
+        continuationToken.CopyTo(canonical.AsSpan(AckHeaderLength));
+        var offset = AckHeaderLength + continuationToken.Length;
         ulong previousCursor = 0;
         foreach (var acknowledgement in acknowledgements)
         {
@@ -126,7 +211,7 @@ public static class MailboxAuthenticatedRequestTranscript
             BinaryPrimitives.WriteUInt64BigEndian(canonical.AsSpan(offset), acknowledgement.Cursor);
             acknowledgement.EnvelopeDigest.Span.CopyTo(canonical.AsSpan(offset + 8));
             previousCursor = acknowledgement.Cursor;
-            offset += 40;
+            offset += AckEntryLength;
         }
         return Create(MailboxAuthenticatedOperation.Ack, operationId, AckTag, canonical);
     }
@@ -148,32 +233,35 @@ public static class MailboxAuthenticatedRequestTranscript
             canonical.ToArray());
     }
 
-    private static MailboxAuthenticatedRequestBinding ParseRetrieve(ReadOnlySpan<byte> canonical)
+    public static MailboxAuthenticatedRetrieveBody DecodeRetrieveBody(
+        ReadOnlySpan<byte> canonical)
     {
-        if (canonical.Length < 112 ||
+        if (canonical.Length < RetrieveHeaderLength ||
             !canonical[..4].SequenceEqual("MBR2"u8) ||
             canonical[4] != 2 ||
             canonical.Slice(5, 3).IndexOfAnyExcept((byte)0) >= 0 ||
             canonical.Slice(108, 4).IndexOfAnyExcept((byte)0) >= 0)
             throw Error("MBR2 header is invalid.");
         var tokenLength = BinaryPrimitives.ReadUInt16BigEndian(canonical.Slice(106, 2));
-        if (canonical.Length != 112 + tokenLength)
+        if (canonical.Length != RetrieveHeaderLength + tokenLength)
             throw Error("MBR2 token length is invalid.");
-        var binding = ForRetrieve(
+        var body = new MailboxAuthenticatedRetrieveBody(
             BinaryPrimitives.ReadUInt64BigEndian(canonical.Slice(8, 8)),
             canonical.Slice(16, 16),
             new BlindedMailboxId(canonical.Slice(32, 32)),
             new BlindedPlacementId(canonical.Slice(64, 32)),
             BinaryPrimitives.ReadUInt64BigEndian(canonical.Slice(96, 8)),
             BinaryPrimitives.ReadUInt16BigEndian(canonical.Slice(104, 2)),
-            canonical[112..]);
+            canonical[RetrieveHeaderLength..]);
+        var binding = ForRetrieve(body);
         EnsureExact(binding, canonical);
-        return binding;
+        return body;
     }
 
-    private static MailboxAuthenticatedRequestBinding ParseAck(ReadOnlySpan<byte> canonical)
+    public static MailboxAuthenticatedAckBody DecodeAckBody(
+        ReadOnlySpan<byte> canonical)
     {
-        if (canonical.Length < 112 + 40 ||
+        if (canonical.Length < AckHeaderLength + AckEntryLength ||
             !canonical[..4].SequenceEqual("MBA2"u8) ||
             canonical[4] != 2 ||
             canonical.Slice(5, 3).IndexOfAnyExcept((byte)0) >= 0 ||
@@ -185,10 +273,11 @@ public static class MailboxAuthenticatedRequestTranscript
         var tokenLength = BinaryPrimitives.ReadUInt16BigEndian(canonical.Slice(102, 2));
         if (count is 0 or > MailboxClientLimits.MaximumPageItems ||
             tokenLength > MailboxClientLimits.MaximumContinuationTokenLength ||
-            canonical.Length != 112 + tokenLength + count * 40)
+            canonical.Length !=
+                AckHeaderLength + tokenLength + count * AckEntryLength)
             throw Error("MBA2 nested lengths are invalid.");
         var acknowledgements = new MailboxAcknowledgement[count];
-        var offset = 112 + tokenLength;
+        var offset = AckHeaderLength + tokenLength;
         for (var index = 0; index < count; index++)
         {
             acknowledgements[index] = new MailboxAcknowledgement
@@ -196,18 +285,47 @@ public static class MailboxAuthenticatedRequestTranscript
                 Cursor = BinaryPrimitives.ReadUInt64BigEndian(canonical.Slice(offset, 8)),
                 EnvelopeDigest = canonical.Slice(offset + 8, 32).ToArray()
             };
-            offset += 40;
+            offset += AckEntryLength;
         }
-        var binding = ForAck(
+        var body = new MailboxAuthenticatedAckBody(
             BinaryPrimitives.ReadUInt64BigEndian(canonical.Slice(8, 8)),
             canonical.Slice(16, 16),
             new BlindedMailboxId(canonical.Slice(32, 32)),
             new BlindedPlacementId(canonical.Slice(64, 32)),
             canonical[96] == 1,
-            canonical.Slice(112, tokenLength),
+            canonical.Slice(AckHeaderLength, tokenLength),
             acknowledgements);
+        var binding = ForAck(body);
         EnsureExact(binding, canonical);
-        return binding;
+        return body;
+    }
+
+    private static MailboxAuthenticatedRequestBinding ForRetrieve(
+        MailboxAuthenticatedRetrieveBody body)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        return ForRetrieve(
+            body.Epoch,
+            body.OperationId.Span,
+            body.MailboxId,
+            body.PlacementId,
+            body.AfterCursor,
+            body.MaximumItems,
+            body.ContinuationToken.Span);
+    }
+
+    private static MailboxAuthenticatedRequestBinding ForAck(
+        MailboxAuthenticatedAckBody body)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        return ForAck(
+            body.Epoch,
+            body.OperationId.Span,
+            body.MailboxId,
+            body.PlacementId,
+            body.IsFinalPage,
+            body.ContinuationToken.Span,
+            body.Acknowledgements);
     }
 
     private static MailboxEncryptedEnvelope ParseEnvelope(ReadOnlySpan<byte> canonical)
