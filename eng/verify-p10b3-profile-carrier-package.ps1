@@ -16,8 +16,8 @@ Set-StrictMode -Version Latest
 $protocolSourceCommit = "60ce2e3a5140f245d6bcfecf60fa456c26ffe730"
 $protocolVersion = "0.3.0-p10b3.60ce2e3"
 $carrierVersion = "0.2.0-p10b3.60ce2e3"
-$normalizerSha256 = "237891f23c12f04bc799ab485ff4a297dca78af9bb0d0bb4002a8d507c1c0343"
-$normalizerSha512 = "53b31b3f1e353a8b746a54750d1711f1ed328897eb186487a6e33a848380675bf07494c68b7f611eedaa25c077061ee1eb71fcac0fa49b2ba371ddb6b0deb044"
+$normalizerSha256 = "18ad526c7676a7458c86c42ca4d85365694f7b627addad1ad09ae1d2c47c911d"
+$normalizerSha512 = "33953c302cac1c3d9e8c09341231db414130de482e5160eece4dee89a75a2e9f6e1c992e35f1353b19891244d9cca70e0c2e80328c7ead67989cda53d22058d9"
 
 if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
     $RepositoryRoot = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
