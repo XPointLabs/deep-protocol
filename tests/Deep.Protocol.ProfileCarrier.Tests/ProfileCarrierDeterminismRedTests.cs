@@ -95,6 +95,7 @@ public sealed class ProfileCarrierDeterminismRedTests
         Assert.Contains("CarrierSourceCommit", p10b3Gate, StringComparison.Ordinal);
         Assert.Contains("SourceRevisionId=$CarrierSourceCommit", p10b3Gate, StringComparison.Ordinal);
         Assert.Contains("RepositoryCommit=$CarrierSourceCommit", p10b3Gate, StringComparison.Ordinal);
+        Assert.Contains("SourceLink=$sourceLink", p10b3Gate, StringComparison.Ordinal);
         Assert.Contains("external-a-b-final-byte-identical", p10b3Gate, StringComparison.Ordinal);
         Assert.Contains("--self-test", p10b3Gate, StringComparison.Ordinal);
         Assert.Contains("Assert-ExternalDistinctRoots", p10b3Gate, StringComparison.Ordinal);

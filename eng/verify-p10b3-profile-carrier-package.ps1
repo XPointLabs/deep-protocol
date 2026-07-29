@@ -155,11 +155,16 @@ function Invoke-CarrierBuild {
 
     $project = Join-Path $source `
         "src\Deep.Protocol.ProfileCarrier\Deep.Protocol.ProfileCarrier.csproj"
+    $sourceLink = Join-Path $root "carrier.sourcelink.json"
+    Set-Content -LiteralPath $sourceLink -NoNewline -Encoding utf8 @"
+{"documents":{"/_/Deep.Protocol.ProfileCarrier/*":"https://raw.githubusercontent.com/XPointLabs/deep-protocol/$CarrierSourceCommit/src/Deep.Protocol.ProfileCarrier/*"}}
+"@
     $properties = @(
         "-p:Version=$carrierVersion",
         "-p:PackageVersion=$carrierVersion",
         "-p:RepositoryCommit=$CarrierSourceCommit",
         "-p:SourceRevisionId=$CarrierSourceCommit",
+        "-p:SourceLink=$sourceLink",
         "-p:DeepProtocolPackageVersion=[$protocolVersion]",
         "-p:Deterministic=true",
         "-p:ContinuousIntegrationBuild=true",

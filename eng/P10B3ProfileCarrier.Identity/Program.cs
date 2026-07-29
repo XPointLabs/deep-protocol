@@ -161,12 +161,24 @@ static void ValidatePackage(
     using var pdbProvider = MetadataReaderProvider.FromPortablePdbImage(
         ImmutableArray.Create(pdb));
     var pdbReader = pdbProvider.GetMetadataReader();
-    var sourceLink = pdbReader.CustomDebugInformation
+    var customDebugInformation = pdbReader.CustomDebugInformation
         .Select(pdbReader.GetCustomDebugInformation)
-        .Single(value =>
-            pdbReader.GetGuid(value.Kind).ToString().Equals(
-                sourceLinkKind,
-                StringComparison.OrdinalIgnoreCase));
+        .ToArray();
+    var sourceLinkMatches = customDebugInformation
+        .Where(value => pdbReader.GetGuid(value.Kind).ToString().Equals(
+            sourceLinkKind,
+            StringComparison.OrdinalIgnoreCase))
+        .ToArray();
+    if (sourceLinkMatches.Length != 1)
+    {
+        var kinds = string.Join(
+            ",",
+            customDebugInformation.Select(value =>
+                pdbReader.GetGuid(value.Kind).ToString()));
+        throw new InvalidOperationException(
+            $"The portable PDB has {sourceLinkMatches.Length} SourceLink records; kinds={kinds}.");
+    }
+    var sourceLink = sourceLinkMatches[0];
     var sourceLinkJson = Encoding.UTF8.GetString(
         pdbReader.GetBlobBytes(sourceLink.Value));
     using var sourceLinkDocument = JsonDocument.Parse(sourceLinkJson);
