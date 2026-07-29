@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Xml.Linq;
+using System.Security.Cryptography;
 using Deep.Protocol.DeepExtension.SelfHostedProfiles;
 
 namespace Deep.Protocol.ProfileCarrier.Tests;
@@ -20,6 +21,12 @@ public sealed class ProfileCarrierSupplyGateRedTests
             root, "eng", "verify-p14-profile-carrier-offline.ps1")));
         Assert.True(File.Exists(Path.Combine(
             root, "eng", "verify-p14-profile-carrier-provenance.ps1")));
+        Assert.True(File.Exists(Path.Combine(
+            root, "eng", "verify-p10i-profile-carrier-package.ps1")));
+        Assert.True(File.Exists(Path.Combine(
+            root, "eng", "p10i-package-provenance.json")));
+        Assert.True(File.Exists(Path.Combine(
+            root, "vendor", "p10i-profile-carrier", "package-manifest.json")));
     }
 
     [Fact]
@@ -68,6 +75,54 @@ public sealed class ProfileCarrierSupplyGateRedTests
             "CLIENT-ACTIVATION-NO-GO / " +
             "EXTERNAL-CRYPTO-PROFILE-REVIEW-PENDING",
             ProfileCarrierContract.Status);
+    }
+
+    [Fact]
+    public void P10iProtocolFeedPinsExactFilesAndAllPackageHashes()
+    {
+        var root = RepositoryRoot();
+        var manifestPath = Path.Combine(
+            root,
+            "vendor",
+            "p10i-profile-carrier",
+            "package-manifest.json");
+        using var manifest = JsonDocument.Parse(File.ReadAllBytes(manifestPath));
+        var packageRoot = Path.Combine(
+            root,
+            "vendor",
+            "p10i-profile-carrier");
+        var entries = manifest.RootElement.GetProperty("packages")
+            .EnumerateArray()
+            .ToArray();
+
+        Assert.Equal("deep-profile-carrier-p10i-package-feed.v1",
+            manifest.RootElement.GetProperty("schema").GetString());
+        Assert.Equal("0.3.0-p10i.a9b7a10",
+            manifest.RootElement.GetProperty("packageVersion").GetString());
+        Assert.Equal("0.2.0-p10i.a9b7a10",
+            manifest.RootElement.GetProperty("profileCarrierPackageVersion").GetString());
+        Assert.False(manifest.RootElement.GetProperty("networkSourcesAllowed").GetBoolean());
+        Assert.Equal(5, entries.Length);
+
+        foreach (var entry in entries)
+        {
+            var path = Path.Combine(
+                packageRoot,
+                entry.GetProperty("file").GetString()!
+                    .Replace('/', Path.DirectorySeparatorChar));
+            var bytes = File.ReadAllBytes(path);
+            Assert.Equal(entry.GetProperty("bytes").GetInt64(), bytes.LongLength);
+            Assert.Equal(
+                entry.GetProperty("sha256").GetString(),
+                Convert.ToHexStringLower(SHA256.HashData(bytes)));
+            var sha512 = SHA512.HashData(bytes);
+            Assert.Equal(
+                entry.GetProperty("sha512").GetString(),
+                Convert.ToHexStringLower(sha512));
+            Assert.Equal(
+                entry.GetProperty("contentHash").GetString(),
+                Convert.ToBase64String(sha512));
+        }
     }
 
     [Fact]

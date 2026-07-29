@@ -144,18 +144,13 @@ static void ValidatePackage(
         throw new InvalidOperationException(
             "The nuspec repository commit does not equal the carrier source commit.");
     }
-    if (repositoryCommit == protocolSourceCommit)
-    {
-        throw new InvalidOperationException(
-            "The carrier and protocol source identities were conflated.");
-    }
     var dependency = metadata.Descendants().Single(value =>
         value.Name.LocalName == "dependency" &&
         value.Attribute("id")?.Value == "Deep.Protocol");
     if (dependency.Attribute("version")?.Value != $"[{protocolVersion}]")
     {
         throw new InvalidOperationException(
-            "The Deep.Protocol dependency is not the exact P10B3 version.");
+            "The Deep.Protocol dependency is not the expected exact protocol version.");
     }
 
     using var pdbProvider = MetadataReaderProvider.FromPortablePdbImage(
@@ -196,9 +191,10 @@ static void ValidatePackage(
         throw new InvalidOperationException(
             "The PDB SourceLink URLs do not pin the carrier source commit.");
     }
-    if (sourceUrls.Any(value => value.Contains(
-        protocolSourceCommit,
-        StringComparison.Ordinal)))
+    if (carrierSourceCommit != protocolSourceCommit &&
+        sourceUrls.Any(value => value.Contains(
+            protocolSourceCommit,
+            StringComparison.Ordinal)))
     {
         throw new InvalidOperationException(
             "The PDB SourceLink URLs incorrectly pin the protocol source commit.");
@@ -315,7 +311,7 @@ static void RunMutationTests(
 
     var mutationRoot = Path.Combine(
         Path.GetTempPath(),
-        $"deep-p10b3-carrier-mutation-{Guid.NewGuid():N}");
+        $"deep-profile-carrier-mutation-{Guid.NewGuid():N}");
     Directory.CreateDirectory(mutationRoot);
     try
     {

@@ -5,10 +5,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <PackageId>Deep.Protocol.ProfileCarrier</PackageId>
-    <Description>Dormant exact DPF1 carrier and activation trust prerequisites over the pinned P04 authority.</Description>
+    <Description>Dormant exact DPF1 carrier and activation trust prerequisites over the accepted P10I protocol closure.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <Version>0.2.0-p14.local</Version>
-    <DeepProtocolPackageVersion Condition="'$(DeepProtocolPackageVersion)' == ''">[0.3.0-p04.b887fa0]</DeepProtocolPackageVersion>
+    <Version>0.2.0-p10i.a9b7a10</Version>
+    <DeepProtocolPackageVersion Condition="'$(DeepProtocolPackageVersion)' == ''">[0.3.0-p10i.a9b7a10]</DeepProtocolPackageVersion>
     <Deterministic>true</Deterministic>
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
     <PathMap>$(MSBuildProjectDirectory)=/_/Deep.Protocol.ProfileCarrier</PathMap>
@@ -19,7 +19,7 @@
     <RepositoryType>git</RepositoryType>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
-    <RestoreAdditionalProjectSources>$(MSBuildThisFileDirectory)..\..\vendor\p14-profile-carrier\packages</RestoreAdditionalProjectSources>
+    <RestoreAdditionalProjectSources>$(MSBuildThisFileDirectory)..\..\vendor\p10i-profile-carrier\packages;$(MSBuildThisFileDirectory)..\..\vendor\p14-profile-carrier\packages</RestoreAdditionalProjectSources>
   </PropertyGroup>
 
   <ItemGroup>

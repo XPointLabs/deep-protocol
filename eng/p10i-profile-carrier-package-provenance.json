@@ -1,0 +1,60 @@
+{
+  "schema": "deep-protocol-profile-carrier-package-provenance.v2",
+  "contract": "P10I-profile-carrier-unified-graph",
+  "carrierSourceCommit": "a9b7a10a555758d4b2e30707a70d271f010b6c30",
+  "protocolContractSourceCommit": "a9b7a10a555758d4b2e30707a70d271f010b6c30",
+  "protocolPackageProvenance": "eng/p10i-package-provenance.json",
+  "carrierPackageVersion": "0.2.0-p10i.a9b7a10",
+  "protocolDependency": "[0.3.0-p10i.a9b7a10]",
+  "publication": "local-only-not-published",
+  "runtimeActivation": "client-package-closure-candidate",
+  "identity": {
+    "nuspecRepositoryCommit": "a9b7a10a555758d4b2e30707a70d271f010b6c30",
+    "pdbSourceLinkCommit": "a9b7a10a555758d4b2e30707a70d271f010b6c30",
+    "peCodeViewMatchesPortablePdb": true,
+    "protocolSourceIdentityCoherent": true
+  },
+  "normalization": {
+    "script": "eng/Normalize-NuGetPackage.ps1",
+    "acceptedSnapshotSha256": "18ad526c7676a7458c86c42ca4d85365694f7b627addad1ad09ae1d2c47c911d",
+    "acceptedSnapshotSha512": "33953c302cac1c3d9e8c09341231db414130de482e5160eece4dee89a75a2e9f6e1c992e35f1353b19891244d9cca70e0c2e80328c7ead67989cda53d22058d9"
+  },
+  "reproducibility": {
+    "distinctExternalWorkRoots": true,
+    "externalBuildAByteIdentical": true,
+    "externalBuildBByteIdentical": true,
+    "publishedPackageByteIdentical": true,
+    "carrierSourceDriftRejected": true,
+    "packageByteDriftRejected": true,
+    "installLockDriftRejected": true
+  },
+  "package": {
+    "id": "Deep.Protocol.ProfileCarrier",
+    "file": "artifacts/survival/P10I/a9b7a10/profile-carrier/Deep.Protocol.ProfileCarrier.0.2.0-p10i.a9b7a10.nupkg",
+    "bytes": 28904,
+    "sha256": "ccae562846602d99115e2de75ddf5b9e3290d17461a8eaa6a9ac0860b231da31",
+    "sha512": "e2e411ab7c6d3caaaca2728bb28d166a0bf619740900dd930b449fe068e46fffbf1f46a74938c66f86059585d8142d1b3c8c98a95d73ce806085d573875f888d",
+    "contentHash": "4uQRq3xtPKqsonKLso0Wagv2GXQJAN2TC0Sf4Gjkb/+/H0anSTjGb4YFlYXYFC0bPIyYqV1zzoBghdVzh1+IjQ=="
+  },
+  "lockedInstallSmoke": {
+    "artifact": "artifacts/survival/P10I/a9b7a10/profile-carrier/install-smoke.packages.lock.json",
+    "bytes": 2284,
+    "sha256": "598a0c51238675416f6be985718bf4322b109768f54870bb4d3ea12b166d2157",
+    "sha512": "f49ac85be272a33fa1e7ff7c6c8fc8a68b6d6d98f61b6f40b3cfc79cb3930988c8cd614ca76a6e71c13279d3825ecf991fdc11ec3310b9545f8ea1d3e2a1d1f5",
+    "contentHash": "9JrIW+Jyoz+h5/98bI/IpottbZj2G29As8/HnLOTCYjIzWFMp2puccEyedOCXs+ZH9wR7DMQuVRfjqHT4qHR9Q==",
+    "targetFramework": "net10.0",
+    "direct": [
+      "Deep.Protocol.ProfileCarrier [0.2.0-p10i.a9b7a10]",
+      "Deep.Protocol [0.3.0-p10i.a9b7a10]"
+    ],
+    "resolved": [
+      "Deep.Protocol.ProfileCarrier 0.2.0-p10i.a9b7a10",
+      "Deep.Protocol 0.3.0-p10i.a9b7a10",
+      "Deep.Protocol.Abstractions 0.3.0-p10i.a9b7a10",
+      "Deep.Protocol.Protobuf 0.3.0-p10i.a9b7a10",
+      "Sodium.Core 1.4.1",
+      "libsodium 1.0.22",
+      "Google.Protobuf 3.32.1"
+    ]
+  }
+}

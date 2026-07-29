@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
-    <RestoreAdditionalProjectSources>$(MSBuildThisFileDirectory)..\..\vendor\p14-profile-carrier\packages</RestoreAdditionalProjectSources>
+    <RestoreAdditionalProjectSources>$(MSBuildThisFileDirectory)..\..\vendor\p10i-profile-carrier\packages;$(MSBuildThisFileDirectory)..\..\vendor\p14-profile-carrier\packages</RestoreAdditionalProjectSources>
   </PropertyGroup>
 
   <ItemGroup>

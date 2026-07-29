@@ -28,7 +28,8 @@ public sealed class ProfileCarrierDeterminismRedTests
         AssertProperty(project, "RepositoryType", "git");
         AssertProperty(project, "PublishRepositoryUrl", "true");
         AssertProperty(project, "DebugType", "portable");
-        AssertProperty(project, "DeepProtocolPackageVersion", "[0.3.0-p04.b887fa0]");
+        AssertProperty(project, "Version", "0.2.0-p10i.a9b7a10");
+        AssertProperty(project, "DeepProtocolPackageVersion", "[0.3.0-p10i.a9b7a10]");
         Assert.Contains(
             project.Descendants("AllowedOutputExtensionsInPackageBuildOutputFolder"),
             element => element.Value.Contains(".pdb", StringComparison.Ordinal));
@@ -104,6 +105,32 @@ public sealed class ProfileCarrierDeterminismRedTests
         Assert.DoesNotContain(
             "SourceRevisionId=$protocolSourceCommit",
             p10b3Gate,
+            StringComparison.Ordinal);
+
+        var p10i = Path.Combine(
+            root,
+            "eng",
+            "verify-p10i-profile-carrier-package.ps1");
+        Assert.True(File.Exists(p10i));
+        var p10iGate = File.ReadAllText(p10i);
+        Assert.Contains("0.3.0-p10i.a9b7a10", p10iGate, StringComparison.Ordinal);
+        Assert.Contains("0.2.0-p10i.a9b7a10", p10iGate, StringComparison.Ordinal);
+        Assert.Contains("p10i-package-provenance.json", p10iGate, StringComparison.Ordinal);
+        Assert.Contains("Normalize-NuGetPackage.ps1", p10iGate, StringComparison.Ordinal);
+        Assert.Contains("external-a-b-final-byte-identical", p10iGate, StringComparison.Ordinal);
+        Assert.Contains("--locked-mode", p10iGate, StringComparison.Ordinal);
+        Assert.Contains("CarrierSourceCommit", p10iGate, StringComparison.Ordinal);
+        Assert.Contains(
+            "\"archive\", \"--format=zip\"",
+            p10iGate,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "merge-base --is-ancestor",
+            p10iGate,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "HEAD to equal the accepted carrier source commit",
+            p10iGate,
             StringComparison.Ordinal);
     }
 
