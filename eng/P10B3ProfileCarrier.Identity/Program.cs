@@ -180,7 +180,7 @@ static void ValidatePackage(
     }
     var sourceLink = sourceLinkMatches[0];
     var sourceLinkJson = Encoding.UTF8.GetString(
-        pdbReader.GetBlobBytes(sourceLink.Value));
+        pdbReader.GetBlobBytes(sourceLink.Value)).TrimStart('\uFEFF');
     using var sourceLinkDocument = JsonDocument.Parse(sourceLinkJson);
     var sourceUrls = sourceLinkDocument.RootElement
         .GetProperty("documents")

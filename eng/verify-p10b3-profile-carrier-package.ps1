@@ -156,9 +156,13 @@ function Invoke-CarrierBuild {
     $project = Join-Path $source `
         "src\Deep.Protocol.ProfileCarrier\Deep.Protocol.ProfileCarrier.csproj"
     $sourceLink = Join-Path $root "carrier.sourcelink.json"
-    Set-Content -LiteralPath $sourceLink -NoNewline -Encoding utf8 @"
+    $sourceLinkJson = @"
 {"documents":{"/_/Deep.Protocol.ProfileCarrier/*":"https://raw.githubusercontent.com/XPointLabs/deep-protocol/$CarrierSourceCommit/src/Deep.Protocol.ProfileCarrier/*"}}
 "@
+    [IO.File]::WriteAllText(
+        $sourceLink,
+        $sourceLinkJson,
+        [Text.UTF8Encoding]::new($false))
     $properties = @(
         "-p:Version=$carrierVersion",
         "-p:PackageVersion=$carrierVersion",
@@ -335,11 +339,14 @@ Invoke-Checked "dotnet" @(
     "--configfile", $a.Config,
     "--packages", $env:NUGET_PACKAGES
 ) $a.Source
-$identityArguments = @(
-    "run", "--project", $identityProject,
+Invoke-Checked "dotnet" @(
+    "build", $identityProject,
     "--no-restore",
-    "--configuration", "Release",
-    "--",
+    "--configuration", "Release"
+) $a.Source
+$identityDll = Join-Path $a.Source `
+    "eng\P10B3ProfileCarrier.Identity\bin\Release\net10.0\P10B3ProfileCarrier.Identity.dll"
+$identityArguments = @(
     "--package", $publishedPackage,
     "--lock", $publishedLock,
     "--carrier-source", $CarrierSourceCommit,
@@ -355,7 +362,7 @@ $identityArguments = @(
 if (![string]::IsNullOrWhiteSpace($ProvenancePath)) {
     $identityArguments += @("--provenance", $ProvenancePath)
 }
-Invoke-Checked "dotnet" $identityArguments $a.Source
+Invoke-Checked "dotnet" (@($identityDll) + $identityArguments) $a.Source
 
 Write-Output "PASS carrier-source-commit=$CarrierSourceCommit protocol-source-commit=$protocolSourceCommit"
 Write-Output "external-work-root-a=$($a.Root)"
