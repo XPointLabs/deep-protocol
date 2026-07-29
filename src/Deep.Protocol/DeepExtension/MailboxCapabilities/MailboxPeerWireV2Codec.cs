@@ -126,8 +126,18 @@ public static class MailboxPeerWireV2Codec
             encoded,
             policy,
             crypto,
-            membershipVerifier);
-        var evaluation = replayJournal.EvaluateAndReserve(claim);
+            membershipVerifier,
+            enforceAdmissionFreshness: false);
+        var isAdmissionFresh =
+            claim.ReservedAtUnixSeconds - claim.CreatedAtUnixSeconds <=
+            MailboxPeerWireV2Limits.MaximumPastAgeSeconds;
+        var evaluation = isAdmissionFresh
+            ? replayJournal.EvaluateAndReserve(claim)
+            : replayJournal.EvaluateExisting(claim)
+              ?? throw Error(
+                  MailboxPeerReplicationError.ExpiredOrStale,
+                  "A stale PRQ2 has no persisted replay reservation.");
+        ValidateReplayEvaluation(evaluation, claim, isAdmissionFresh);
         var disposition = evaluation.State switch
         {
             MailboxPeerReplayState.NewReserved =>
@@ -144,11 +154,15 @@ public static class MailboxPeerWireV2Codec
                 MailboxPeerReplicationError.ReplayConflict,
                 "PRQ2 replay journal returned an invalid state.")
         };
+        var effectiveClaim = claim with
+        {
+            ReservedAtUnixSeconds = evaluation.EffectiveReservedAtUnixSeconds
+        };
         var verified = new VerifiedMailboxPeerWireRequestV2
         {
             Request = request,
             Envelope = envelope,
-            ReplayClaim = claim,
+            ReplayClaim = effectiveClaim,
             ReplayDisposition = disposition,
             CachedResponse = evaluation.CachedResponse.ToArray()
         };
@@ -159,6 +173,26 @@ public static class MailboxPeerWireV2Codec
                 MailboxPeerReplicationError.ReplayConflict,
                 "Only an exact completed retry may return a cached PRQ2 response.");
         return verified;
+    }
+
+    /// <summary>
+    /// Authenticates and binds a PRQ2 before sender-partitioned admission without consulting or
+    /// mutating replay state. Past-age admission is intentionally deferred to
+    /// <see cref="VerifyAndReserve"/> so an exact persisted retry can be recognized.
+    /// </summary>
+    public static MailboxPeerWireRequestV2 VerifyReplayCandidate(
+        ReadOnlySpan<byte> encoded,
+        MailboxPeerWireVerificationPolicyV2 policy,
+        IMailboxPeerReplicationCrypto crypto,
+        IMailboxReplicaMembershipProofVerifier membershipVerifier)
+    {
+        var (request, _, _) = VerifyRequest(
+            encoded,
+            policy,
+            crypto,
+            membershipVerifier,
+            enforceAdmissionFreshness: false);
+        return request;
     }
 
     /// <summary>
@@ -364,7 +398,8 @@ public static class MailboxPeerWireV2Codec
         ReadOnlySpan<byte> encoded,
         MailboxPeerWireVerificationPolicyV2 policy,
         IMailboxPeerReplicationCrypto crypto,
-        IMailboxReplicaMembershipProofVerifier membershipVerifier)
+        IMailboxReplicaMembershipProofVerifier membershipVerifier,
+        bool enforceAdmissionFreshness = true)
     {
         var request = Decode(encoded);
         if (request.Operation != policy.ExpectedOperation ||
@@ -398,6 +433,7 @@ public static class MailboxPeerWireV2Codec
             request.ExpiresAtUnixSeconds - request.CreatedAtUnixSeconds >
                 MailboxPeerWireV2Limits.MaximumTombstoneLifetimeSeconds ||
             request.CreatedAtUnixSeconds > policy.NowUnixSeconds ||
+            enforceAdmissionFreshness &&
             policy.NowUnixSeconds > request.CreatedAtUnixSeconds &&
             policy.NowUnixSeconds - request.CreatedAtUnixSeconds >
                 MailboxPeerWireV2Limits.MaximumPastAgeSeconds)
@@ -476,6 +512,28 @@ public static class MailboxPeerWireV2Codec
                 EpochExpiresAtUnixSeconds = policy.EpochExpiresAtUnixSeconds,
                 RetainUntilUnixSeconds = retainUntil
             });
+    }
+
+    private static void ValidateReplayEvaluation(
+        MailboxPeerReplayEvaluation evaluation,
+        MailboxPeerReplayClaim claim,
+        bool isAdmissionFresh)
+    {
+        ArgumentNullException.ThrowIfNull(evaluation);
+        var effectiveReservedAt = evaluation.EffectiveReservedAtUnixSeconds;
+        if (effectiveReservedAt < claim.CreatedAtUnixSeconds ||
+            effectiveReservedAt > claim.ReservedAtUnixSeconds ||
+            effectiveReservedAt >= claim.ExpiresAtUnixSeconds ||
+            effectiveReservedAt - claim.CreatedAtUnixSeconds >
+                MailboxPeerWireV2Limits.MaximumPastAgeSeconds ||
+            evaluation.State == MailboxPeerReplayState.NewReserved &&
+            (!isAdmissionFresh ||
+             effectiveReservedAt != claim.ReservedAtUnixSeconds))
+        {
+            throw Error(
+                MailboxPeerReplicationError.ReplayConflict,
+                "The replay journal returned invalid effective reservation metadata.");
+        }
     }
 
     private static byte[] EncodeUnsigned(MailboxPeerWireRequestV2 request)

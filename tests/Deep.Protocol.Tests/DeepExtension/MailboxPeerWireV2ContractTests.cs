@@ -175,7 +175,14 @@ public sealed class MailboxPeerWireV2ContractTests
             Assert.Throws<MailboxPeerReplicationException>(() =>
                 fixture.Verify(badSignature)).Error);
 
-        var stale = fixture.Sign(request with { CreatedAtUnixSeconds = 929 });
+        var staleEnvelope = fixture.Envelope with { CreatedAtUnixSeconds = 900 };
+        var stalePayload = MailboxClientCodec.EncodeEncryptedEnvelope(staleEnvelope);
+        var stale = fixture.Sign(request with
+        {
+            CreatedAtUnixSeconds = 929,
+            Payload = stalePayload,
+            PayloadDigest = SHA256.HashData(stalePayload)
+        });
         Assert.Equal(
             MailboxPeerReplicationError.ExpiredOrStale,
             Assert.Throws<MailboxPeerReplicationException>(() =>
@@ -845,6 +852,71 @@ public sealed class MailboxPeerWireV2ContractTests
     }
 
     [Fact]
+    public void ExactPendingAndCompletedRetries_UsePersistedReservationPastAdmissionFreshness()
+    {
+        var fixture = new Fixture(MailboxPeerReplicationOperation.Store);
+        var envelope = fixture.Envelope with { ExpiresAtUnixSeconds = 1190 };
+        var payload = MailboxClientCodec.EncodeEncryptedEnvelope(envelope);
+        var request = fixture.Sign(fixture.Request with
+        {
+            ExpiresAtUnixSeconds = envelope.ExpiresAtUnixSeconds,
+            Payload = payload,
+            PayloadDigest = SHA256.HashData(payload)
+        });
+        var encoded = MailboxPeerWireV2Codec.Encode(request);
+        var first = fixture.Verify(encoded);
+        Assert.Equal(1050UL, first.ReplayClaim.ReservedAtUnixSeconds);
+
+        var pendingRetry = fixture.VerifyAt(encoded, 1171, 1200);
+        Assert.Equal(MailboxPeerReplayDisposition.InFlight, pendingRetry.ReplayDisposition);
+        Assert.Equal(1050UL, pendingRetry.ReplayClaim.ReservedAtUnixSeconds);
+
+        var response = fixture.Crypto.SignReplicaResponse(
+            MailboxPeerWireV2Codec.CreateUnsignedDurableResponseAfterPersistence(
+                pendingRetry,
+                MailboxReplicaDisposition.Stored,
+                pendingRetry.ReplayClaim.ReservedAtUnixSeconds,
+                pendingRetry.ReplayClaim.ReservedAtUnixSeconds),
+            fixture.RecipientSeed);
+        var canonicalResponse = MailboxReceiptV2Codec.EncodeReplica(response);
+        fixture.Journal.CompleteAtomically(pendingRetry.ReplayClaim, canonicalResponse);
+
+        var completedRetry = fixture.VerifyAt(encoded, 1172, 1200);
+        Assert.Equal(
+            MailboxPeerReplayDisposition.IdempotentCompleted,
+            completedRetry.ReplayDisposition);
+        Assert.Equal(1050UL, completedRetry.ReplayClaim.ReservedAtUnixSeconds);
+        Assert.Equal(canonicalResponse, completedRetry.CachedResponse.ToArray());
+
+        var unknown = new Fixture(MailboxPeerReplicationOperation.Store);
+        var stale = Assert.Throws<MailboxPeerReplicationException>(() =>
+            unknown.VerifyAt(encoded, 1172, 1200));
+        Assert.Equal(MailboxPeerReplicationError.ExpiredOrStale, stale.Error);
+        Assert.Equal(0, unknown.Journal.Count);
+    }
+
+    [Fact]
+    public void ReplaySnapshotWithReservationOutsideOriginalFreshnessWindow_FailsClosed()
+    {
+        var fixture = new Fixture(MailboxPeerReplicationOperation.Store);
+        var encoded = MailboxPeerWireV2Codec.Encode(fixture.Sign(fixture.Request));
+        var verified = fixture.Verify(encoded);
+        var snapshot = fixture.Journal.Snapshot(verified.ReplayClaim) with
+        {
+            ReservedAtUnixSeconds =
+                verified.ReplayClaim.CreatedAtUnixSeconds +
+                MailboxPeerWireV2Limits.MaximumPastAgeSeconds + 1
+        };
+        var retry = verified.ReplayClaim with
+        {
+            ReservedAtUnixSeconds = snapshot.ReservedAtUnixSeconds
+        };
+
+        Assert.Throws<MailboxPeerReplicationException>(() =>
+            MailboxPeerReplayStateMachine.EvaluateAndReserve(snapshot, retry));
+    }
+
+    [Fact]
     public void PostRetentionOldExactAndConflictAreStaleBeforeJournal()
     {
         var fixture = new Fixture(MailboxPeerReplicationOperation.Tombstone);
@@ -1180,7 +1252,7 @@ public sealed class MailboxPeerWireV2ContractTests
             ulong verificationTimeUnixSeconds)
         {
             Calls++;
-            return verificationTimeUnixSeconds == 1050 &&
+            return verificationTimeUnixSeconds is >= 1050 and < 1200 &&
                    proof.CanonicalInclusionProof.Length == 64;
         }
     }
@@ -1223,6 +1295,21 @@ public sealed class MailboxPeerWireV2ContractTests
             snapshots[key] = next;
             return evaluation;
         }
+
+        public MailboxPeerReplayEvaluation? EvaluateExisting(
+            MailboxPeerReplayClaim claim)
+        {
+            var key = Convert.ToHexString(claim.ScopeKey.Span);
+            if (!snapshots.TryGetValue(key, out var current))
+            {
+                return null;
+            }
+
+            return MailboxPeerReplayStateMachine.EvaluateAndReserve(current, claim)
+                .Evaluation;
+        }
+
+        public int Count => snapshots.Count;
 
         public void CompleteAtomically(
             MailboxPeerReplayClaim claim,

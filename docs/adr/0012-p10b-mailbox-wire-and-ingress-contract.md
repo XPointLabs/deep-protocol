@@ -79,7 +79,9 @@ The epoch-scoped replay key and finite retention contract are specified below. T
 atomically reserve before storage work. Exact pending retries remain pending after a crash. An
 exact completed retry returns the cached canonical `MRR2`. Reusing the same live scope with
 different complete request bytes is an equivocation/replay conflict. Completion accepts only the
-exact newly reserved claim and one verified durable recipient `MRR2`.
+exact effective persisted reservation and one verified durable recipient `MRR2`. Replay evaluation
+returns the persisted reservation timestamp for pending/completed scopes; retry-time clock values
+must never replace it when recreating a receipt or completing recovered pending work.
 
 `MRR2` itself is intentionally unchanged and does not add the transport replay nonce. It signs the
 business outcome fields: recipient replica, operation, epoch, cursor, blinded mailbox,
@@ -87,9 +89,12 @@ placement/membership commitments, envelope digest, expiry, disposition and durab
 The verified `PRQ2` replay transaction binds that existing outcome to the request. Adding the nonce
 to `MRR2` would silently break P03B2 and was rejected.
 
-Freshness is fixed rather than host-selectable: creation may be at most 120 seconds old and must
-not be later than verification time (future skew is exactly zero); expiry must be strictly after verification time. Expiry is also bound
-to `MEO1` for Store. Tombstone expiry must be no more than seven days after request creation.
+Initial-admission freshness is fixed rather than host-selectable: creation may be at most 120
+seconds old and must not be later than verification time (future skew is exactly zero). Once that
+fresh admission is durably reserved, an exact pending/completed retry may exceed 120 seconds only
+through a read-only lookup of the existing request-identity scope; an unknown stale request cannot
+create replay state. Expiry must remain strictly after verification time. Expiry is also bound to
+`MEO1` for Store. Tombstone expiry must be no more than seven days after request creation.
 Every successful `MRR2`, including a validly signed cached response, must have
 `AcceptedAtUnixSeconds >= PRQ2.CreatedAtUnixSeconds`.
 

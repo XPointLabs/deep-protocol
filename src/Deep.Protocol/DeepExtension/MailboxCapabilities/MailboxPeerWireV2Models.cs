@@ -128,6 +128,7 @@ public sealed record MailboxPeerReplayEvaluation
 {
     public required MailboxPeerReplayState State { get; init; }
     public required ReadOnlyMemory<byte> CachedResponse { get; init; }
+    public required ulong EffectiveReservedAtUnixSeconds { get; init; }
 }
 
 /// <summary>
@@ -140,6 +141,13 @@ public sealed record MailboxPeerReplayEvaluation
 public interface IMailboxPeerReplayJournal
 {
     MailboxPeerReplayEvaluation EvaluateAndReserve(MailboxPeerReplayClaim claim);
+
+    /// <summary>
+    /// Evaluates an already persisted replay scope without creating a reservation when the
+    /// scope is absent. This permits an exact retry to outlive the admission freshness window
+    /// without allowing an unknown stale request to consume replay capacity.
+    /// </summary>
+    MailboxPeerReplayEvaluation? EvaluateExisting(MailboxPeerReplayClaim claim);
 
     void CompleteAtomically(
         MailboxPeerReplayClaim claim,

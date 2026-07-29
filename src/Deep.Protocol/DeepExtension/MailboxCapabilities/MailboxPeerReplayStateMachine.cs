@@ -42,8 +42,13 @@ public static class MailboxPeerReplayStateMachine
         ValidateClaim(claim);
         if (current is null)
         {
+            if (claim.ReservedAtUnixSeconds - claim.CreatedAtUnixSeconds >
+                MailboxPeerWireV2Limits.MaximumPastAgeSeconds)
+                throw Error("A new peer replay claim is outside its admission freshness window.");
             return (
-                Evaluation(MailboxPeerReplayState.NewReserved),
+                Evaluation(
+                    MailboxPeerReplayState.NewReserved,
+                    claim.ReservedAtUnixSeconds),
                 new MailboxPeerReplaySnapshot
                 {
                     ScopeKey = claim.ScopeKey.ToArray(),
@@ -69,21 +74,32 @@ public static class MailboxPeerReplayStateMachine
             current.EpochExpiresAtUnixSeconds != claim.EpochExpiresAtUnixSeconds ||
             current.RetainUntilUnixSeconds != claim.RetainUntilUnixSeconds ||
             claim.ReservedAtUnixSeconds < current.ReservedAtUnixSeconds)
-            return (Evaluation(MailboxPeerReplayState.Conflict), current);
+            return (
+                Evaluation(
+                    MailboxPeerReplayState.Conflict,
+                    current.ReservedAtUnixSeconds),
+                current);
         if (!CryptographicOperations.FixedTimeEquals(
                 current.RequestDigest.Span,
                 claim.RequestDigest.Span))
-            return (Evaluation(MailboxPeerReplayState.Conflict), current);
+            return (
+                Evaluation(
+                    MailboxPeerReplayState.Conflict,
+                    current.ReservedAtUnixSeconds),
+                current);
 
         return current.Status switch
         {
             MailboxPeerReplayRecordStatus.Pending =>
-                (Evaluation(MailboxPeerReplayState.PendingSame), current),
+                (Evaluation(
+                    MailboxPeerReplayState.PendingSame,
+                    current.ReservedAtUnixSeconds), current),
             MailboxPeerReplayRecordStatus.Completed =>
                 (new MailboxPeerReplayEvaluation
                 {
                     State = MailboxPeerReplayState.CompletedSame,
-                    CachedResponse = current.CanonicalResponse.ToArray()
+                    CachedResponse = current.CanonicalResponse.ToArray(),
+                    EffectiveReservedAtUnixSeconds = current.ReservedAtUnixSeconds
                 }, current),
             _ => throw Error("Persisted peer replay snapshot is inconsistent.")
         };
@@ -110,6 +126,7 @@ public static class MailboxPeerReplayStateMachine
             current.ExpiresAtUnixSeconds != claim.ExpiresAtUnixSeconds ||
             current.EpochExpiresAtUnixSeconds != claim.EpochExpiresAtUnixSeconds ||
             current.RetainUntilUnixSeconds != claim.RetainUntilUnixSeconds ||
+            current.ReservedAtUnixSeconds != claim.ReservedAtUnixSeconds ||
             canonicalMrr2Response.Length !=
                 MailboxPeerWireV2Limits.Ed25519ReplicaResponseLength)
             throw Error("Only the exact pending peer request can complete with one bounded MRR2.");
@@ -130,11 +147,14 @@ public static class MailboxPeerReplayStateMachine
         return nowUnixSeconds >= snapshot.RetainUntilUnixSeconds;
     }
 
-    private static MailboxPeerReplayEvaluation Evaluation(MailboxPeerReplayState state) =>
+    private static MailboxPeerReplayEvaluation Evaluation(
+        MailboxPeerReplayState state,
+        ulong effectiveReservedAtUnixSeconds) =>
         new()
         {
             State = state,
-            CachedResponse = ReadOnlyMemory<byte>.Empty
+            CachedResponse = ReadOnlyMemory<byte>.Empty,
+            EffectiveReservedAtUnixSeconds = effectiveReservedAtUnixSeconds
         };
 
     private static void ValidateClaim(MailboxPeerReplayClaim claim)
@@ -186,6 +206,8 @@ public static class MailboxPeerReplayStateMachine
                 MailboxPeerWireV2Limits.Ed25519ReplicaResponseLength ||
             snapshot.CreatedAtUnixSeconds == 0 ||
             snapshot.CreatedAtUnixSeconds > snapshot.ReservedAtUnixSeconds ||
+            snapshot.ReservedAtUnixSeconds - snapshot.CreatedAtUnixSeconds >
+                MailboxPeerWireV2Limits.MaximumPastAgeSeconds ||
             snapshot.ReservedAtUnixSeconds >= snapshot.ExpiresAtUnixSeconds ||
             snapshot.ExpiresAtUnixSeconds > snapshot.EpochExpiresAtUnixSeconds ||
             snapshot.EpochExpiresAtUnixSeconds - snapshot.CreatedAtUnixSeconds >
