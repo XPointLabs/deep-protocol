@@ -1,0 +1,58 @@
+{
+  "schema": "deep-protocol-profile-carrier-package-provenance.v2",
+  "contract": "P10B3-profile-carrier-unified-graph",
+  "carrierSourceCommit": "dfb182d65d3e8d3ee44a2246ae94c68159bc692d",
+  "protocolContractSourceCommit": "60ce2e3a5140f245d6bcfecf60fa456c26ffe730",
+  "protocolPackageProvenanceCommit": "c84c154dffc8261e47230b499946c846aa84baf5",
+  "carrierPackageVersion": "0.2.0-p10b3.60ce2e3",
+  "protocolDependency": "[0.3.0-p10b3.60ce2e3]",
+  "publication": "local-only-not-published",
+  "runtimeActivation": "blocked-contract-only",
+  "identity": {
+    "nuspecRepositoryCommit": "dfb182d65d3e8d3ee44a2246ae94c68159bc692d",
+    "pdbSourceLinkCommit": "dfb182d65d3e8d3ee44a2246ae94c68159bc692d",
+    "peCodeViewMatchesPortablePdb": true,
+    "protocolSourceIdentityRemainsSeparate": true
+  },
+  "normalization": {
+    "script": "eng/Normalize-NuGetPackage.ps1",
+    "acceptedSnapshotSha256": "18ad526c7676a7458c86c42ca4d85365694f7b627addad1ad09ae1d2c47c911d",
+    "acceptedSnapshotSha512": "33953c302cac1c3d9e8c09341231db414130de482e5160eece4dee89a75a2e9f6e1c992e35f1353b19891244d9cca70e0c2e80328c7ead67989cda53d22058d9"
+  },
+  "reproducibility": {
+    "distinctExternalWorkRoots": true,
+    "externalBuildAByteIdentical": true,
+    "externalBuildBByteIdentical": true,
+    "publishedPackageByteIdentical": true,
+    "carrierSourceDriftRejected": true,
+    "packageByteDriftRejected": true,
+    "installLockDriftRejected": true
+  },
+  "package": {
+    "id": "Deep.Protocol.ProfileCarrier",
+    "file": "artifacts/survival/P10B3/60ce2e3/profile-carrier/Deep.Protocol.ProfileCarrier.0.2.0-p10b3.60ce2e3.nupkg",
+    "bytes": 28902,
+    "sha256": "e2d03040daaf7c7fe29952db3cfbc3227fb9f0da42740b5f57f65a02ae8118a2",
+    "sha512": "32e6a21d489c305d5546687fe2dddb67b776ded97f5f5a08c99b2f792438a60c05841281f65e002638871989a5b33a6d7b2cb05b2239646678e2eaef68707f41"
+  },
+  "lockedInstallSmoke": {
+    "artifact": "artifacts/survival/P10B3/60ce2e3/profile-carrier/install-smoke.packages.lock.json",
+    "bytes": 2295,
+    "sha256": "7970582cc12ba4906cab6c584dbe9a2d12a1558484bc7dab229bb9efa0d28002",
+    "sha512": "3fa82c1846b6cc9fc4a0c18dc8ea4ab42ccc43c1193c88ba5f4afb6750a4dd4ba4762a110c6bac47dc700516496112bf0be0d4610bbc30b7773273166620700b",
+    "targetFramework": "net10.0",
+    "direct": [
+      "Deep.Protocol.ProfileCarrier [0.2.0-p10b3.60ce2e3]",
+      "Deep.Protocol [0.3.0-p10b3.60ce2e3]"
+    ],
+    "resolved": [
+      "Deep.Protocol.ProfileCarrier 0.2.0-p10b3.60ce2e3",
+      "Deep.Protocol 0.3.0-p10b3.60ce2e3",
+      "Deep.Protocol.Abstractions 0.3.0-p10b3.60ce2e3",
+      "Deep.Protocol.Protobuf 0.3.0-p10b3.60ce2e3",
+      "Sodium.Core 1.4.1",
+      "libsodium 1.0.22",
+      "Google.Protobuf 3.32.1"
+    ]
+  }
+}

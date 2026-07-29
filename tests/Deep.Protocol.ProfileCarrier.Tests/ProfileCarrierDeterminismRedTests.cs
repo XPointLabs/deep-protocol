@@ -99,6 +99,8 @@ public sealed class ProfileCarrierDeterminismRedTests
         Assert.Contains("external-a-b-final-byte-identical", p10b3Gate, StringComparison.Ordinal);
         Assert.Contains("--self-test", p10b3Gate, StringComparison.Ordinal);
         Assert.Contains("Assert-ExternalDistinctRoots", p10b3Gate, StringComparison.Ordinal);
+        Assert.Contains("pdbSourceLinkCommit", p10b3Gate, StringComparison.Ordinal);
+        Assert.Contains("publishedPackageByteIdentical", p10b3Gate, StringComparison.Ordinal);
         Assert.DoesNotContain(
             "SourceRevisionId=$protocolSourceCommit",
             p10b3Gate,

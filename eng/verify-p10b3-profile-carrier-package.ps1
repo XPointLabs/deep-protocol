@@ -258,6 +258,36 @@ foreach ($id in @(
         (Get-Hash $path "SHA512") `
         "$id package SHA-512"
 }
+if (![string]::IsNullOrWhiteSpace($ProvenancePath)) {
+    $carrierProvenance = Get-Content -LiteralPath $ProvenancePath -Raw |
+        ConvertFrom-Json
+    Assert-Equal "deep-protocol-profile-carrier-package-provenance.v2" `
+        ([string]$carrierProvenance.schema) `
+        "Carrier provenance schema"
+    Assert-Equal $CarrierSourceCommit `
+        ([string]$carrierProvenance.identity.nuspecRepositoryCommit) `
+        "Provenance nuspec carrier identity"
+    Assert-Equal $CarrierSourceCommit `
+        ([string]$carrierProvenance.identity.pdbSourceLinkCommit) `
+        "Provenance PDB SourceLink identity"
+    if (!$carrierProvenance.identity.peCodeViewMatchesPortablePdb -or
+        !$carrierProvenance.identity.protocolSourceIdentityRemainsSeparate -or
+        !$carrierProvenance.reproducibility.distinctExternalWorkRoots -or
+        !$carrierProvenance.reproducibility.externalBuildAByteIdentical -or
+        !$carrierProvenance.reproducibility.externalBuildBByteIdentical -or
+        !$carrierProvenance.reproducibility.publishedPackageByteIdentical -or
+        !$carrierProvenance.reproducibility.carrierSourceDriftRejected -or
+        !$carrierProvenance.reproducibility.packageByteDriftRejected -or
+        !$carrierProvenance.reproducibility.installLockDriftRejected) {
+        throw "Carrier provenance does not record every required identity/reproducibility proof."
+    }
+    Assert-Equal $normalizerSha256 `
+        ([string]$carrierProvenance.normalization.acceptedSnapshotSha256) `
+        "Carrier provenance normalizer SHA-256"
+    Assert-Equal $normalizerSha512 `
+        ([string]$carrierProvenance.normalization.acceptedSnapshotSha512) `
+        "Carrier provenance normalizer SHA-512"
+}
 
 New-Item -ItemType Directory -Path `
     $WorkRootA, $WorkRootB, $PublishedRoot -Force | Out-Null
