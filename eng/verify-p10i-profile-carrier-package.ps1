@@ -1,18 +1,18 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)]
-    [string]$CarrierSourceCommit,
     [string]$RepositoryRoot = "",
     [string]$ProtocolPackageRoot = "",
     [string]$WorkRootA = "",
     [string]$WorkRootB = "",
     [string]$PublishedRoot = "",
-    [string]$ProvenancePath = ""
+    [string]$ProvenancePath = "",
+    [switch]$PolicySelfTest
 )
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
+$carrierSourceCommit = "a9b7a10a555758d4b2e30707a70d271f010b6c30"
 $protocolSourceCommit = "a9b7a10a555758d4b2e30707a70d271f010b6c30"
 $protocolVersion = "0.3.0-p10i.a9b7a10"
 $carrierVersion = "0.2.0-p10i.a9b7a10"
@@ -44,8 +44,16 @@ if ([string]::IsNullOrWhiteSpace($PublishedRoot)) {
 $WorkRootA = [IO.Path]::GetFullPath($WorkRootA)
 $WorkRootB = [IO.Path]::GetFullPath($WorkRootB)
 $PublishedRoot = [IO.Path]::GetFullPath($PublishedRoot)
-if (![string]::IsNullOrWhiteSpace($ProvenancePath)) {
-    $ProvenancePath = (Resolve-Path -LiteralPath $ProvenancePath).Path
+if ([string]::IsNullOrWhiteSpace($ProvenancePath)) {
+    throw "ProvenancePath is required and must name the accepted P10I carrier provenance."
+}
+$acceptedProvenancePath = (Resolve-Path -LiteralPath (Join-Path $RepositoryRoot `
+    "eng\p10i-profile-carrier-package-provenance.json")).Path
+$ProvenancePath = (Resolve-Path -LiteralPath $ProvenancePath).Path
+if (!$ProvenancePath.Equals(
+        $acceptedProvenancePath,
+        [StringComparison]::OrdinalIgnoreCase)) {
+    throw "ProvenancePath must resolve to the accepted P10I carrier provenance."
 }
 
 function Invoke-Checked {
@@ -72,6 +80,177 @@ function Assert-Equal {
     if ($Expected -ne $Actual) {
         throw "$Label differs."
     }
+}
+
+function Get-ContentHash {
+    param([string]$Path)
+    $algorithm = [Security.Cryptography.SHA512]::Create()
+    try {
+        $stream = [IO.File]::OpenRead($Path)
+        try {
+            return [Convert]::ToBase64String($algorithm.ComputeHash($stream))
+        }
+        finally {
+            $stream.Dispose()
+        }
+    }
+    finally {
+        $algorithm.Dispose()
+    }
+}
+
+function Assert-AcceptedCarrierSource {
+    param([string]$Candidate)
+    Assert-Equal $carrierSourceCommit $Candidate "Fixed carrier source commit"
+}
+
+function Assert-CarrierProvenanceStatic {
+    param([object]$Value)
+    Assert-Equal "deep-protocol-profile-carrier-package-provenance.v2" `
+        ([string]$Value.schema) `
+        "Carrier provenance schema"
+    Assert-Equal $carrierSourceCommit `
+        ([string]$Value.carrierSourceCommit) `
+        "Provenance carrier source commit"
+    Assert-Equal $protocolSourceCommit `
+        ([string]$Value.protocolContractSourceCommit) `
+        "Provenance protocol contract source commit"
+    Assert-Equal $carrierVersion `
+        ([string]$Value.carrierPackageVersion) `
+        "Provenance carrier package version"
+    Assert-Equal "[$protocolVersion]" `
+        ([string]$Value.protocolDependency) `
+        "Provenance protocol dependency"
+    Assert-Equal $carrierSourceCommit `
+        ([string]$Value.identity.nuspecRepositoryCommit) `
+        "Provenance nuspec carrier identity"
+    Assert-Equal $carrierSourceCommit `
+        ([string]$Value.identity.pdbSourceLinkCommit) `
+        "Provenance PDB SourceLink identity"
+    if (!$Value.identity.peCodeViewMatchesPortablePdb -or
+        !$Value.identity.protocolSourceIdentityCoherent -or
+        !$Value.reproducibility.distinctExternalWorkRoots -or
+        !$Value.reproducibility.externalBuildAByteIdentical -or
+        !$Value.reproducibility.externalBuildBByteIdentical -or
+        !$Value.reproducibility.publishedPackageByteIdentical -or
+        !$Value.reproducibility.carrierSourceDriftRejected -or
+        !$Value.reproducibility.packageByteDriftRejected -or
+        !$Value.reproducibility.installLockDriftRejected) {
+        throw "Carrier provenance does not record every required identity/reproducibility proof."
+    }
+    Assert-Equal $normalizerSha256 `
+        ([string]$Value.normalization.acceptedSnapshotSha256) `
+        "Carrier provenance normalizer SHA-256"
+    Assert-Equal $normalizerSha512 `
+        ([string]$Value.normalization.acceptedSnapshotSha512) `
+        "Carrier provenance normalizer SHA-512"
+    Assert-Equal "Deep.Protocol.ProfileCarrier" `
+        ([string]$Value.package.id) `
+        "Carrier provenance package id"
+    Assert-Equal `
+        "artifacts/survival/P10I/a9b7a10/profile-carrier/Deep.Protocol.ProfileCarrier.$carrierVersion.nupkg" `
+        ([string]$Value.package.file) `
+        "Carrier provenance package file"
+    Assert-Equal `
+        "artifacts/survival/P10I/a9b7a10/profile-carrier/install-smoke.packages.lock.json" `
+        ([string]$Value.lockedInstallSmoke.artifact) `
+        "Carrier provenance install-lock file"
+}
+
+function Assert-CarrierProvenancePackage {
+    param([object]$Value, [string]$PackagePath)
+    Assert-Equal ([string]$Value.package.bytes) `
+        ([string](Get-Item -LiteralPath $PackagePath).Length) `
+        "Carrier provenance package byte length"
+    Assert-Equal ([string]$Value.package.sha256) `
+        (Get-Hash $PackagePath "SHA256") `
+        "Carrier provenance package SHA-256"
+    Assert-Equal ([string]$Value.package.sha512) `
+        (Get-Hash $PackagePath "SHA512") `
+        "Carrier provenance package SHA-512"
+    Assert-Equal ([string]$Value.package.contentHash) `
+        (Get-ContentHash $PackagePath) `
+        "Carrier provenance package content hash"
+}
+
+function Assert-CarrierProvenanceLock {
+    param([object]$Value, [string]$LockPath)
+    Assert-Equal ([string]$Value.lockedInstallSmoke.bytes) `
+        ([string](Get-Item -LiteralPath $LockPath).Length) `
+        "Carrier provenance install-lock byte length"
+    Assert-Equal ([string]$Value.lockedInstallSmoke.sha256) `
+        (Get-Hash $LockPath "SHA256") `
+        "Carrier provenance install-lock SHA-256"
+    Assert-Equal ([string]$Value.lockedInstallSmoke.sha512) `
+        (Get-Hash $LockPath "SHA512") `
+        "Carrier provenance install-lock SHA-512"
+    Assert-Equal ([string]$Value.lockedInstallSmoke.contentHash) `
+        (Get-ContentHash $LockPath) `
+        "Carrier provenance install-lock content hash"
+}
+
+function Copy-JsonObject {
+    param([object]$Value)
+    return $Value | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+}
+
+function Expect-Rejected {
+    param([scriptblock]$Action, [string]$Label)
+    try {
+        & $Action
+    }
+    catch {
+        Write-Output "$Label-rejection=PASS"
+        return
+    }
+    throw "The deliberate $Label mutation was accepted."
+}
+
+function Invoke-PolicySelfTest {
+    param([object]$AcceptedProvenance)
+    $ancestor = "60ce2e3a5140f245d6bcfecf60fa456c26ffe730"
+    & git -C $RepositoryRoot merge-base --is-ancestor $ancestor $carrierSourceCommit
+    if ($LASTEXITCODE -ne 0) {
+        throw "The policy self-test ancestor fixture is not an ancestor."
+    }
+    Expect-Rejected {
+        Assert-AcceptedCarrierSource $ancestor
+    } "alternate-ancestor-source"
+
+    $descendant = (& git -C $RepositoryRoot rev-parse HEAD).Trim()
+    if ($LASTEXITCODE -ne 0 -or $descendant -eq $carrierSourceCommit) {
+        throw "The policy self-test requires a descendant HEAD."
+    }
+    Expect-Rejected {
+        Assert-AcceptedCarrierSource $descendant
+    } "alternate-descendant-source"
+
+    $sourceMutation = Copy-JsonObject $AcceptedProvenance
+    $sourceMutation.carrierSourceCommit = $ancestor
+    Expect-Rejected {
+        Assert-CarrierProvenanceStatic $sourceMutation
+    } "tampered-carrier-source"
+
+    $versionMutation = Copy-JsonObject $AcceptedProvenance
+    $versionMutation.carrierPackageVersion = "0.2.0-p10i.tampered"
+    Expect-Rejected {
+        Assert-CarrierProvenanceStatic $versionMutation
+    } "tampered-carrier-version"
+
+    $dependencyMutation = Copy-JsonObject $AcceptedProvenance
+    $dependencyMutation.protocolDependency = "[0.3.0-p10i.tampered]"
+    Expect-Rejected {
+        Assert-CarrierProvenanceStatic $dependencyMutation
+    } "tampered-protocol-dependency"
+
+    $hashMutation = Copy-JsonObject $AcceptedProvenance
+    $hashMutation.package.sha256 = ("0" * 64)
+    $acceptedPackage = Join-Path $ProtocolPackageRoot `
+        "Deep.Protocol.ProfileCarrier.$carrierVersion.nupkg"
+    Expect-Rejected {
+        Assert-CarrierProvenancePackage $hashMutation $acceptedPackage
+    } "tampered-package-hash"
+    Write-Output "P10I carrier package policy self-test PASS"
 }
 
 function Assert-ExternalDistinctRoots {
@@ -133,7 +312,7 @@ function Invoke-CarrierBuild {
         "-C", $RepositoryRoot,
         "archive", "--format=zip",
         "-o", $archive,
-        $CarrierSourceCommit
+        $carrierSourceCommit
     ) $RepositoryRoot | Out-Host
     Expand-Archive -LiteralPath $archive -DestinationPath $source
 
@@ -157,7 +336,7 @@ function Invoke-CarrierBuild {
         "src\Deep.Protocol.ProfileCarrier\Deep.Protocol.ProfileCarrier.csproj"
     $sourceLink = Join-Path $root "carrier.sourcelink.json"
     $sourceLinkJson = @"
-{"documents":{"/_/Deep.Protocol.ProfileCarrier/*":"https://raw.githubusercontent.com/XPointLabs/deep-protocol/$CarrierSourceCommit/src/Deep.Protocol.ProfileCarrier/*"}}
+{"documents":{"/_/Deep.Protocol.ProfileCarrier/*":"https://raw.githubusercontent.com/XPointLabs/deep-protocol/$carrierSourceCommit/src/Deep.Protocol.ProfileCarrier/*"}}
 "@
     [IO.File]::WriteAllText(
         $sourceLink,
@@ -166,8 +345,8 @@ function Invoke-CarrierBuild {
     $properties = @(
         "-p:Version=$carrierVersion",
         "-p:PackageVersion=$carrierVersion",
-        "-p:RepositoryCommit=$CarrierSourceCommit",
-        "-p:SourceRevisionId=$CarrierSourceCommit",
+        "-p:RepositoryCommit=$carrierSourceCommit",
+        "-p:SourceRevisionId=$carrierSourceCommit",
         "-p:SourceLink=$sourceLink",
         "-p:DeepProtocolPackageVersion=[$protocolVersion]",
         "-p:Deterministic=true",
@@ -212,14 +391,15 @@ function Invoke-CarrierBuild {
 }
 
 Assert-ExternalDistinctRoots
+Assert-AcceptedCarrierSource $carrierSourceCommit
 $resolvedCarrierCommit = (& git -C $RepositoryRoot rev-parse `
-    "$CarrierSourceCommit`^{commit}").Trim()
-if ($LASTEXITCODE -ne 0 -or $resolvedCarrierCommit -ne $CarrierSourceCommit -or
-    $CarrierSourceCommit -notmatch "^[0-9a-f]{40}$") {
-    throw "CarrierSourceCommit must be an available exact full commit."
+    "$carrierSourceCommit`^{commit}").Trim()
+if ($LASTEXITCODE -ne 0 -or $resolvedCarrierCommit -ne $carrierSourceCommit -or
+    $carrierSourceCommit -notmatch "^[0-9a-f]{40}$") {
+    throw "The fixed carrier source must be an available exact full commit."
 }
 & git -C $RepositoryRoot merge-base --is-ancestor `
-    $CarrierSourceCommit HEAD
+    $carrierSourceCommit HEAD
 if ($LASTEXITCODE -ne 0) {
     throw "The exact archived carrier source commit must be an ancestor of current HEAD."
 }
@@ -251,39 +431,16 @@ foreach ($id in @(
         (Get-Hash $path "SHA512") `
         "$id package SHA-512"
 }
-if (![string]::IsNullOrWhiteSpace($ProvenancePath)) {
-    $carrierProvenance = Get-Content -LiteralPath $ProvenancePath -Raw |
-        ConvertFrom-Json
-    Assert-Equal "deep-protocol-profile-carrier-package-provenance.v2" `
-        ([string]$carrierProvenance.schema) `
-        "Carrier provenance schema"
-    Assert-Equal $CarrierSourceCommit `
-        ([string]$carrierProvenance.identity.nuspecRepositoryCommit) `
-        "Provenance nuspec carrier identity"
-    Assert-Equal $CarrierSourceCommit `
-        ([string]$carrierProvenance.identity.pdbSourceLinkCommit) `
-        "Provenance PDB SourceLink identity"
-    if (!$carrierProvenance.identity.peCodeViewMatchesPortablePdb -or
-        !$carrierProvenance.identity.protocolSourceIdentityCoherent -or
-        !$carrierProvenance.reproducibility.distinctExternalWorkRoots -or
-        !$carrierProvenance.reproducibility.externalBuildAByteIdentical -or
-        !$carrierProvenance.reproducibility.externalBuildBByteIdentical -or
-        !$carrierProvenance.reproducibility.publishedPackageByteIdentical -or
-        !$carrierProvenance.reproducibility.carrierSourceDriftRejected -or
-        !$carrierProvenance.reproducibility.packageByteDriftRejected -or
-        !$carrierProvenance.reproducibility.installLockDriftRejected) {
-        throw "Carrier provenance does not record every required identity/reproducibility proof."
-    }
-    Assert-Equal $normalizerSha256 `
-        ([string]$carrierProvenance.normalization.acceptedSnapshotSha256) `
-        "Carrier provenance normalizer SHA-256"
-    Assert-Equal $normalizerSha512 `
-        ([string]$carrierProvenance.normalization.acceptedSnapshotSha512) `
-        "Carrier provenance normalizer SHA-512"
+$carrierProvenance = Get-Content -LiteralPath $ProvenancePath -Raw |
+    ConvertFrom-Json
+Assert-CarrierProvenanceStatic $carrierProvenance
+if ($PolicySelfTest) {
+    Invoke-PolicySelfTest $carrierProvenance
+    exit 0
 }
 
 New-Item -ItemType Directory -Path `
-    $WorkRootA, $WorkRootB, $PublishedRoot -Force | Out-Null
+    $WorkRootA, $WorkRootB -Force | Out-Null
 $invocationId = [Guid]::NewGuid().ToString("N")
 $a = Invoke-CarrierBuild $WorkRootA "a" $invocationId
 $b = Invoke-CarrierBuild $WorkRootB "b" $invocationId
@@ -291,19 +448,7 @@ Assert-Equal ([string]$a.Bytes) ([string]$b.Bytes) `
     "External build A/B byte length"
 Assert-Equal $a.Sha256 $b.Sha256 "External build A/B SHA-256"
 Assert-Equal $a.Sha512 $b.Sha512 "External build A/B SHA-512"
-
-$publishedPackage = Join-Path $PublishedRoot `
-    "Deep.Protocol.ProfileCarrier.$carrierVersion.nupkg"
-Copy-Item -LiteralPath $a.Package -Destination $publishedPackage -Force
-Assert-Equal ([string]$a.Bytes) `
-    ([string](Get-Item -LiteralPath $publishedPackage).Length) `
-    "Published package byte length"
-Assert-Equal $a.Sha256 `
-    (Get-Hash $publishedPackage "SHA256") `
-    "Published package SHA-256"
-Assert-Equal $b.Sha512 `
-    (Get-Hash $publishedPackage "SHA512") `
-    "Published package SHA-512"
+Assert-CarrierProvenancePackage $carrierProvenance $a.Package
 
 $smokeRoot = Join-Path $a.Root "locked-install-smoke"
 $smokeFeed = Join-Path $smokeRoot "feed"
@@ -313,7 +458,7 @@ Copy-PackageSet `
     (Join-Path $a.Source "vendor\p14-profile-carrier\packages") `
     $smokeFeed
 Copy-PackageSet $ProtocolPackageRoot $smokeFeed
-Copy-Item -LiteralPath $publishedPackage `
+Copy-Item -LiteralPath $a.Package `
     -Destination (Join-Path $smokeFeed `
         "Deep.Protocol.ProfileCarrier.$carrierVersion.nupkg") `
     -Force
@@ -350,9 +495,7 @@ Invoke-Checked "dotnet" @(
     "--configuration", "Release"
 ) $smokeRoot
 $smokeLock = Join-Path $smokeRoot "packages.lock.json"
-$publishedLock = Join-Path $PublishedRoot `
-    "install-smoke.packages.lock.json"
-Copy-Item -LiteralPath $smokeLock -Destination $publishedLock -Force
+Assert-CarrierProvenanceLock $carrierProvenance $smokeLock
 
 $identityProject = Join-Path $RepositoryRoot `
     "eng\P10B3ProfileCarrier.Identity\P10B3ProfileCarrier.Identity.csproj"
@@ -370,24 +513,32 @@ Invoke-Checked "dotnet" @(
 $identityDll = Join-Path $RepositoryRoot `
     "eng\P10B3ProfileCarrier.Identity\bin\Release\net10.0\P10B3ProfileCarrier.Identity.dll"
 $identityArguments = @(
-    "--package", $publishedPackage,
-    "--lock", $publishedLock,
-    "--carrier-source", $CarrierSourceCommit,
+    "--package", $a.Package,
+    "--lock", $smokeLock,
+    "--carrier-source", $carrierSourceCommit,
     "--protocol-source", $protocolSourceCommit,
     "--carrier-version", $carrierVersion,
     "--protocol-version", $protocolVersion,
     "--package-sha256", $a.Sha256,
     "--package-sha512", $a.Sha512,
-    "--lock-sha256", (Get-Hash $publishedLock "SHA256"),
-    "--lock-sha512", (Get-Hash $publishedLock "SHA512"),
-    "--self-test"
+    "--lock-sha256", (Get-Hash $smokeLock "SHA256"),
+    "--lock-sha512", (Get-Hash $smokeLock "SHA512"),
+    "--self-test",
+    "--provenance", $ProvenancePath
 )
-if (![string]::IsNullOrWhiteSpace($ProvenancePath)) {
-    $identityArguments += @("--provenance", $ProvenancePath)
-}
 Invoke-Checked "dotnet" (@($identityDll) + $identityArguments) $a.Source
 
-Write-Output "PASS carrier-source-commit=$CarrierSourceCommit protocol-source-commit=$protocolSourceCommit"
+New-Item -ItemType Directory -Path $PublishedRoot -Force | Out-Null
+$publishedPackage = Join-Path $PublishedRoot `
+    "Deep.Protocol.ProfileCarrier.$carrierVersion.nupkg"
+$publishedLock = Join-Path $PublishedRoot `
+    "install-smoke.packages.lock.json"
+Copy-Item -LiteralPath $a.Package -Destination $publishedPackage -Force
+Copy-Item -LiteralPath $smokeLock -Destination $publishedLock -Force
+Assert-CarrierProvenancePackage $carrierProvenance $publishedPackage
+Assert-CarrierProvenanceLock $carrierProvenance $publishedLock
+
+Write-Output "PASS carrier-source-commit=$carrierSourceCommit protocol-source-commit=$protocolSourceCommit"
 Write-Output "external-work-root-a=$($a.Root)"
 Write-Output "external-work-root-b=$($b.Root)"
 Write-Output "package=$publishedPackage"

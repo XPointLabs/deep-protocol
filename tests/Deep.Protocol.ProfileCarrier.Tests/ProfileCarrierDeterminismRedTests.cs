@@ -119,7 +119,22 @@ public sealed class ProfileCarrierDeterminismRedTests
         Assert.Contains("Normalize-NuGetPackage.ps1", p10iGate, StringComparison.Ordinal);
         Assert.Contains("external-a-b-final-byte-identical", p10iGate, StringComparison.Ordinal);
         Assert.Contains("--locked-mode", p10iGate, StringComparison.Ordinal);
-        Assert.Contains("CarrierSourceCommit", p10iGate, StringComparison.Ordinal);
+        Assert.Contains(
+            "$carrierSourceCommit = \"a9b7a10a555758d4b2e30707a70d271f010b6c30\"",
+            p10iGate,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "[string]$CarrierSourceCommit",
+            p10iGate,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "ProvenancePath is required",
+            p10iGate,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Assert-CarrierProvenancePackage $carrierProvenance $a.Package",
+            p10iGate,
+            StringComparison.Ordinal);
         Assert.Contains(
             "\"archive\", \"--format=zip\"",
             p10iGate,
