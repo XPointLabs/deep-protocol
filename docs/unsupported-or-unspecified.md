@@ -267,3 +267,20 @@ sequence inputs fail P04 verification, while equal-sequence different
 statements are forks. Cross-RID native assets are hash-pinned for Windows,
 Linux and Android, but execution outside the current Windows ARM64 host is
 deferred to the exact P14C3/P14A2b downstream package rebinds.
+
+## P10B managed ingress H2 gaps
+
+P10B defines only the public opaque-transit contract, canonical fixed-size outer errors and a
+bounded advisory capability document. It deliberately does not implement:
+
+- an ASP.NET/HTTP server, reverse proxy, TLS policy or ingress-to-core authentication;
+- bridge selection, signed control-plane fetching or endpoint rotation;
+- queueing, retry timers, stream/concurrency budgets or network cancellation handling;
+- inner DPB1/MCP1 composition, mailbox receipt verification or P05A evidence;
+- mailbox acceptance, durability or recipient-device delivery state;
+- traffic-analysis resistance, global anonymity, endpoint unblockability or full-IP-cutoff
+  operation;
+- Docker, deployment, monitoring, production registration or live-network evidence.
+
+Production activation remains blocked on P07B/P10/P11B/P15 implementations, accepted inner
+producer/receipt/storage contracts, device/network E2E and independent security review.

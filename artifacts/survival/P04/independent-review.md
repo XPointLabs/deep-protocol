@@ -16,4 +16,21 @@ returned **NO-GO**: P0=0, P1=6, P2=4, P3=1.
 | malformed tests/docs incomplete | nine-decoder structured smoke plus public P04 docs |
 | unused evidence parameter | removed by rewritten verifier flow |
 
-The corrected source and following evidence commit require a fresh independent read-only review.
+The first corrected source `388e482` received a second **NO-GO**: P0=0, P1=2, P2=4, P3=1.
+
+| Rereview finding | Second correction at `47f2802` / `b887fa0` |
+| --- | --- |
+| Caller-constructed genesis bypassed verifier trust checks | every verifier path validates full strict genesis and emits contract errors |
+| Delegation/revocation lacked signed wire envelopes | bounded canonical signed authority codecs/decoders and exact vectors |
+| Self-host import was self-certified without a pin | caller must supply expected network ID and canonical genesis SHA-256 |
+| Online IDs could not rotate | policy defines three slots; root-signed delegation rotates all IDs and keys |
+| Direct signature/revocation collections were unbounded | explicit count, length and distinctness caps |
+| Signed/domain/hash vectors and dependency pin incomplete | 16 exact vectors, seven SHA-256 pins and `Deep.Protocol/P04-canonical-v1` |
+| Missing verifier produced a framework exception | verifier absence is rejected through the contract error surface |
+
+Final read-only rereview of source `b887fa088f486390be182cac4cbcb59b60ce8931` and evidence
+`68da52aaf6768ee2cb41f88ae42db102eeaf1ad6` returned **GO**:
+P0=0, P1=0, P2=0, P3=1 local-hygiene-only. Fresh full Release 173/173 and focused 26/26 passed.
+Package, nuspec, TRX, coverage, vector and ADR claims matched independently. The three ignored
+obsolete `ab40f70` packages identified as P3 were removed locally; only manifest-listed `b887fa0`
+packages remain.

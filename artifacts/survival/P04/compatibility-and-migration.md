@@ -15,5 +15,5 @@ DTOs as signed P04 documents. Migration requires:
 5. keep node membership commitments/proofs away from ordinary bridge clients;
 6. retain fork evidence and stop automatic advancement until an authorized recovery decision.
 
-No current registry or client runtime was modified. Package `0.3.0-p04.388e482` is a local consumer
+No current registry or client runtime was modified. Package `0.3.0-p04.b887fa0` is a local consumer
 fixture only and must not be activated with the deterministic test verifier.
