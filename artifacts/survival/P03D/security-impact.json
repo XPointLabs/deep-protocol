@@ -1,0 +1,21 @@
+{
+  "schema": "deep.p03d.security-impact.v1",
+  "sourceCommit": "5f1f8f2397dc5412a4bce3656270ee5e70b85185",
+  "delivered": [
+    "verifier-issued exact local and peer credential capabilities",
+    "instance-bound AKE issuer capabilities and one-shot flight ownership",
+    "pending-session-owned replay claim and durable commit boundary",
+    "fresh role-specific context-bound canonical frames",
+    "typed direction, bounded records and deterministic disposal"
+  ],
+  "notDelivered": [
+    "production AKE/DH/transcript mapping",
+    "discovery PRF",
+    "device credential authority",
+    "durable replay persistence",
+    "record AEAD/counters/rekey/erasure",
+    "runtime radio or keystore integration",
+    "cross-language vectors, fuzzing and physical-device E2E",
+    "independent external cryptographic review"
+  ]
+}

@@ -65,6 +65,9 @@ Primary upstream areas reviewed:
   `Deep.Protocol.ProfileCarrier` package and
   `Deep.Protocol.DeepExtension.SelfHostedProfiles`; it is an unsigned wrapper over the exact
   pinned P04 authority and has no signer, network, persistence or activation API
+- P03D typed fresh-only nearby secure-channel and durable replay-commit boundary, isolated in
+  `Deep.Protocol.DeepExtension.NearbySecureChannels`; the fixed profile remains explicitly
+  unassigned pending external crypto review and no channel implementation is shipped
 - P18A compact authenticated fragmentation/planning and durable replay-store orchestration for
   exact DPB1 bytes, isolated in `Deep.Protocol.DeepExtension.LoRaFragments`; no production
   authenticator, replay store, radio runtime or DI registration is shipped
@@ -169,6 +172,18 @@ resumption counter, bundle version and hop-local attempt ID through
 `INearbyAuthenticatedKeyExchange`. Stable peer identity and session key material appear only after
 adapter authentication and replay acceptance. No radio transport, permission, UI, background
 scheduler, production AKE adapter or runtime registration is included.
+
+P03D preserves the P03C wire framing but replaces any downstream assumption of a raw traffic key
+with a typed, dormant boundary. An abstract verifier converts an untrusted credential descriptor
+into a non-publicly-constructible capability. A provider-issued local key handle binds the verified
+local credential to an opaque platform-key reference. The fresh-only context binds those local and
+expected-peer capabilities, roster epoch, role and P03C binding. Disposable flights transfer their
+owned state once. A pending session owns the exact immutable replay claim and can activate only
+once by asking the durable committer to commit that claim; the committer returns classification,
+not a reusable acceptance. The activated `INearbySecureSession` owns role-derived send/receive
+directions and record sealing/opening; callers cannot select a seal direction. No raw key, AKE,
+record crypto, replay persistence, concrete credential verifier/key provider or runtime
+implementation is included. The sole profile is `UnassignedPendingExternalCryptoReview`.
 
 P04 separates canonical network genesis, offline-root delegation/revocation, public bridge
 discovery, node-only membership commitments and fork witnesses. The approved Beta policy is
