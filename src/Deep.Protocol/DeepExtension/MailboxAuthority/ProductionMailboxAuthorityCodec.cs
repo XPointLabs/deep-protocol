@@ -14,6 +14,7 @@ namespace Deep.Protocol.DeepExtension.MailboxAuthority;
 public static class ProductionMailboxAuthorityCodec
 {
     private static ReadOnlySpan<byte> Magic => "PMA1"u8;
+    private static ReadOnlySpan<byte> RevocationBindingMagic => "PMB1"u8;
 
     public static byte[] GetPayloadBytes(ProductionMailboxAuthority authority)
     {
@@ -95,6 +96,60 @@ public static class ProductionMailboxAuthorityCodec
 
     public static byte[] ComputeCanonicalHash(ProductionMailboxAuthority authority) =>
         SHA256.HashData(Encode(authority));
+
+    /// <summary>
+    /// Canonical pre-approval binding for PMR1. It binds every PMA1 policy field except the
+    /// circular revocation SnapshotHash, approval AuthorityPayloadHash, and detached signature.
+    /// Those three values may be non-zero placeholders while this hash is computed.
+    /// </summary>
+    public static byte[] GetRevocationBindingBytes(ProductionMailboxAuthority authority)
+    {
+        ArgumentNullException.ThrowIfNull(authority);
+        ValidateCore(authority);
+        ValidateHashList(authority.MrXApproval.AllowedAndroidSigningCertificateSha256, "Android signing certificate hashes");
+        ValidateHashList(authority.MrXApproval.AllowedWindowsSigningCertificateSha256, "Windows signing certificate hashes");
+        ValidateHashList(authority.MrXApproval.AndroidReleaseBuildArtifactSha256, "Android release build artifact hashes");
+        ValidateHashList(authority.MrXApproval.WindowsReleaseBuildArtifactSha256, "Windows release build artifact hashes");
+        if (authority.MrXApproval.RolloutNotBeforeUnixSeconds == 0 ||
+            authority.MrXApproval.RolloutNotBeforeUnixSeconds >= authority.MrXApproval.RolloutNotAfterUnixSeconds ||
+            authority.MrXApproval.RolloutNotBeforeUnixSeconds < authority.CurrentEpoch.NotBeforeUnixSeconds ||
+            authority.MrXApproval.RolloutNotAfterUnixSeconds > authority.NextEpoch.NotAfterUnixSeconds)
+            throw Error(ProductionMailboxAuthorityError.InvalidValidityWindow, "Mr. X rollout window is invalid.");
+
+        var writer = new Writer();
+        writer.Bytes(RevocationBindingMagic);
+        writer.Byte(ProductionMailboxAuthorityConstants.Version);
+        writer.Zero(3);
+        writer.Bool(authority.DevelopmentOnly);
+        writer.Byte((byte)authority.Environment);
+        writer.Byte((byte)authority.Transport);
+        writer.Byte((byte)authority.Ownership);
+        writer.Byte((byte)authority.EndpointPolicy);
+        writer.Fixed(authority.NetworkId.Span, ProductionMailboxAuthorityConstants.NetworkIdLength, "network ID");
+        writer.UInt64(authority.AuthorityGeneration);
+        writer.Fixed(authority.PreviousAuthorityHash.Span, ProductionMailboxAuthorityConstants.HashLength, "previous authority hash");
+        writer.Fixed(authority.MailboxIssuerEd25519PublicKey.Span, ProductionMailboxAuthorityConstants.Ed25519PublicKeyLength, "mailbox issuer key");
+        writer.Fixed(authority.MrXApprovalEd25519PublicKey.Span, ProductionMailboxAuthorityConstants.Ed25519PublicKeyLength, "Mr. X approval key");
+        WriteEndpoint(writer, authority.Coordinator);
+        WriteEndpoint(writer, authority.NodeIngress);
+        WriteEpoch(writer, authority.CurrentEpoch);
+        WriteEpoch(writer, authority.NextEpoch);
+        writer.Fixed(authority.Revocation.HeadHash.Span, ProductionMailboxAuthorityConstants.HashLength, "revocation head hash");
+        writer.Fixed(authority.Revocation.PreviousHeadHash.Span, ProductionMailboxAuthorityConstants.HashLength, "previous revocation head hash");
+        writer.UInt64(authority.Revocation.Generation);
+        writer.UInt64(authority.Revocation.IssuedAtUnixSeconds);
+        writer.UInt64(authority.Revocation.ExpiresAtUnixSeconds);
+        WriteHashes(writer, authority.MrXApproval.AllowedAndroidSigningCertificateSha256, "Android signing certificate hash");
+        WriteHashes(writer, authority.MrXApproval.AllowedWindowsSigningCertificateSha256, "Windows signing certificate hash");
+        WriteHashes(writer, authority.MrXApproval.AndroidReleaseBuildArtifactSha256, "Android release build artifact hash");
+        WriteHashes(writer, authority.MrXApproval.WindowsReleaseBuildArtifactSha256, "Windows release build artifact hash");
+        writer.UInt64(authority.MrXApproval.RolloutNotBeforeUnixSeconds);
+        writer.UInt64(authority.MrXApproval.RolloutNotAfterUnixSeconds);
+        return writer.ToArray();
+    }
+
+    public static byte[] ComputeRevocationBindingHash(ProductionMailboxAuthority authority) =>
+        SHA256.HashData(GetRevocationBindingBytes(authority));
 
     private static void WriteHeader(Writer writer)
     {

@@ -11,6 +11,11 @@ persistence, TLS handshake/SPKI enforcement, network fetch, rollout control and 
 retrieval remain host responsibilities. The protocol never accepts a downloaded authority as a new
 trust anchor and exposes no signing/private-key API.
 
+PMR1 supplies the strict, signed, hash-bound public revocation snapshot and a verified
+`IMailboxCapabilityRevocationSource`. Fetch scheduling, atomic PMA1/PMR1 activation and rollback-safe
+durable persistence remain XNode responsibilities; the protocol exposes no PMR1 signer or legacy
+revocation conversion.
+
 ## Crypto
 
 Implemented in managed production adapter (`SodiumSessionProtocolCrypto`):

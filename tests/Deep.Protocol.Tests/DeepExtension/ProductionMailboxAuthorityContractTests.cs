@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Runtime.InteropServices;
 using Deep.Protocol.DeepExtension.MailboxAuthority;
 using Sodium;
 
@@ -19,6 +20,21 @@ public sealed class ProductionMailboxAuthorityContractTests
         var verified = ProductionMailboxAuthorityVerifier.Verify(decoded, fixture.Context, new SodiumProductionMailboxAuthoritySignatureVerifier());
         Assert.Equal((ulong)7, verified.NextCommittedGeneration);
         Assert.Equal(ProductionMailboxAuthorityCodec.ComputeCanonicalHash(decoded), verified.CanonicalAuthorityHash.ToArray());
+    }
+
+    [Fact]
+    public void VerificationFreezesCallerOwnedAuthorityBeforeSignatureCallbackMutation()
+    {
+        var fixture = CreateFixture();
+        var sourceNetwork = Writable(fixture.Authority.NetworkId);
+        var expectedNetwork = sourceNetwork.ToArray();
+        var verified = ProductionMailboxAuthorityVerifier.Verify(
+            fixture.Authority,
+            fixture.Context,
+            new MutatingVerifier(() => sourceNetwork[0] ^= 0xff));
+
+        Assert.NotEqual(expectedNetwork[0], sourceNetwork[0]);
+        Assert.Equal(expectedNetwork, verified.Authority.NetworkId.ToArray());
     }
 
     [Fact]
@@ -278,6 +294,25 @@ public sealed class ProductionMailboxAuthorityContractTests
     };
 
     private static byte[] Bytes(byte seed, int length) => Enumerable.Range(0, length).Select(index => unchecked((byte)(seed + index))).ToArray();
+
+    private static byte[] Writable(ReadOnlyMemory<byte> value)
+    {
+        Assert.True(MemoryMarshal.TryGetArray(value, out ArraySegment<byte> segment));
+        Assert.Equal(0, segment.Offset);
+        Assert.NotNull(segment.Array);
+        return segment.Array!;
+    }
+
+    private sealed class MutatingVerifier(Action mutate) : IProductionMailboxAuthoritySignatureVerifier
+    {
+        private readonly SodiumProductionMailboxAuthoritySignatureVerifier _inner = new();
+
+        public bool Verify(ReadOnlySpan<byte> publicKey, ReadOnlySpan<byte> signingBytes, ReadOnlySpan<byte> signature)
+        {
+            mutate();
+            return _inner.Verify(publicKey, signingBytes, signature);
+        }
+    }
 
     private sealed record Fixture(ProductionMailboxAuthority Authority, byte[] PrivateKey, ProductionMailboxAuthorityVerificationContext Context);
 }

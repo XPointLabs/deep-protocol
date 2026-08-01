@@ -34,30 +34,28 @@ public static class ProductionMailboxAuthorityVerifier
         ArgumentNullException.ThrowIfNull(signatureVerifier);
         ValidateContext(context);
 
+        // Freeze caller-owned backing arrays once. Every trust decision below uses only the strict
+        // canonical re-decode, so concurrent mutation cannot create a verified mixed snapshot.
         var encoded = ProductionMailboxAuthorityCodec.Encode(authority);
+        var frozen = ProductionMailboxAuthorityCodec.Decode(encoded);
         var canonicalHash = SHA256.HashData(encoded);
-        if (!CryptographicOperations.FixedTimeEquals(authority.NetworkId.Span, context.ExpectedNetworkId.Span))
+        if (!CryptographicOperations.FixedTimeEquals(frozen.NetworkId.Span, context.ExpectedNetworkId.Span))
             throw Error(ProductionMailboxAuthorityError.InvalidField, "Authority is for another network.");
-        if (authority.AuthorityGeneration == ulong.MaxValue || authority.AuthorityGeneration != context.LastCommittedGeneration + 1)
+        if (frozen.AuthorityGeneration == ulong.MaxValue || frozen.AuthorityGeneration != context.LastCommittedGeneration + 1)
             throw Error(ProductionMailboxAuthorityError.AuthorityRollback, "Authority generation is not the next durable generation.");
-        if (!CryptographicOperations.FixedTimeEquals(authority.PreviousAuthorityHash.Span, context.LastCommittedAuthorityHash.Span))
+        if (!CryptographicOperations.FixedTimeEquals(frozen.PreviousAuthorityHash.Span, context.LastCommittedAuthorityHash.Span))
             throw Error(ProductionMailboxAuthorityError.PreviousHashMismatch, "Authority previous hash does not match durable state.");
         if (!CryptographicOperations.FixedTimeEquals(
-                SHA256.HashData(authority.MrXApprovalEd25519PublicKey.Span), context.PinnedMrXPublicKeySha256.Span))
+                SHA256.HashData(frozen.MrXApprovalEd25519PublicKey.Span), context.PinnedMrXPublicKeySha256.Span))
             throw Error(ProductionMailboxAuthorityError.UntrustedMrXKey, "Authority Mr. X key does not match the caller-pinned key hash.");
         if (!signatureVerifier.Verify(
-                authority.MrXApprovalEd25519PublicKey.Span,
-                ProductionMailboxAuthorityCodec.GetSigningBytes(authority),
-                authority.Signature.Span))
+                frozen.MrXApprovalEd25519PublicKey.Span,
+                ProductionMailboxAuthorityCodec.GetSigningBytes(frozen),
+                frozen.Signature.Span))
             throw Error(ProductionMailboxAuthorityError.InvalidSignature, "Authority signature is invalid.");
-        VerifyRevocationSuccessor(authority.Revocation, context);
-        VerifyTime(authority, context.NowUnixSeconds, context.ClockSkewSeconds);
-        return new VerifiedProductionMailboxAuthority
-        {
-            Authority = authority,
-            CanonicalAuthorityHash = canonicalHash,
-            NextCommittedGeneration = authority.AuthorityGeneration
-        };
+        VerifyRevocationSuccessor(frozen.Revocation, context);
+        VerifyTime(frozen, context.NowUnixSeconds, context.ClockSkewSeconds);
+        return new VerifiedProductionMailboxAuthority(frozen, canonicalHash, frozen.AuthorityGeneration);
     }
 
     private static void ValidateContext(ProductionMailboxAuthorityVerificationContext context)

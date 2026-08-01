@@ -165,9 +165,92 @@ public sealed record ProductionMailboxAuthorityVerificationContext
     public uint ClockSkewSeconds { get; init; }
 }
 
-public sealed record VerifiedProductionMailboxAuthority
+/// <summary>
+/// Unforgeable verified handle. The constructor and trusted snapshot are assembly-internal; public
+/// access returns defensive copies so caller mutation cannot alter later trust decisions.
+/// </summary>
+public sealed class VerifiedProductionMailboxAuthority
 {
-    public required ProductionMailboxAuthority Authority { get; init; }
-    public required ReadOnlyMemory<byte> CanonicalAuthorityHash { get; init; }
-    public required ulong NextCommittedGeneration { get; init; }
+    private readonly ProductionMailboxAuthority _authority;
+    private readonly byte[] _canonicalAuthorityHash;
+
+    internal VerifiedProductionMailboxAuthority(
+        ProductionMailboxAuthority authority,
+        ReadOnlySpan<byte> canonicalAuthorityHash,
+        ulong nextCommittedGeneration)
+    {
+        _authority = ProductionMailboxAuthorityCopy.Clone(authority);
+        _canonicalAuthorityHash = canonicalAuthorityHash.ToArray();
+        NextCommittedGeneration = nextCommittedGeneration;
+    }
+
+    public ProductionMailboxAuthority Authority => ProductionMailboxAuthorityCopy.Clone(_authority);
+    public ReadOnlyMemory<byte> CanonicalAuthorityHash => _canonicalAuthorityHash.ToArray();
+    public ulong NextCommittedGeneration { get; }
+
+    internal ProductionMailboxAuthority TrustedAuthority => _authority;
+}
+
+internal static class ProductionMailboxAuthorityCopy
+{
+    public static ProductionMailboxAuthority Clone(ProductionMailboxAuthority value) => new()
+    {
+        DevelopmentOnly = value.DevelopmentOnly,
+        Environment = value.Environment,
+        Transport = value.Transport,
+        Ownership = value.Ownership,
+        EndpointPolicy = value.EndpointPolicy,
+        NetworkId = value.NetworkId.ToArray(),
+        AuthorityGeneration = value.AuthorityGeneration,
+        PreviousAuthorityHash = value.PreviousAuthorityHash.ToArray(),
+        MailboxIssuerEd25519PublicKey = value.MailboxIssuerEd25519PublicKey.ToArray(),
+        MrXApprovalEd25519PublicKey = value.MrXApprovalEd25519PublicKey.ToArray(),
+        Coordinator = new ProductionMailboxAuthorityEndpoint
+        {
+            Uri = value.Coordinator.Uri,
+            CurrentSpkiSha256 = value.Coordinator.CurrentSpkiSha256.ToArray(),
+            NextSpkiSha256 = value.Coordinator.NextSpkiSha256.ToArray()
+        },
+        NodeIngress = new ProductionMailboxAuthorityEndpoint
+        {
+            Uri = value.NodeIngress.Uri,
+            CurrentSpkiSha256 = value.NodeIngress.CurrentSpkiSha256.ToArray(),
+            NextSpkiSha256 = value.NodeIngress.NextSpkiSha256.ToArray()
+        },
+        CurrentEpoch = Clone(value.CurrentEpoch),
+        NextEpoch = Clone(value.NextEpoch),
+        Revocation = new ProductionMailboxAuthorityRevocation
+        {
+            SnapshotHash = value.Revocation.SnapshotHash.ToArray(),
+            HeadHash = value.Revocation.HeadHash.ToArray(),
+            PreviousHeadHash = value.Revocation.PreviousHeadHash.ToArray(),
+            Generation = value.Revocation.Generation,
+            IssuedAtUnixSeconds = value.Revocation.IssuedAtUnixSeconds,
+            ExpiresAtUnixSeconds = value.Revocation.ExpiresAtUnixSeconds
+        },
+        MrXApproval = new ProductionMailboxAuthorityApproval
+        {
+            AuthorityPayloadHash = value.MrXApproval.AuthorityPayloadHash.ToArray(),
+            AllowedAndroidSigningCertificateSha256 = Clone(value.MrXApproval.AllowedAndroidSigningCertificateSha256),
+            AllowedWindowsSigningCertificateSha256 = Clone(value.MrXApproval.AllowedWindowsSigningCertificateSha256),
+            AndroidReleaseBuildArtifactSha256 = Clone(value.MrXApproval.AndroidReleaseBuildArtifactSha256),
+            WindowsReleaseBuildArtifactSha256 = Clone(value.MrXApproval.WindowsReleaseBuildArtifactSha256),
+            RolloutNotBeforeUnixSeconds = value.MrXApproval.RolloutNotBeforeUnixSeconds,
+            RolloutNotAfterUnixSeconds = value.MrXApproval.RolloutNotAfterUnixSeconds
+        },
+        Signature = value.Signature.ToArray()
+    };
+
+    private static ProductionMailboxAuthorityEpoch Clone(ProductionMailboxAuthorityEpoch value) => new()
+    {
+        Epoch = value.Epoch,
+        Generation = value.Generation,
+        MembershipCommitment = value.MembershipCommitment.ToArray(),
+        PlacementCommitment = value.PlacementCommitment.ToArray(),
+        NotBeforeUnixSeconds = value.NotBeforeUnixSeconds,
+        NotAfterUnixSeconds = value.NotAfterUnixSeconds
+    };
+
+    private static IReadOnlyList<ReadOnlyMemory<byte>> Clone(IReadOnlyList<ReadOnlyMemory<byte>> values) =>
+        values.Select(static value => (ReadOnlyMemory<byte>)value.ToArray()).ToArray();
 }

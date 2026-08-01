@@ -74,6 +74,9 @@ Primary upstream areas reviewed:
 - production-only `production-mailbox-authority.v1` canonical PMA1 authority, isolated in
   `Deep.Protocol.DeepExtension.MailboxAuthority`; it is public signed configuration/anti-rollback
   verification only and contains no holder, mailbox grant, secret, runtime activation or token logic
+- hash-bound `production-mailbox-revocation-snapshot.v1` PMR1 artifact in the same namespace;
+  its verified immutable result supplies exact MCG2 serial revocations for one verified PMA1 issuer
+  and has no signer, key-custody, network-fetch, persistence, or legacy compatibility API
 
 ## Wire Semantics Preserved
 
