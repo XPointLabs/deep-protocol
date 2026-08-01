@@ -71,6 +71,9 @@ Primary upstream areas reviewed:
 - P18A compact authenticated fragmentation/planning and durable replay-store orchestration for
   exact DPB1 bytes, isolated in `Deep.Protocol.DeepExtension.LoRaFragments`; no production
   authenticator, replay store, radio runtime or DI registration is shipped
+- production-only `production-mailbox-authority.v1` canonical PMA1 authority, isolated in
+  `Deep.Protocol.DeepExtension.MailboxAuthority`; it is public signed configuration/anti-rollback
+  verification only and contains no holder, mailbox grant, secret, runtime activation or token logic
 
 ## Wire Semantics Preserved
 

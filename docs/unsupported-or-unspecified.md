@@ -3,6 +3,14 @@
 This document lists areas where the .NET port intentionally stops at an adapter boundary or marks a
 TODO instead of inventing behavior.
 
+## Production mailbox authority V1
+
+`production-mailbox-authority.v1` has a production verify-only Ed25519 implementation and strict
+canonical PMA1 parser. Key custody, detached signing, durable atomic publication/last-known-good
+persistence, TLS handshake/SPKI enforcement, network fetch, rollout control and revocation snapshot
+retrieval remain host responsibilities. The protocol never accepts a downloaded authority as a new
+trust anchor and exposes no signing/private-key API.
+
 ## Crypto
 
 Implemented in managed production adapter (`SodiumSessionProtocolCrypto`):
