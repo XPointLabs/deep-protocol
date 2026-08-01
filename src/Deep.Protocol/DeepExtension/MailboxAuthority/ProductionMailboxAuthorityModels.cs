@@ -89,7 +89,8 @@ public sealed record ProductionMailboxAuthorityEpoch
     public required ulong Epoch { get; init; }
     public required ulong Generation { get; init; }
     public required ReadOnlyMemory<byte> MembershipCommitment { get; init; }
-    public required ReadOnlyMemory<byte> PlacementCommitment { get; init; }
+    /// <summary>Global catalog/policy commitment. This is never a user's mailbox placement commitment.</summary>
+    public required ReadOnlyMemory<byte> TopologyPlacementCommitment { get; init; }
     public required ulong NotBeforeUnixSeconds { get; init; }
     public required ulong NotAfterUnixSeconds { get; init; }
 }
@@ -246,7 +247,7 @@ internal static class ProductionMailboxAuthorityCopy
         Epoch = value.Epoch,
         Generation = value.Generation,
         MembershipCommitment = value.MembershipCommitment.ToArray(),
-        PlacementCommitment = value.PlacementCommitment.ToArray(),
+        TopologyPlacementCommitment = value.TopologyPlacementCommitment.ToArray(),
         NotBeforeUnixSeconds = value.NotBeforeUnixSeconds,
         NotAfterUnixSeconds = value.NotAfterUnixSeconds
     };

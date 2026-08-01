@@ -201,7 +201,7 @@ public static class ProductionMailboxAuthorityCodec
         writer.UInt64(epoch.Epoch);
         writer.UInt64(epoch.Generation);
         writer.Fixed(epoch.MembershipCommitment.Span, ProductionMailboxAuthorityConstants.HashLength, "membership commitment");
-        writer.Fixed(epoch.PlacementCommitment.Span, ProductionMailboxAuthorityConstants.HashLength, "placement commitment");
+        writer.Fixed(epoch.TopologyPlacementCommitment.Span, ProductionMailboxAuthorityConstants.HashLength, "topology placement commitment");
         writer.UInt64(epoch.NotBeforeUnixSeconds);
         writer.UInt64(epoch.NotAfterUnixSeconds);
     }
@@ -211,7 +211,7 @@ public static class ProductionMailboxAuthorityCodec
         Epoch = reader.UInt64(),
         Generation = reader.UInt64(),
         MembershipCommitment = reader.Fixed(ProductionMailboxAuthorityConstants.HashLength),
-        PlacementCommitment = reader.Fixed(ProductionMailboxAuthorityConstants.HashLength),
+        TopologyPlacementCommitment = reader.Fixed(ProductionMailboxAuthorityConstants.HashLength),
         NotBeforeUnixSeconds = reader.UInt64(),
         NotAfterUnixSeconds = reader.UInt64()
     };
@@ -343,7 +343,7 @@ public static class ProductionMailboxAuthorityCodec
     private static void ValidateEpoch(ProductionMailboxAuthorityEpoch value, string name)
     {
         Require(value.MembershipCommitment, ProductionMailboxAuthorityConstants.HashLength, $"{name} membership commitment");
-        Require(value.PlacementCommitment, ProductionMailboxAuthorityConstants.HashLength, $"{name} placement commitment");
+        Require(value.TopologyPlacementCommitment, ProductionMailboxAuthorityConstants.HashLength, $"{name} topology placement commitment");
         if (value.Epoch == 0 || value.Generation == 0 || value.NotBeforeUnixSeconds == 0 ||
             value.NotBeforeUnixSeconds >= value.NotAfterUnixSeconds)
             throw Error(ProductionMailboxAuthorityError.InvalidValidityWindow, $"{name} epoch validity is invalid.");

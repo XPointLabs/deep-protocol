@@ -382,7 +382,7 @@ public sealed class ProductionMailboxRevocationSnapshotContractTests
         Epoch = epoch,
         Generation = generation,
         MembershipCommitment = Bytes(seed, 32),
-        PlacementCommitment = Bytes((byte)(seed + 1), 32),
+        TopologyPlacementCommitment = Bytes((byte)(seed + 1), 32),
         NotBeforeUnixSeconds = from,
         NotAfterUnixSeconds = until
     };

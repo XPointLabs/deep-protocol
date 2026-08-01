@@ -23,7 +23,7 @@ public sealed class ProductionMailboxTopologyTests
         var selection = SignSelection(f, verifiedTopology);
         var verified = ProductionMailboxSelectionVerifier.Verify(
             ProductionMailboxTopologyCodec.EncodeSelection(selection), f.Authority, verifiedTopology,
-            f.SelectionInputCommitment, Now, 0, new SodiumProductionMailboxTopologySignatureVerifier());
+            f.PlacementId, Now, 0, new SodiumProductionMailboxTopologySignatureVerifier());
 
         Assert.Equal(2, verified.Replicas.Count);
         Assert.NotEqual(verified.Replicas[0].ReplicaId.ToArray(), verified.Replicas[1].ReplicaId.ToArray());
@@ -138,7 +138,7 @@ public sealed class ProductionMailboxTopologyTests
         var valid = SignSelection(f, vt);
         AssertError(ProductionMailboxTopologyError.SelectionMismatch,
             () => ProductionMailboxSelectionVerifier.Verify(ProductionMailboxTopologyCodec.EncodeSelection(valid), f.Authority, vt,
-                Bytes(200, 32), Now, 0, f.SignatureVerifier));
+                new BlindedPlacementId(Bytes(200, 32)), Now, 0, f.SignatureVerifier));
 
         var reversed = ReSignSelection(valid with { Replicas = valid.Replicas.Reverse().ToArray() }, f.IssuerPrivateKey);
         AssertError(ProductionMailboxTopologyError.SelectionMismatch,
@@ -148,7 +148,8 @@ public sealed class ProductionMailboxTopologyTests
         Assert.Throws<ProductionMailboxTopologyException>(() => ProductionMailboxTopologyCodec.EncodeSelection(badProof));
         var bytes = ProductionMailboxTopologyCodec.EncodeSelection(valid); bytes[^1] ^= 1;
         AssertError(ProductionMailboxTopologyError.InvalidSignature,
-            () => ProductionMailboxSelectionVerifier.Verify(bytes, f.Authority, vt, f.SelectionInputCommitment, Now, 0, f.SignatureVerifier));
+            () => ProductionMailboxSelectionVerifier.Verify(bytes, f.Authority, vt,
+                f.PlacementId, Now, 0, f.SignatureVerifier));
     }
 
     [Fact]
@@ -164,6 +165,53 @@ public sealed class ProductionMailboxTopologyTests
         Assert.NotEqual(
             Convert.ToHexString(ProductionMailboxReplicaSelection.ComputeSelectionInputCommitment(new BlindedPlacementId(Bytes(10, 32)))),
             Convert.ToHexString(ProductionMailboxReplicaSelection.ComputeSelectionInputCommitment(new BlindedPlacementId(Bytes(11, 32)))));
+    }
+
+    [Fact]
+    public void TwoMailboxes_ShareOneTopology_ButBindDistinctPlacementAndExactTwoSelections()
+    {
+        var f = CreateFixture();
+        var topology = ProductionMailboxTopologyVerifier.Verify(
+            ProductionMailboxTopologyCodec.Encode(f.Topology), f.Authority, f.Context, f.SignatureVerifier);
+        var firstPlacement = new BlindedPlacementId(Bytes(201, 32));
+        var secondPlacement = new BlindedPlacementId(Bytes(202, 32));
+        var first = SignSelectionFor(f, topology, firstPlacement);
+        var second = SignSelectionFor(f, topology, secondPlacement);
+        var firstMailboxCommitment = MailboxPlacementCommitment.Compute(firstPlacement);
+        var secondMailboxCommitment = MailboxPlacementCommitment.Compute(secondPlacement);
+        var firstVerified = ProductionMailboxSelectionVerifier.Verify(
+            ProductionMailboxTopologyCodec.EncodeSelection(first), f.Authority, topology,
+            firstPlacement, Now, 0, f.SignatureVerifier);
+        var secondVerified = ProductionMailboxSelectionVerifier.Verify(
+            ProductionMailboxTopologyCodec.EncodeSelection(second), f.Authority, topology,
+            secondPlacement, Now, 0, f.SignatureVerifier);
+        var firstGrant = SignGrant(f, firstMailboxCommitment, Bytes(211, 32), 1);
+        var secondGrant = SignGrant(f, secondMailboxCommitment, Bytes(212, 32), 2);
+
+        Assert.Equal(first.TopologyPlacementCommitment, second.TopologyPlacementCommitment);
+        Assert.NotEqual(first.MailboxPlacementCommitment, second.MailboxPlacementCommitment);
+        Assert.Equal(firstVerified.Proof.MailboxPlacementCommitment.ToArray(), firstGrant.PlacementCommitment.ToArray());
+        Assert.Equal(secondVerified.Proof.MailboxPlacementCommitment.ToArray(), secondGrant.PlacementCommitment.ToArray());
+        Assert.NotEqual(firstGrant.PlacementCommitment.ToArray(), secondGrant.PlacementCommitment.ToArray());
+        var decodedFirstGrant = MailboxAuthenticatedCapabilityCodec.DecodeGrant(
+            MailboxAuthenticatedCapabilityCodec.EncodeGrant(firstGrant));
+        Assert.Equal(firstGrant.Epoch, decodedFirstGrant.Epoch);
+        Assert.Equal(firstGrant.HolderPublicKey.ToArray(), decodedFirstGrant.HolderPublicKey.ToArray());
+        Assert.Equal(firstGrant.PlacementCommitment.ToArray(), decodedFirstGrant.PlacementCommitment.ToArray());
+        Assert.Equal(2, firstVerified.Replicas.Count);
+        Assert.Equal(2, secondVerified.Replicas.Count);
+        AssertError(ProductionMailboxTopologyError.SelectionMismatch, () =>
+            ProductionMailboxSelectionVerifier.Verify(
+                ProductionMailboxTopologyCodec.EncodeSelection(first), f.Authority, topology,
+                secondPlacement, Now, 0, f.SignatureVerifier));
+        var substituted = ReSignSelection(first with
+        {
+            MailboxPlacementCommitment = secondMailboxCommitment
+        }, f.IssuerPrivateKey);
+        AssertError(ProductionMailboxTopologyError.SelectionMismatch, () =>
+            ProductionMailboxSelectionVerifier.Verify(
+                ProductionMailboxTopologyCodec.EncodeSelection(substituted), f.Authority, topology,
+                firstPlacement, Now, 0, f.SignatureVerifier));
     }
 
     [Fact]
@@ -204,7 +252,7 @@ public sealed class ProductionMailboxTopologyTests
         var selection = SignSelection(f, vt); var selectionBytes = ProductionMailboxTopologyCodec.EncodeSelection(selection);
         var selectionVerifier = new MutatingVerifier(() => selectionBytes[30] ^= 1);
         var verified = ProductionMailboxSelectionVerifier.Verify(selectionBytes, f.Authority, vt,
-            f.SelectionInputCommitment, Now, 0, selectionVerifier);
+            f.PlacementId, Now, 0, selectionVerifier);
         Assert.Equal(2, verified.Replicas.Count);
     }
 
@@ -242,13 +290,13 @@ public sealed class ProductionMailboxTopologyTests
             var changed = selectionBytes.ToArray();
             changed[offset] ^= 1;
             Assert.Throws<ProductionMailboxTopologyException>(() => ProductionMailboxSelectionVerifier.Verify(
-                changed, f.Authority, topology, f.SelectionInputCommitment, Now, 0, f.SignatureVerifier));
+                changed, f.Authority, topology, f.PlacementId, Now, 0, f.SignatureVerifier));
         }
     }
 
     private static void VerifySelection(ProductionMailboxSelectionProof proof, Fixture f, VerifiedProductionMailboxTopology topology) =>
         ProductionMailboxSelectionVerifier.Verify(ProductionMailboxTopologyCodec.EncodeSelection(proof), f.Authority,
-            topology, f.SelectionInputCommitment, Now, 0, f.SignatureVerifier);
+            topology, f.PlacementId, Now, 0, f.SignatureVerifier);
 
     private static void InvalidTopology(ProductionMailboxTopologySnapshot topology) =>
         Assert.Throws<ProductionMailboxTopologyException>(() => ProductionMailboxTopologyCodec.GetSigningBytes(topology));
@@ -329,8 +377,11 @@ public sealed class ProductionMailboxTopologyTests
             IssuerSignature = new byte[64]
         };
         topology = ReSignTopology(topology, issuer.PrivateKey);
+        var blindedPlacement = new BlindedPlacementId(Bytes(201, 32));
         return new Fixture(verifiedAuthority, topology, issuer.PrivateKey, currentDescriptors,
-            ProductionMailboxReplicaSelection.ComputeSelectionInputCommitment(new BlindedPlacementId(Bytes(201, 32))),
+            blindedPlacement,
+            ProductionMailboxReplicaSelection.ComputeSelectionInputCommitment(blindedPlacement),
+            MailboxPlacementCommitment.Compute(blindedPlacement),
             new ProductionMailboxTopologyVerificationContext
             {
                 LastCommittedTopologyGeneration = 2,
@@ -341,10 +392,18 @@ public sealed class ProductionMailboxTopologyTests
             new SodiumProductionMailboxTopologySignatureVerifier());
     }
 
-    private static ProductionMailboxSelectionProof SignSelection(Fixture f, VerifiedProductionMailboxTopology topology)
+    private static ProductionMailboxSelectionProof SignSelection(Fixture f, VerifiedProductionMailboxTopology topology) =>
+        SignSelectionFor(f, topology, new BlindedPlacementId(Bytes(201, 32)));
+
+    private static ProductionMailboxSelectionProof SignSelectionFor(
+        Fixture f,
+        VerifiedProductionMailboxTopology topology,
+        BlindedPlacementId blindedPlacement)
     {
+        var selectionInputCommitment = ProductionMailboxReplicaSelection.ComputeSelectionInputCommitment(blindedPlacement);
+        var mailboxPlacementCommitment = MailboxPlacementCommitment.Compute(blindedPlacement);
         var selected = ProductionMailboxReplicaSelection.Select(f.Topology.NetworkId.Span, f.Topology.AuthorityGeneration,
-            f.Topology.CurrentEpoch, f.SelectionInputCommitment);
+            f.Topology.CurrentEpoch, selectionInputCommitment);
         var proofs = MembershipRouteDescriptorCodec.BuildProofs(f.CurrentDescriptors);
         var replicas = selected.Select(id =>
         {
@@ -375,12 +434,39 @@ public sealed class ProductionMailboxTopologyTests
             Epoch = f.Topology.CurrentEpoch.Epoch,
             Generation = f.Topology.CurrentEpoch.Generation,
             MembershipCommitment = f.Topology.CurrentEpoch.MembershipCommitment,
-            PlacementCommitment = f.Topology.CurrentEpoch.PlacementCommitment,
-            SelectionInputCommitment = f.SelectionInputCommitment,
+            TopologyPlacementCommitment = f.Topology.CurrentEpoch.TopologyPlacementCommitment,
+            MailboxPlacementCommitment = mailboxPlacementCommitment,
+            SelectionInputCommitment = selectionInputCommitment,
             IssuedAtUnixSeconds = Now - 5,
             ExpiresAtUnixSeconds = Now + 50,
             Replicas = replicas,
             IssuerSignature = new byte[64]
+        }, f.IssuerPrivateKey);
+    }
+
+    private static MailboxAuthenticatedGrant SignGrant(
+        Fixture f,
+        byte[] mailboxPlacementCommitment,
+        byte[] holderPublicKey,
+        byte serialSeed)
+    {
+        var epoch = f.Topology.CurrentEpoch;
+        return new SodiumMailboxCapabilityCrypto().SignGrant(new MailboxAuthenticatedGrant
+        {
+            Domain = MailboxCapabilityDomain.Retrieve,
+            Lifecycle = MailboxCapabilityLifecycle.Active,
+            NetworkId = f.Topology.NetworkId,
+            Epoch = epoch.Epoch,
+            Generation = epoch.Generation,
+            Serial = Bytes(serialSeed, MailboxAuthenticatedCapabilityLimits.SerialLength),
+            NotBeforeUnixSeconds = epoch.NotBeforeUnixSeconds,
+            ExpiresAtUnixSeconds = epoch.NotAfterUnixSeconds,
+            OverlapUntilUnixSeconds = 0,
+            PlacementCommitment = mailboxPlacementCommitment,
+            MembershipCommitment = epoch.MembershipCommitment,
+            IssuerPublicKey = f.Authority.Authority.MailboxIssuerEd25519PublicKey,
+            HolderPublicKey = holderPublicKey,
+            IssuerSignature = new byte[MailboxAuthenticatedCapabilityLimits.SignatureLength]
         }, f.IssuerPrivateKey);
     }
 
@@ -402,7 +488,7 @@ public sealed class ProductionMailboxTopologyTests
         Epoch = epoch.Epoch,
         Generation = epoch.Generation,
         MembershipCommitment = epoch.MembershipCommitment,
-        PlacementCommitment = epoch.PlacementCommitment,
+        TopologyPlacementCommitment = epoch.TopologyPlacementCommitment,
         NotBeforeUnixSeconds = epoch.NotBeforeUnixSeconds,
         NotAfterUnixSeconds = epoch.NotAfterUnixSeconds,
         Nodes = descriptors.Select((d, i) => new ProductionMailboxTopologyNode
@@ -414,7 +500,7 @@ public sealed class ProductionMailboxTopologyTests
         }).ToArray()
     };
     private static ProductionMailboxAuthorityEpoch AuthorityEpoch(ulong epoch, ulong generation, byte[] membership, byte[] placement, ulong from, ulong until) =>
-        new() { Epoch = epoch, Generation = generation, MembershipCommitment = membership, PlacementCommitment = placement, NotBeforeUnixSeconds = from, NotAfterUnixSeconds = until };
+        new() { Epoch = epoch, Generation = generation, MembershipCommitment = membership, TopologyPlacementCommitment = placement, NotBeforeUnixSeconds = from, NotAfterUnixSeconds = until };
     private static ProductionMailboxAuthorityEndpoint Endpoint(string uri, byte seed) => new() { Uri = uri, CurrentSpkiSha256 = Bytes(seed, 32), NextSpkiSha256 = Bytes((byte)(seed + 1), 32) };
     private static ProductionMailboxAuthority SignAuthority(ProductionMailboxAuthority value, byte[] key)
     {
@@ -445,6 +531,8 @@ public sealed class ProductionMailboxTopologyTests
         { mutate(); return _inner.Verify(publicKey, signingBytes, signature); }
     }
     private sealed record Fixture(VerifiedProductionMailboxAuthority Authority, ProductionMailboxTopologySnapshot Topology,
-        byte[] IssuerPrivateKey, MembershipRouteDescriptor[] CurrentDescriptors, byte[] SelectionInputCommitment,
+        byte[] IssuerPrivateKey, MembershipRouteDescriptor[] CurrentDescriptors, BlindedPlacementId PlacementId,
+        byte[] SelectionInputCommitment,
+        byte[] MailboxPlacementCommitment,
         ProductionMailboxTopologyVerificationContext Context, IProductionMailboxTopologySignatureVerifier SignatureVerifier);
 }

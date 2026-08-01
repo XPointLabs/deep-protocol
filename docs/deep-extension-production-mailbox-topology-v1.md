@@ -13,8 +13,10 @@ operation, token rule, or network fetch in the protocol package.
 3. For a mailbox, compute `SHA-256("Deep/PMT1/selection-input/v1" || BlindedPlacementId32)`. The
    API accepts the existing strongly typed blinded placement identifier, not a raw mailbox ID; the
    identifier itself is never encoded in PMT1/PMS1.
-4. Publish PMS1 signed by the same issuer. PMS1 binds the canonical PMT1 SHA-256 and the caller's
-   expected selection-input commitment.
+4. Compute the independent per-mailbox
+   `MailboxPlacementCommitment.Compute(BlindedPlacementId32)`. Publish PMS1 signed by the same
+   issuer. PMS1 binds the canonical PMT1 SHA-256, the caller's selection-input commitment, and this
+   per-mailbox commitment.
 5. Verify both embedded canonical MIP1/RIP1 proofs against the exact selected epoch membership
    commitment before using the returned endpoint and SPKI pins.
 
@@ -28,8 +30,9 @@ not advance that lineage.
 All integers are unsigned big-endian. PMT1 is fixed order: `PMT1`, version `1`, three zero bytes,
 network (16), authority generation, final authority hash (32), topology generation, previous
 topology hash (32), issued/expires, then exactly current and next epoch sections, followed by the
-64-byte issuer signature. Each epoch contains epoch/generation, membership and placement
-commitments, PMA validity times, node count, and strictly increasing nodes. A node contains its
+64-byte issuer signature. Each epoch contains epoch/generation, membership and global topology
+placement commitments, PMA validity times, node count, and strictly increasing nodes. The topology
+placement commitment is catalog/policy state and is never copied into a per-user MCG2. A node contains its
 32-byte MRL1 router ID, length-prefixed canonical HTTPS origin, and distinct current/next 32-byte
 SPKI SHA-256 pins.
 
@@ -55,13 +58,18 @@ IDs in rank order; a verifier recomputes the ranking rather than trusting publis
 
 PMS1 is fixed order: `PMS1`, version `1`, three zero bytes, algorithm `1` plus three zero bytes,
 network/authority generation/authority hash, topology generation/topology hash, epoch/generation,
-membership/placement/selection-input commitments, issued/expires, replica count `2` plus three zero
+membership/global-topology-placement/per-mailbox-placement/selection-input commitments,
+issued/expires, replica count `2` plus three zero
 bytes, then exactly two `(replicaId32, proofLength16, two zero bytes, canonical MIP1)` entries and a
 64-byte issuer signature. Its lifetime is at most 24 hours.
 
 Verification requires a `VerifiedProductionMailboxAuthority`, a
-`VerifiedProductionMailboxTopology`, and the selection-input commitment independently expected by
-the caller. Each MIP1 must be canonical, name the ranked node and exact epoch/root, contain a
+`VerifiedProductionMailboxTopology` and one caller-owned, strongly typed `BlindedPlacementId`.
+The verifier domain-computes both the selection-input commitment and per-mailbox placement
+commitment internally; callers cannot accidentally source either expected hash from an untrusted
+PMS1. Thus two users can share one PMA1/PMT1 while receiving distinct MCG2 placement bindings.
+Substituting the caller placement ID or either signed commitment fails closed.
+Each MIP1 must be canonical, name the ranked node and exact epoch/root, contain a
 canonical RIP1 proof, and prove Storage role/capability and its independent Ed25519 key at the
 verification time. The result is an immutable two-replica handle with endpoint and both pins.
 

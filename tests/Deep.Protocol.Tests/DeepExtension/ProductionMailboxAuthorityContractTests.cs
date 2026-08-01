@@ -289,7 +289,7 @@ public sealed class ProductionMailboxAuthorityContractTests
 
     private static ProductionMailboxAuthorityEpoch Epoch(ulong epoch, ulong generation, ulong from, ulong until, byte seed) => new()
     {
-        Epoch = epoch, Generation = generation, MembershipCommitment = Bytes(seed, 32), PlacementCommitment = Bytes((byte)(seed + 1), 32),
+        Epoch = epoch, Generation = generation, MembershipCommitment = Bytes(seed, 32), TopologyPlacementCommitment = Bytes((byte)(seed + 1), 32),
         NotBeforeUnixSeconds = from, NotAfterUnixSeconds = until
     };
 

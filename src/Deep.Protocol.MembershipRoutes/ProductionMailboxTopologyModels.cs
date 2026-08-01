@@ -18,7 +18,7 @@ public static class ProductionMailboxTopologyConstants
     public const int MaximumClockSkewSeconds = 300;
     public const ulong MaximumArtifactLifetimeSeconds = 86_400;
     public const int MaximumTopologyArtifactBytes = 4_997_504;
-    public const int MaximumSelectionArtifactBytes = 8_808;
+    public const int MaximumSelectionArtifactBytes = 8_840;
 }
 
 public enum ProductionMailboxSelectionAlgorithm : byte
@@ -70,7 +70,8 @@ public sealed record ProductionMailboxTopologyEpoch
     public required ulong Epoch { get; init; }
     public required ulong Generation { get; init; }
     public required ReadOnlyMemory<byte> MembershipCommitment { get; init; }
-    public required ReadOnlyMemory<byte> PlacementCommitment { get; init; }
+    /// <summary>Global catalog/policy commitment copied from PMA1. Never a user's mailbox placement.</summary>
+    public required ReadOnlyMemory<byte> TopologyPlacementCommitment { get; init; }
     public required ulong NotBeforeUnixSeconds { get; init; }
     public required ulong NotAfterUnixSeconds { get; init; }
     public required IReadOnlyList<ProductionMailboxTopologyNode> Nodes { get; init; }
@@ -116,7 +117,9 @@ public sealed record ProductionMailboxSelectionProof
     public required ulong Epoch { get; init; }
     public required ulong Generation { get; init; }
     public required ReadOnlyMemory<byte> MembershipCommitment { get; init; }
-    public required ReadOnlyMemory<byte> PlacementCommitment { get; init; }
+    public required ReadOnlyMemory<byte> TopologyPlacementCommitment { get; init; }
+    /// <summary>Per-mailbox MCG2 placement commitment for the caller's blinded placement ID.</summary>
+    public required ReadOnlyMemory<byte> MailboxPlacementCommitment { get; init; }
     public required ReadOnlyMemory<byte> SelectionInputCommitment { get; init; }
     public required ulong IssuedAtUnixSeconds { get; init; }
     public required ulong ExpiresAtUnixSeconds { get; init; }
@@ -207,7 +210,7 @@ internal static class ProductionMailboxTopologyCopy
         Epoch = value.Epoch,
         Generation = value.Generation,
         MembershipCommitment = value.MembershipCommitment.ToArray(),
-        PlacementCommitment = value.PlacementCommitment.ToArray(),
+        TopologyPlacementCommitment = value.TopologyPlacementCommitment.ToArray(),
         NotBeforeUnixSeconds = value.NotBeforeUnixSeconds,
         NotAfterUnixSeconds = value.NotAfterUnixSeconds,
         Nodes = value.Nodes.Select(Clone).ToArray()
@@ -232,7 +235,8 @@ internal static class ProductionMailboxTopologyCopy
         Epoch = value.Epoch,
         Generation = value.Generation,
         MembershipCommitment = value.MembershipCommitment.ToArray(),
-        PlacementCommitment = value.PlacementCommitment.ToArray(),
+        TopologyPlacementCommitment = value.TopologyPlacementCommitment.ToArray(),
+        MailboxPlacementCommitment = value.MailboxPlacementCommitment.ToArray(),
         SelectionInputCommitment = value.SelectionInputCommitment.ToArray(),
         IssuedAtUnixSeconds = value.IssuedAtUnixSeconds,
         ExpiresAtUnixSeconds = value.ExpiresAtUnixSeconds,

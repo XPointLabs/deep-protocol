@@ -28,8 +28,8 @@ public static class ProductionMailboxReplicaSelection
         if (networkId.Length != 16 || networkId.IndexOfAnyExcept((byte)0) < 0 || authorityGeneration == 0 ||
             selectionInputCommitment.Length != 32 || selectionInputCommitment.IndexOfAnyExcept((byte)0) < 0 ||
             epoch.Epoch == 0 || epoch.Generation == 0 || epoch.MembershipCommitment.Length != 32 ||
-            epoch.MembershipCommitment.Span.IndexOfAnyExcept((byte)0) < 0 || epoch.PlacementCommitment.Length != 32 ||
-            epoch.PlacementCommitment.Span.IndexOfAnyExcept((byte)0) < 0 || epoch.Nodes is null ||
+            epoch.MembershipCommitment.Span.IndexOfAnyExcept((byte)0) < 0 || epoch.TopologyPlacementCommitment.Length != 32 ||
+            epoch.TopologyPlacementCommitment.Span.IndexOfAnyExcept((byte)0) < 0 || epoch.Nodes is null ||
             epoch.Nodes.Count is < 2 or > ProductionMailboxTopologyConstants.MaximumNodesPerEpoch ||
             epoch.Nodes.Any(static node => node is null || node.NodeId.Length != 32 || node.NodeId.Span.IndexOfAnyExcept((byte)0) < 0) ||
             epoch.Nodes.Select(static node => Convert.ToHexString(node.NodeId.Span)).Distinct(StringComparer.Ordinal).Count() != epoch.Nodes.Count)
@@ -54,7 +54,7 @@ public static class ProductionMailboxReplicaSelection
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         hash.AppendData(ScoreDomain); hash.AppendData(networkId); hash.AppendData(numbers);
-        hash.AppendData(epoch.MembershipCommitment.Span); hash.AppendData(epoch.PlacementCommitment.Span);
+        hash.AppendData(epoch.MembershipCommitment.Span); hash.AppendData(epoch.TopologyPlacementCommitment.Span);
         hash.AppendData(selectionInput); hash.AppendData(nodeId);
         return hash.GetHashAndReset();
     }
@@ -137,8 +137,8 @@ public static class ProductionMailboxTopologyVerifier
             throw Error(ProductionMailboxTopologyError.AuthorityMismatch, $"PMT1 {name} epoch metadata mismatch.");
         Equal(topology.MembershipCommitment.Span, authority.MembershipCommitment.Span,
             ProductionMailboxTopologyError.AuthorityMismatch, $"PMT1 {name} membership commitment mismatch.");
-        Equal(topology.PlacementCommitment.Span, authority.PlacementCommitment.Span,
-            ProductionMailboxTopologyError.AuthorityMismatch, $"PMT1 {name} placement commitment mismatch.");
+        Equal(topology.TopologyPlacementCommitment.Span, authority.TopologyPlacementCommitment.Span,
+            ProductionMailboxTopologyError.AuthorityMismatch, $"PMT1 {name} topology placement commitment mismatch.");
     }
 
     private static void VerifyEndpointPolicy(ProductionMailboxTopologySnapshot topology, ProductionMailboxAuthority authority)
@@ -169,7 +169,7 @@ public static class ProductionMailboxSelectionVerifier
         ReadOnlySpan<byte> encoded,
         VerifiedProductionMailboxAuthority verifiedAuthority,
         VerifiedProductionMailboxTopology verifiedTopology,
-        ReadOnlySpan<byte> expectedSelectionInputCommitment,
+        BlindedPlacementId expectedPlacementId,
         ulong nowUnixSeconds,
         uint clockSkewSeconds,
         IProductionMailboxTopologySignatureVerifier signatureVerifier)
@@ -178,7 +178,10 @@ public static class ProductionMailboxSelectionVerifier
         ArgumentNullException.ThrowIfNull(signatureVerifier);
         if (encoded.Length > ProductionMailboxTopologyConstants.MaximumSelectionArtifactBytes)
             throw ProductionMailboxTopologyVerifier.Error(ProductionMailboxTopologyError.InvalidLength, "PMS1 exceeds its strict maximum length.");
-        var frozenExpectedSelectionInput = expectedSelectionInputCommitment.ToArray();
+        ArgumentNullException.ThrowIfNull(expectedPlacementId);
+        var frozenExpectedSelectionInput = ProductionMailboxReplicaSelection
+            .ComputeSelectionInputCommitment(expectedPlacementId);
+        var expectedMailboxPlacementCommitment = MailboxPlacementCommitment.Compute(expectedPlacementId);
         if (nowUnixSeconds == 0 || clockSkewSeconds > ProductionMailboxTopologyConstants.MaximumClockSkewSeconds)
             throw ProductionMailboxTopologyVerifier.Error(ProductionMailboxTopologyError.InvalidField, "Selection verification time is unsafe.");
         var frozenBytes = encoded.ToArray();
@@ -205,9 +208,11 @@ public static class ProductionMailboxSelectionVerifier
         if (proof.IssuedAtUnixSeconds < epoch.NotBeforeUnixSeconds || proof.ExpiresAtUnixSeconds > epoch.NotAfterUnixSeconds)
             throw ProductionMailboxTopologyVerifier.Error(ProductionMailboxTopologyError.InvalidValidityWindow, "PMS1 lifetime exceeds its PMA epoch.");
         ProductionMailboxTopologyVerifier.Equal(proof.MembershipCommitment.Span, epoch.MembershipCommitment.Span, ProductionMailboxTopologyError.SelectionMismatch, "Selection membership mismatch.");
-        ProductionMailboxTopologyVerifier.Equal(proof.PlacementCommitment.Span, epoch.PlacementCommitment.Span, ProductionMailboxTopologyError.SelectionMismatch, "Selection placement mismatch.");
-        if (frozenExpectedSelectionInput.Length != 32 || frozenExpectedSelectionInput.AsSpan().IndexOfAnyExcept((byte)0) < 0)
-            throw ProductionMailboxTopologyVerifier.Error(ProductionMailboxTopologyError.InvalidField, "Expected selection input commitment is invalid.");
+        ProductionMailboxTopologyVerifier.Equal(proof.TopologyPlacementCommitment.Span, epoch.TopologyPlacementCommitment.Span, ProductionMailboxTopologyError.SelectionMismatch, "Selection topology placement mismatch.");
+        if (expectedMailboxPlacementCommitment.Length != 32 || expectedMailboxPlacementCommitment.IndexOfAnyExcept((byte)0) < 0)
+            throw ProductionMailboxTopologyVerifier.Error(ProductionMailboxTopologyError.InvalidField, "Expected mailbox placement commitment is invalid.");
+        ProductionMailboxTopologyVerifier.Equal(proof.MailboxPlacementCommitment.Span, expectedMailboxPlacementCommitment,
+            ProductionMailboxTopologyError.SelectionMismatch, "Selection mailbox placement mismatch.");
         ProductionMailboxTopologyVerifier.Equal(proof.SelectionInputCommitment.Span, frozenExpectedSelectionInput,
             ProductionMailboxTopologyError.SelectionMismatch, "Selection input mismatch.");
         var selectedIds = ProductionMailboxReplicaSelection.Select(proof.NetworkId.Span, proof.AuthorityGeneration, epoch, frozenExpectedSelectionInput);

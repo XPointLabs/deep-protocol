@@ -92,6 +92,7 @@ public static class ProductionMailboxTopologyCodec
         var generation = reader.UInt64();
         var membership = reader.Fixed(32);
         var placement = reader.Fixed(32);
+        var mailboxPlacement = reader.Fixed(32);
         var selectionInput = reader.Fixed(32);
         var issued = reader.UInt64();
         var expires = reader.UInt64();
@@ -122,7 +123,8 @@ public static class ProductionMailboxTopologyCodec
             Epoch = epoch,
             Generation = generation,
             MembershipCommitment = membership,
-            PlacementCommitment = placement,
+            TopologyPlacementCommitment = placement,
+            MailboxPlacementCommitment = mailboxPlacement,
             SelectionInputCommitment = selectionInput,
             IssuedAtUnixSeconds = issued,
             ExpiresAtUnixSeconds = expires,
@@ -154,7 +156,7 @@ public static class ProductionMailboxTopologyCodec
     {
         writer.UInt64(value.Epoch); writer.UInt64(value.Generation);
         writer.Fixed(value.MembershipCommitment.Span, 32, "membership commitment");
-        writer.Fixed(value.PlacementCommitment.Span, 32, "placement commitment");
+        writer.Fixed(value.TopologyPlacementCommitment.Span, 32, "topology placement commitment");
         writer.UInt64(value.NotBeforeUnixSeconds); writer.UInt64(value.NotAfterUnixSeconds);
         writer.UInt16(checked((ushort)value.Nodes.Count)); writer.Zero(2);
         foreach (var node in value.Nodes)
@@ -187,7 +189,7 @@ public static class ProductionMailboxTopologyCodec
             Epoch = epoch,
             Generation = generation,
             MembershipCommitment = membership,
-            PlacementCommitment = placement,
+            TopologyPlacementCommitment = placement,
             NotBeforeUnixSeconds = from,
             NotAfterUnixSeconds = until,
             Nodes = nodes
@@ -201,7 +203,8 @@ public static class ProductionMailboxTopologyCodec
         writer.Fixed(value.CanonicalAuthorityHash.Span, 32, "authority hash"); writer.UInt64(value.TopologyGeneration);
         writer.Fixed(value.CanonicalTopologyHash.Span, 32, "topology hash"); writer.UInt64(value.Epoch);
         writer.UInt64(value.Generation); writer.Fixed(value.MembershipCommitment.Span, 32, "membership commitment");
-        writer.Fixed(value.PlacementCommitment.Span, 32, "placement commitment");
+        writer.Fixed(value.TopologyPlacementCommitment.Span, 32, "topology placement commitment");
+        writer.Fixed(value.MailboxPlacementCommitment.Span, 32, "mailbox placement commitment");
         writer.Fixed(value.SelectionInputCommitment.Span, 32, "selection input");
         writer.UInt64(value.IssuedAtUnixSeconds); writer.UInt64(value.ExpiresAtUnixSeconds);
         writer.Byte(checked((byte)value.Replicas.Count)); writer.Zero(3);
@@ -239,7 +242,7 @@ public static class ProductionMailboxTopologyCodec
     {
         ArgumentNullException.ThrowIfNull(value);
         if (value.Epoch == 0 || value.Generation == 0) Invalid($"{name} epoch/generation is invalid.");
-        Fixed(value.MembershipCommitment, 32, "membership commitment"); Fixed(value.PlacementCommitment, 32, "placement commitment");
+        Fixed(value.MembershipCommitment, 32, "membership commitment"); Fixed(value.TopologyPlacementCommitment, 32, "topology placement commitment");
         Window(value.NotBeforeUnixSeconds, value.NotAfterUnixSeconds, name, boundedLifetime: false);
         var nodes = value.Nodes;
         if (nodes is null || nodes.Count < 2 || nodes.Count > ProductionMailboxTopologyConstants.MaximumNodesPerEpoch)
@@ -264,7 +267,9 @@ public static class ProductionMailboxTopologyCodec
         if (value.Algorithm != ProductionMailboxSelectionAlgorithm.RendezvousSha256V1) Invalid("Unknown selection algorithm.");
         Fixed(value.NetworkId, 16, "network id"); Fixed(value.CanonicalAuthorityHash, 32, "authority hash");
         Fixed(value.CanonicalTopologyHash, 32, "topology hash"); Fixed(value.MembershipCommitment, 32, "membership commitment");
-        Fixed(value.PlacementCommitment, 32, "placement commitment"); Fixed(value.SelectionInputCommitment, 32, "selection input");
+        Fixed(value.TopologyPlacementCommitment, 32, "topology placement commitment");
+        Fixed(value.MailboxPlacementCommitment, 32, "mailbox placement commitment");
+        Fixed(value.SelectionInputCommitment, 32, "selection input");
         if (value.AuthorityGeneration == 0 || value.TopologyGeneration == 0 || value.Epoch == 0 || value.Generation == 0) Invalid("PMS1 generations/epoch are invalid.");
         Window(value.IssuedAtUnixSeconds, value.ExpiresAtUnixSeconds, "selection", boundedLifetime: true);
         var replicas = value.Replicas;

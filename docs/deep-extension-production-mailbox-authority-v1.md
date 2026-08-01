@@ -7,7 +7,8 @@ smart-contract or protobuf schema.
 
 The signed payload fixes production-only `authenticated-mau2`, ownership, one coordinator and one
 node-ingress endpoint, two non-identical SPKI SHA-256 pins for each role, the mailbox issuer public
-Ed25519 key, current and next epoch/generation commitments, a bounded revocation snapshot, and the
+Ed25519 key, current and next epoch/generation membership and global topology-placement commitments,
+a bounded revocation snapshot, and the
 Mr. X approval binding. The approval binds SHA-256 of the payload plus approved Android/Windows
 signing-certificate and release-artifact SHA-256 lists and a rollout window. The document's
 separate Mr. X public Ed25519 key signs the payload plus approval. No private key, holder, session,
@@ -17,6 +18,10 @@ mailbox identifier, capability grant, recovery material, or log data is in the m
 the payload and approval but not the 64-byte detached signature. `Encode` is the signed canonical
 document. `Decode` rejects non-canonical/trailing fields; binary framing consequently has no unknown
 or duplicate fields.
+
+The epoch `TopologyPlacementCommitment` is global catalog/policy state. It is never a user's
+mailbox placement commitment and must never be copied into MCG2. PMS1 separately binds the caller's
+`MailboxPlacementCommitment`, which MCG2 and the typed mailbox request enforce.
 
 Production official-managed authorities require public HTTPS endpoints and distinct coordinator and
 node-ingress origins. HTTP and development markers are always rejected. The only documented
