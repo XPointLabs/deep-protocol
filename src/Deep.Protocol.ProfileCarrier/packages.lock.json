@@ -4,12 +4,12 @@
     "net10.0": {
       "Deep.Protocol": {
         "type": "Direct",
-        "requested": "[0.3.0-p10i.a9b7a10, 0.3.0-p10i.a9b7a10]",
-        "resolved": "0.3.0-p10i.a9b7a10",
-        "contentHash": "Wp5hUJKUTmoJcC2NTJmbQR8SlUXhOk8Cuz2QcgCQv+R9a+Ll616yVTBXv7rDGUZSNLyNMI9ov6au2gZyXHG8ww==",
+        "requested": "[0.4.0-survival.e570512, 0.4.0-survival.e570512]",
+        "resolved": "0.4.0-survival.e570512",
+        "contentHash": "7TZ9uLNtVQWEqKhu5R+r23yxGIzNfhtMY0VJ8X7OPTgbsN6FJpf0DZ7/PCgjqTcUecZxBScSJ7yFxfLb+ozJCw==",
         "dependencies": {
-          "Deep.Protocol.Abstractions": "0.3.0-p10i.a9b7a10",
-          "Deep.Protocol.Protobuf": "0.3.0-p10i.a9b7a10",
+          "Deep.Protocol.Abstractions": "0.4.0-survival.e570512",
+          "Deep.Protocol.Protobuf": "0.4.0-survival.e570512",
           "Sodium.Core": "1.4.1"
         }
       },
@@ -30,13 +30,13 @@
       },
       "Deep.Protocol.Abstractions": {
         "type": "Transitive",
-        "resolved": "0.3.0-p10i.a9b7a10",
-        "contentHash": "iKhmUIWwbcqQjOQoxDdK/eSJrHRmzI/zZQhDUOyKtvC4+7+42IT5a5qSShFlEGn9QBNRUX86/s5wNVYLgGuoQw=="
+        "resolved": "0.4.0-survival.e570512",
+        "contentHash": "c2rRxx7OgrI2pmfkze2FS3mJd6Rru84X8bwX7/FLJR9YgTO0L+gQlyUuoXpXKOmFQW+Um4fjwE/dp+79sIckow=="
       },
       "Deep.Protocol.Protobuf": {
         "type": "Transitive",
-        "resolved": "0.3.0-p10i.a9b7a10",
-        "contentHash": "LoXm4/fcJzRgNNZLoEsBxqYcvHQEKllL1BhCfiwojPWgD8NgFeo4ODA3E0X8P8Ehjv+RCCc3XmrKKLVbsMKjRA==",
+        "resolved": "0.4.0-survival.e570512",
+        "contentHash": "6ycEE9S9ZRTdKcg4OR88h0WP4Opqx2bzN/p2Sb8xhi6amr7gGOL5ck+oyhFp6N3sTg5gEpE9YNQ9KqSZIclWvQ==",
         "dependencies": {
           "Google.Protobuf": "3.32.1"
         }

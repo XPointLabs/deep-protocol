@@ -28,8 +28,8 @@ public sealed class ProfileCarrierDeterminismRedTests
         AssertProperty(project, "RepositoryType", "git");
         AssertProperty(project, "PublishRepositoryUrl", "true");
         AssertProperty(project, "DebugType", "portable");
-        AssertProperty(project, "Version", "0.2.0-p10i.a9b7a10");
-        AssertProperty(project, "DeepProtocolPackageVersion", "[0.3.0-p10i.a9b7a10]");
+        AssertProperty(project, "Version", "0.4.0-survival.e570512");
+        AssertProperty(project, "DeepProtocolPackageVersion", "[0.4.0-survival.e570512]");
         Assert.Contains(
             project.Descendants("AllowedOutputExtensionsInPackageBuildOutputFolder"),
             element => element.Value.Contains(".pdb", StringComparison.Ordinal));
