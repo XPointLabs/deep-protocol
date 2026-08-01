@@ -77,6 +77,10 @@ Primary upstream areas reviewed:
 - hash-bound `production-mailbox-revocation-snapshot.v1` PMR1 artifact in the same namespace;
   its verified immutable result supplies exact MCG2 serial revocations for one verified PMA1 issuer
   and has no signer, key-custody, network-fetch, persistence, or legacy compatibility API
+- `production-mailbox-topology.v1` PMT1 plus per-mailbox `production-mailbox-selection.v1` PMS1 in
+  `Deep.Protocol.DeepExtension.MailboxTopology`; strict issuer-signed current/next catalogs bind the
+  final PMA1 hash, and deterministic Rendezvous-SHA256-v1 returns exactly two MIP1/RIP1-proven
+  storage replicas with public HTTPS endpoints and current/next SPKI pins
 
 ## Wire Semantics Preserved
 

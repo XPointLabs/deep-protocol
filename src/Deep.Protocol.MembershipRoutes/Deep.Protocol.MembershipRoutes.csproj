@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <PackageId>Deep.Protocol.MembershipRoutes</PackageId>
-    <Version>0.1.0-p15.local</Version>
+    <Version>0.1.0-p16.local</Version>
     <Description>Canonical Deep membership route descriptors and Merkle inclusion proofs.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryType>git</RepositoryType>

@@ -16,6 +16,13 @@ PMR1 supplies the strict, signed, hash-bound public revocation snapshot and a ve
 durable persistence remain XNode responsibilities; the protocol exposes no PMR1 signer or legacy
 revocation conversion.
 
+PMT1/PMS1 supplies strict signed topology plus a caller-bound, mailbox-private deterministic
+two-replica selection with exact MIP1/RIP1 proofs, HTTPS origins and rotating SPKI pins. PMT fetch,
+issuer key custody/signing, protected last-known-good persistence, DNS/public-address enforcement,
+TLS/SPKI handshake enforcement, health-aware failover and XNode/client activation remain host
+responsibilities. The protocol exposes no signer, private key, mutable trust handle, development
+fallback, or legacy topology conversion.
+
 ## Crypto
 
 Implemented in managed production adapter (`SodiumSessionProtocolCrypto`):
