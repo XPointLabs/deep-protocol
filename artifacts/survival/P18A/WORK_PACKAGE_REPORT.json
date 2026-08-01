@@ -1,0 +1,111 @@
+{
+  "schema": "deep-survival-work-package-report.v1",
+  "workPackage": "P18A",
+  "title": "Compact authenticated fragment contract",
+  "status": "contract-go-runtime-blocked",
+  "humanOwner": "Mr. X",
+  "repository": "deep-protocol",
+  "branch": "survival/w03-p18a-corrective",
+  "baseCommit": "b887fa088f486390be182cac4cbcb59b60ce8931",
+  "requiredP03CAncestor": "261c77658c8ff1f51ba45116ca8d938b1336eaa9",
+  "initialGreenSource": "9678875578faa7e8ecf5231ce480a6ccc7b99ba3",
+  "firstReviewedSource": "b34ac5f84d2e2e7e06bad347b66df18fa503d061",
+  "finalSourceCommit": "781054ea0c218f488e6176470901fe409f5397de",
+  "correctiveCommits": [
+    "81c82ae",
+    "299324e",
+    "509cf1f",
+    "7308675",
+    "27f6e2c",
+    "8e7f745",
+    "7928d9d",
+    "3731052",
+    "4ca7ec1",
+    "781054e"
+  ],
+  "prerequisite": {
+    "w1w2FinalEvidence": "1c01e24e24647a46b4f37622f3934dc2cc1284ef",
+    "w1w2Carrier": "524c5796aa868fa3d057fbf7eaa13cfea2e0d19c",
+    "protocolEvidenceCarrier": "db58937d4070eb057642c00d10a64d2f738f6e41",
+    "manifestSha256": "920b24bb5bcfcc8b4f91aef56ed210127246ec9fd2d49178ed9856c8555d0b93",
+    "contractSha256": "c45f66f7a688cbd70b7ca57a777851962ce2ab59eb37a3304d9b4bf7e4c55719",
+    "strictProducerArtifacts": 17,
+    "verdict": "GO-0/0/0/0"
+  },
+  "tests": {
+    "offlineRestore": "PASS-local-cache-network-denied",
+    "releaseBuild": "PASS-0-warnings-0-errors",
+    "focused": {
+      "passed": 81,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "c24aa68cb4e2a91e15eede75335facf9ec9b44d68a71b5422aec93a1f86be0b5"
+    },
+    "malformedFuzz": {
+      "passed": 13,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "7779066dc7362a90bc0dd6ad1adb7b64fd7c1f21640c3d4f79bc6df29e08e44b"
+    },
+    "full": {
+      "passed": 254,
+      "failed": 0,
+      "skipped": 0,
+      "trxSha256": "f05c99e4de83df9864e2584a89a4c39e4e717bd584a967bb4221b419e953a18b"
+    },
+    "coverage": {
+      "passed": 254,
+      "failed": 0,
+      "lines": "5053/8971",
+      "branches": "1902/4483",
+      "trxSha256": "70aa6c661a3f6a786b5572cd55887888f063875f30a58704f0693bd84693498d",
+      "coberturaSha256": "c050de318d775469d2bebeb88fb78c4424f2b7ab0dadfe611657c64f6a403c4d"
+    },
+    "format": "PASS",
+    "diffCheck": "PASS"
+  },
+  "package": {
+    "version": "0.3.0-p18a.781054e",
+    "manifest": "artifacts/survival/P18A/package-manifest.json",
+    "count": 3,
+    "sourcePinnedInEveryNuspec": true,
+    "published": false
+  },
+  "independentReview": {
+    "protocolArchitecture": {
+      "source": "781054ea0c218f488e6176470901fe409f5397de",
+      "verdict": "GO",
+      "p0": 0,
+      "p1": 0,
+      "p2": 0,
+      "p3": 0
+    },
+    "securityResilience": {
+      "source": "781054ea0c218f488e6176470901fe409f5397de",
+      "verdict": "GO",
+      "p0": 0,
+      "p1": 0,
+      "p2": 0,
+      "p3": 0
+    }
+  },
+  "productionBoundary": {
+    "authenticatorPresent": false,
+    "durableReplayStorePresent": false,
+    "runtimeRegistrationPresent": false,
+    "radioOrBleUsbPresent": false,
+    "regionOrPowerDefaultsPresent": false,
+    "commercialDependencyPresent": false,
+    "testAuthenticatorProductionVisible": false
+  },
+  "nonActions": [
+    "network download",
+    "Docker",
+    "deployment",
+    "blockchain",
+    "seed phrase or private key use",
+    "UAT or production credentials",
+    "package publication",
+    "GitHub push or pull request"
+  ]
+}

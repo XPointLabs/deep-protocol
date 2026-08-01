@@ -65,6 +65,9 @@ Primary upstream areas reviewed:
   `Deep.Protocol.ProfileCarrier` package and
   `Deep.Protocol.DeepExtension.SelfHostedProfiles`; it is an unsigned wrapper over the exact
   pinned P04 authority and has no signer, network, persistence or activation API
+- P18A compact authenticated fragmentation/planning and durable replay-store orchestration for
+  exact DPB1 bytes, isolated in `Deep.Protocol.DeepExtension.LoRaFragments`; no production
+  authenticator, replay store, radio runtime or DI registration is shipped
 
 ## Wire Semantics Preserved
 
@@ -193,5 +196,11 @@ and a bounded advisory capability-document codec in
 HTTP success is only `TransitCompleted` and cannot represent mailbox acceptance, durability or
 delivery. ASP.NET, proxy/TLS configuration, bridge selection, retry scheduling and inner receipt
 verification remain outside this library.
+
+P18A adds fixed `LF` V1 frames, a canonical ten-byte DPB1 descriptor and optional one-XOR-shard
+groups. Authentication and replay scopes are provider-issued opaque handles. The coordinator
+returns bundle bytes only after strict DPB1 validation and a durable generation-CAS completion
+tombstone. It includes no link-key implementation, BLE/USB, radio, region defaults, billing,
+rewards or battery/background behavior.
 
 Tests use an explicit fake adapter only to verify managed state and wire container behavior.

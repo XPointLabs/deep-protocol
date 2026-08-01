@@ -27,6 +27,13 @@ public sealed record GoldenVector
     public string? X25519PublicKeyHex { get; init; }
     public int? MutationOffset { get; init; }
     public string? ExpectedError { get; init; }
+    public IReadOnlyList<string>? FramesHex { get; init; }
+    public string? ReassembledBundleHex { get; init; }
+    public int? DataShardCount { get; init; }
+    public int? ParityShardCount { get; init; }
+    public int? ShardSize { get; init; }
+    public string? MessageIdHex { get; init; }
+    public string? DescriptorHex { get; init; }
 }
 
 public static class GoldenVectorLoader

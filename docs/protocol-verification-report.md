@@ -37,6 +37,8 @@ Any regression in these suites fails CI.
 | DPB1 structured failure branches | `OpaqueBundleMalformedAndFuzzTests.DeterministicStructuredMutations_ReachNamedFailureBranches`, truncation and encoder separation tests | Covered by deterministic structural mutations |
 | DPF1 exact carrier compatibility and malformed input | `ProfileCarrierContractRedTests`, `ProfileCarrierMalformedRedTests`, accepted XNode `eff4523` public synthetic golden vector | Covered by exact bytes, full truncation, structured mutations, deterministic random smoke and reachable maximum bounds |
 | P10B PRQ2 Store/Tombstone, quorum, aggregate ACK and ingress metadata | `MailboxPeerWireV2ContractTests`, `mailbox-peer-wire-v2.json`, negative vectors | Covered by complete-frame/signing-digest identities, signed CreatedAt boundaries at Now/+1/+30/+31 for Store and Tombstone, persisted effective reservation timestamps, exact pending/completed retries beyond the initial freshness window without stale-state creation, 1/100 ACK bounds, canonical MRR2/MQR3 router order, cursor/digest/expiry/key/coordinator mutations, bidirectional MQR2/MQR3 and MAR1 nested-domain rejection, finite epoch replay retention, retry/crash/churn/bounded-GC, forged cached timestamps and exact HTTP metadata/status tests |
+| P18A LF V1 canonical None/Xor1 frames | `LoRaFragmentCodecAndPlannerTests.PlannerMatchesEveryFrameInGoldenVector` and `lora-fragment-v1.json` | Covered with deterministic test-only authentication |
+| P18A malformed/auth/reassembly behavior | `LoRaFragmentMalformedAndFuzzTests`, `LoRaFragmentReassemblerTests` | Covered for strict parsing, auth-before-store, reorder, duplicate poison, one-loss XOR and durable terminal ordering |
 
 ## Remaining Risk Areas
 
@@ -52,6 +54,12 @@ trailing bytes, non-canonical padding, unknown/missing critical features, undefi
 transport-attempt/dedup equality and legacy opt-in. This suite is branch-targeted regression
 testing, not coverage-guided fuzzing. The separate fixed-seed random malformed-input loop is also a
 smoke test, not a claim of fuzz-engine exploration or corpus minimization.
+
+P18A adds complete byte-for-byte `None` and `Xor1` frame vectors, every-frame
+authentication checks, fixed-seed malformed smoke, truncation, single-byte
+mutation, 4096-byte planning, replay restart and FEC recovery regressions.
+These prove the managed contract and test adapter only. They are not
+cross-language crypto, radio, battery, regulatory or hardware evidence.
 
 ## Suggested Next Verification Hardening
 

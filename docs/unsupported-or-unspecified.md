@@ -284,3 +284,24 @@ bounded advisory capability document. It deliberately does not implement:
 
 Production activation remains blocked on P07B/P10/P11B/P15 implementations, accepted inner
 producer/receipt/storage contracts, device/network E2E and independent security review.
+
+## P18A compact fragment gaps
+
+P18A defines a Deep-extension compact fragment codec, deterministic planner,
+bounded reassembly coordinator and durable replay/quota interfaces. It
+deliberately does not implement:
+
+- production fragment authentication, link/network/profile key binding,
+  derivation, rotation, custody or recovery;
+- a production durable replay/quota store or runtime registration;
+- BLE/USB framing, pairing, permissions, reconnect or gateway queue behavior;
+- LoRa/LoRaWAN radio, simulator, driver, frequency, region, power, duty-cycle
+  or legal configuration;
+- mesh routing, discovery, attachments, calls, presence or background delivery;
+- wallet, XPNT, subscriptions, entitlements, rewards or managed-node billing.
+
+The deterministic HMAC adapter and memory replay store exist only in tests.
+Fragment authentication is not link encryption or traffic-flow
+confidentiality. Runtime activation requires P18B/P18C, approved hardware and
+region profile, external cryptographic/privacy review, two-device E2E and
+real-device battery evidence.

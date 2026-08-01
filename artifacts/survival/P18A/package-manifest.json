@@ -1,0 +1,28 @@
+{
+  "schema": "deep.p18a-local-package-manifest.v1",
+  "workPackage": "P18A",
+  "version": "0.3.0-p18a.781054e",
+  "sourceCommit": "781054ea0c218f488e6176470901fe409f5397de",
+  "publication": "local-only-not-published",
+  "sourcePinnedInEveryNuspec": true,
+  "packages": [
+    {
+      "id": "Deep.Protocol",
+      "file": "Deep.Protocol.0.3.0-p18a.781054e.nupkg",
+      "length": 108039,
+      "sha256": "b409177196113371e1a127ddce0088b4e72fb69159f736c05a42e4bf5bcfbe97"
+    },
+    {
+      "id": "Deep.Protocol.Abstractions",
+      "file": "Deep.Protocol.Abstractions.0.3.0-p18a.781054e.nupkg",
+      "length": 25814,
+      "sha256": "f84af1d36845ed532b11dfe2a916f68a35ea3a2030337389d436db411174fca0"
+    },
+    {
+      "id": "Deep.Protocol.Protobuf",
+      "file": "Deep.Protocol.Protobuf.0.3.0-p18a.781054e.nupkg",
+      "length": 51360,
+      "sha256": "da1071205f4ed73a8e0884f00ab53fd6211fa166deff1d1759ef72bdaa159a3c"
+    }
+  ]
+}
