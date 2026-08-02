@@ -85,6 +85,11 @@ Primary upstream areas reviewed:
   `Deep.Protocol.DeepExtension.MailboxAuthority`; it binds network, PMA1, intent, platform,
   stable owner, active holder, route, release attestation and anonymous challenge without exposing
   signing or HTTP/service concerns
+- fixed issuer-signed PRC1 route certificate and owner-signed PRA1 contact advertisement in
+  `Deep.Protocol.DeepExtension.MailboxTopology`; they bind a stable dedicated owner key to the
+  blinded route and verified PMA1 while excluding holder/device and topology identity. PRA1 is
+  contact-scoped authorization, never a directory or replica proof; exact PMT1/PMS1 verification
+  remains mandatory and private-key custody/transport/persistence stay host-owned
 
 ## Wire Semantics Preserved
 
