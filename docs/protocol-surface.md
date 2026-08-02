@@ -81,6 +81,10 @@ Primary upstream areas reviewed:
   `Deep.Protocol.DeepExtension.MailboxTopology`; strict issuer-signed current/next catalogs bind the
   final PMA1 hash, and deterministic Rendezvous-SHA256-v1 returns exactly two MIP1/RIP1-proven
   storage replicas with public HTTPS endpoints and current/next SPKI pins
+- fixed PHP1 production mailbox holder/owner proof transcript in
+  `Deep.Protocol.DeepExtension.MailboxAuthority`; it binds network, PMA1, intent, platform,
+  stable owner, active holder, route, release attestation and anonymous challenge without exposing
+  signing or HTTP/service concerns
 
 ## Wire Semantics Preserved
 
