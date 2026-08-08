@@ -176,6 +176,7 @@ internal sealed record RouteV2TestFixture(
     VerifiedProductionMailboxRouteCertificate VerifiedCertificate,
     ProductionMailboxRouteAdvertisementV2 Pra,
     VerifiedProductionMailboxRouteAdvertisementV2 VerifiedPra,
+    ProductionMailboxRouteOriginLkg PreDelegationRouteOriginLkg,
     ProductionMailboxRouteContinuityDelegation Delegation,
     ProductionMailboxRouteDelegationAcceptance Acceptance,
     ProductionMailboxRouteContinuityRevocation Revocation,
@@ -273,6 +274,20 @@ internal sealed record RouteV2TestFixture(
                 NowUnixSeconds = Now,
                 ClockSkewSeconds = 0
             }, new SodiumProductionMailboxRouteSignatureVerifier());
+        var preDelegationRouteOriginLkg = new ProductionMailboxRouteOriginLkg
+        {
+            NetworkId = authorityValue.NetworkId,
+            RouteDomainHash = routeDomain,
+            AuthorizationKind = ProductionMailboxRouteAuthorizationKind.OwnerPRA2,
+            CanonicalAuthorizationHash = verifiedPra.CanonicalHash,
+            AuthorizationSequence = pra.Sequence,
+            CanonicalDelegationHash = new byte[32],
+            CanonicalDelegationAcceptanceHash = new byte[32],
+            OwnerRevocationGeneration = 0,
+            OwnerRevocationHeadHash = new byte[32],
+            RouteVerifiedAtUnixSeconds = Now - 20,
+            LocalCommitGeneration = 1
+        };
         var delegation = new ProductionMailboxRouteContinuityDelegation
         {
             NetworkId = authorityValue.NetworkId,
@@ -288,8 +303,9 @@ internal sealed record RouteV2TestFixture(
             AnchorAuthorizationKind = ProductionMailboxRouteAuthorizationKind.OwnerPRA2,
             AnchorCanonicalRouteAuthorizationHash = verifiedPra.CanonicalHash,
             AnchorRouteAuthorizationSequence = pra.Sequence,
-            PreDelegationRouteOriginLkgHash = Bytes(150, 32),
-            RouteVerifiedAtUnixSeconds = Now - 20,
+            PreDelegationRouteOriginLkgHash = ProductionMailboxRouteContinuityCodec
+                .ComputeRouteOriginLkgHash(preDelegationRouteOriginLkg),
+            RouteVerifiedAtUnixSeconds = preDelegationRouteOriginLkg.RouteVerifiedAtUnixSeconds,
             Capability = ProductionMailboxRouteContinuityCapability.RouteContinuityOnly,
             DelegationSerial = Bytes(151, 16),
             DelegationSequence = 1,
@@ -378,7 +394,8 @@ internal sealed record RouteV2TestFixture(
         };
         return new RouteV2TestFixture(authorityValue.NetworkId.ToArray(), routeDomain, salt, commitment,
             issuer.PrivateKey, owner.PrivateKey, authority, verifiedPmr, verifiedCertificate, pra,
-            verifiedPra, delegation, acceptance, revocation, checkpoint, enrollmentContext);
+            verifiedPra, preDelegationRouteOriginLkg, delegation, acceptance, revocation,
+            checkpoint, enrollmentContext);
     }
 
     internal static ProductionMailboxRouteHistoryCheckpoint InitialHistoryCheckpoint(

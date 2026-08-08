@@ -321,6 +321,25 @@ public static class ProductionMailboxSelectionSuccessorV2Codec
         return output;
     }
 
+    internal static ProductionMailboxSelectionSuccessorV2Proof FreezeUnsignedForAuthoring(
+        ProductionMailboxSelectionSuccessorV2Proof value)
+    {
+        var frozen = Freeze(value);
+        if (frozen.Selection.OldIssuerSignature.Length !=
+                ProductionMailboxSelectionSuccessorConstants.Ed25519SignatureLength ||
+            frozen.Selection.NewIssuerSignature.Length !=
+                ProductionMailboxSelectionSuccessorConstants.Ed25519SignatureLength ||
+            frozen.Selection.OldIssuerSignature.Span.IndexOfAnyExcept((byte)0) >= 0 ||
+            frozen.Selection.NewIssuerSignature.Span.IndexOfAnyExcept((byte)0) >= 0)
+            throw Error(ProductionMailboxSelectionSuccessorError.InvalidField,
+                "PSS2 authoring draft signatures must be canonical zero placeholders.");
+        ValidateRoute(frozen);
+        if (frozen.Selection.Mode == ProductionMailboxSelectionSuccessorMode.DirectPromotion)
+            _ = GetOldIssuerSigningBytes(frozen);
+        _ = GetCurrentIssuerSigningBytes(frozen);
+        return frozen;
+    }
+
     public static ProductionMailboxSelectionSuccessorV2Proof Decode(ReadOnlySpan<byte> encoded)
     {
         if (encoded.Length < ProductionMailboxSelectionSuccessorV2Constants.FixedCoreLength +

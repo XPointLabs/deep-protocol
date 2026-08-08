@@ -382,9 +382,11 @@ route checkpoint containing the canonical checkpoint hash, delegation binding, n
 exact tagged authorization/RCR state, verified PMA generation/hash, pinned Mr. X hash, batch
 sequence, cumulative batch/link counts and cumulative payload bytes. Only this compact checkpoint
 is retained between batches; prior batch tables and payload bodies are discarded after the durable
-checkpoint commit. Each link's PMA is the same verified authority or a strict
-forward pinned-Mr. X successor; same-generation hash forks, rollback, skips not proven by the
-authority chain, and generations above the RCD ceiling fail closed. Batch sequence and cumulative
+checkpoint commit. Each link's PMA is either the exact retained generation/hash replay or a strict
+successor accepted by the bounded pinned-Mr. X forward-checkpoint verifier. Authority generations
+may skip only when that exact forward-checkpoint proof verifies; an unproven jump, same-generation
+hash fork or rollback fails closed. RHB batch sequence and route-authorization sequence remain
+contiguous exact `+1`, and authority generations above the RCD ceiling fail closed. Batch sequence and cumulative
 counts advance exactly, remain nonterminal and never exceed 32 batches, 512 links or 256 MiB. The next batch
 exact-binds that checkpoint and starts at its exact predecessor authorization; a batch replay is
 byte-identical, while a fork, gap, rollback or changed payload at the same sequence fails closed.
@@ -486,9 +488,10 @@ state. No generic route-forward verifier returns ordinary verified capabilities.
   delegation serials are hidden behind a fresh per-activation salt and continuity commitment. They
   are never stored on XNodes, placed in XNode publication tickets, logs, metrics, paths, query
   strings or push payloads.
-- XNodes carry only the changing PRC, RCH, RCA, RTC, PSS2 and selection closure required by a
-  client that already owns the sealed RCD/RDA state. Requests remain constant-path authenticated
-  binary bodies.
+- XNodes carry only changing PRC, RTC, PSS2 and selection closure plus one explicitly tagged route
+  authorization: exact PRA2 for `OwnerPRA2`, or exact RCH and RCA1 for `DelegatedRCA1`. They never
+  carry RCD, RDA, raw RCR, RHB or RHC. A client must already own the sealed continuity state needed
+  by the delegated path. Requests remain constant-path authenticated binary bodies.
 - A new contact receives the complete owner-authorized origin and current chain only through an
   authenticated E2E channel, then verifies the current PMA and RCH.
 - An owner device without sealed route-origin LKG may not activate RCA offline and may not sign a

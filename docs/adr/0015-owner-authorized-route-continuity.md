@@ -52,7 +52,9 @@ previously fetched activation has a maximum 24-hour residual lifetime.
 
 RDA prevents an attacker from manufacturing a backdated delegation using only old artifacts.
 Exact predecessor hashes and sequences prevent rollback, same-sequence fork and mode downgrade.
-The current issuer cannot mint an owner signature. XNodes never receive RCD/RDA/RCR or signing
+The current issuer cannot mint an owner signature. XNodes receive only changing PRC/RTC/PSS2 and
+selection closure plus tagged PRA2, or RCH/RCA1 for the delegated path; they never receive
+RCD/RDA/raw-RCR/RHB/RHC or signing
 keys and remain carry-only transports. A fresh salted per-activation commitment hides stable
 delegation identifiers from XNode artifacts, while the sealed ROL1 hash binds the exact original
 route LKG and immutable `RouteVerifiedAt`.

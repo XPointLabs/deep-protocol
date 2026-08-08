@@ -21,7 +21,29 @@ public static class ProductionMailboxSelectionSuccessorVerifier
         VerifiedProductionMailboxTopology currentTopology,
         ProductionMailboxSelectionSuccessorVerificationContext selectionContext,
         ProductionMailboxRouteSelectionTransitionVerificationContext routeContext)
+        => VerifyDirectRouteSelectionTransitionCore(encodedSuccessor, canonicalFreshRouteCertificate,
+            canonicalTransitionContext, canonicalRouteAuthorization, canonicalRevocationCheckpoint,
+            oldAuthority, oldTopology, currentAuthority, currentRevocations, currentTopology,
+            selectionContext, routeContext,
+            new SodiumProductionMailboxSelectionSuccessorSignatureVerifier());
+
+    internal static VerifiedProductionMailboxRouteSelectionTransition
+        VerifyDirectRouteSelectionTransitionCore(
+        ReadOnlySpan<byte> encodedSuccessor,
+        ReadOnlySpan<byte> canonicalFreshRouteCertificate,
+        ReadOnlySpan<byte> canonicalTransitionContext,
+        ReadOnlySpan<byte> canonicalRouteAuthorization,
+        ReadOnlySpan<byte> canonicalRevocationCheckpoint,
+        VerifiedProductionMailboxAuthority oldAuthority,
+        VerifiedProductionMailboxTopology oldTopology,
+        VerifiedProductionMailboxAuthority currentAuthority,
+        VerifiedProductionMailboxRevocationSnapshot currentRevocations,
+        VerifiedProductionMailboxTopology currentTopology,
+        ProductionMailboxSelectionSuccessorVerificationContext selectionContext,
+        ProductionMailboxRouteSelectionTransitionVerificationContext routeContext,
+        IProductionMailboxSelectionSuccessorSignatureVerifier successorSignatureVerifier)
     {
+        ArgumentNullException.ThrowIfNull(successorSignatureVerifier);
         var inputs = FreezeRouteInputs(encodedSuccessor, canonicalFreshRouteCertificate,
             canonicalTransitionContext, canonicalRouteAuthorization, canonicalRevocationCheckpoint,
             routeContext);
@@ -33,7 +55,7 @@ public static class ProductionMailboxSelectionSuccessorVerifier
             currentAuthority, currentTopology, selectionContext,
             new SodiumProductionMailboxAuthoritySignatureVerifier(),
             new SodiumProductionMailboxTopologySignatureVerifier(),
-            new SodiumProductionMailboxSelectionSuccessorSignatureVerifier());
+            successorSignatureVerifier);
         return VerifyRouteClosure(inputs, pss, selection, offlineClosure: null, currentAuthority,
             currentRevocations, currentTopology, selectionContext.NowUnixSeconds,
             selectionContext.ClockSkewSeconds);
@@ -56,7 +78,33 @@ public static class ProductionMailboxSelectionSuccessorVerifier
         VerifiedProductionMailboxTopology oldTopology,
         ProductionMailboxOfflineCheckpointClosureVerificationContext selectionContext,
         ProductionMailboxRouteSelectionTransitionVerificationContext routeContext)
+        => VerifyOfflineRouteSelectionTransitionClosureCore(encodedSuccessor, canonicalNewAuthority,
+            canonicalNewRevocationSnapshot, canonicalNewTopology, canonicalOldSelection,
+            canonicalNewCurrentSelection, canonicalNewNextSelection, canonicalFreshRouteCertificate,
+            canonicalTransitionContext, canonicalRouteAuthorization, canonicalRevocationCheckpoint,
+            oldAuthority, oldTopology, selectionContext, routeContext,
+            new SodiumProductionMailboxSelectionSuccessorSignatureVerifier());
+
+    internal static VerifiedProductionMailboxRouteSelectionTransition
+        VerifyOfflineRouteSelectionTransitionClosureCore(
+        ReadOnlySpan<byte> encodedSuccessor,
+        ReadOnlySpan<byte> canonicalNewAuthority,
+        ReadOnlySpan<byte> canonicalNewRevocationSnapshot,
+        ReadOnlySpan<byte> canonicalNewTopology,
+        ReadOnlySpan<byte> canonicalOldSelection,
+        ReadOnlySpan<byte> canonicalNewCurrentSelection,
+        ReadOnlySpan<byte> canonicalNewNextSelection,
+        ReadOnlySpan<byte> canonicalFreshRouteCertificate,
+        ReadOnlySpan<byte> canonicalTransitionContext,
+        ReadOnlySpan<byte> canonicalRouteAuthorization,
+        ReadOnlySpan<byte> canonicalRevocationCheckpoint,
+        VerifiedProductionMailboxAuthority oldAuthority,
+        VerifiedProductionMailboxTopology oldTopology,
+        ProductionMailboxOfflineCheckpointClosureVerificationContext selectionContext,
+        ProductionMailboxRouteSelectionTransitionVerificationContext routeContext,
+        IProductionMailboxSelectionSuccessorSignatureVerifier successorSignatureVerifier)
     {
+        ArgumentNullException.ThrowIfNull(successorSignatureVerifier);
         var inputs = FreezeRouteInputs(encodedSuccessor, canonicalFreshRouteCertificate,
             canonicalTransitionContext, canonicalRouteAuthorization, canonicalRevocationCheckpoint,
             routeContext);
@@ -70,7 +118,7 @@ public static class ProductionMailboxSelectionSuccessorVerifier
             selectionContext, new SodiumProductionMailboxAuthoritySignatureVerifier(),
             new SodiumProductionMailboxRevocationSnapshotSignatureVerifier(),
             new SodiumProductionMailboxTopologySignatureVerifier(),
-            new SodiumProductionMailboxSelectionSuccessorSignatureVerifier(), isV2: true);
+            successorSignatureVerifier, isV2: true);
         return VerifyRouteClosure(inputs, pss, offline.Successor, offline, offline.Authority,
             offline.Revocations, offline.Topology, selectionContext.VerifiedAtUnixSeconds,
             selectionContext.ClockSkewSeconds);

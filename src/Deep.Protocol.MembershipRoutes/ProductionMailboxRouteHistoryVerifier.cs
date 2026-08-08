@@ -31,6 +31,8 @@ internal sealed record ProductionMailboxRouteHistoryLinkVerificationState
     internal required ReadOnlyMemory<byte> RouteOriginLkgHash { get; init; }
     internal required ulong RouteVerifiedAtUnixSeconds { get; init; }
     internal required ulong LocalCommitGeneration { get; init; }
+    internal required ulong OwnerRevocationGeneration { get; init; }
+    internal required ReadOnlyMemory<byte> OwnerRevocationHeadHash { get; init; }
     internal required ulong AuthorityGeneration { get; init; }
     internal required ReadOnlyMemory<byte> CanonicalAuthorityHash { get; init; }
     internal required ulong RevocationGeneration { get; init; }
@@ -142,6 +144,11 @@ internal sealed class ProductionMailboxRouteHistoryCryptographicLinkVerifier(
                     NowUnixSeconds = linkTime,
                     ClockSkewSeconds = ProductionMailboxRouteContinuityConstants.MaximumClockSkewSeconds
                 }, _routeVerifier);
+            var embeddedCertificate = ProductionMailboxRouteAdvertisementCodec.EncodeCertificate(
+                verified.Advertisement.Certificate);
+            if (!certificateBytes.AsSpan().SequenceEqual(embeddedCertificate))
+                throw new FormatException(
+                    "RHB1 owner PRA2 does not embed the exact indexed PRC1 bytes.");
             authorizationHash = verified.CanonicalHash.ToArray();
         }
         else
@@ -168,7 +175,8 @@ internal sealed class ProductionMailboxRouteHistoryCryptographicLinkVerifier(
             var verifiedRch = ProductionMailboxRouteContinuityVerifier.VerifyRevocationCheckpoint(
                 rchBytes, authority, revocations, _enrollment.VerifiedDelegation,
                 rtcValue.TransitionSalt.Span, rtcValue.ContinuityTransitionCommitment.Span,
-                0, new byte[32], linkTime,
+                predecessor.OwnerRevocationGeneration, predecessor.OwnerRevocationHeadHash.Span,
+                linkTime,
                 ProductionMailboxRouteContinuityConstants.MaximumClockSkewSeconds, _routeVerifier);
             var activation = ProductionMailboxRouteAuthorizationVerifier.VerifyDelegatedActivation(
                 authorizationBytes, authority, revocations, certificate, verifiedRch, verifiedRtc,
@@ -186,8 +194,8 @@ internal sealed class ProductionMailboxRouteHistoryCryptographicLinkVerifier(
             AuthorizationSequence = link.NewSequence,
             CanonicalDelegationHash = _enrollment.CanonicalDelegationHash.ToArray(),
             CanonicalDelegationAcceptanceHash = _enrollment.CanonicalAcceptanceHash.ToArray(),
-            OwnerRevocationGeneration = 0,
-            OwnerRevocationHeadHash = new byte[32],
+            OwnerRevocationGeneration = predecessor.OwnerRevocationGeneration,
+            OwnerRevocationHeadHash = predecessor.OwnerRevocationHeadHash.ToArray(),
             RouteVerifiedAtUnixSeconds = predecessor.RouteVerifiedAtUnixSeconds,
             LocalCommitGeneration = predecessor.LocalCommitGeneration + 1
         };
@@ -199,6 +207,8 @@ internal sealed class ProductionMailboxRouteHistoryCryptographicLinkVerifier(
             RouteOriginLkgHash = ProductionMailboxRouteContinuityCodec.ComputeRouteOriginLkgHash(nextRol),
             RouteVerifiedAtUnixSeconds = predecessor.RouteVerifiedAtUnixSeconds,
             LocalCommitGeneration = predecessor.LocalCommitGeneration + 1,
+            OwnerRevocationGeneration = predecessor.OwnerRevocationGeneration,
+            OwnerRevocationHeadHash = predecessor.OwnerRevocationHeadHash.ToArray(),
             AuthorityGeneration = authority.Authority.AuthorityGeneration,
             CanonicalAuthorityHash = authority.CanonicalAuthorityHash.ToArray(),
             RevocationGeneration = revocations.Snapshot.RevocationGeneration,
@@ -261,6 +271,11 @@ internal static class ProductionMailboxRouteHistoryVerifier
                 throw new FormatException("RHB1 same-sequence replay conflicts with the durable batch.");
             return current;
         }
+        if (old.OwnerRevocationGeneration == 1 &&
+            old.OwnerRevocationHeadHash.Length == 32 &&
+            old.OwnerRevocationHeadHash.Span.IndexOfAnyExcept((byte)0) >= 0)
+            throw new FormatException(
+                "RHB1 cannot advance after the protected owner revocation became terminal.");
         if (old.LastCommittedBatchSequence == ulong.MaxValue ||
             sequence != old.LastCommittedBatchSequence + 1)
             throw new FormatException("RHB1 batch sequence is stale or has a gap.");
@@ -285,6 +300,8 @@ internal static class ProductionMailboxRouteHistoryVerifier
             RouteOriginLkgHash = old.CurrentRouteOriginLkgHash.ToArray(),
             RouteVerifiedAtUnixSeconds = old.RouteVerifiedAtUnixSeconds,
             LocalCommitGeneration = old.CurrentLocalCommitGeneration,
+            OwnerRevocationGeneration = old.OwnerRevocationGeneration,
+            OwnerRevocationHeadHash = old.OwnerRevocationHeadHash.ToArray(),
             AuthorityGeneration = old.CurrentAuthorityGeneration,
             CanonicalAuthorityHash = old.CurrentCanonicalAuthorityHash.ToArray(),
             RevocationGeneration = old.CurrentRevocationGeneration,
@@ -309,8 +326,8 @@ internal static class ProductionMailboxRouteHistoryVerifier
             CurrentAuthorizationKind = state.AuthorizationKind,
             CurrentCanonicalAuthorizationHash = state.CanonicalAuthorizationHash.ToArray(),
             CurrentAuthorizationSequence = state.AuthorizationSequence,
-            OwnerRevocationGeneration = old.OwnerRevocationGeneration,
-            OwnerRevocationHeadHash = old.OwnerRevocationHeadHash.ToArray(),
+            OwnerRevocationGeneration = state.OwnerRevocationGeneration,
+            OwnerRevocationHeadHash = state.OwnerRevocationHeadHash.ToArray(),
             CurrentRouteOriginLkgHash = state.RouteOriginLkgHash.ToArray(),
             RouteVerifiedAtUnixSeconds = old.RouteVerifiedAtUnixSeconds,
             CurrentLocalCommitGeneration = state.LocalCommitGeneration,
@@ -340,6 +357,11 @@ internal static class ProductionMailboxRouteHistoryVerifier
         FixedNonzero(next.CanonicalAuthorityHash, "authority hash");
         FixedNonzero(next.RevocationHeadHash, "PMR1 head hash");
         FixedNonzero(next.RevocationSnapshotHash, "PMR1 snapshot hash");
+        if (next.OwnerRevocationHeadHash.Length != 32 ||
+            next.OwnerRevocationGeneration != previous.OwnerRevocationGeneration ||
+            !CryptographicOperations.FixedTimeEquals(next.OwnerRevocationHeadHash.Span,
+                previous.OwnerRevocationHeadHash.Span))
+            throw new FormatException("RHB1 owner revocation state changed inside route history.");
         if (next.AuthorizationKind != link.AuthorizationKind || next.AuthorizationSequence != link.NewSequence ||
             next.AuthorizationSequence != previous.AuthorizationSequence + 1 ||
             next.RouteVerifiedAtUnixSeconds != previous.RouteVerifiedAtUnixSeconds ||
@@ -366,6 +388,7 @@ internal static class ProductionMailboxRouteHistoryVerifier
     {
         CanonicalAuthorizationHash = value.CanonicalAuthorizationHash.ToArray(),
         RouteOriginLkgHash = value.RouteOriginLkgHash.ToArray(),
+        OwnerRevocationHeadHash = value.OwnerRevocationHeadHash.ToArray(),
         CanonicalAuthorityHash = value.CanonicalAuthorityHash.ToArray(),
         RevocationHeadHash = value.RevocationHeadHash.ToArray(),
         RevocationSnapshotHash = value.RevocationSnapshotHash.ToArray()
