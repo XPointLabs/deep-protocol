@@ -204,7 +204,9 @@ public sealed class ActivationTransitionRedTests
     {
         var publicTypes = typeof(ProfileCarrierTransitionVerifier).Assembly
             .GetExportedTypes()
-            .Where(type => type.Namespace == typeof(ProfileCarrierTransitionVerifier).Namespace)
+            .Where(type =>
+                type.Namespace == typeof(ProfileCarrierTransitionVerifier).Namespace &&
+                type.Name.StartsWith("ProfileCarrier", StringComparison.Ordinal))
             .ToArray();
         var continuityTokens = new[]
         {

@@ -53,6 +53,8 @@ public sealed class ProfileCarrierCorrectiveBoundaryRedTests
         Assert.Equal(
             new[]
             {
+                "ISelfHostedActivationCommitter",
+                "ISelfHostedRuntimeSignatureVerifier",
                 "ProfileCarrierAssemblyInput",
                 "ProfileCarrierComposer",
                 "ProfileCarrierComposition",
@@ -65,7 +67,28 @@ public sealed class ProfileCarrierCorrectiveBoundaryRedTests
                 "ProfileCarrierVerificationOptions",
                 "ProfileCarrierVerificationResult",
                 "ProfileCarrierVerifier",
-                "SodiumEd25519MembershipSignatureVerifier"
+                "SelfHostedActivationCommit",
+                "SelfHostedActivationCommitKind",
+                "SelfHostedActivationContract",
+                "SelfHostedActivationGate",
+                "SelfHostedActivationLastKnownGood",
+                "SelfHostedRuntimeEndpoint",
+                "SelfHostedRuntimeEnvelope",
+                "SelfHostedRuntimeEnvelopeCodec",
+                "SelfHostedRuntimeEnvelopeContract",
+                "SelfHostedRuntimeEnvelopeVerifier",
+                "SelfHostedRuntimeEpoch",
+                "SelfHostedRuntimeLastKnownGood",
+                "SelfHostedRuntimeSignature",
+                "SelfHostedRuntimeTransitionDecision",
+                "SelfHostedSwitchConsent",
+                "SodiumEd25519MembershipSignatureVerifier",
+                "SodiumEd25519SelfHostedRuntimeSignatureVerifier",
+                "VerifiedSelfHostedActivationDescriptor",
+                "VerifiedSelfHostedContactDescriptor",
+                "VerifiedSelfHostedDelegationDescriptor",
+                "VerifiedSelfHostedRuntimeEnvelope",
+                "VerifiedSelfHostedSignerDescriptor"
             },
             assembly.ExportedTypes
                 .Select(static type => type.Name)
@@ -81,10 +104,13 @@ public sealed class ProfileCarrierCorrectiveBoundaryRedTests
         Assert.DoesNotContain(
             assembly.ExportedTypes,
             static type =>
-                type.Name.Contains("Signer", StringComparison.Ordinal) ||
                 type.Name.Contains("PrivateKey", StringComparison.Ordinal) ||
-                type.Name.Contains("Endpoint", StringComparison.Ordinal) ||
                 type.Name.Contains("NetworkClient", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            assembly.ExportedTypes.SelectMany(static type => type.GetMethods()),
+            static method => !method.IsSpecialName &&
+                method.Name.Contains("Sign", StringComparison.Ordinal) &&
+                !method.Name.Contains("Verify", StringComparison.Ordinal));
     }
 
     [Theory]

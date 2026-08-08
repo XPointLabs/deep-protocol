@@ -309,6 +309,22 @@ statements are forks. Cross-RID native assets are hash-pinned for Windows,
 Linux and Android, but execution outside the current Windows ARM64 host is
 deferred to the exact P14C3/P14A2b downstream package rebinds.
 
+The post-consent UserManaged seam does not remove these production blockers.
+It provides an exact verified descriptor, a single-use switch-consent boundary
+and the canonical signed SHR1 runtime document, but deliberately does not
+implement:
+
+- consent UI or a production protected implementation of the atomic activation committer;
+- atomic active-DPF/runtime-LKG persistence or cross-store crash recovery;
+- DPF/SHR1 acquisition, endpoint transport, TLS validation or SPKI enforcement;
+- operator-side envelope signing, delegated private-key custody or rotation;
+- Registry, PMA1, billing or official-network fallback for user-managed mode;
+- Android/Windows import, restart, send/receive or endpoint-rotation E2E.
+
+Consumers must not treat a generic DPF verification result, a direct-P2P path,
+a Registry DTO, an official PMA1 artifact or an unpersisted consent object as a
+UserManaged activation capability.
+
 ## P10B managed ingress H2 gaps
 
 P10B defines only the public opaque-transit contract, canonical fixed-size outer errors and a

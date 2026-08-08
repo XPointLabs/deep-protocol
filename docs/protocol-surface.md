@@ -63,8 +63,11 @@ Primary upstream areas reviewed:
   mutually authenticated AKE remains a blocked host adapter with no production implementation
 - DPF1 exact self-hosted profile carrier composition and verification, isolated in the
   `Deep.Protocol.ProfileCarrier` package and
-  `Deep.Protocol.DeepExtension.SelfHostedProfiles`; it is an unsigned wrapper over the exact
-  pinned P04 authority and has no signer, network, persistence or activation API
+  `Deep.Protocol.DeepExtension.SelfHostedProfiles`; a capability-specific post-consent seam
+  defensively projects verified activation authority, gates exact-LKG updates or explicitly
+  consented genesis switches, and verifies canonical online-quorum-signed SHR1 UserManaged
+  runtime envelopes without changing the generic verifier or exposing signing/private keys;
+  network, protected persistence and runtime registration are not shipped
 - P03D typed fresh-only nearby secure-channel and durable replay-commit boundary, isolated in
   `Deep.Protocol.DeepExtension.NearbySecureChannels`; the fixed profile remains explicitly
   unassigned pending external crypto review and no channel implementation is shipped

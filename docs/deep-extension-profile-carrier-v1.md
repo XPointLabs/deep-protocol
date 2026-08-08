@@ -95,6 +95,36 @@ selected fixed domain tag. It verifies those supplied bytes once without
 rehashing or reframing. It has no signing, key-generation or custody surface.
 External cryptographic/profile review remains pending.
 
+## Post-consent user-managed activation capability
+
+`SelfHostedActivationGate` is the only public factory for the capability-
+specific `VerifiedSelfHostedActivationDescriptor`. Only after exact DPF1/P04
+verification and an atomic host commit succeed does it defensively expose the
+exact DPF hash, network, genesis fingerprint, effective protocol range,
+verified online delegation and ordered latest bridge contacts. The raw
+projection helper is internal and the generic result remains non-activating.
+
+Initial activation and every different-genesis switch require an explicit
+single-use consent bound to the current account generation plus the exact
+candidate DPF and genesis hashes. Same-genesis forward updates instead require
+the current exact DPF/LKG and the existing exact-prefix transition verifier.
+The host-provided asynchronous committer receives consent, expected current
+LKG, exact candidate bytes and candidate LKG together and owns their one-CAS
+consumption and active-profile replacement. Gate methods freeze and verify
+before awaiting it, and expose the activation capability only after `true`.
+Post-commit cancellation/failure ambiguity must be reconciled inside the
+committer.
+
+The separate canonical `SHR1` UserManaged runtime envelope binds exact DPF,
+network, genesis, delegation, coordinator and MAU2 HTTPS origins, current/next
+SPKI pins, topology, revocation state, current/next epochs and optional sorted
+capabilities. Its complete LKG prevents topology/revocation/epoch rollback and
+permits SPKI pairs only unchanged or promoted `old.next -> new.current`, never
+ABBA. Its fixed `DEEP-SHR-V1` transcript is verified by the exact DPF online
+quorum. This is not PMA1 and neither authority can be substituted for the
+other. The codec has no signing or private-key API. See
+`docs/adr/0014-self-hosted-post-consent-activation.md`.
+
 ## Offline package source
 
 Every solution project has an exact lock file. The package source is
