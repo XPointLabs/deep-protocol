@@ -372,7 +372,8 @@ from the sealed predecessor plus exact PRC/PRA2. For a DelegatedRCA1 link, RCH a
 and RCA authenticates the exact RTC hash. Every other index is less than artifact count and names
 the required exact tag. Table byte counts are
 exactly `artifactCount*40 + linkCount*32`; checked arithmetic and the absolute envelope maximum
-are validated before allocating or invoking a codec/verifier.
+are validated before allocating or invoking a codec/verifier. Every artifact-table row is
+referenced by at least one link; unused rows and payload bytes are non-canonical.
 
 The verifier snapshots the bounded item table once, checks integer overflow and the 8 MiB budget,
 then freezes and verifies one artifact at a time. Links may reference the same unique frozen
@@ -391,7 +392,7 @@ No public generic historical verifier or ordinary verified capability is returne
 stale refresh can stream resumable exact batches; XNode preposition carries only the final live
 activation for the exact old LKG lineage.
 
-## RHC1 — sealed resumable route-history checkpoint (328 bytes)
+## RHC1 — sealed resumable route-history checkpoint (464 bytes)
 
 RHC is an internal canonical capability persisted by the client and mirrored by Registry state.
 It is never accepted from an unauthenticated caller and never becomes a general verified route
@@ -420,32 +421,51 @@ The per-delegation history binding is
 | 224 | 32 | pinned Mr. X Ed25519 public-key SHA-256 |
 | 256 | 8 | current verified PMA authority generation |
 | 264 | 32 | exact current PMA hash |
-| 296 | 8 | last committed RHB batch sequence |
-| 304 | 8 | cumulative committed batch count |
-| 312 | 8 | cumulative verified route-link count |
-| 320 | 8 | cumulative canonical payload bytes |
+| 296 | 8 | current verified PMR revocation generation |
+| 304 | 32 | exact current PMR revocation-head hash |
+| 336 | 32 | exact current PMR snapshot hash |
+| 368 | 8 | last committed RHB batch sequence |
+| 376 | 8 | cumulative committed batch count |
+| 384 | 8 | cumulative verified route-link count |
+| 392 | 8 | cumulative canonical payload bytes |
+| 400 | 32 | rolling exact RHB history-transcript head |
+| 432 | 32 | SHA-256 of the exact last committed RHB1 bytes |
 
 The initial RHC is created from the exact sealed continuity-enrollment ROL/RCD/RDA and current
 verified PMA/route authorization before fetching history. It has batch sequence and all three
 cumulative counters zero; authorization, owner-RCR state, ROL, `RouteVerifiedAt`, local commit
 generation, Mr. X pin and PMA fields equal that sealed state. Initial RCR state is `0/zero`; if an
-exact owner-signed terminal RCR is already known, no history activation may start.
+exact owner-signed terminal RCR is already known, no history activation may start. PMR generation,
+head and snapshot equal the exact verified PMR under the initial PMA. The history-transcript head
+and last-committed-RHB hash are all zero.
 
 For every non-empty RHB, the header previous-checkpoint hash equals the canonical hash of the exact
 prior RHC, and header batch sequence equals prior sequence plus one. Verification begins from the
 prior authorization/PMA/ROL fields and ends at the exact last link. The next RHC preserves network,
 route domain, delegation binding, Mr. X pin and immutable `RouteVerifiedAt`; replaces authorization,
-ROL and PMA with the verified final values; advances local route commit generation exactly once per
-verified route link; preserves the exact owner-RCR state; sets batch sequence and cumulative batch
-count to prior plus one; adds exact link count and payload bytes using checked arithmetic. It rejects
-terminal counters and the 32-batch/512-link/256-MiB limits before reading payload bodies.
+ROL, PMA and PMR with the verified final values; advances local route commit generation exactly once
+per verified route link; preserves the exact owner-RCR state; sets batch sequence and cumulative
+batch count to prior plus one; adds exact link count and payload bytes using checked arithmetic; and
+sets the history-transcript head to
+`SHA-256("Deep/production-mailbox/route-history-transcript/v1" || priorHead32 || exactRHB1Bytes)`.
+It also sets the last-committed-RHB hash to `SHA-256(exactRHB1Bytes)`.
+Under the same PMA, PMR is exact replay or a strictly verified forward generation/head/snapshot;
+same-generation fork, rollback and stale substitution fail. When PMA advances, PMR must be the
+exact verified live snapshot for that new PMA and becomes the new retained comparison tuple. The
+verifier rejects terminal counters and the 32-batch/512-link/256-MiB limits before reading payload
+bodies.
 
-The next RHC bytes and their canonical hash are durably committed with the route-history CAS before
-the next batch request. Exact replay returns the identical RHC. Same prior hash/batch sequence with
-different batch bytes, a checkpoint/hash mismatch, partial or ambiguous checkpoint persistence,
+The next RHC bytes, rolling history-transcript head, last-batch hash and canonical hash are durably
+committed with the route-history CAS before the next batch request. On a request whose batch
+sequence equals the current RHC batch sequence, the verifier hashes the bounded exact RHB bytes
+before any artifact/crypto callback: equality with the stored last-batch hash returns the identical
+current RHC, while a different hash is a fork. Older sequences are stale. Only sequence current+1
+may advance and must bind the current RHC canonical hash. A checkpoint/hash mismatch, partial or ambiguous checkpoint persistence,
 counter gap/rollback, delegation substitution, PMA fork or changed sealed origin fails closed. On
 restart, the client resumes only from the exact committed RHC; Registry must present a batch whose
-previous hash and sequence match it.
+previous hash and sequence match it. A committed same-prior/same-sequence batch with different exact
+bytes necessarily produces a different transcript head and is a fork even if its final semantic
+authorization and counters would otherwise match.
 
 ## Composite verification and atomic state
 
@@ -487,10 +507,15 @@ PRA/RCA mode downgrade, RTC/PSS/hash substitution, validity escape, terminal cou
 allocation, mutable-input races, no-LKG activation and publication before the complete chain is
 durable. Multi-missed-rotation tests verify every historical exact-linked hop at chain time and
 require the final closure to be live. RHB negatives include duplicate/cross-type artifact hashes,
-wrong tag/index, forbidden or missing `0xffff`, OwnerPRA2 RTC injection, unsorted tables, payload reorder, checked-size overflow,
+unused artifact rows, wrong tag/index, forbidden or missing `0xffff`, OwnerPRA2 RTC injection,
+unsorted tables, payload reorder, checked-size overflow,
 maximum-minus-one/exact-maximum/one-byte-over envelopes, late oversized hops with zero crypto
 callbacks, batch/cumulative terminal counters, 33rd batch, cumulative-payload overflow,
-checkpoint fork/gap/rollback and PMA lineage fork.
+checkpoint fork/gap/rollback, PMA/PMR lineage fork, and restart replay of same prior+sequence with
+an equal-length exact-batch substitution that must change the last-batch hash/rolling transcript
+head. Tests cover commit success followed by lost response, process restart, exact last-batch
+replay returning byte-identical RHC with zero artifact/crypto callbacks, and same-sequence changed
+bytes failing as a fork with zero callbacks.
 Revocation negatives include a forged or conflicting issuer-only Revoked RCH, missing RCR bytes,
 wrong owner/serial/RCD hash and proof that none of those can advance the durable terminal RCR LKG.
 

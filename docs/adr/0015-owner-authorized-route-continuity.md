@@ -38,8 +38,10 @@ single 512-hop allocation. Historical batches exclude PMT/PMS/PSS; only the fina
 selection. Each batch has an absolute 8,394,304-byte envelope bound, canonical unique artifact
 table, exact predecessor checkpoint and cumulative nonterminal link count. One refresh is bounded
 to 32 batches, 512 links and 256 MiB of streamed canonical payload; only the compact sealed
-328-byte RHC1 checkpoint survives between batches. RHC1 has an exact hash domain, initial state,
-field layout and +1 update/CAS rule, so Registry and client resume from identical bytes.
+464-byte RHC1 checkpoint survives between batches. RHC1 has an exact hash domain, initial state,
+field layout, retained PMA/PMR lineage, rolling exact-batch transcript head and exact last-batch hash
+with a +1 update/CAS rule, so Registry and client resume or replay from identical bytes.
+Unreferenced artifact rows are forbidden.
 
 ## Security consequences
 
