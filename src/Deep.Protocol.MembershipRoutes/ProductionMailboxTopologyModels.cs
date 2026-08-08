@@ -23,7 +23,7 @@ public static class ProductionMailboxTopologyConstants
 
 public enum ProductionMailboxSelectionAlgorithm : byte
 {
-    RendezvousSha256V1 = 1
+    RendezvousSha256V2 = 2
 }
 
 public enum ProductionMailboxTopologyError
@@ -95,6 +95,17 @@ public sealed record ProductionMailboxTopologyVerificationContext
 {
     public required ulong LastCommittedTopologyGeneration { get; init; }
     public required ReadOnlyMemory<byte> LastCommittedTopologyHash { get; init; }
+    public required ulong NowUnixSeconds { get; init; }
+    public uint ClockSkewSeconds { get; init; }
+}
+
+/// <summary>
+/// Bounded-forward PMT1 recovery after the enclosing PMA1 has already passed the pinned-Mr. X
+/// forward-checkpoint verifier. The current mailbox issuer signature remains mandatory.
+/// </summary>
+internal sealed record ProductionMailboxTopologyCheckpointVerificationContext
+{
+    public required ulong LastCommittedTopologyGeneration { get; init; }
     public required ulong NowUnixSeconds { get; init; }
     public uint ClockSkewSeconds { get; init; }
 }

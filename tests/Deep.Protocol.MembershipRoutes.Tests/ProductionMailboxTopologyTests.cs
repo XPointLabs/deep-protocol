@@ -153,18 +153,77 @@ public sealed class ProductionMailboxTopologyTests
     }
 
     [Fact]
-    public void RendezvousV1_IsStableAndMailboxSpecific()
+    public void RendezvousV2_IsStableAndMailboxSpecific()
     {
         var f = CreateFixture();
-        var a = ProductionMailboxReplicaSelection.Select(f.Topology.NetworkId.Span, f.Topology.AuthorityGeneration,
+        var a = ProductionMailboxReplicaSelection.Select(f.Topology.NetworkId.Span,
             f.Topology.CurrentEpoch, ProductionMailboxReplicaSelection.ComputeSelectionInputCommitment(new BlindedPlacementId(Bytes(10, 32))));
-        var again = ProductionMailboxReplicaSelection.Select(f.Topology.NetworkId.Span, f.Topology.AuthorityGeneration,
+        var again = ProductionMailboxReplicaSelection.Select(f.Topology.NetworkId.Span,
             f.Topology.CurrentEpoch, ProductionMailboxReplicaSelection.ComputeSelectionInputCommitment(new BlindedPlacementId(Bytes(10, 32))));
         Assert.Equal(a.Select(x => Convert.ToHexString(x.Span)), again.Select(x => Convert.ToHexString(x.Span)));
         Assert.Equal(2, a.Count); Assert.False(a[0].Span.SequenceEqual(a[1].Span));
         Assert.NotEqual(
             Convert.ToHexString(ProductionMailboxReplicaSelection.ComputeSelectionInputCommitment(new BlindedPlacementId(Bytes(10, 32)))),
             Convert.ToHexString(ProductionMailboxReplicaSelection.ComputeSelectionInputCommitment(new BlindedPlacementId(Bytes(11, 32)))));
+    }
+
+    [Fact]
+    public void RendezvousV2_PreservesPromotionAndRemapsEveryRouteInput_WithDeterministicVectors()
+    {
+        var f = CreateFixture();
+        var nodes = Enumerable.Range(0, 16).Select(i => new ProductionMailboxTopologyNode
+        {
+            NodeId = Bytes((byte)(10 + i * 8), 32),
+            HttpsEndpoint = $"https://v2-{i}.example.net/",
+            CurrentSpkiSha256 = Bytes((byte)(130 + i), 32),
+            NextSpkiSha256 = Bytes((byte)(150 + i), 32)
+        }).ToArray();
+        var epoch = f.Topology.CurrentEpoch with { Nodes = nodes };
+        var input = ProductionMailboxReplicaSelection.ComputeSelectionInputCommitment(
+            new BlindedPlacementId(Bytes(10, 32)));
+        static string Vector(IReadOnlyList<ReadOnlyMemory<byte>> ids) =>
+            string.Join("|", ids.Select(id => Convert.ToHexString(id.Span)));
+        string Select(ProductionMailboxTopologyEpoch candidate, byte[] selection) => Vector(
+            ProductionMailboxReplicaSelection.Select(f.Topology.NetworkId.Span, candidate, selection));
+
+        var baseline = Select(epoch, input);
+        var promoted = Select(epoch, input);
+        var epochGenerationChanged = Select(epoch with { Generation = epoch.Generation + 1 }, input);
+        var membershipChanged = Select(epoch with { MembershipCommitment = Bytes(230, 32) }, input);
+        var placementChanged = Select(epoch with { TopologyPlacementCommitment = Bytes(231, 32) }, input);
+        var inputChanged = Select(epoch,
+            ProductionMailboxReplicaSelection.ComputeSelectionInputCommitment(
+                new BlindedPlacementId(Bytes(11, 32))));
+        var selectedId = ProductionMailboxReplicaSelection.Select(
+            f.Topology.NetworkId.Span, epoch, input)[0].ToArray();
+        var nodeChanged = Select(epoch with
+        {
+            Nodes = nodes.Where(node => !node.NodeId.Span.SequenceEqual(selectedId)).Append(
+                nodes[0] with { NodeId = Bytes(250, 32) }).ToArray()
+        }, input);
+
+        Assert.Equal(baseline, promoted);
+        Assert.Equal("22232425262728292A2B2C2D2E2F303132333435363738393A3B3C3D3E3F4041|7A7B7C7D7E7F808182838485868788898A8B8C8D8E8F90919293949596979899", baseline);
+        Assert.Equal("1A1B1C1D1E1F202122232425262728292A2B2C2D2E2F30313233343536373839|22232425262728292A2B2C2D2E2F303132333435363738393A3B3C3D3E3F4041", epochGenerationChanged);
+        Assert.Equal("62636465666768696A6B6C6D6E6F707172737475767778797A7B7C7D7E7F8081|3A3B3C3D3E3F404142434445464748494A4B4C4D4E4F50515253545556575859", membershipChanged);
+        Assert.Equal("3A3B3C3D3E3F404142434445464748494A4B4C4D4E4F50515253545556575859|6A6B6C6D6E6F707172737475767778797A7B7C7D7E7F80818283848586878889", placementChanged);
+        Assert.Equal("5A5B5C5D5E5F606162636465666768696A6B6C6D6E6F70717273747576777879|7A7B7C7D7E7F808182838485868788898A8B8C8D8E8F90919293949596979899", inputChanged);
+        Assert.Equal("7A7B7C7D7E7F808182838485868788898A8B8C8D8E8F90919293949596979899|3A3B3C3D3E3F404142434445464748494A4B4C4D4E4F50515253545556575859", nodeChanged);
+    }
+
+    [Fact]
+    public void SelectionCodec_RejectsRemovedRendezvousV1Algorithm()
+    {
+        var f = CreateFixture();
+        var topology = ProductionMailboxTopologyVerifier.Verify(
+            ProductionMailboxTopologyCodec.Encode(f.Topology), f.Authority, f.Context, f.SignatureVerifier);
+        var selection = SignSelection(f, topology) with
+        {
+            Algorithm = (ProductionMailboxSelectionAlgorithm)1,
+            IssuerSignature = new byte[64]
+        };
+        AssertError(ProductionMailboxTopologyError.InvalidField,
+            () => ProductionMailboxTopologyCodec.GetSelectionSigningBytes(selection));
     }
 
     [Fact]
@@ -402,7 +461,7 @@ public sealed class ProductionMailboxTopologyTests
     {
         var selectionInputCommitment = ProductionMailboxReplicaSelection.ComputeSelectionInputCommitment(blindedPlacement);
         var mailboxPlacementCommitment = MailboxPlacementCommitment.Compute(blindedPlacement);
-        var selected = ProductionMailboxReplicaSelection.Select(f.Topology.NetworkId.Span, f.Topology.AuthorityGeneration,
+        var selected = ProductionMailboxReplicaSelection.Select(f.Topology.NetworkId.Span,
             f.Topology.CurrentEpoch, selectionInputCommitment);
         var proofs = MembershipRouteDescriptorCodec.BuildProofs(f.CurrentDescriptors);
         var replicas = selected.Select(id =>
@@ -425,7 +484,7 @@ public sealed class ProductionMailboxTopologyTests
         }).ToArray();
         return ReSignSelection(new ProductionMailboxSelectionProof
         {
-            Algorithm = ProductionMailboxSelectionAlgorithm.RendezvousSha256V1,
+            Algorithm = ProductionMailboxSelectionAlgorithm.RendezvousSha256V2,
             NetworkId = f.Topology.NetworkId,
             AuthorityGeneration = f.Topology.AuthorityGeneration,
             CanonicalAuthorityHash = f.Topology.CanonicalAuthorityHash,

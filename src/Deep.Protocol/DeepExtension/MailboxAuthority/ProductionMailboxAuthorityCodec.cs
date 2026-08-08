@@ -51,6 +51,9 @@ public static class ProductionMailboxAuthorityCodec
 
     public static ProductionMailboxAuthority Decode(ReadOnlySpan<byte> encoded)
     {
+        if (encoded.Length > ProductionMailboxAuthorityConstants.MaximumArtifactBytes)
+            throw Error(ProductionMailboxAuthorityError.InvalidLength,
+                "PMA1 exceeds its strict maximum length.");
         var reader = new Reader(encoded);
         reader.Magic(Magic);
         if (reader.Byte() != ProductionMailboxAuthorityConstants.Version)

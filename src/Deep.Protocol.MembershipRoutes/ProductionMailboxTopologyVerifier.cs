@@ -9,7 +9,7 @@ namespace Deep.Protocol.DeepExtension.MailboxTopology;
 public static class ProductionMailboxReplicaSelection
 {
     private static ReadOnlySpan<byte> InputDomain => "Deep/PMT1/selection-input/v1"u8;
-    private static ReadOnlySpan<byte> ScoreDomain => "Deep/PMT1/rendezvous-sha256/v1"u8;
+    private static ReadOnlySpan<byte> ScoreDomain => "Deep/PMT1/rendezvous-sha256/v2"u8;
 
     /// <summary>The public selection input reveals only a domain-separated commitment, never a raw mailbox identifier.</summary>
     public static byte[] ComputeSelectionInputCommitment(BlindedPlacementId blindedPlacementId)
@@ -21,11 +21,11 @@ public static class ProductionMailboxReplicaSelection
     }
 
     public static IReadOnlyList<ReadOnlyMemory<byte>> Select(
-        ReadOnlySpan<byte> networkId, ulong authorityGeneration, ProductionMailboxTopologyEpoch epoch,
+        ReadOnlySpan<byte> networkId, ProductionMailboxTopologyEpoch epoch,
         ReadOnlySpan<byte> selectionInputCommitment)
     {
         ArgumentNullException.ThrowIfNull(epoch);
-        if (networkId.Length != 16 || networkId.IndexOfAnyExcept((byte)0) < 0 || authorityGeneration == 0 ||
+        if (networkId.Length != 16 || networkId.IndexOfAnyExcept((byte)0) < 0 ||
             selectionInputCommitment.Length != 32 || selectionInputCommitment.IndexOfAnyExcept((byte)0) < 0 ||
             epoch.Epoch == 0 || epoch.Generation == 0 || epoch.MembershipCommitment.Length != 32 ||
             epoch.MembershipCommitment.Span.IndexOfAnyExcept((byte)0) < 0 || epoch.TopologyPlacementCommitment.Length != 32 ||
@@ -35,10 +35,9 @@ public static class ProductionMailboxReplicaSelection
             epoch.Nodes.Select(static node => Convert.ToHexString(node.NodeId.Span)).Distinct(StringComparer.Ordinal).Count() != epoch.Nodes.Count)
             throw Error(ProductionMailboxTopologyError.InvalidField, "Selection inputs are invalid.");
         var network = networkId.ToArray(); var selectionInput = selectionInputCommitment.ToArray();
-        var numbers = new byte[24];
-        BinaryPrimitives.WriteUInt64BigEndian(numbers, authorityGeneration);
-        BinaryPrimitives.WriteUInt64BigEndian(numbers[8..], epoch.Epoch);
-        BinaryPrimitives.WriteUInt64BigEndian(numbers[16..], epoch.Generation);
+        var numbers = new byte[16];
+        BinaryPrimitives.WriteUInt64BigEndian(numbers, epoch.Epoch);
+        BinaryPrimitives.WriteUInt64BigEndian(numbers.AsSpan(8), epoch.Generation);
         return epoch.Nodes.Select(node => new
         {
             Node = node.NodeId.ToArray(),
@@ -70,35 +69,79 @@ public static class ProductionMailboxReplicaSelection
 
 public static class ProductionMailboxTopologyVerifier
 {
+    internal static VerifiedProductionMailboxTopology VerifyForwardCheckpoint(
+        ReadOnlySpan<byte> encoded,
+        VerifiedProductionMailboxAuthority verifiedAuthority,
+        ProductionMailboxTopologyCheckpointVerificationContext context,
+        IProductionMailboxTopologySignatureVerifier signatureVerifier)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        if (context.LastCommittedTopologyGeneration == 0 || context.NowUnixSeconds == 0 ||
+            context.ClockSkewSeconds > ProductionMailboxTopologyConstants.MaximumClockSkewSeconds)
+            throw Error(ProductionMailboxTopologyError.InvalidField,
+                "Topology checkpoint context is incomplete or unsafe.");
+        return VerifyCore(encoded, verifiedAuthority, signatureVerifier,
+            context.LastCommittedTopologyGeneration, default, context.NowUnixSeconds,
+            context.ClockSkewSeconds, forwardCheckpoint: true);
+    }
+
     public static VerifiedProductionMailboxTopology Verify(
         ReadOnlySpan<byte> encoded,
         VerifiedProductionMailboxAuthority verifiedAuthority,
         ProductionMailboxTopologyVerificationContext context,
         IProductionMailboxTopologySignatureVerifier signatureVerifier)
     {
-        ArgumentNullException.ThrowIfNull(verifiedAuthority); ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(context);
+        context = context with { LastCommittedTopologyHash = context.LastCommittedTopologyHash.ToArray() };
+        ValidateContext(context);
+        return VerifyCore(encoded, verifiedAuthority, signatureVerifier,
+            context.LastCommittedTopologyGeneration, context.LastCommittedTopologyHash,
+            context.NowUnixSeconds, context.ClockSkewSeconds, forwardCheckpoint: false);
+    }
+
+    private static VerifiedProductionMailboxTopology VerifyCore(
+        ReadOnlySpan<byte> encoded,
+        VerifiedProductionMailboxAuthority verifiedAuthority,
+        IProductionMailboxTopologySignatureVerifier signatureVerifier,
+        ulong lastCommittedTopologyGeneration,
+        ReadOnlyMemory<byte> lastCommittedTopologyHash,
+        ulong nowUnixSeconds,
+        uint clockSkewSeconds,
+        bool forwardCheckpoint)
+    {
+        ArgumentNullException.ThrowIfNull(verifiedAuthority);
         ArgumentNullException.ThrowIfNull(signatureVerifier);
         if (encoded.Length > ProductionMailboxTopologyConstants.MaximumTopologyArtifactBytes)
             throw Error(ProductionMailboxTopologyError.InvalidLength, "PMT1 exceeds its strict maximum length.");
-        context = context with { LastCommittedTopologyHash = context.LastCommittedTopologyHash.ToArray() };
-        ValidateContext(context);
         var frozenBytes = encoded.ToArray();
         var topology = ProductionMailboxTopologyCodec.Decode(frozenBytes);
         var authority = verifiedAuthority.Authority;
         var authorityHash = verifiedAuthority.CanonicalAuthorityHash.ToArray();
-        VerifyLiveAuthority(authority, context.NowUnixSeconds, context.ClockSkewSeconds);
+        VerifyLiveAuthority(authority, nowUnixSeconds, clockSkewSeconds);
         Equal(topology.NetworkId.Span, authority.NetworkId.Span, ProductionMailboxTopologyError.AuthorityMismatch, "Network mismatch.");
         Equal(topology.CanonicalAuthorityHash.Span, authorityHash, ProductionMailboxTopologyError.AuthorityMismatch, "Authority hash mismatch.");
         if (topology.AuthorityGeneration != authority.AuthorityGeneration)
             throw Error(ProductionMailboxTopologyError.AuthorityMismatch, "Authority generation mismatch.");
         BindEpoch(topology.CurrentEpoch, authority.CurrentEpoch, "current");
         BindEpoch(topology.NextEpoch, authority.NextEpoch, "next");
-        if (context.LastCommittedTopologyGeneration == ulong.MaxValue ||
-            topology.TopologyGeneration != context.LastCommittedTopologyGeneration + 1)
-            throw Error(ProductionMailboxTopologyError.TopologyRollback, "Topology is not the exact durable successor.");
-        Equal(topology.PreviousTopologyHash.Span, context.LastCommittedTopologyHash.Span,
-            ProductionMailboxTopologyError.PreviousHashMismatch, "Previous topology hash mismatch.");
-        VerifyWindow(topology.IssuedAtUnixSeconds, topology.ExpiresAtUnixSeconds, context.NowUnixSeconds, context.ClockSkewSeconds, "topology");
+        if (forwardCheckpoint)
+        {
+            if (topology.TopologyGeneration == ulong.MaxValue ||
+                topology.TopologyGeneration <= lastCommittedTopologyGeneration)
+                throw Error(ProductionMailboxTopologyError.TopologyRollback,
+                    "Topology checkpoint must move to a non-terminal forward generation.");
+        }
+        else
+        {
+            if (lastCommittedTopologyGeneration == ulong.MaxValue ||
+                topology.TopologyGeneration != lastCommittedTopologyGeneration + 1)
+                throw Error(ProductionMailboxTopologyError.TopologyRollback,
+                    "Topology is not the exact durable successor.");
+            Equal(topology.PreviousTopologyHash.Span, lastCommittedTopologyHash.Span,
+                ProductionMailboxTopologyError.PreviousHashMismatch, "Previous topology hash mismatch.");
+        }
+        VerifyWindow(topology.IssuedAtUnixSeconds, topology.ExpiresAtUnixSeconds,
+            nowUnixSeconds, clockSkewSeconds, "topology");
         if (topology.IssuedAtUnixSeconds < authority.MrXApproval.RolloutNotBeforeUnixSeconds ||
             topology.ExpiresAtUnixSeconds > authority.MrXApproval.RolloutNotAfterUnixSeconds ||
             topology.IssuedAtUnixSeconds < authority.Revocation.IssuedAtUnixSeconds ||
@@ -215,7 +258,7 @@ public static class ProductionMailboxSelectionVerifier
             ProductionMailboxTopologyError.SelectionMismatch, "Selection mailbox placement mismatch.");
         ProductionMailboxTopologyVerifier.Equal(proof.SelectionInputCommitment.Span, frozenExpectedSelectionInput,
             ProductionMailboxTopologyError.SelectionMismatch, "Selection input mismatch.");
-        var selectedIds = ProductionMailboxReplicaSelection.Select(proof.NetworkId.Span, proof.AuthorityGeneration, epoch, frozenExpectedSelectionInput);
+        var selectedIds = ProductionMailboxReplicaSelection.Select(proof.NetworkId.Span, epoch, frozenExpectedSelectionInput);
         if (!signatureVerifier.Verify(authority.MailboxIssuerEd25519PublicKey.Span,
                 ProductionMailboxTopologyCodec.GetSelectionSigningBytes(proof), proof.IssuerSignature.Span))
             throw ProductionMailboxTopologyVerifier.Error(ProductionMailboxTopologyError.InvalidSignature, "PMS1 issuer signature is invalid.");

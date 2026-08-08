@@ -79,8 +79,15 @@ Primary upstream areas reviewed:
   and has no signer, key-custody, network-fetch, persistence, or legacy compatibility API
 - `production-mailbox-topology.v1` PMT1 plus per-mailbox `production-mailbox-selection.v1` PMS1 in
   `Deep.Protocol.DeepExtension.MailboxTopology`; strict issuer-signed current/next catalogs bind the
-  final PMA1 hash, and deterministic Rendezvous-SHA256-v1 returns exactly two MIP1/RIP1-proven
+  final PMA1 hash, and deterministic Rendezvous-SHA256-v2 returns exactly two MIP1/RIP1-proven
   storage replicas with public HTTPS endpoints and current/next SPKI pins
+- explicit PSS1 selection successor proof in the same namespace; DirectPromotion embeds exact
+  old/new PMS1 and current PMA1 bytes, requires direct PMA1/PMT1 lineage, preserves the promoted
+  route with controlled SPKI-pin promotion, and uses separate old/current issuer domains.
+  OfflineCheckpoint verifies the embedded live PMA1 against the pinned Mr. X trust floor, binds the
+  exact local old PMS1/owner/blinded route to a live new closure with the current issuer only, and
+  caps local-anchor age at 365 days without tying recovery to rotation count or retaining retired
+  keys; forward-checkpoint primitives are internal to the high-level PSS1 verifier
 - fixed PHP1 production mailbox holder/owner proof transcript in
   `Deep.Protocol.DeepExtension.MailboxAuthority`; it binds network, PMA1, intent, platform,
   stable owner, active holder, route, release attestation and anonymous challenge without exposing

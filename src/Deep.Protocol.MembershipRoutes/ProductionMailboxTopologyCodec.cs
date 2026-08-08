@@ -264,7 +264,7 @@ public static class ProductionMailboxTopologyCodec
     private static void Validate(ProductionMailboxSelectionProof value, bool signature)
     {
         ArgumentNullException.ThrowIfNull(value);
-        if (value.Algorithm != ProductionMailboxSelectionAlgorithm.RendezvousSha256V1) Invalid("Unknown selection algorithm.");
+        if (value.Algorithm != ProductionMailboxSelectionAlgorithm.RendezvousSha256V2) Invalid("Unknown selection algorithm.");
         Fixed(value.NetworkId, 16, "network id"); Fixed(value.CanonicalAuthorityHash, 32, "authority hash");
         Fixed(value.CanonicalTopologyHash, 32, "topology hash"); Fixed(value.MembershipCommitment, 32, "membership commitment");
         Fixed(value.TopologyPlacementCommitment, 32, "topology placement commitment");

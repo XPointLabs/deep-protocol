@@ -24,6 +24,42 @@ public sealed class SodiumProductionMailboxAuthoritySignatureVerifier : IProduct
 
 public static class ProductionMailboxAuthorityVerifier
 {
+    internal static VerifiedProductionMailboxAuthority VerifyForwardCheckpoint(
+        ReadOnlySpan<byte> canonicalAuthority,
+        ProductionMailboxAuthorityCheckpointVerificationContext context,
+        IProductionMailboxAuthoritySignatureVerifier signatureVerifier)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(signatureVerifier);
+        ValidateCheckpointContext(context);
+        var frozenBytes = canonicalAuthority.ToArray();
+        var frozen = ProductionMailboxAuthorityCodec.Decode(frozenBytes);
+        if (!frozenBytes.AsSpan().SequenceEqual(ProductionMailboxAuthorityCodec.Encode(frozen)))
+            throw Error(ProductionMailboxAuthorityError.NonCanonical,
+                "Forward checkpoint PMA1 is not canonical.");
+        if (!CryptographicOperations.FixedTimeEquals(frozen.NetworkId.Span,
+                context.ExpectedNetworkId.Span))
+            throw Error(ProductionMailboxAuthorityError.InvalidField,
+                "Forward checkpoint authority is for another network.");
+        if (frozen.AuthorityGeneration == ulong.MaxValue ||
+            frozen.AuthorityGeneration <= context.LastCommittedGeneration)
+            throw Error(ProductionMailboxAuthorityError.AuthorityRollback,
+                "Forward checkpoint authority did not advance durable generation.");
+        if (!CryptographicOperations.FixedTimeEquals(
+                SHA256.HashData(frozen.MrXApprovalEd25519PublicKey.Span),
+                context.PinnedMrXPublicKeySha256.Span))
+            throw Error(ProductionMailboxAuthorityError.UntrustedMrXKey,
+                "Forward checkpoint Mr. X key does not match the caller-pinned key hash.");
+        if (!signatureVerifier.Verify(frozen.MrXApprovalEd25519PublicKey.Span,
+                ProductionMailboxAuthorityCodec.GetSigningBytes(frozen), frozen.Signature.Span))
+            throw Error(ProductionMailboxAuthorityError.InvalidSignature,
+                "Forward checkpoint PMA1 signature is invalid.");
+        VerifyCheckpointRevocation(frozen.Revocation, context);
+        VerifyTime(frozen, context.NowUnixSeconds, context.ClockSkewSeconds);
+        return new VerifiedProductionMailboxAuthority(
+            frozen, SHA256.HashData(frozenBytes), frozen.AuthorityGeneration);
+    }
+
     public static VerifiedProductionMailboxAuthority Verify(
         ProductionMailboxAuthority authority,
         ProductionMailboxAuthorityVerificationContext context,
@@ -74,6 +110,45 @@ public static class ProductionMailboxAuthorityVerifier
             context.LastCommittedRevocationSnapshotHash.Span.IndexOfAnyExcept((byte)0) < 0 ||
             context.NowUnixSeconds == 0 || context.ClockSkewSeconds > ProductionMailboxAuthorityConstants.MaximumClockSkewSeconds)
             throw Error(ProductionMailboxAuthorityError.InvalidField, "Verification context is incomplete or unsafe.");
+    }
+
+    private static void ValidateCheckpointContext(
+        ProductionMailboxAuthorityCheckpointVerificationContext context)
+    {
+        if (context.PinnedMrXPublicKeySha256.Length != ProductionMailboxAuthorityConstants.HashLength ||
+            context.PinnedMrXPublicKeySha256.Span.IndexOfAnyExcept((byte)0) < 0 ||
+            context.ExpectedNetworkId.Length != ProductionMailboxAuthorityConstants.NetworkIdLength ||
+            context.ExpectedNetworkId.Span.IndexOfAnyExcept((byte)0) < 0 ||
+            context.LastCommittedGeneration == 0 ||
+            context.LastCommittedRevocationGeneration == 0 ||
+            context.LastCommittedRevocationHeadHash.Length != ProductionMailboxAuthorityConstants.HashLength ||
+            context.LastCommittedRevocationHeadHash.Span.IndexOfAnyExcept((byte)0) < 0 ||
+            context.LastCommittedRevocationSnapshotHash.Length != ProductionMailboxAuthorityConstants.HashLength ||
+            context.LastCommittedRevocationSnapshotHash.Span.IndexOfAnyExcept((byte)0) < 0 ||
+            context.NowUnixSeconds == 0 ||
+            context.ClockSkewSeconds > ProductionMailboxAuthorityConstants.MaximumClockSkewSeconds)
+            throw Error(ProductionMailboxAuthorityError.InvalidField,
+                "Forward checkpoint verification context is incomplete or unsafe.");
+    }
+
+    private static void VerifyCheckpointRevocation(
+        ProductionMailboxAuthorityRevocation revocation,
+        ProductionMailboxAuthorityCheckpointVerificationContext context)
+    {
+        if (revocation.Generation == ulong.MaxValue ||
+            revocation.Generation < context.LastCommittedRevocationGeneration)
+            throw Error(ProductionMailboxAuthorityError.AuthorityRollback,
+                "Forward checkpoint revocation generation rolled back.");
+        if (revocation.Generation == context.LastCommittedRevocationGeneration)
+        {
+            if (!CryptographicOperations.FixedTimeEquals(revocation.HeadHash.Span,
+                    context.LastCommittedRevocationHeadHash.Span) ||
+                !CryptographicOperations.FixedTimeEquals(revocation.SnapshotHash.Span,
+                    context.LastCommittedRevocationSnapshotHash.Span))
+                throw Error(ProductionMailboxAuthorityError.PreviousHashMismatch,
+                    "Same revocation generation conflicts with durable state.");
+            return;
+        }
     }
 
     private static void VerifyRevocationSuccessor(

@@ -16,4 +16,8 @@
     <ProjectReference Include="..\Deep.Protocol\Deep.Protocol.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Deep.Protocol.MembershipRoutes.Tests" />
+  </ItemGroup>
+
 </Project>

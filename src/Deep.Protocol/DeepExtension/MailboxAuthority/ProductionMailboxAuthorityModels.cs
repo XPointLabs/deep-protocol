@@ -18,6 +18,7 @@ public static class ProductionMailboxAuthorityConstants
     public const int MaximumHashesPerPlatform = 8;
     public const int MaximumClockSkewSeconds = 300;
     public const ulong MaximumRevocationSnapshotLifetimeSeconds = 86_400;
+    public const int MaximumArtifactBytes = 16_384;
 }
 
 public enum ProductionMailboxAuthorityEnvironment : byte
@@ -159,6 +160,23 @@ public sealed record ProductionMailboxAuthorityVerificationContext
     public required ReadOnlyMemory<byte> ExpectedNetworkId { get; init; }
     public required ulong LastCommittedGeneration { get; init; }
     public required ReadOnlyMemory<byte> LastCommittedAuthorityHash { get; init; }
+    public required ulong LastCommittedRevocationGeneration { get; init; }
+    public required ReadOnlyMemory<byte> LastCommittedRevocationHeadHash { get; init; }
+    public required ReadOnlyMemory<byte> LastCommittedRevocationSnapshotHash { get; init; }
+    public required ulong NowUnixSeconds { get; init; }
+    public uint ClockSkewSeconds { get; init; }
+}
+
+/// <summary>
+/// Explicit bounded-forward recovery context for a client that was offline across more than one
+/// PMA1 rotation. The downloaded PMA1 is still authenticated by the caller-pinned Mr. X key and
+/// must be live; only the exact previous-hash requirement is replaced by a bounded forward jump.
+/// </summary>
+internal sealed record ProductionMailboxAuthorityCheckpointVerificationContext
+{
+    public required ReadOnlyMemory<byte> PinnedMrXPublicKeySha256 { get; init; }
+    public required ReadOnlyMemory<byte> ExpectedNetworkId { get; init; }
+    public required ulong LastCommittedGeneration { get; init; }
     public required ulong LastCommittedRevocationGeneration { get; init; }
     public required ReadOnlyMemory<byte> LastCommittedRevocationHeadHash { get; init; }
     public required ReadOnlyMemory<byte> LastCommittedRevocationSnapshotHash { get; init; }

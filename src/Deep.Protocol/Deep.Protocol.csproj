@@ -13,4 +13,10 @@
     <ProjectReference Include="..\Deep.Protocol.Protobuf\Deep.Protocol.Protobuf.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Deep.Protocol.MembershipRoutes" />
+    <InternalsVisibleTo Include="Deep.Protocol.MembershipRoutes.Tests" />
+    <InternalsVisibleTo Include="Deep.Protocol.Tests" />
+  </ItemGroup>
+
 </Project>

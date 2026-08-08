@@ -153,6 +153,54 @@ public sealed class ProductionMailboxAuthorityContractTests
     }
 
     [Fact]
+    public void ForwardCheckpointAuthenticatesPinnedRootAndAllowsLargeNonterminalAdvance()
+    {
+        var fixture = CreateFixture();
+        var context = new ProductionMailboxAuthorityCheckpointVerificationContext
+        {
+            PinnedMrXPublicKeySha256 = fixture.Context.PinnedMrXPublicKeySha256,
+            ExpectedNetworkId = fixture.Context.ExpectedNetworkId,
+            LastCommittedGeneration = 2,
+            LastCommittedRevocationGeneration = fixture.Authority.Revocation.Generation,
+            LastCommittedRevocationHeadHash = fixture.Authority.Revocation.HeadHash,
+            LastCommittedRevocationSnapshotHash = fixture.Authority.Revocation.SnapshotHash,
+            NowUnixSeconds = Now,
+            ClockSkewSeconds = 0
+        };
+        var verifier = new SodiumProductionMailboxAuthoritySignatureVerifier();
+        var encoded = ProductionMailboxAuthorityCodec.Encode(fixture.Authority);
+
+        Assert.Equal(fixture.Authority.AuthorityGeneration,
+            ProductionMailboxAuthorityVerifier.VerifyForwardCheckpoint(
+                encoded, context, verifier).Authority.AuthorityGeneration);
+        Assert.Equal(ProductionMailboxAuthorityError.UntrustedMrXKey,
+            Assert.Throws<ProductionMailboxAuthorityException>(() =>
+                ProductionMailboxAuthorityVerifier.VerifyForwardCheckpoint(encoded,
+                    context with { PinnedMrXPublicKeySha256 = Bytes(90, 32) }, verifier)).Error);
+
+        var generation65 = ReSign(fixture.Authority with
+        { AuthorityGeneration = context.LastCommittedGeneration + 65 }, fixture.PrivateKey);
+        Assert.Equal(context.LastCommittedGeneration + 65,
+            ProductionMailboxAuthorityVerifier.VerifyForwardCheckpoint(
+                ProductionMailboxAuthorityCodec.Encode(generation65), context, verifier)
+                .Authority.AuthorityGeneration);
+        var terminal = ReSign(fixture.Authority with
+        { AuthorityGeneration = ulong.MaxValue }, fixture.PrivateKey);
+        Assert.Equal(ProductionMailboxAuthorityError.AuthorityRollback,
+            Assert.Throws<ProductionMailboxAuthorityException>(() =>
+                ProductionMailboxAuthorityVerifier.VerifyForwardCheckpoint(
+                    ProductionMailboxAuthorityCodec.Encode(terminal), context, verifier)).Error);
+        var terminalRevocation = ReSign(fixture.Authority with
+        {
+            Revocation = fixture.Authority.Revocation with { Generation = ulong.MaxValue }
+        }, fixture.PrivateKey);
+        Assert.Equal(ProductionMailboxAuthorityError.AuthorityRollback,
+            Assert.Throws<ProductionMailboxAuthorityException>(() =>
+                ProductionMailboxAuthorityVerifier.VerifyForwardCheckpoint(
+                    ProductionMailboxAuthorityCodec.Encode(terminalRevocation), context, verifier)).Error);
+    }
+
+    [Fact]
     public void VerifierRejectsTimeAndRevocationExpiry()
     {
         var fixture = CreateFixture();

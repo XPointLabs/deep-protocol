@@ -25,6 +25,12 @@ verified-PMA-bound PMT1 genesis is exactly generation `1` with a zero previous h
 PMT1 accepts only the exact successor and exact nonzero previous hash. PMS1 is immutable and does
 not advance that lineage.
 
+The separate bounded-forward PMT1 verifier exists only for an authenticated PSS1
+`OfflineCheckpoint` after the exact current PMA1 has passed pinned-Mr. X forward-checkpoint
+verification. It requires a live current-issuer signature and a strictly forward non-terminal
+generation. It is internal to the high-level offline PSS1 verifier, not a generic shortcut around
+ordinary PMT1 LKG lineage.
+
 ## PMT1 canonical binary
 
 All integers are unsigned big-endian. PMT1 is fixed order: `PMT1`, version `1`, three zero bytes,
@@ -44,11 +50,16 @@ verified PMA1 explicitly says `UserManagedPrivateHttps`; official topology is pu
 DNS resolution, TLS handshake validation, live SPKI enforcement, fetch and atomic file replacement
 remain host responsibilities.
 
-## Rendezvous-SHA256-v1
+## Rendezvous-SHA256-v2
 
 For every PMT1 node compute:
 
-`SHA-256("Deep/PMT1/rendezvous-sha256/v1" || network16 || authorityGeneration8 || epoch8 || generation8 || membership32 || placement32 || selectionInput32 || nodeId32)`
+`SHA-256("Deep/PMT1/rendezvous-sha256/v2" || network16 || epoch8 || generation8 || membership32 || placement32 || selectionInput32 || nodeId32)`
+
+V2 deliberately excludes the outer PMA1 authority generation from the rendezvous score. PMS1 still
+binds and is signed over the exact PMA1 generation/hash, while a promoted old-next/new-current epoch
+with identical epoch generation and catalog commitments retains the same ordered replicas. This is
+required for explicit PSS1 overlap verification during authority rotation.
 
 All fields after the domain are fixed width. Sort ascending by the 32-byte score, breaking an
 improbable tie by ascending node ID, and take the first two. PMS1 must encode those two distinct
@@ -56,7 +67,7 @@ IDs in rank order; a verifier recomputes the ranking rather than trusting publis
 
 ## PMS1 canonical binary
 
-PMS1 is fixed order: `PMS1`, version `1`, three zero bytes, algorithm `1` plus three zero bytes,
+PMS1 is fixed order: `PMS1`, version `1`, three zero bytes, algorithm `2` plus three zero bytes,
 network/authority generation/authority hash, topology generation/topology hash, epoch/generation,
 membership/global-topology-placement/per-mailbox-placement/selection-input commitments,
 issued/expires, replica count `2` plus three zero
