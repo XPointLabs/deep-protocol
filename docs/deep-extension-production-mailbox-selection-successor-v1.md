@@ -79,8 +79,9 @@ The verifier freezes all caller buffers and requires:
 
 1. live PSS1, exact local network/owner/blinded IDs and exact locally pinned old PMS1 hash;
 2. embedded PMA1 canonicality, pinned-Mr. X signature, live rollout/revocation/current epoch,
-   exact PMA1 `+1` generation and previous hash;
-3. exact PMT1 `+1` generation/previous hash and exact old-next/new-current epoch promotion;
+   exact PMA1 `+1` generation and previous hash, with a non-terminal revocation generation;
+3. exact non-terminal PMT1 `+1` generation/previous hash and exact old-next/new-current epoch
+   promotion;
 4. historical verification of old PMS1 at its own issuance time and live verification of new PMS1;
 5. identical route commitments, replica IDs/order, exact MIP1 proofs and HTTPS endpoints;
 6. either an unchanged `(current,next)` SPKI pair, or `old.next == new.current` with a fresh

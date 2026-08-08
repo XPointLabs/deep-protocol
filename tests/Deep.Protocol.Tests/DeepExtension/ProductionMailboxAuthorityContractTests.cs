@@ -227,6 +227,27 @@ public sealed class ProductionMailboxAuthorityContractTests
     }
 
     [Fact]
+    public void OrdinaryVerifierRejectsMaxMinusOneToTerminalRevocation()
+    {
+        var fixture = CreateFixture();
+        var terminal = ReSign(fixture.Authority with
+        {
+            Revocation = fixture.Authority.Revocation with
+            { Generation = ulong.MaxValue }
+        }, fixture.PrivateKey);
+        var context = fixture.Context with
+        {
+            LastCommittedRevocationGeneration = ulong.MaxValue - 1,
+            LastCommittedRevocationHeadHash = terminal.Revocation.PreviousHeadHash
+        };
+
+        Assert.Equal(ProductionMailboxAuthorityError.AuthorityRollback,
+            Assert.Throws<ProductionMailboxAuthorityException>(() =>
+                ProductionMailboxAuthorityVerifier.Verify(terminal, context,
+                    new SodiumProductionMailboxAuthoritySignatureVerifier())).Error);
+    }
+
+    [Fact]
     public void VerifierRejectsFutureIssuedRevocationSnapshot()
     {
         var fixture = CreateFixture();

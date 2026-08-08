@@ -85,6 +85,21 @@ public sealed class ProductionMailboxTopologyTests
     }
 
     [Fact]
+    public void OrdinaryTopologyVerifierRejectsMaxMinusOneToTerminalSuccessor()
+    {
+        var f = CreateFixture();
+        var terminal = ReSignTopology(f.Topology with
+        { TopologyGeneration = ulong.MaxValue }, f.IssuerPrivateKey);
+        var context = f.Context with
+        { LastCommittedTopologyGeneration = ulong.MaxValue - 1 };
+
+        AssertError(ProductionMailboxTopologyError.TopologyRollback,
+            () => ProductionMailboxTopologyVerifier.Verify(
+                ProductionMailboxTopologyCodec.Encode(terminal), f.Authority, context,
+                f.SignatureVerifier));
+    }
+
+    [Fact]
     public void TopologyCodec_RejectsNodeOrderDuplicateEndpointPinsAndUnsafeUris()
     {
         var f = CreateFixture(); var nodes = f.Topology.CurrentEpoch.Nodes;

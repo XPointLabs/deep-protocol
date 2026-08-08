@@ -124,10 +124,12 @@ public static class ProductionMailboxTopologyVerifier
             throw Error(ProductionMailboxTopologyError.AuthorityMismatch, "Authority generation mismatch.");
         BindEpoch(topology.CurrentEpoch, authority.CurrentEpoch, "current");
         BindEpoch(topology.NextEpoch, authority.NextEpoch, "next");
+        if (topology.TopologyGeneration == ulong.MaxValue)
+            throw Error(ProductionMailboxTopologyError.TopologyRollback,
+                "A terminal topology generation cannot be committed.");
         if (forwardCheckpoint)
         {
-            if (topology.TopologyGeneration == ulong.MaxValue ||
-                topology.TopologyGeneration <= lastCommittedTopologyGeneration)
+            if (topology.TopologyGeneration <= lastCommittedTopologyGeneration)
                 throw Error(ProductionMailboxTopologyError.TopologyRollback,
                     "Topology checkpoint must move to a non-terminal forward generation.");
         }

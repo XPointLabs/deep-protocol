@@ -135,8 +135,8 @@ public static class ProductionMailboxAuthorityVerifier
         ProductionMailboxAuthorityRevocation revocation,
         ProductionMailboxAuthorityCheckpointVerificationContext context)
     {
-        if (revocation.Generation == ulong.MaxValue ||
-            revocation.Generation < context.LastCommittedRevocationGeneration)
+        RejectTerminalRevocation(revocation);
+        if (revocation.Generation < context.LastCommittedRevocationGeneration)
             throw Error(ProductionMailboxAuthorityError.AuthorityRollback,
                 "Forward checkpoint revocation generation rolled back.");
         if (revocation.Generation == context.LastCommittedRevocationGeneration)
@@ -155,6 +155,7 @@ public static class ProductionMailboxAuthorityVerifier
         ProductionMailboxAuthorityRevocation revocation,
         ProductionMailboxAuthorityVerificationContext context)
     {
+        RejectTerminalRevocation(revocation);
         if (revocation.Generation < context.LastCommittedRevocationGeneration)
             throw Error(ProductionMailboxAuthorityError.AuthorityRollback, "Revocation generation rolled back.");
         if (revocation.Generation == context.LastCommittedRevocationGeneration)
@@ -169,6 +170,13 @@ public static class ProductionMailboxAuthorityVerifier
             throw Error(ProductionMailboxAuthorityError.AuthorityRollback, "Revocation generation is not the next durable generation.");
         if (!CryptographicOperations.FixedTimeEquals(revocation.PreviousHeadHash.Span, context.LastCommittedRevocationHeadHash.Span))
             throw Error(ProductionMailboxAuthorityError.PreviousHashMismatch, "Revocation previous head does not match durable state.");
+    }
+
+    private static void RejectTerminalRevocation(ProductionMailboxAuthorityRevocation revocation)
+    {
+        if (revocation.Generation == ulong.MaxValue)
+            throw Error(ProductionMailboxAuthorityError.AuthorityRollback,
+                "A terminal revocation generation cannot be committed.");
     }
 
     private static void VerifyTime(ProductionMailboxAuthority authority, ulong now, uint skew)

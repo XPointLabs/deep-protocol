@@ -72,6 +72,53 @@ public sealed class ProductionMailboxSelectionSuccessorTests
     }
 
     [Fact]
+    public void PublicEntrypointsRejectOutOfBoundsBeforeSignatureCallbacks()
+    {
+        var f = CreateFixture();
+        var verifier = new CountingSignatureVerifier();
+        var undersized = new byte[
+            ProductionMailboxSelectionSuccessorConstants.FixedCoreLength +
+            ProductionMailboxSelectionSuccessorConstants.SignatureBytes - 1];
+        var oversized = new byte[
+            ProductionMailboxSelectionSuccessorConstants.MaximumArtifactBytes + 1];
+
+        foreach (var invalid in new[] { undersized, oversized })
+        {
+            AssertError(ProductionMailboxSelectionSuccessorError.InvalidLength,
+                () => ProductionMailboxSelectionSuccessorVerifier.VerifyDirectPromotion(
+                    invalid, f.OldAuthority, f.OldTopology, f.NewAuthority, f.NewTopology,
+                    f.Context, verifier, verifier, verifier));
+            AssertError(ProductionMailboxSelectionSuccessorError.InvalidLength,
+                () => ProductionMailboxSelectionSuccessorVerifier.VerifyOfflineCheckpoint(
+                    invalid, f.OldAuthority, f.OldTopology,
+                    ProductionMailboxTopologyCodec.Encode(f.NewTopology.Snapshot), f.Context,
+                    verifier, verifier, verifier));
+        }
+
+        var multiMegabyte = new byte[8 * 1024 * 1024];
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        AssertError(ProductionMailboxSelectionSuccessorError.InvalidLength,
+            () => ProductionMailboxSelectionSuccessorVerifier.VerifyDirectPromotion(
+                multiMegabyte, f.OldAuthority, f.OldTopology, f.NewAuthority, f.NewTopology,
+                f.Context, verifier, verifier, verifier));
+        var directAllocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        Assert.True(directAllocated < 1024 * 1024,
+            $"Direct verifier allocated {directAllocated} bytes for an oversized PSS1.");
+
+        allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        AssertError(ProductionMailboxSelectionSuccessorError.InvalidLength,
+            () => ProductionMailboxSelectionSuccessorVerifier.VerifyOfflineCheckpoint(
+                multiMegabyte, f.OldAuthority, f.OldTopology,
+                ProductionMailboxTopologyCodec.Encode(f.NewTopology.Snapshot), f.Context,
+                verifier, verifier, verifier));
+        var offlineAllocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+        Assert.True(offlineAllocated < 1024 * 1024,
+            $"Offline verifier allocated {offlineAllocated} bytes for an oversized PSS1.");
+
+        Assert.Equal(0, verifier.CallbackCount);
+    }
+
+    [Fact]
     public void Verifier_RejectsTamperWrongContextForkAndRollback()
     {
         var f = CreateFixture();
@@ -331,6 +378,57 @@ public sealed class ProductionMailboxSelectionSuccessorTests
                 ProductionMailboxSelectionSuccessorCodec.Encode(forkProof),
                 f.OldAuthority, f.OldTopology, f.NewAuthority, forkTopology, f.Context,
                 new SodiumProductionMailboxAuthoritySignatureVerifier(),
+                new SodiumProductionMailboxTopologySignatureVerifier(),
+                new SodiumProductionMailboxSelectionSuccessorSignatureVerifier()));
+    }
+
+    [Fact]
+    public void DirectPromotionRejectsMaxMinusOneToTerminalRevocationAndTopology()
+    {
+        var f = CreateFixture();
+        var encoded = ProductionMailboxSelectionSuccessorCodec.Encode(f.Proof);
+
+        var oldTerminalRevocationAuthority = SignAuthority(f.OldAuthority.Authority with
+        {
+            Revocation = f.OldAuthority.Authority.Revocation with
+            { Generation = ulong.MaxValue - 1 }
+        }, f.MrXPrivateKey);
+        var newTerminalRevocationAuthority = SignAuthority(f.NewAuthority.Authority with
+        {
+            Revocation = f.NewAuthority.Authority.Revocation with
+            { Generation = ulong.MaxValue }
+        }, f.MrXPrivateKey);
+        var forgedOldAuthority = new VerifiedProductionMailboxAuthority(
+            oldTerminalRevocationAuthority,
+            SHA256.HashData(ProductionMailboxAuthorityCodec.Encode(oldTerminalRevocationAuthority)),
+            oldTerminalRevocationAuthority.AuthorityGeneration);
+        var forgedNewAuthority = new VerifiedProductionMailboxAuthority(
+            newTerminalRevocationAuthority,
+            SHA256.HashData(ProductionMailboxAuthorityCodec.Encode(newTerminalRevocationAuthority)),
+            newTerminalRevocationAuthority.AuthorityGeneration);
+        AssertError(ProductionMailboxSelectionSuccessorError.AuthorityNotSuccessor,
+            () => ProductionMailboxSelectionSuccessorVerifier.VerifyDirectPromotion(
+                encoded, forgedOldAuthority, f.OldTopology, forgedNewAuthority, f.NewTopology,
+                f.Context, new SodiumProductionMailboxAuthoritySignatureVerifier(),
+                new SodiumProductionMailboxTopologySignatureVerifier(),
+                new SodiumProductionMailboxSelectionSuccessorSignatureVerifier()));
+
+        var oldTerminalTopology = SignTopology(f.OldTopology.Snapshot with
+        { TopologyGeneration = ulong.MaxValue - 1 }, f.OldIssuerPrivateKey);
+        var oldTerminalTopologyBytes = ProductionMailboxTopologyCodec.Encode(oldTerminalTopology);
+        var newTerminalTopology = SignTopology(f.NewTopology.Snapshot with
+        {
+            TopologyGeneration = ulong.MaxValue,
+            PreviousTopologyHash = SHA256.HashData(oldTerminalTopologyBytes)
+        }, f.NewIssuerPrivateKey);
+        var forgedOldTopology = new VerifiedProductionMailboxTopology(
+            oldTerminalTopology, SHA256.HashData(oldTerminalTopologyBytes));
+        var forgedNewTopology = new VerifiedProductionMailboxTopology(newTerminalTopology,
+            SHA256.HashData(ProductionMailboxTopologyCodec.Encode(newTerminalTopology)));
+        AssertError(ProductionMailboxSelectionSuccessorError.TopologyNotSuccessor,
+            () => ProductionMailboxSelectionSuccessorVerifier.VerifyDirectPromotion(
+                encoded, f.OldAuthority, forgedOldTopology, f.NewAuthority, forgedNewTopology,
+                f.Context, new SodiumProductionMailboxAuthoritySignatureVerifier(),
                 new SodiumProductionMailboxTopologySignatureVerifier(),
                 new SodiumProductionMailboxSelectionSuccessorSignatureVerifier()));
     }
@@ -943,6 +1041,21 @@ public sealed class ProductionMailboxSelectionSuccessorTests
         {
             mutate();
             return _inner.Verify(publicKey, signingBytes, signature);
+        }
+    }
+
+    private sealed class CountingSignatureVerifier :
+        IProductionMailboxAuthoritySignatureVerifier,
+        IProductionMailboxTopologySignatureVerifier,
+        IProductionMailboxSelectionSuccessorSignatureVerifier
+    {
+        public int CallbackCount { get; private set; }
+
+        public bool Verify(ReadOnlySpan<byte> publicKey, ReadOnlySpan<byte> signingBytes,
+            ReadOnlySpan<byte> signature)
+        {
+            CallbackCount++;
+            return false;
         }
     }
 

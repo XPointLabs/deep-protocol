@@ -22,8 +22,9 @@ operation, token rule, or network fetch in the protocol package.
 
 Hosts must atomically persist the PMT1 `(generation, canonical hash)` last-known-good state. A
 verified-PMA-bound PMT1 genesis is exactly generation `1` with a zero previous hash; after genesis,
-PMT1 accepts only the exact successor and exact nonzero previous hash. PMS1 is immutable and does
-not advance that lineage.
+PMT1 accepts only the exact successor and exact nonzero previous hash. Terminal generation
+`ulong.MaxValue` is rejected before commit so accepted topology always has successor capacity.
+PMS1 is immutable and does not advance that lineage.
 
 The separate bounded-forward PMT1 verifier exists only for an authenticated PSS1
 `OfflineCheckpoint` after the exact current PMA1 has passed pinned-Mr. X forward-checkpoint

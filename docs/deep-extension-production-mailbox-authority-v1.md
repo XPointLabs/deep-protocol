@@ -35,6 +35,8 @@ only exactly the next generation with an exact previous-hash link, verifies the 
 signature, and validates the current epoch, rollout and revocation freshness at one caller-supplied
 time. The same durable state also carries the last revocation generation, head and snapshot hash:
 the verifier accepts an identical snapshot at that generation or exactly one head-linked successor.
+Authority and revocation generation `ulong.MaxValue` are terminal and are rejected before commit,
+so every accepted durable authority retains successor capacity.
 Snapshots have an explicit issuance time and a protocol-bounded maximum 24-hour lifetime. A caller
 must provision initial authority and revocation last-known-good state out of band; downloaded
 authority never bootstraps trust.

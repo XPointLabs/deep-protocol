@@ -17,7 +17,7 @@ public static class ProductionMailboxSelectionSuccessorVerifier
         IProductionMailboxTopologySignatureVerifier selectionSignatureVerifier,
         IProductionMailboxSelectionSuccessorSignatureVerifier successorSignatureVerifier)
     {
-        var frozenEncoded = encoded.ToArray();
+        var frozenEncoded = FreezeBounded(encoded);
         if (ProductionMailboxSelectionSuccessorCodec.Decode(frozenEncoded).Mode !=
             ProductionMailboxSelectionSuccessorMode.DirectPromotion)
             throw Error(ProductionMailboxSelectionSuccessorError.InvalidTransitionMode,
@@ -42,7 +42,7 @@ public static class ProductionMailboxSelectionSuccessorVerifier
         ArgumentNullException.ThrowIfNull(authoritySignatureVerifier);
         ArgumentNullException.ThrowIfNull(topologySignatureVerifier);
         ArgumentNullException.ThrowIfNull(successorSignatureVerifier);
-        var frozenEncoded = encoded.ToArray();
+        var frozenEncoded = FreezeBounded(encoded);
         var frozenContext = Freeze(context);
         ValidateContext(frozenContext);
         var proof = ProductionMailboxSelectionSuccessorCodec.Decode(frozenEncoded);
@@ -133,6 +133,10 @@ public static class ProductionMailboxSelectionSuccessorVerifier
         var newTopologyValue = newTopology.Snapshot;
         var oldTopologyHash = oldTopology.CanonicalTopologyHash.ToArray();
         var newTopologyHash = newTopology.CanonicalTopologyHash.ToArray();
+
+        if (proof.Mode == ProductionMailboxSelectionSuccessorMode.DirectPromotion)
+            RejectTerminalDirectClosure(oldAuthorityValue, newAuthorityValue,
+                oldTopologyValue, newTopologyValue);
 
         Equal(proof.NetworkId.Span, frozenContext.ExpectedNetworkId.Span,
             ProductionMailboxSelectionSuccessorError.NetworkMismatch, "PSS1 expected network mismatch.");
@@ -339,6 +343,32 @@ public static class ProductionMailboxSelectionSuccessorVerifier
                 "Direct PSS1 must bridge old-next to the identical new-current epoch.");
         BindDirectSelectionRoute(oldSelection, newSelection);
         BindDirectResolvedReplicas(oldReplicas, newReplicas);
+    }
+
+    private static void RejectTerminalDirectClosure(
+        ProductionMailboxAuthority oldAuthority,
+        ProductionMailboxAuthority newAuthority,
+        ProductionMailboxTopologySnapshot oldTopology,
+        ProductionMailboxTopologySnapshot newTopology)
+    {
+        if (oldAuthority.Revocation.Generation == ulong.MaxValue ||
+            newAuthority.Revocation.Generation == ulong.MaxValue)
+            throw Error(ProductionMailboxSelectionSuccessorError.AuthorityNotSuccessor,
+                "Direct PSS1 cannot commit a terminal revocation generation.");
+        if (oldTopology.TopologyGeneration == ulong.MaxValue ||
+            newTopology.TopologyGeneration == ulong.MaxValue)
+            throw Error(ProductionMailboxSelectionSuccessorError.TopologyNotSuccessor,
+                "Direct PSS1 cannot commit a terminal topology generation.");
+    }
+
+    private static byte[] FreezeBounded(ReadOnlySpan<byte> encoded)
+    {
+        if (encoded.Length < ProductionMailboxSelectionSuccessorConstants.FixedCoreLength +
+                ProductionMailboxSelectionSuccessorConstants.SignatureBytes ||
+            encoded.Length > ProductionMailboxSelectionSuccessorConstants.MaximumArtifactBytes)
+            throw Error(ProductionMailboxSelectionSuccessorError.InvalidLength,
+                "PSS1 length is outside its strict bounds.");
+        return encoded.ToArray();
     }
 
     private static void VerifyOfflineCheckpoint(
