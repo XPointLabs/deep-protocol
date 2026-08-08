@@ -85,6 +85,25 @@ public sealed class ProductionMailboxTopologyTests
     }
 
     [Fact]
+    public void TopologyVerifierPreflightsContextHashBeforeCopyOrSignatureCallback()
+    {
+        var f = CreateFixture();
+        var verifier = new CountingVerifier();
+        var context = f.Context with { LastCommittedTopologyHash = new byte[8 * 1024 * 1024] };
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        var exception = Assert.Throws<ProductionMailboxTopologyException>(() =>
+            ProductionMailboxTopologyVerifier.Verify(
+                ProductionMailboxTopologyCodec.Encode(f.Topology), f.Authority, context, verifier));
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.Equal(ProductionMailboxTopologyError.InvalidField, exception.Error);
+        Assert.True(allocated < 128 * 1024,
+            $"Topology verifier allocated {allocated} bytes for an oversized context hash.");
+        Assert.Equal(0, verifier.CallbackCount);
+    }
+
+    [Fact]
     public void OrdinaryTopologyVerifierRejectsMaxMinusOneToTerminalSuccessor()
     {
         var f = CreateFixture();
@@ -180,6 +199,50 @@ public sealed class ProductionMailboxTopologyTests
         Assert.NotEqual(
             Convert.ToHexString(ProductionMailboxReplicaSelection.ComputeSelectionInputCommitment(new BlindedPlacementId(Bytes(10, 32)))),
             Convert.ToHexString(ProductionMailboxReplicaSelection.ComputeSelectionInputCommitment(new BlindedPlacementId(Bytes(11, 32)))));
+    }
+
+    [Fact]
+    public void RendezvousV2UsesOneBoundedSnapshotAndRejectsAnUnstableNodeList()
+    {
+        var f = CreateFixture();
+        var network = f.Topology.NetworkId.ToArray();
+        var membership = f.Topology.CurrentEpoch.MembershipCommitment.ToArray();
+        var placement = f.Topology.CurrentEpoch.TopologyPlacementCommitment.ToArray();
+        var selection = f.SelectionInputCommitment.ToArray();
+        var nodes = f.Topology.CurrentEpoch.Nodes.ToArray();
+        var stableEpoch = f.Topology.CurrentEpoch with
+        {
+            MembershipCommitment = membership.ToArray(),
+            TopologyPlacementCommitment = placement.ToArray(),
+            Nodes = nodes
+        };
+        var expected = ProductionMailboxReplicaSelection.Select(
+            network.ToArray(), stableEpoch, selection.ToArray());
+        var mutatingNodes = new CallbackNodeList(nodes, () =>
+        {
+            network[0] ^= 0xff;
+            membership[0] ^= 0xff;
+            placement[0] ^= 0xff;
+            selection[0] ^= 0xff;
+        });
+        var mutableEpoch = f.Topology.CurrentEpoch with
+        {
+            MembershipCommitment = membership,
+            TopologyPlacementCommitment = placement,
+            Nodes = mutatingNodes
+        };
+
+        var actual = ProductionMailboxReplicaSelection.Select(network, mutableEpoch, selection);
+        Assert.Equal(expected.Select(static id => Convert.ToHexString(id.Span)),
+            actual.Select(static id => Convert.ToHexString(id.Span)));
+
+        var unstableEpoch = f.Topology.CurrentEpoch with
+        {
+            Nodes = new UnstableCountNodeList(nodes)
+        };
+        AssertError(ProductionMailboxTopologyError.InvalidField,
+            () => ProductionMailboxReplicaSelection.Select(
+                f.Topology.NetworkId.Span, unstableEpoch, f.SelectionInputCommitment));
     }
 
     [Fact]
@@ -603,6 +666,42 @@ public sealed class ProductionMailboxTopologyTests
         private readonly SodiumProductionMailboxTopologySignatureVerifier _inner = new();
         public bool Verify(ReadOnlySpan<byte> publicKey, ReadOnlySpan<byte> signingBytes, ReadOnlySpan<byte> signature)
         { mutate(); return _inner.Verify(publicKey, signingBytes, signature); }
+    }
+    private sealed class CountingVerifier : IProductionMailboxTopologySignatureVerifier
+    {
+        public int CallbackCount { get; private set; }
+        public bool Verify(ReadOnlySpan<byte> publicKey, ReadOnlySpan<byte> signingBytes,
+            ReadOnlySpan<byte> signature)
+        { CallbackCount++; return false; }
+    }
+    private sealed class CallbackNodeList(
+        IReadOnlyList<ProductionMailboxTopologyNode> inner,
+        Action callback) : IReadOnlyList<ProductionMailboxTopologyNode>
+    {
+        private int _callbackInvoked;
+        public int Count => inner.Count;
+        public ProductionMailboxTopologyNode this[int index]
+        {
+            get
+            {
+                if (Interlocked.Exchange(ref _callbackInvoked, 1) == 0)
+                    callback();
+                return inner[index];
+            }
+        }
+        public IEnumerator<ProductionMailboxTopologyNode> GetEnumerator() => inner.GetEnumerator();
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+    }
+    private sealed class UnstableCountNodeList(
+        IReadOnlyList<ProductionMailboxTopologyNode> inner) : IReadOnlyList<ProductionMailboxTopologyNode>
+    {
+        private int _countReads;
+        public int Count => Interlocked.Increment(ref _countReads) == 1
+            ? inner.Count
+            : inner.Count - 1;
+        public ProductionMailboxTopologyNode this[int index] => inner[index];
+        public IEnumerator<ProductionMailboxTopologyNode> GetEnumerator() => inner.GetEnumerator();
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
     }
     private sealed record Fixture(VerifiedProductionMailboxAuthority Authority, ProductionMailboxTopologySnapshot Topology,
         byte[] IssuerPrivateKey, MembershipRouteDescriptor[] CurrentDescriptors, BlindedPlacementId PlacementId,

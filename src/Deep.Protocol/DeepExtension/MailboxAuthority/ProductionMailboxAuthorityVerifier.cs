@@ -31,31 +31,33 @@ public static class ProductionMailboxAuthorityVerifier
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(signatureVerifier);
-        ValidateCheckpointContext(context);
+        ValidateCheckpointContextLengths(context);
+        var frozenContext = Freeze(context);
+        ValidateCheckpointContext(frozenContext);
         var frozenBytes = canonicalAuthority.ToArray();
         var frozen = ProductionMailboxAuthorityCodec.Decode(frozenBytes);
         if (!frozenBytes.AsSpan().SequenceEqual(ProductionMailboxAuthorityCodec.Encode(frozen)))
             throw Error(ProductionMailboxAuthorityError.NonCanonical,
                 "Forward checkpoint PMA1 is not canonical.");
         if (!CryptographicOperations.FixedTimeEquals(frozen.NetworkId.Span,
-                context.ExpectedNetworkId.Span))
+                frozenContext.ExpectedNetworkId.Span))
             throw Error(ProductionMailboxAuthorityError.InvalidField,
                 "Forward checkpoint authority is for another network.");
         if (frozen.AuthorityGeneration == ulong.MaxValue ||
-            frozen.AuthorityGeneration <= context.LastCommittedGeneration)
+            frozen.AuthorityGeneration <= frozenContext.LastCommittedGeneration)
             throw Error(ProductionMailboxAuthorityError.AuthorityRollback,
                 "Forward checkpoint authority did not advance durable generation.");
         if (!CryptographicOperations.FixedTimeEquals(
                 SHA256.HashData(frozen.MrXApprovalEd25519PublicKey.Span),
-                context.PinnedMrXPublicKeySha256.Span))
+                frozenContext.PinnedMrXPublicKeySha256.Span))
             throw Error(ProductionMailboxAuthorityError.UntrustedMrXKey,
                 "Forward checkpoint Mr. X key does not match the caller-pinned key hash.");
         if (!signatureVerifier.Verify(frozen.MrXApprovalEd25519PublicKey.Span,
                 ProductionMailboxAuthorityCodec.GetSigningBytes(frozen), frozen.Signature.Span))
             throw Error(ProductionMailboxAuthorityError.InvalidSignature,
                 "Forward checkpoint PMA1 signature is invalid.");
-        VerifyCheckpointRevocation(frozen.Revocation, context);
-        VerifyTime(frozen, context.NowUnixSeconds, context.ClockSkewSeconds);
+        VerifyCheckpointRevocation(frozen.Revocation, frozenContext);
+        VerifyTime(frozen, frozenContext.NowUnixSeconds, frozenContext.ClockSkewSeconds);
         return new VerifiedProductionMailboxAuthority(
             frozen, SHA256.HashData(frozenBytes), frozen.AuthorityGeneration);
     }
@@ -68,31 +70,88 @@ public static class ProductionMailboxAuthorityVerifier
         ArgumentNullException.ThrowIfNull(authority);
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(signatureVerifier);
-        ValidateContext(context);
+        ValidateContextLengths(context);
+        var frozenContext = Freeze(context);
+        ValidateContext(frozenContext);
 
         // Freeze caller-owned backing arrays once. Every trust decision below uses only the strict
         // canonical re-decode, so concurrent mutation cannot create a verified mixed snapshot.
         var encoded = ProductionMailboxAuthorityCodec.Encode(authority);
         var frozen = ProductionMailboxAuthorityCodec.Decode(encoded);
         var canonicalHash = SHA256.HashData(encoded);
-        if (!CryptographicOperations.FixedTimeEquals(frozen.NetworkId.Span, context.ExpectedNetworkId.Span))
+        if (!CryptographicOperations.FixedTimeEquals(
+                frozen.NetworkId.Span, frozenContext.ExpectedNetworkId.Span))
             throw Error(ProductionMailboxAuthorityError.InvalidField, "Authority is for another network.");
-        if (frozen.AuthorityGeneration == ulong.MaxValue || frozen.AuthorityGeneration != context.LastCommittedGeneration + 1)
+        if (frozen.AuthorityGeneration == ulong.MaxValue ||
+            frozen.AuthorityGeneration != frozenContext.LastCommittedGeneration + 1)
             throw Error(ProductionMailboxAuthorityError.AuthorityRollback, "Authority generation is not the next durable generation.");
-        if (!CryptographicOperations.FixedTimeEquals(frozen.PreviousAuthorityHash.Span, context.LastCommittedAuthorityHash.Span))
+        if (!CryptographicOperations.FixedTimeEquals(
+                frozen.PreviousAuthorityHash.Span, frozenContext.LastCommittedAuthorityHash.Span))
             throw Error(ProductionMailboxAuthorityError.PreviousHashMismatch, "Authority previous hash does not match durable state.");
         if (!CryptographicOperations.FixedTimeEquals(
-                SHA256.HashData(frozen.MrXApprovalEd25519PublicKey.Span), context.PinnedMrXPublicKeySha256.Span))
+                SHA256.HashData(frozen.MrXApprovalEd25519PublicKey.Span),
+                frozenContext.PinnedMrXPublicKeySha256.Span))
             throw Error(ProductionMailboxAuthorityError.UntrustedMrXKey, "Authority Mr. X key does not match the caller-pinned key hash.");
         if (!signatureVerifier.Verify(
                 frozen.MrXApprovalEd25519PublicKey.Span,
                 ProductionMailboxAuthorityCodec.GetSigningBytes(frozen),
                 frozen.Signature.Span))
             throw Error(ProductionMailboxAuthorityError.InvalidSignature, "Authority signature is invalid.");
-        VerifyRevocationSuccessor(frozen.Revocation, context);
-        VerifyTime(frozen, context.NowUnixSeconds, context.ClockSkewSeconds);
+        VerifyRevocationSuccessor(frozen.Revocation, frozenContext);
+        VerifyTime(frozen, frozenContext.NowUnixSeconds, frozenContext.ClockSkewSeconds);
         return new VerifiedProductionMailboxAuthority(frozen, canonicalHash, frozen.AuthorityGeneration);
     }
+
+    private static void ValidateContextLengths(
+        ProductionMailboxAuthorityVerificationContext context)
+    {
+        if (context.PinnedMrXPublicKeySha256.Length
+                != ProductionMailboxAuthorityConstants.HashLength ||
+            context.ExpectedNetworkId.Length
+                != ProductionMailboxAuthorityConstants.NetworkIdLength ||
+            context.LastCommittedAuthorityHash.Length
+                != ProductionMailboxAuthorityConstants.HashLength ||
+            context.LastCommittedRevocationHeadHash.Length
+                != ProductionMailboxAuthorityConstants.HashLength ||
+            context.LastCommittedRevocationSnapshotHash.Length
+                != ProductionMailboxAuthorityConstants.HashLength)
+            throw Error(ProductionMailboxAuthorityError.InvalidField,
+                "Verification context field length is invalid.");
+    }
+
+    private static ProductionMailboxAuthorityVerificationContext Freeze(
+        ProductionMailboxAuthorityVerificationContext context) => context with
+    {
+        PinnedMrXPublicKeySha256 = context.PinnedMrXPublicKeySha256.ToArray(),
+        ExpectedNetworkId = context.ExpectedNetworkId.ToArray(),
+        LastCommittedAuthorityHash = context.LastCommittedAuthorityHash.ToArray(),
+        LastCommittedRevocationHeadHash = context.LastCommittedRevocationHeadHash.ToArray(),
+        LastCommittedRevocationSnapshotHash = context.LastCommittedRevocationSnapshotHash.ToArray()
+    };
+
+    private static void ValidateCheckpointContextLengths(
+        ProductionMailboxAuthorityCheckpointVerificationContext context)
+    {
+        if (context.PinnedMrXPublicKeySha256.Length
+                != ProductionMailboxAuthorityConstants.HashLength ||
+            context.ExpectedNetworkId.Length
+                != ProductionMailboxAuthorityConstants.NetworkIdLength ||
+            context.LastCommittedRevocationHeadHash.Length
+                != ProductionMailboxAuthorityConstants.HashLength ||
+            context.LastCommittedRevocationSnapshotHash.Length
+                != ProductionMailboxAuthorityConstants.HashLength)
+            throw Error(ProductionMailboxAuthorityError.InvalidField,
+                "Forward checkpoint context field length is invalid.");
+    }
+
+    private static ProductionMailboxAuthorityCheckpointVerificationContext Freeze(
+        ProductionMailboxAuthorityCheckpointVerificationContext context) => context with
+    {
+        PinnedMrXPublicKeySha256 = context.PinnedMrXPublicKeySha256.ToArray(),
+        ExpectedNetworkId = context.ExpectedNetworkId.ToArray(),
+        LastCommittedRevocationHeadHash = context.LastCommittedRevocationHeadHash.ToArray(),
+        LastCommittedRevocationSnapshotHash = context.LastCommittedRevocationSnapshotHash.ToArray()
+    };
 
     private static void ValidateContext(ProductionMailboxAuthorityVerificationContext context)
     {

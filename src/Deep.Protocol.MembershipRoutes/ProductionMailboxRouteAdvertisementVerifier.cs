@@ -15,6 +15,9 @@ public static class ProductionMailboxRouteCertificateVerifier
     {
         ArgumentNullException.ThrowIfNull(verifiedAuthority);
         ArgumentNullException.ThrowIfNull(signatureVerifier);
+        if (encoded.Length != ProductionMailboxRouteAdvertisementConstants.CanonicalCertificateLength)
+            throw Error(ProductionMailboxRouteAdvertisementError.InvalidLength,
+                "PRC1 canonical length is invalid.");
         ValidateClock(nowUnixSeconds, clockSkewSeconds);
         var frozenBytes = encoded.ToArray();
         var certificate = ProductionMailboxRouteAdvertisementCodec.DecodeCertificate(frozenBytes);
@@ -105,6 +108,17 @@ public static class ProductionMailboxRouteAdvertisementVerifier
         ArgumentNullException.ThrowIfNull(verifiedAuthority);
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(signatureVerifier);
+        if (encoded.Length != ProductionMailboxRouteAdvertisementConstants.CanonicalAdvertisementLength)
+            throw ProductionMailboxRouteCertificateVerifier.Error(
+                ProductionMailboxRouteAdvertisementError.InvalidLength,
+                "PRA1 canonical length is invalid.");
+        if (context.ExpectedRouteDomainHash.Length
+                != ProductionMailboxRouteAdvertisementConstants.HashLength
+            || context.LastAcceptedAdvertisementHash.Length
+                != ProductionMailboxRouteAdvertisementConstants.HashLength)
+            throw ProductionMailboxRouteCertificateVerifier.Error(
+                ProductionMailboxRouteAdvertisementError.InvalidField,
+                "PRA1 verification context hash length is invalid.");
         var frozenRouteDomainHash = context.ExpectedRouteDomainHash.ToArray();
         var frozenLastHash = context.LastAcceptedAdvertisementHash.ToArray();
         ValidateContext(context.LastAcceptedSequence, frozenLastHash,

@@ -17,12 +17,17 @@ public static class ProductionMailboxSelectionSuccessorVerifier
         IProductionMailboxTopologySignatureVerifier selectionSignatureVerifier,
         IProductionMailboxSelectionSuccessorSignatureVerifier successorSignatureVerifier)
     {
+        ArgumentNullException.ThrowIfNull(context);
+        ValidateContextLengths(context);
+        var frozenContext = Freeze(context);
+        ValidateContext(frozenContext);
         var frozenEncoded = FreezeBounded(encoded);
         if (ProductionMailboxSelectionSuccessorCodec.Decode(frozenEncoded).Mode !=
             ProductionMailboxSelectionSuccessorMode.DirectPromotion)
             throw Error(ProductionMailboxSelectionSuccessorError.InvalidTransitionMode,
                 "This entry point accepts direct-promotion PSS1 only.");
-        return VerifyCore(frozenEncoded, oldAuthority, oldTopology, newAuthority, newTopology, context,
+        return VerifyCore(frozenEncoded, oldAuthority, oldTopology, newAuthority, newTopology,
+            frozenContext,
             authoritySignatureVerifier, selectionSignatureVerifier, successorSignatureVerifier);
     }
 
@@ -42,9 +47,10 @@ public static class ProductionMailboxSelectionSuccessorVerifier
         ArgumentNullException.ThrowIfNull(authoritySignatureVerifier);
         ArgumentNullException.ThrowIfNull(topologySignatureVerifier);
         ArgumentNullException.ThrowIfNull(successorSignatureVerifier);
-        var frozenEncoded = FreezeBounded(encoded);
+        ValidateContextLengths(context);
         var frozenContext = Freeze(context);
         ValidateContext(frozenContext);
+        var frozenEncoded = FreezeBounded(encoded);
         var proof = ProductionMailboxSelectionSuccessorCodec.Decode(frozenEncoded);
         if (proof.Mode != ProductionMailboxSelectionSuccessorMode.OfflineCheckpoint)
             throw Error(ProductionMailboxSelectionSuccessorError.InvalidTransitionMode,
@@ -119,8 +125,7 @@ public static class ProductionMailboxSelectionSuccessorVerifier
         ArgumentNullException.ThrowIfNull(authoritySignatureVerifier);
         ArgumentNullException.ThrowIfNull(selectionSignatureVerifier);
         ArgumentNullException.ThrowIfNull(successorSignatureVerifier);
-        var frozenContext = Freeze(context);
-        ValidateContext(frozenContext);
+        var frozenContext = context;
         var proof = ProductionMailboxSelectionSuccessorCodec.Decode(frozenBytes);
         VerifyWindow(proof.IssuedAtUnixSeconds, proof.ExpiresAtUnixSeconds,
             frozenContext.NowUnixSeconds, frozenContext.ClockSkewSeconds, "PSS1");
@@ -545,6 +550,19 @@ public static class ProductionMailboxSelectionSuccessorVerifier
         PinnedMrXPublicKeySha256 = context.PinnedMrXPublicKeySha256.ToArray(),
         ExpectedOldCanonicalSelectionHash = context.ExpectedOldCanonicalSelectionHash.ToArray()
     };
+
+    private static void ValidateContextLengths(
+        ProductionMailboxSelectionSuccessorVerificationContext context)
+    {
+        if (context.ExpectedNetworkId.Length != 16 ||
+            context.ExpectedMailboxOwnerEd25519PublicKey.Length != 32 ||
+            context.ExpectedBlindedMailboxId.Length != 32 ||
+            context.ExpectedBlindedPlacementId.Length != 32 ||
+            context.PinnedMrXPublicKeySha256.Length != 32 ||
+            context.ExpectedOldCanonicalSelectionHash.Length != 32)
+            throw Error(ProductionMailboxSelectionSuccessorError.InvalidField,
+                "PSS1 verification context field length is invalid.");
+    }
 
     private static void ValidateContext(ProductionMailboxSelectionSuccessorVerificationContext context)
     {

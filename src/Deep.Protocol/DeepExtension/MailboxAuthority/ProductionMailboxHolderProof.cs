@@ -75,6 +75,8 @@ public static class ProductionMailboxHolderProof
 
     public static byte[] GetSigningBytes(ProductionMailboxHolderProofInput input)
     {
+        ArgumentNullException.ThrowIfNull(input);
+        ValidateFixedFieldLengths(input);
         var frozen = Freeze(input);
         return GetFrozenSigningBytes(frozen);
     }
@@ -114,6 +116,7 @@ public static class ProductionMailboxHolderProof
         ReadOnlySpan<byte> signature,
         IProductionMailboxHolderProofSignatureVerifier verifier)
     {
+        ArgumentNullException.ThrowIfNull(input);
         if (input.Intent != ProductionMailboxIssuanceIntent.LocalOwner)
             throw Error(ProductionMailboxHolderProofError.InvalidIntent,
                 "Owner proof is valid only for LocalOwner issuance.");
@@ -127,13 +130,18 @@ public static class ProductionMailboxHolderProof
         IProductionMailboxHolderProofSignatureVerifier verifier,
         string role)
     {
+        ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(verifier);
+        ValidateFixedFieldLengths(input);
+        if (signature.Length != 64)
+            throw Error(ProductionMailboxHolderProofError.InvalidSignature,
+                $"Production mailbox {role} proof is invalid.");
         var frozen = Freeze(input);
         var frozenPublicKey = (owner
             ? frozen.MailboxOwnerEd25519PublicKey : frozen.HolderEd25519PublicKey).ToArray();
         var frozenSignature = signature.ToArray();
         var signingBytes = GetFrozenSigningBytes(frozen);
-        if (frozenSignature.Length != 64 || !verifier.Verify(frozenPublicKey, signingBytes, frozenSignature))
+        if (!verifier.Verify(frozenPublicKey, signingBytes, frozenSignature))
             throw Error(ProductionMailboxHolderProofError.InvalidSignature,
                 $"Production mailbox {role} proof is invalid.");
     }
@@ -169,6 +177,25 @@ public static class ProductionMailboxHolderProof
             input.Intent == ProductionMailboxIssuanceIntent.PeerDeposit && !routeFields[0])
             throw Error(ProductionMailboxHolderProofError.InvalidRoute,
                 "LocalOwner requires a zero route; PeerDeposit requires a complete route.");
+    }
+
+    private static void ValidateFixedFieldLengths(ProductionMailboxHolderProofInput input)
+    {
+        if (input.NetworkId.Length != 16 ||
+            input.CanonicalAuthorityHash.Length != 32 ||
+            input.HolderEd25519PublicKey.Length != 32 ||
+            input.MailboxOwnerEd25519PublicKey.Length != 32 ||
+            input.BlindedMailboxId.Length != 32 ||
+            input.BlindedPlacementId.Length != 32 ||
+            input.SelectionInputCommitment.Length != 32 ||
+            input.SigningCertificateSha256.Length != 32 ||
+            input.BuildArtifactSha256.Length != 32 ||
+            input.IdempotencyKey.Length != 32 ||
+            input.EntitlementCommitment.Length != 32 ||
+            input.ChallengeId.Length != 16 ||
+            input.Challenge.Length != 32)
+            throw Error(ProductionMailboxHolderProofError.InvalidField,
+                "Holder-proof fixed field length is invalid.");
     }
 
     private static ProductionMailboxHolderProofInput Freeze(ProductionMailboxHolderProofInput input)

@@ -38,6 +38,55 @@ public sealed class ProductionMailboxAuthorityContractTests
     }
 
     [Fact]
+    public void VerificationFreezesCallerOwnedContextBeforeSignatureCallbackMutation()
+    {
+        var fixture = CreateFixture();
+        var mutableRevocationHead = fixture.Context.LastCommittedRevocationHeadHash.ToArray();
+        var context = fixture.Context with
+        {
+            LastCommittedRevocationHeadHash = mutableRevocationHead
+        };
+
+        var verified = ProductionMailboxAuthorityVerifier.Verify(
+            fixture.Authority,
+            context,
+            new MutatingVerifier(() => mutableRevocationHead[0] ^= 0xff));
+
+        Assert.False(verified.CanonicalAuthorityHash.IsEmpty);
+        Assert.NotEqual(fixture.Context.LastCommittedRevocationHeadHash.Span[0],
+            mutableRevocationHead[0]);
+    }
+
+    [Fact]
+    public void VerificationPreflightsAllContextFieldsBeforeCopyOrSignatureCallback()
+    {
+        var fixture = CreateFixture();
+        var huge = new byte[8 * 1024 * 1024];
+        var contexts = new[]
+        {
+            fixture.Context with { PinnedMrXPublicKeySha256 = huge },
+            fixture.Context with { ExpectedNetworkId = huge },
+            fixture.Context with { LastCommittedAuthorityHash = huge },
+            fixture.Context with { LastCommittedRevocationHeadHash = huge },
+            fixture.Context with { LastCommittedRevocationSnapshotHash = huge }
+        };
+        var verifier = new CountingVerifier();
+
+        foreach (var context in contexts)
+        {
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            var exception = Assert.Throws<ProductionMailboxAuthorityException>(() =>
+                ProductionMailboxAuthorityVerifier.Verify(fixture.Authority, context, verifier));
+            var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            Assert.Equal(ProductionMailboxAuthorityError.InvalidField, exception.Error);
+            Assert.True(allocated < 128 * 1024,
+                $"Authority verifier allocated {allocated} bytes for an oversized context field.");
+        }
+
+        Assert.Equal(0, verifier.CallbackCount);
+    }
+
+    [Fact]
     public void PayloadHashBindsEveryAuthorityPayloadField()
     {
         var fixture = CreateFixture();
@@ -380,6 +429,18 @@ public sealed class ProductionMailboxAuthorityContractTests
         {
             mutate();
             return _inner.Verify(publicKey, signingBytes, signature);
+        }
+    }
+
+    private sealed class CountingVerifier : IProductionMailboxAuthoritySignatureVerifier
+    {
+        public int CallbackCount { get; private set; }
+
+        public bool Verify(ReadOnlySpan<byte> publicKey, ReadOnlySpan<byte> signingBytes,
+            ReadOnlySpan<byte> signature)
+        {
+            CallbackCount++;
+            return false;
         }
     }
 

@@ -25,23 +25,62 @@ public static class ProductionMailboxReplicaSelection
         ReadOnlySpan<byte> selectionInputCommitment)
     {
         ArgumentNullException.ThrowIfNull(epoch);
-        if (networkId.Length != 16 || networkId.IndexOfAnyExcept((byte)0) < 0 ||
-            selectionInputCommitment.Length != 32 || selectionInputCommitment.IndexOfAnyExcept((byte)0) < 0 ||
-            epoch.Epoch == 0 || epoch.Generation == 0 || epoch.MembershipCommitment.Length != 32 ||
-            epoch.MembershipCommitment.Span.IndexOfAnyExcept((byte)0) < 0 || epoch.TopologyPlacementCommitment.Length != 32 ||
-            epoch.TopologyPlacementCommitment.Span.IndexOfAnyExcept((byte)0) < 0 || epoch.Nodes is null ||
-            epoch.Nodes.Count is < 2 or > ProductionMailboxTopologyConstants.MaximumNodesPerEpoch ||
-            epoch.Nodes.Any(static node => node is null || node.NodeId.Length != 32 || node.NodeId.Span.IndexOfAnyExcept((byte)0) < 0) ||
-            epoch.Nodes.Select(static node => Convert.ToHexString(node.NodeId.Span)).Distinct(StringComparer.Ordinal).Count() != epoch.Nodes.Count)
+        if (networkId.Length != 16 || selectionInputCommitment.Length != 32 ||
+            epoch.MembershipCommitment.Length != 32 ||
+            epoch.TopologyPlacementCommitment.Length != 32 || epoch.Nodes is null)
             throw Error(ProductionMailboxTopologyError.InvalidField, "Selection inputs are invalid.");
-        var network = networkId.ToArray(); var selectionInput = selectionInputCommitment.ToArray();
-        var numbers = new byte[16];
-        BinaryPrimitives.WriteUInt64BigEndian(numbers, epoch.Epoch);
-        BinaryPrimitives.WriteUInt64BigEndian(numbers.AsSpan(8), epoch.Generation);
-        return epoch.Nodes.Select(node => new
+
+        var network = networkId.ToArray();
+        var selectionInput = selectionInputCommitment.ToArray();
+        var membership = epoch.MembershipCommitment.ToArray();
+        var topologyPlacement = epoch.TopologyPlacementCommitment.ToArray();
+        var epochNumber = epoch.Epoch;
+        var epochGeneration = epoch.Generation;
+        var sourceNodes = epoch.Nodes;
+        int nodeCount;
+        byte[][] nodes;
+        try
         {
-            Node = node.NodeId.ToArray(),
-            Score = Score(network, numbers, epoch, selectionInput, node.NodeId.Span)
+            nodeCount = sourceNodes.Count;
+            if (nodeCount is < 2 or > ProductionMailboxTopologyConstants.MaximumNodesPerEpoch)
+                throw Error(ProductionMailboxTopologyError.InvalidField,
+                    "Selection inputs are invalid.");
+            nodes = new byte[nodeCount][];
+            for (var index = 0; index < nodeCount; index++)
+            {
+                if (sourceNodes.Count != nodeCount)
+                    throw Error(ProductionMailboxTopologyError.InvalidField,
+                        "Selection node set changed while being snapshotted.");
+                var node = sourceNodes[index];
+                if (node is null || node.NodeId.Length != 32)
+                    throw Error(ProductionMailboxTopologyError.InvalidField,
+                        "Selection node is invalid.");
+                nodes[index] = node.NodeId.ToArray();
+            }
+            if (sourceNodes.Count != nodeCount)
+                throw Error(ProductionMailboxTopologyError.InvalidField,
+                    "Selection node set changed while being snapshotted.");
+        }
+        catch (Exception exception) when (exception is ArgumentOutOfRangeException
+            or IndexOutOfRangeException or InvalidOperationException)
+        {
+            throw Error(ProductionMailboxTopologyError.InvalidField,
+                "Selection node set could not be snapshotted.");
+        }
+        if (network.IndexOfAnyExcept((byte)0) < 0 ||
+            selectionInput.IndexOfAnyExcept((byte)0) < 0 || epochNumber == 0 ||
+            epochGeneration == 0 || membership.IndexOfAnyExcept((byte)0) < 0 ||
+            topologyPlacement.IndexOfAnyExcept((byte)0) < 0 ||
+            nodes.Any(static node => node.AsSpan().IndexOfAnyExcept((byte)0) < 0) ||
+            nodes.Select(Convert.ToHexString).Distinct(StringComparer.Ordinal).Count() != nodeCount)
+            throw Error(ProductionMailboxTopologyError.InvalidField, "Selection inputs are invalid.");
+        var numbers = new byte[16];
+        BinaryPrimitives.WriteUInt64BigEndian(numbers, epochNumber);
+        BinaryPrimitives.WriteUInt64BigEndian(numbers.AsSpan(8), epochGeneration);
+        return nodes.Select(node => new
+        {
+            Node = node,
+            Score = Score(network, numbers, membership, topologyPlacement, selectionInput, node)
         })
             .OrderBy(static item => item.Score, ByteArrayComparer.Instance)
             .ThenBy(static item => item.Node, ByteArrayComparer.Instance)
@@ -49,11 +88,12 @@ public static class ProductionMailboxReplicaSelection
     }
 
     private static byte[] Score(ReadOnlySpan<byte> networkId, ReadOnlySpan<byte> numbers,
-        ProductionMailboxTopologyEpoch epoch, ReadOnlySpan<byte> selectionInput, ReadOnlySpan<byte> nodeId)
+        ReadOnlySpan<byte> membershipCommitment, ReadOnlySpan<byte> topologyPlacementCommitment,
+        ReadOnlySpan<byte> selectionInput, ReadOnlySpan<byte> nodeId)
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         hash.AppendData(ScoreDomain); hash.AppendData(networkId); hash.AppendData(numbers);
-        hash.AppendData(epoch.MembershipCommitment.Span); hash.AppendData(epoch.TopologyPlacementCommitment.Span);
+        hash.AppendData(membershipCommitment); hash.AppendData(topologyPlacementCommitment);
         hash.AppendData(selectionInput); hash.AppendData(nodeId);
         return hash.GetHashAndReset();
     }
@@ -92,6 +132,9 @@ public static class ProductionMailboxTopologyVerifier
         IProductionMailboxTopologySignatureVerifier signatureVerifier)
     {
         ArgumentNullException.ThrowIfNull(context);
+        if (context.LastCommittedTopologyHash.Length != 32)
+            throw Error(ProductionMailboxTopologyError.InvalidField,
+                "Topology verification context hash length is invalid.");
         context = context with { LastCommittedTopologyHash = context.LastCommittedTopologyHash.ToArray() };
         ValidateContext(context);
         return VerifyCore(encoded, verifiedAuthority, signatureVerifier,

@@ -103,6 +103,50 @@ public sealed class ProductionMailboxHolderProofTests
         }, ProductionMailboxHolderProofError.InvalidRoute);
     }
 
+    [Fact]
+    public void PublicProofApisPreflightEveryFixedFieldAndSignatureBeforeCopyOrCallback()
+    {
+        var input = Input();
+        var huge = new byte[8 * 1024 * 1024];
+        var inputs = new[]
+        {
+            input with { NetworkId = huge },
+            input with { CanonicalAuthorityHash = huge },
+            input with { HolderEd25519PublicKey = huge },
+            input with { MailboxOwnerEd25519PublicKey = huge },
+            input with { BlindedMailboxId = huge },
+            input with { BlindedPlacementId = huge },
+            input with { SelectionInputCommitment = huge },
+            input with { SigningCertificateSha256 = huge },
+            input with { BuildArtifactSha256 = huge },
+            input with { IdempotencyKey = huge },
+            input with { EntitlementCommitment = huge },
+            input with { ChallengeId = huge },
+            input with { Challenge = huge }
+        };
+        var verifier = new CountingVerifier();
+
+        foreach (var malformed in inputs)
+        {
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            var exception = Assert.Throws<ProductionMailboxHolderProofException>(() =>
+                ProductionMailboxHolderProof.VerifyHolder(malformed, new byte[64], verifier));
+            var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            Assert.Equal(ProductionMailboxHolderProofError.InvalidField, exception.Error);
+            Assert.True(allocated < 128 * 1024,
+                $"Holder-proof verifier allocated {allocated} bytes for an oversized field.");
+        }
+
+        var signatureBefore = GC.GetAllocatedBytesForCurrentThread();
+        var signatureException = Assert.Throws<ProductionMailboxHolderProofException>(() =>
+            ProductionMailboxHolderProof.VerifyHolder(input, huge, verifier));
+        var signatureAllocated = GC.GetAllocatedBytesForCurrentThread() - signatureBefore;
+        Assert.Equal(ProductionMailboxHolderProofError.InvalidSignature, signatureException.Error);
+        Assert.True(signatureAllocated < 128 * 1024,
+            $"Holder-proof verifier allocated {signatureAllocated} bytes for an oversized signature.");
+        Assert.Equal(0, verifier.CallbackCount);
+    }
+
     private static void AssertError(ProductionMailboxHolderProofInput input, ProductionMailboxHolderProofError error) =>
         Assert.Equal(error, Assert.Throws<ProductionMailboxHolderProofException>(() =>
             ProductionMailboxHolderProof.GetSigningBytes(input)).Error);
@@ -149,6 +193,18 @@ public sealed class ProductionMailboxHolderProofTests
         {
             mutate();
             return inner.Verify(publicKey, signingBytes, signature);
+        }
+    }
+
+    private sealed class CountingVerifier : IProductionMailboxHolderProofSignatureVerifier
+    {
+        public int CallbackCount { get; private set; }
+
+        public bool Verify(ReadOnlySpan<byte> publicKey, ReadOnlySpan<byte> signingBytes,
+            ReadOnlySpan<byte> signature)
+        {
+            CallbackCount++;
+            return false;
         }
     }
 }

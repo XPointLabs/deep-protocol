@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Security.Cryptography;
 using Sodium;
 
@@ -36,6 +37,20 @@ public static class ProductionMailboxRevocationSnapshotVerifier
         ArgumentNullException.ThrowIfNull(signatureVerifier);
         if (nowUnixSeconds == 0 || clockSkewSeconds > ProductionMailboxAuthorityConstants.MaximumClockSkewSeconds)
             throw Error(ProductionMailboxRevocationSnapshotError.InvalidField, "PMR1 verification time is invalid.");
+        if (encoded.Length is < ProductionMailboxRevocationSnapshotConstants.FixedArtifactBytesWithoutSerials
+            or > ProductionMailboxRevocationSnapshotConstants.MaximumArtifactBytes)
+            throw Error(ProductionMailboxRevocationSnapshotError.InvalidLength,
+                "PMR1 length is outside its strict bounds.");
+        const int revokedSerialCountOffset = 152;
+        var revokedSerialCount = BinaryPrimitives.ReadUInt16LittleEndian(
+            encoded.Slice(revokedSerialCountOffset, 2));
+        var expectedLength = ProductionMailboxRevocationSnapshotConstants
+            .FixedArtifactBytesWithoutSerials +
+            (revokedSerialCount * ProductionMailboxRevocationSnapshotConstants.RevokedGrantSerialBytes);
+        if (revokedSerialCount > ProductionMailboxRevocationSnapshotConstants.MaximumRevokedGrantSerials
+            || encoded.Length != expectedLength)
+            throw Error(ProductionMailboxRevocationSnapshotError.InvalidLength,
+                "PMR1 length does not match its bounded serial count.");
 
         // Freeze caller-owned bytes once so decode, hash and signature cannot observe different data.
         var canonicalBytes = encoded.ToArray();

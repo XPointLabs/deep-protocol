@@ -211,6 +211,36 @@ public sealed class ProductionMailboxRouteAdvertisementTests
     }
 
     [Fact]
+    public void PublicVerifiers_PreflightEncodedAndContextBoundsBeforeCopyOrCallback()
+    {
+        var fixture = CreateFixture();
+        var verifier = new CountingVerifier();
+        var oversized = new byte[8 * 1024 * 1024];
+        var before = GC.GetAllocatedBytesForCurrentThread();
+
+        AssertError(ProductionMailboxRouteAdvertisementError.InvalidLength, () =>
+            ProductionMailboxRouteCertificateVerifier.Verify(
+                oversized, fixture.Authority, Now, 0, verifier));
+        AssertError(ProductionMailboxRouteAdvertisementError.InvalidLength, () =>
+            ProductionMailboxRouteAdvertisementVerifier.Verify(
+                oversized, fixture.Authority, InitialContext(fixture.Certificate), verifier));
+
+        var advertisement = ProductionMailboxRouteAdvertisementCodec.EncodeAdvertisement(
+            fixture.Advertisement);
+        AssertError(ProductionMailboxRouteAdvertisementError.InvalidField, () =>
+            ProductionMailboxRouteAdvertisementVerifier.Verify(
+                advertisement, fixture.Authority,
+                InitialContext(fixture.Certificate) with
+                {
+                    ExpectedRouteDomainHash = oversized,
+                    LastAcceptedAdvertisementHash = oversized
+                }, verifier));
+
+        Assert.InRange(GC.GetAllocatedBytesForCurrentThread() - before, 0, 128 * 1024);
+        Assert.Equal(0, verifier.Callbacks);
+    }
+
+    [Fact]
     public void CallerOwnedBuffers_AreFrozenBeforeSignatureCallbacksAndVerifiedOutputsAreDefensive()
     {
         var fixture = CreateFixture();
@@ -430,6 +460,18 @@ public sealed class ProductionMailboxRouteAdvertisementTests
             ReadOnlySpan<byte> signature)
         {
             mutate(); return _inner.Verify(publicKey, signingBytes, signature);
+        }
+    }
+
+    private sealed class CountingVerifier : IProductionMailboxRouteSignatureVerifier
+    {
+        public int Callbacks { get; private set; }
+
+        public bool Verify(ReadOnlySpan<byte> publicKey, ReadOnlySpan<byte> signingBytes,
+            ReadOnlySpan<byte> signature)
+        {
+            Callbacks++;
+            return false;
         }
     }
 

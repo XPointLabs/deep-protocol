@@ -137,6 +137,40 @@ public sealed class ProductionMailboxRevocationSnapshotContractTests
     }
 
     [Fact]
+    public void VerifierPreflightsEncodedLengthBeforeCopyOrSignatureCallback()
+    {
+        var fixture = CreateFixture([Serial(1)]);
+        var oversized = new byte[8 * 1024 * 1024];
+        var verifier = new CountingVerifier();
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        var exception = Assert.Throws<ProductionMailboxRevocationSnapshotException>(() =>
+            ProductionMailboxRevocationSnapshotVerifier.Verify(
+                oversized, fixture.VerifiedAuthority, Now, 0, verifier));
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.Equal(ProductionMailboxRevocationSnapshotError.InvalidLength, exception.Error);
+        Assert.True(allocated < 128 * 1024,
+            $"Revocation verifier allocated {allocated} bytes for an oversized PMR1.");
+        Assert.Equal(0, verifier.CallbackCount);
+    }
+
+    [Fact]
+    public void VerifierUsesOneEncodedSnapshotAcrossSignatureCallbackMutation()
+    {
+        var fixture = CreateFixture([Serial(1)]);
+        var mutable = fixture.EncodedSnapshot.ToArray();
+        var expectedHash = SHA256.HashData(mutable);
+
+        var verified = ProductionMailboxRevocationSnapshotVerifier.Verify(
+            mutable, fixture.VerifiedAuthority, Now, 0,
+            new MutatingVerifier(() => mutable[40] ^= 0xff));
+
+        Assert.Equal(expectedHash, verified.CanonicalSnapshotHash.ToArray());
+        Assert.NotEqual(expectedHash, SHA256.HashData(mutable));
+    }
+
+    [Fact]
     public void VerifierRechecksStaleVerifiedAuthorityEpochAndRollout()
     {
         var rolloutExpiresFirst = CreateFixture([Serial(1)]);
@@ -404,6 +438,30 @@ public sealed class ProductionMailboxRevocationSnapshotContractTests
 
     private static byte[] Bytes(byte seed, int length) =>
         Enumerable.Range(0, length).Select(index => unchecked((byte)(seed + index))).ToArray();
+
+    private sealed class CountingVerifier : IProductionMailboxRevocationSnapshotSignatureVerifier
+    {
+        public int CallbackCount { get; private set; }
+
+        public bool Verify(ReadOnlySpan<byte> publicKey, ReadOnlySpan<byte> signingBytes,
+            ReadOnlySpan<byte> signature)
+        {
+            CallbackCount++;
+            return false;
+        }
+    }
+
+    private sealed class MutatingVerifier(Action mutate) : IProductionMailboxRevocationSnapshotSignatureVerifier
+    {
+        private readonly SodiumProductionMailboxRevocationSnapshotSignatureVerifier _inner = new();
+
+        public bool Verify(ReadOnlySpan<byte> publicKey, ReadOnlySpan<byte> signingBytes,
+            ReadOnlySpan<byte> signature)
+        {
+            mutate();
+            return _inner.Verify(publicKey, signingBytes, signature);
+        }
+    }
 
     private sealed record Fixture(
         ProductionMailboxAuthority Authority,

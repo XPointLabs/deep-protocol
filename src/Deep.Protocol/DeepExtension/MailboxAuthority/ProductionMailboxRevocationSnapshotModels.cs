@@ -7,6 +7,10 @@ public static class ProductionMailboxRevocationSnapshotConstants
     public const string Schema = "production-mailbox-revocation-snapshot.v1";
     public const byte Version = 1;
     public const int MaximumRevokedGrantSerials = 4_096;
+    public const int FixedArtifactBytesWithoutSerials = 220;
+    public const int RevokedGrantSerialBytes = 16;
+    public const int MaximumArtifactBytes = FixedArtifactBytesWithoutSerials +
+        (MaximumRevokedGrantSerials * RevokedGrantSerialBytes);
 }
 
 public enum ProductionMailboxRevocationSnapshotError

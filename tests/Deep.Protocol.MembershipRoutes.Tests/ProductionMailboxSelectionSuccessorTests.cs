@@ -115,6 +115,39 @@ public sealed class ProductionMailboxSelectionSuccessorTests
         Assert.True(offlineAllocated < 1024 * 1024,
             $"Offline verifier allocated {offlineAllocated} bytes for an oversized PSS1.");
 
+        var valid = ProductionMailboxSelectionSuccessorCodec.Encode(f.Proof);
+        var hugeContextField = new byte[8 * 1024 * 1024];
+        var malformedContexts = new[]
+        {
+            f.Context with { ExpectedNetworkId = hugeContextField },
+            f.Context with { ExpectedMailboxOwnerEd25519PublicKey = hugeContextField },
+            f.Context with { ExpectedBlindedMailboxId = hugeContextField },
+            f.Context with { ExpectedBlindedPlacementId = hugeContextField },
+            f.Context with { PinnedMrXPublicKeySha256 = hugeContextField },
+            f.Context with { ExpectedOldCanonicalSelectionHash = hugeContextField }
+        };
+        foreach (var malformedContext in malformedContexts)
+        {
+            allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            AssertError(ProductionMailboxSelectionSuccessorError.InvalidField,
+                () => ProductionMailboxSelectionSuccessorVerifier.VerifyDirectPromotion(
+                    valid, f.OldAuthority, f.OldTopology, f.NewAuthority, f.NewTopology,
+                    malformedContext, verifier, verifier, verifier));
+            var contextAllocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+            Assert.True(contextAllocated < 128 * 1024,
+                $"Direct verifier allocated {contextAllocated} bytes for an oversized context field.");
+
+            allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            AssertError(ProductionMailboxSelectionSuccessorError.InvalidField,
+                () => ProductionMailboxSelectionSuccessorVerifier.VerifyOfflineCheckpoint(
+                    valid, f.OldAuthority, f.OldTopology,
+                    ProductionMailboxTopologyCodec.Encode(f.NewTopology.Snapshot),
+                    malformedContext, verifier, verifier, verifier));
+            contextAllocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+            Assert.True(contextAllocated < 128 * 1024,
+                $"Offline verifier allocated {contextAllocated} bytes for an oversized context field.");
+        }
+
         Assert.Equal(0, verifier.CallbackCount);
     }
 
@@ -176,6 +209,20 @@ public sealed class ProductionMailboxSelectionSuccessorTests
             new MutatingVerifier(() => mutable[40] ^= 1));
         var exposed = verified.Proof.MailboxOwnerEd25519PublicKey.ToArray(); exposed[0] ^= 1;
         Assert.NotEqual(exposed, verified.Proof.MailboxOwnerEd25519PublicKey.ToArray());
+
+        var mutableOwner = f.Context.ExpectedMailboxOwnerEd25519PublicKey.ToArray();
+        var mutableContext = f.Context with
+        {
+            ExpectedMailboxOwnerEd25519PublicKey = mutableOwner
+        };
+        var contextVerified = ProductionMailboxSelectionSuccessorVerifier.VerifyDirectPromotion(
+            ProductionMailboxSelectionSuccessorCodec.Encode(f.Proof),
+            f.OldAuthority, f.OldTopology, f.NewAuthority, f.NewTopology, mutableContext,
+            new MutatingAuthorityVerifier(() => mutableOwner[0] ^= 1),
+            new SodiumProductionMailboxTopologySignatureVerifier(),
+            new SodiumProductionMailboxSelectionSuccessorSignatureVerifier());
+        Assert.Equal(f.Proof.MailboxOwnerEd25519PublicKey.ToArray(),
+            contextVerified.Proof.MailboxOwnerEd25519PublicKey.ToArray());
     }
 
     [Fact]
