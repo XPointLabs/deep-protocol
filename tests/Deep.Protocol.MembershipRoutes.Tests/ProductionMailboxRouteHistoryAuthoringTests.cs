@@ -68,15 +68,42 @@ public sealed class ProductionMailboxRouteHistoryAuthoringTests
         var persistedCheckpoint = plan.NextCursor.CanonicalCheckpoint.ToArray();
         var persistedValue = ProductionMailboxRouteContinuityCodec.DecodeRouteHistoryCheckpoint(
             persistedCheckpoint);
+        var protectedRestore = plan.ToProtectedRestoreContext();
+        Assert.Equal(plan.NextCursor.CanonicalCheckpoint.ToArray(),
+            protectedRestore.CanonicalCheckpoint.ToArray());
+        Assert.Equal(cursor.Enrollment.CanonicalDelegationHash.ToArray(),
+            protectedRestore.EnrollmentCanonicalDelegationHash.ToArray());
+        Assert.Equal(fixture.Authority.CanonicalAuthorityHash.ToArray(),
+            protectedRestore.CurrentCanonicalAuthorityHash.ToArray());
+        Assert.Equal(fixture.RevocationSnapshot.CanonicalSnapshotHash.ToArray(),
+            protectedRestore.CurrentRevocationSnapshotHash.ToArray());
+        var exposedProtected = protectedRestore.CanonicalCheckpoint.ToArray();
+        exposedProtected[0] ^= 1;
+        Assert.NotEqual(exposedProtected, protectedRestore.CanonicalCheckpoint.ToArray());
+        var oversizedCheckpoint = new byte[8 * 1024 * 1024];
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        Assert.Throws<FormatException>(() =>
+            new ProductionMailboxRouteHistoryProtectedRestoreContext(
+                oversizedCheckpoint,
+                protectedRestore.CanonicalCheckpointHash,
+                protectedRestore.LastCommittedBatchSequence,
+                protectedRestore.LastCommittedBatchHash,
+                protectedRestore.CurrentRouteOriginLkgHash,
+                protectedRestore.EnrollmentCanonicalDelegationHash,
+                protectedRestore.EnrollmentCanonicalAcceptanceHash,
+                protectedRestore.NetworkId,
+                protectedRestore.RouteDomainHash,
+                protectedRestore.DelegationHistoryBinding,
+                protectedRestore.PinnedMrXPublicKeySha256,
+                protectedRestore.CurrentAuthorityGeneration,
+                protectedRestore.CurrentCanonicalAuthorityHash,
+                protectedRestore.CurrentRevocationGeneration,
+                protectedRestore.CurrentRevocationHeadHash,
+                protectedRestore.CurrentRevocationSnapshotHash));
+        Assert.InRange(GC.GetAllocatedBytesForCurrentThread() - allocatedBefore, 0, 512 * 1024);
         var restored = ProductionMailboxRouteHistoryAuthoring.RestoreCursor(
             persistedCheckpoint, cursor.Enrollment, fixture.Authority, fixture.RevocationSnapshot,
-            new ProductionMailboxRouteHistoryProtectedRestoreContext
-            {
-                ExpectedCanonicalCheckpointHash = plan.NextCursor.CanonicalCheckpointHash,
-                ExpectedLastCommittedBatchSequence = 1,
-                ExpectedLastCommittedBatchHash = plan.CanonicalBatchHash,
-                ExpectedCurrentRouteOriginLkgHash = persistedValue.CurrentRouteOriginLkgHash
-            });
+            protectedRestore);
         Assert.Equal(1UL, restored.LastCommittedBatchSequence);
         Assert.Same(restored, ProductionMailboxRouteHistoryAuthoring.VerifyBatch(
             restored, plan.CanonicalBatch.Span));
@@ -90,13 +117,7 @@ public sealed class ProductionMailboxRouteHistoryAuthoringTests
         tamperedCheckpoint[100] ^= 1;
         Assert.ThrowsAny<Exception>(() => ProductionMailboxRouteHistoryAuthoring.RestoreCursor(
             tamperedCheckpoint, cursor.Enrollment, fixture.Authority, fixture.RevocationSnapshot,
-            new ProductionMailboxRouteHistoryProtectedRestoreContext
-            {
-                ExpectedCanonicalCheckpointHash = plan.NextCursor.CanonicalCheckpointHash,
-                ExpectedLastCommittedBatchSequence = 1,
-                ExpectedLastCommittedBatchHash = plan.CanonicalBatchHash,
-                ExpectedCurrentRouteOriginLkgHash = persistedValue.CurrentRouteOriginLkgHash
-            }));
+            plan.NextCursor.ToProtectedRestoreContext()));
     }
 
     [Fact]
@@ -210,14 +231,23 @@ public sealed class ProductionMailboxRouteHistoryAuthoringTests
             terminalValue);
         var restored = ProductionMailboxRouteHistoryAuthoring.RestoreCursor(
             terminalBytes, cursor.Enrollment, fixture.Authority, fixture.RevocationSnapshot,
-            new ProductionMailboxRouteHistoryProtectedRestoreContext
-            {
-                ExpectedCanonicalCheckpointHash = ProductionMailboxRouteContinuityCodec
-                    .ComputeRouteHistoryCheckpointHash(terminalValue),
-                ExpectedLastCommittedBatchSequence = terminalValue.LastCommittedBatchSequence,
-                ExpectedLastCommittedBatchHash = terminalValue.LastCommittedBatchHash,
-                ExpectedCurrentRouteOriginLkgHash = terminalValue.CurrentRouteOriginLkgHash
-            });
+            new ProductionMailboxRouteHistoryProtectedRestoreContext(
+                terminalBytes,
+                ProductionMailboxRouteContinuityCodec.ComputeRouteHistoryCheckpointHash(terminalValue),
+                terminalValue.LastCommittedBatchSequence,
+                terminalValue.LastCommittedBatchHash,
+                terminalValue.CurrentRouteOriginLkgHash,
+                cursor.Enrollment.CanonicalDelegationHash,
+                cursor.Enrollment.CanonicalAcceptanceHash,
+                terminalValue.NetworkId,
+                terminalValue.RouteDomainHash,
+                terminalValue.DelegationHistoryBinding,
+                terminalValue.PinnedMrXPublicKeySha256,
+                terminalValue.CurrentAuthorityGeneration,
+                terminalValue.CurrentCanonicalAuthorityHash,
+                terminalValue.CurrentRevocationGeneration,
+                terminalValue.CurrentRevocationHeadHash,
+                terminalValue.CurrentRevocationSnapshotHash));
         var verifier = new CountingHistoryLinkVerifier();
 
         Assert.Same(restored.Checkpoint, ProductionMailboxRouteHistoryVerifier.Advance(

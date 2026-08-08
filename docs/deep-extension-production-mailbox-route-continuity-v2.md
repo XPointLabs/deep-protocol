@@ -492,6 +492,19 @@ state. No generic route-forward verifier returns ordinary verified capabilities.
   authorization: exact PRA2 for `OwnerPRA2`, or exact RCH and RCA1 for `DelegatedRCA1`. They never
   carry RCD, RDA, raw RCR, RHB or RHC. A client must already own the sealed continuity state needed
   by the delegated path. Requests remain constant-path authenticated binary bodies.
+- The public PMC2 node-cache verifier is intentionally weaker than the client activation verifier.
+  It snapshots an aggregate of at most 8 MiB, verifies the current PMA/PMR/PMT, current and staged
+  next PMS, current-issuer PSS2 signature, PRC/RTC and tagged PRA2 or Active-RCH/RCA closure, and
+  returns only a node-cache capability. It accepts neither RCD/RDA/RCR nor a sealed ROL and exposes
+  no conversion to the atomic client activation capability. For `DirectPromotion`, PMC2 retains and
+  canonical-checks the non-zero retired-issuer signature slot but cannot authenticate that signature
+  because retired PMA1 is deliberately absent; the current issuer signature and cache transcript
+  still bind/distinguish the exact unsigned closure and exact retained slot bytes. Full client
+  activation separately verifies retired trust from protected LKG state.
+- `VerifyOwnerRevocation` is the only public RCR verification entry point and returns a sealed exact
+  verified-RCR capability. RHC cursors and commit plans export their exact durable restore tuple via
+  `ToProtectedRestoreContext`; Registry does not parse RHC to reconstruct checkpoint, enrollment,
+  PMA or PMR CAS bindings.
 - A new contact receives the complete owner-authorized origin and current chain only through an
   authenticated E2E channel, then verifies the current PMA and RCH.
 - An owner device without sealed route-origin LKG may not activate RCA offline and may not sign a

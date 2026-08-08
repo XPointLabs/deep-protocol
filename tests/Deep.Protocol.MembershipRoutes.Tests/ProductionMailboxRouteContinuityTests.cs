@@ -87,11 +87,15 @@ public sealed class ProductionMailboxRouteContinuityTests
                 f.Authority, f.RevocationSnapshot, f.VerifiedCertificate, f.VerifiedPra, f.EnrollmentContext,
                 new SodiumProductionMailboxRouteSignatureVerifier()));
 
-        var verifiedRcr = ProductionMailboxRouteContinuityVerifier.VerifyTerminalRevocation(
+        var verifiedRcr = ProductionMailboxRouteContinuityVerifier.VerifyOwnerRevocation(
             ProductionMailboxRouteContinuityCodec.EncodeRevocation(f.Revocation),
-            enrollment.VerifiedDelegation, RouteV2TestFixture.Now, 0,
-            new SodiumProductionMailboxRouteSignatureVerifier());
+            enrollment, RouteV2TestFixture.Now, 0);
         Assert.Equal(1UL, verifiedRcr.Revocation.RevocationGeneration);
+        var forgedRcr = verifiedRcr.CanonicalBytes.ToArray();
+        forgedRcr[^1] ^= 1;
+        Assert.Throws<ProductionMailboxRouteContinuityException>(() =>
+            ProductionMailboxRouteContinuityVerifier.VerifyOwnerRevocation(
+                forgedRcr, enrollment, RouteV2TestFixture.Now, 0));
 
         var verifiedRch = ProductionMailboxRouteContinuityVerifier.VerifyRevocationCheckpoint(
             ProductionMailboxRouteContinuityCodec.EncodeRevocationCheckpoint(f.Checkpoint),
@@ -119,6 +123,14 @@ public sealed class ProductionMailboxRouteContinuityTests
         var exposed = enrollment.CanonicalAcceptanceHash.ToArray();
         exposed[0] ^= 1;
         Assert.NotEqual(exposed, enrollment.CanonicalAcceptanceHash.ToArray());
+        var revocation = ProductionMailboxRouteContinuityVerifier.VerifyOwnerRevocation(
+            ProductionMailboxRouteContinuityCodec.EncodeRevocation(f.Revocation), enrollment,
+            RouteV2TestFixture.Now, 0);
+        var exposedRevocation = revocation.CanonicalBytes.ToArray();
+        exposedRevocation[0] ^= 1;
+        Assert.NotEqual(exposedRevocation, revocation.CanonicalBytes.ToArray());
+        Assert.Equal(SHA256.HashData(revocation.CanonicalBytes.Span),
+            revocation.CanonicalHash.ToArray());
 
         var publicMethods = typeof(ProductionMailboxRouteContinuityCodec).GetMethods(
             BindingFlags.Public | BindingFlags.Static);
@@ -130,6 +142,7 @@ public sealed class ProductionMailboxRouteContinuityTests
             method.GetParameters().Any(parameter =>
                 typeof(IProductionMailboxRouteSignatureVerifier).IsAssignableFrom(parameter.ParameterType)));
         Assert.Empty(typeof(VerifiedProductionMailboxRouteContinuityEnrollment).GetConstructors());
+        Assert.Empty(typeof(VerifiedProductionMailboxRouteContinuityRevocation).GetConstructors());
     }
 
     [Fact]

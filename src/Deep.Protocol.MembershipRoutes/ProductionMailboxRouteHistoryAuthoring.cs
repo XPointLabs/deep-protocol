@@ -33,6 +33,13 @@ public sealed class VerifiedProductionMailboxRouteHistoryCursor
     public ulong LastCommittedBatchSequence => _checkpoint.TrustedCheckpoint.LastCommittedBatchSequence;
     public ulong CumulativeVerifiedRouteLinkCount =>
         _checkpoint.TrustedCheckpoint.CumulativeVerifiedRouteLinkCount;
+
+    /// <summary>
+    /// Exports one defensively snapshotted durable restore tuple. Callers never parse RHC1 to
+    /// recover its CAS, enrollment, PMA1 or PMR1 bindings.
+    /// </summary>
+    public ProductionMailboxRouteHistoryProtectedRestoreContext ToProtectedRestoreContext() =>
+        ProductionMailboxRouteHistoryProtectedRestoreContext.From(this);
 }
 
 public sealed class ProductionMailboxRouteHistoryBatchCommitPlan
@@ -52,18 +59,184 @@ public sealed class ProductionMailboxRouteHistoryBatchCommitPlan
     public ReadOnlyMemory<byte> CanonicalBatch => _canonicalBatch.ToArray();
     public ReadOnlyMemory<byte> CanonicalBatchHash => _canonicalBatchHash.ToArray();
     public VerifiedProductionMailboxRouteHistoryCursor NextCursor { get; }
+
+    /// <summary>Exports the exact post-commit durable restore tuple.</summary>
+    public ProductionMailboxRouteHistoryProtectedRestoreContext ToProtectedRestoreContext() =>
+        NextCursor.ToProtectedRestoreContext();
 }
 
 /// <summary>
 /// Exact fields retained by the authenticated durable CAS alongside RHC1. Network-fetched values
 /// must never be used to populate this context.
 /// </summary>
-public sealed record ProductionMailboxRouteHistoryProtectedRestoreContext
+public sealed class ProductionMailboxRouteHistoryProtectedRestoreContext
 {
-    public required ReadOnlyMemory<byte> ExpectedCanonicalCheckpointHash { get; init; }
-    public required ulong ExpectedLastCommittedBatchSequence { get; init; }
-    public required ReadOnlyMemory<byte> ExpectedLastCommittedBatchHash { get; init; }
-    public required ReadOnlyMemory<byte> ExpectedCurrentRouteOriginLkgHash { get; init; }
+    private readonly byte[] _canonicalCheckpoint;
+    private readonly byte[] _canonicalCheckpointHash;
+    private readonly byte[] _lastCommittedBatchHash;
+    private readonly byte[] _currentRouteOriginLkgHash;
+    private readonly byte[] _enrollmentCanonicalDelegationHash;
+    private readonly byte[] _enrollmentCanonicalAcceptanceHash;
+    private readonly byte[] _networkId;
+    private readonly byte[] _routeDomainHash;
+    private readonly byte[] _delegationHistoryBinding;
+    private readonly byte[] _pinnedMrXPublicKeySha256;
+    private readonly byte[] _currentCanonicalAuthorityHash;
+    private readonly byte[] _currentRevocationHeadHash;
+    private readonly byte[] _currentRevocationSnapshotHash;
+
+    public ProductionMailboxRouteHistoryProtectedRestoreContext(
+        ReadOnlyMemory<byte> canonicalCheckpoint,
+        ReadOnlyMemory<byte> canonicalCheckpointHash,
+        ulong lastCommittedBatchSequence,
+        ReadOnlyMemory<byte> lastCommittedBatchHash,
+        ReadOnlyMemory<byte> currentRouteOriginLkgHash,
+        ReadOnlyMemory<byte> enrollmentCanonicalDelegationHash,
+        ReadOnlyMemory<byte> enrollmentCanonicalAcceptanceHash,
+        ReadOnlyMemory<byte> networkId,
+        ReadOnlyMemory<byte> routeDomainHash,
+        ReadOnlyMemory<byte> delegationHistoryBinding,
+        ReadOnlyMemory<byte> pinnedMrXPublicKeySha256,
+        ulong currentAuthorityGeneration,
+        ReadOnlyMemory<byte> currentCanonicalAuthorityHash,
+        ulong currentRevocationGeneration,
+        ReadOnlyMemory<byte> currentRevocationHeadHash,
+        ReadOnlyMemory<byte> currentRevocationSnapshotHash)
+    {
+        PreflightInputs(canonicalCheckpoint, canonicalCheckpointHash,
+            lastCommittedBatchSequence, lastCommittedBatchHash, currentRouteOriginLkgHash,
+            enrollmentCanonicalDelegationHash, enrollmentCanonicalAcceptanceHash, networkId,
+            routeDomainHash, delegationHistoryBinding, pinnedMrXPublicKeySha256,
+            currentAuthorityGeneration, currentCanonicalAuthorityHash,
+            currentRevocationGeneration, currentRevocationHeadHash,
+            currentRevocationSnapshotHash);
+        _canonicalCheckpoint = canonicalCheckpoint.ToArray();
+        _canonicalCheckpointHash = canonicalCheckpointHash.ToArray();
+        LastCommittedBatchSequence = lastCommittedBatchSequence;
+        _lastCommittedBatchHash = lastCommittedBatchHash.ToArray();
+        _currentRouteOriginLkgHash = currentRouteOriginLkgHash.ToArray();
+        _enrollmentCanonicalDelegationHash = enrollmentCanonicalDelegationHash.ToArray();
+        _enrollmentCanonicalAcceptanceHash = enrollmentCanonicalAcceptanceHash.ToArray();
+        _networkId = networkId.ToArray();
+        _routeDomainHash = routeDomainHash.ToArray();
+        _delegationHistoryBinding = delegationHistoryBinding.ToArray();
+        _pinnedMrXPublicKeySha256 = pinnedMrXPublicKeySha256.ToArray();
+        CurrentAuthorityGeneration = currentAuthorityGeneration;
+        _currentCanonicalAuthorityHash = currentCanonicalAuthorityHash.ToArray();
+        CurrentRevocationGeneration = currentRevocationGeneration;
+        _currentRevocationHeadHash = currentRevocationHeadHash.ToArray();
+        _currentRevocationSnapshotHash = currentRevocationSnapshotHash.ToArray();
+        Validate();
+    }
+
+    private static void PreflightInputs(
+        ReadOnlyMemory<byte> canonicalCheckpoint,
+        ReadOnlyMemory<byte> canonicalCheckpointHash,
+        ulong lastCommittedBatchSequence,
+        ReadOnlyMemory<byte> lastCommittedBatchHash,
+        ReadOnlyMemory<byte> currentRouteOriginLkgHash,
+        ReadOnlyMemory<byte> enrollmentCanonicalDelegationHash,
+        ReadOnlyMemory<byte> enrollmentCanonicalAcceptanceHash,
+        ReadOnlyMemory<byte> networkId,
+        ReadOnlyMemory<byte> routeDomainHash,
+        ReadOnlyMemory<byte> delegationHistoryBinding,
+        ReadOnlyMemory<byte> pinnedMrXPublicKeySha256,
+        ulong currentAuthorityGeneration,
+        ReadOnlyMemory<byte> currentCanonicalAuthorityHash,
+        ulong currentRevocationGeneration,
+        ReadOnlyMemory<byte> currentRevocationHeadHash,
+        ReadOnlyMemory<byte> currentRevocationSnapshotHash)
+    {
+        static void Exact(ReadOnlyMemory<byte> value, int length, string name)
+        {
+            if (value.Length != length)
+                throw new FormatException($"Protected RHC1 {name} length is invalid.");
+        }
+        Exact(canonicalCheckpoint,
+            ProductionMailboxRouteContinuityConstants.CanonicalRouteHistoryCheckpointLength,
+            "checkpoint");
+        Exact(canonicalCheckpointHash, 32, "checkpoint hash");
+        Exact(lastCommittedBatchHash, 32, "last batch hash");
+        Exact(currentRouteOriginLkgHash, 32, "ROL1 hash");
+        Exact(enrollmentCanonicalDelegationHash, 32, "RCD1 hash");
+        Exact(enrollmentCanonicalAcceptanceHash, 32, "RDA1 hash");
+        Exact(networkId, 16, "network");
+        Exact(routeDomainHash, 32, "route domain");
+        Exact(delegationHistoryBinding, 32, "delegation binding");
+        Exact(pinnedMrXPublicKeySha256, 32, "Mr. X pin");
+        Exact(currentCanonicalAuthorityHash, 32, "PMA1 hash");
+        Exact(currentRevocationHeadHash, 32, "PMR1 head");
+        Exact(currentRevocationSnapshotHash, 32, "PMR1 snapshot");
+        if (lastCommittedBatchSequence >
+                ProductionMailboxRouteContinuityConstants.MaximumHistoryBatchCount ||
+            currentAuthorityGeneration is 0 or ulong.MaxValue ||
+            currentRevocationGeneration is 0 or ulong.MaxValue)
+            throw new FormatException("Protected RHC1 scalar state is invalid.");
+    }
+
+    public ReadOnlyMemory<byte> CanonicalCheckpoint => _canonicalCheckpoint.ToArray();
+    public ReadOnlyMemory<byte> CanonicalCheckpointHash => _canonicalCheckpointHash.ToArray();
+    public ulong LastCommittedBatchSequence { get; }
+    public ReadOnlyMemory<byte> LastCommittedBatchHash => _lastCommittedBatchHash.ToArray();
+    public ReadOnlyMemory<byte> CurrentRouteOriginLkgHash => _currentRouteOriginLkgHash.ToArray();
+    public ReadOnlyMemory<byte> EnrollmentCanonicalDelegationHash =>
+        _enrollmentCanonicalDelegationHash.ToArray();
+    public ReadOnlyMemory<byte> EnrollmentCanonicalAcceptanceHash =>
+        _enrollmentCanonicalAcceptanceHash.ToArray();
+    public ReadOnlyMemory<byte> NetworkId => _networkId.ToArray();
+    public ReadOnlyMemory<byte> RouteDomainHash => _routeDomainHash.ToArray();
+    public ReadOnlyMemory<byte> DelegationHistoryBinding => _delegationHistoryBinding.ToArray();
+    public ReadOnlyMemory<byte> PinnedMrXPublicKeySha256 => _pinnedMrXPublicKeySha256.ToArray();
+    public ulong CurrentAuthorityGeneration { get; }
+    public ReadOnlyMemory<byte> CurrentCanonicalAuthorityHash =>
+        _currentCanonicalAuthorityHash.ToArray();
+    public ulong CurrentRevocationGeneration { get; }
+    public ReadOnlyMemory<byte> CurrentRevocationHeadHash => _currentRevocationHeadHash.ToArray();
+    public ReadOnlyMemory<byte> CurrentRevocationSnapshotHash =>
+        _currentRevocationSnapshotHash.ToArray();
+
+    internal static ProductionMailboxRouteHistoryProtectedRestoreContext From(
+        VerifiedProductionMailboxRouteHistoryCursor cursor)
+    {
+        var checkpoint = cursor.Checkpoint.TrustedCheckpoint;
+        var enrollment = cursor.Enrollment;
+        return new(cursor.CanonicalCheckpoint, cursor.CanonicalCheckpointHash,
+            checkpoint.LastCommittedBatchSequence, checkpoint.LastCommittedBatchHash,
+            checkpoint.CurrentRouteOriginLkgHash, enrollment.CanonicalDelegationHash,
+            enrollment.CanonicalAcceptanceHash, checkpoint.NetworkId, checkpoint.RouteDomainHash,
+            checkpoint.DelegationHistoryBinding, checkpoint.PinnedMrXPublicKeySha256,
+            checkpoint.CurrentAuthorityGeneration, checkpoint.CurrentCanonicalAuthorityHash,
+            checkpoint.CurrentRevocationGeneration, checkpoint.CurrentRevocationHeadHash,
+            checkpoint.CurrentRevocationSnapshotHash);
+    }
+
+    internal void Validate()
+    {
+        static void Fixed(ReadOnlySpan<byte> value, int length, bool nonzero, string name)
+        {
+            if (value.Length != length || (nonzero && value.IndexOfAnyExcept((byte)0) < 0))
+                throw new FormatException($"Protected RHC1 {name} is invalid.");
+        }
+        Fixed(_canonicalCheckpoint, ProductionMailboxRouteContinuityConstants.CanonicalRouteHistoryCheckpointLength,
+            true, "checkpoint");
+        Fixed(_canonicalCheckpointHash, 32, true, "checkpoint hash");
+        Fixed(_lastCommittedBatchHash, 32, LastCommittedBatchSequence != 0, "last batch hash");
+        if (LastCommittedBatchSequence == 0 && _lastCommittedBatchHash.AsSpan().IndexOfAnyExcept((byte)0) >= 0)
+            throw new FormatException("Protected initial RHC1 last batch hash is non-zero.");
+        Fixed(_currentRouteOriginLkgHash, 32, true, "ROL1 hash");
+        Fixed(_enrollmentCanonicalDelegationHash, 32, true, "RCD1 hash");
+        Fixed(_enrollmentCanonicalAcceptanceHash, 32, true, "RDA1 hash");
+        Fixed(_networkId, 16, false, "network");
+        Fixed(_routeDomainHash, 32, true, "route domain");
+        Fixed(_delegationHistoryBinding, 32, true, "delegation binding");
+        Fixed(_pinnedMrXPublicKeySha256, 32, true, "Mr. X pin");
+        Fixed(_currentCanonicalAuthorityHash, 32, true, "PMA1 hash");
+        Fixed(_currentRevocationHeadHash, 32, true, "PMR1 head");
+        Fixed(_currentRevocationSnapshotHash, 32, true, "PMR1 snapshot");
+        if (CurrentAuthorityGeneration == 0 || CurrentAuthorityGeneration == ulong.MaxValue ||
+            CurrentRevocationGeneration == 0 || CurrentRevocationGeneration == ulong.MaxValue)
+            throw new FormatException("Protected RHC1 PMA1/PMR1 generations are invalid.");
+    }
 }
 
 /// <summary>
@@ -177,26 +350,47 @@ public static class ProductionMailboxRouteHistoryAuthoring
         ArgumentNullException.ThrowIfNull(currentAuthority);
         ArgumentNullException.ThrowIfNull(currentRevocations);
         ArgumentNullException.ThrowIfNull(protectedState);
+        protectedState.Validate();
+        var protectedCheckpoint = protectedState.CanonicalCheckpoint.ToArray();
+        var protectedCheckpointHash = protectedState.CanonicalCheckpointHash.ToArray();
+        var protectedLastBatchHash = protectedState.LastCommittedBatchHash.ToArray();
+        var protectedRolHash = protectedState.CurrentRouteOriginLkgHash.ToArray();
         if (canonicalCheckpoint.Length !=
                 ProductionMailboxRouteContinuityConstants.CanonicalRouteHistoryCheckpointLength ||
-            protectedState.ExpectedCanonicalCheckpointHash.Length != 32 ||
-            protectedState.ExpectedCanonicalCheckpointHash.Span.IndexOfAnyExcept((byte)0) < 0 ||
-            protectedState.ExpectedLastCommittedBatchHash.Length != 32 ||
-            protectedState.ExpectedCurrentRouteOriginLkgHash.Length != 32 ||
-            protectedState.ExpectedCurrentRouteOriginLkgHash.Span.IndexOfAnyExcept((byte)0) < 0)
-            throw new FormatException("Protected RHC1 restore fields have invalid fixed bounds.");
+            !canonicalCheckpoint.SequenceEqual(protectedCheckpoint))
+            throw new FormatException("RHC1 differs from the exact protected checkpoint bytes.");
         var frozen = canonicalCheckpoint.ToArray();
         var checkpoint = ProductionMailboxRouteContinuityCodec.DecodeRouteHistoryCheckpoint(frozen);
         var canonicalHash = ProductionMailboxRouteContinuityCodec.ComputeRouteHistoryCheckpointHash(
             checkpoint);
         if (!CryptographicOperations.FixedTimeEquals(canonicalHash,
-                protectedState.ExpectedCanonicalCheckpointHash.Span) ||
+                protectedCheckpointHash) ||
             checkpoint.LastCommittedBatchSequence !=
-                protectedState.ExpectedLastCommittedBatchSequence ||
+                protectedState.LastCommittedBatchSequence ||
             !CryptographicOperations.FixedTimeEquals(checkpoint.LastCommittedBatchHash.Span,
-                protectedState.ExpectedLastCommittedBatchHash.Span) ||
+                protectedLastBatchHash) ||
             !CryptographicOperations.FixedTimeEquals(checkpoint.CurrentRouteOriginLkgHash.Span,
-                protectedState.ExpectedCurrentRouteOriginLkgHash.Span))
+                protectedRolHash) ||
+            !CryptographicOperations.FixedTimeEquals(checkpoint.NetworkId.Span,
+                protectedState.NetworkId.Span) ||
+            !CryptographicOperations.FixedTimeEquals(checkpoint.RouteDomainHash.Span,
+                protectedState.RouteDomainHash.Span) ||
+            !CryptographicOperations.FixedTimeEquals(checkpoint.DelegationHistoryBinding.Span,
+                protectedState.DelegationHistoryBinding.Span) ||
+            !CryptographicOperations.FixedTimeEquals(checkpoint.PinnedMrXPublicKeySha256.Span,
+                protectedState.PinnedMrXPublicKeySha256.Span) ||
+            checkpoint.CurrentAuthorityGeneration != protectedState.CurrentAuthorityGeneration ||
+            !CryptographicOperations.FixedTimeEquals(checkpoint.CurrentCanonicalAuthorityHash.Span,
+                protectedState.CurrentCanonicalAuthorityHash.Span) ||
+            checkpoint.CurrentRevocationGeneration != protectedState.CurrentRevocationGeneration ||
+            !CryptographicOperations.FixedTimeEquals(checkpoint.CurrentRevocationHeadHash.Span,
+                protectedState.CurrentRevocationHeadHash.Span) ||
+            !CryptographicOperations.FixedTimeEquals(checkpoint.CurrentRevocationSnapshotHash.Span,
+                protectedState.CurrentRevocationSnapshotHash.Span) ||
+            !CryptographicOperations.FixedTimeEquals(enrollment.CanonicalDelegationHash.Span,
+                protectedState.EnrollmentCanonicalDelegationHash.Span) ||
+            !CryptographicOperations.FixedTimeEquals(enrollment.CanonicalAcceptanceHash.Span,
+                protectedState.EnrollmentCanonicalAcceptanceHash.Span))
             throw new FormatException("RHC1 differs from the protected durable CAS state.");
         VerifyCheckpointClosure(checkpoint, enrollment, currentAuthority, currentRevocations);
         return new(new VerifiedProductionMailboxRouteHistoryCheckpoint(checkpoint, frozen), enrollment);

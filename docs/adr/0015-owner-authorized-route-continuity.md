@@ -59,6 +59,13 @@ keys and remain carry-only transports. A fresh salted per-activation commitment 
 delegation identifiers from XNode artifacts, while the sealed ROL1 hash binds the exact original
 route LKG and immutable `RouteVerifiedAt`.
 
+XNode cache verification is a separate, deliberately non-activating capability. It verifies the
+bounded current distribution closure without sealed delegation/revocation history. In direct mode
+the absent retired PMA means the retained old-signature slot is canonical and transcript-bound but
+not asserted authentic by the node-cache result; the protected client activation path performs that
+trust decision. Verified RCR and RHC restore exports likewise use dedicated high-level APIs rather
+than public raw transcript or caller-injectable verification policy.
+
 Per-delegation revocation deliberately has only Active `0/zero` and terminal Revoked
 `1/exact-owner-RCR`. An issuer-signed Active checkpoint cannot prove that an owner revocation not
 yet delivered to the verifier does not exist. Therefore learned revocation fails immediately, but

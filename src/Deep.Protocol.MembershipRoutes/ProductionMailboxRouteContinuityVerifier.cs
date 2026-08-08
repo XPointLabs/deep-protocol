@@ -71,22 +71,31 @@ public sealed class VerifiedProductionMailboxRouteContinuityEnrollment
     public ReadOnlyMemory<byte> CanonicalAcceptanceHash => _acceptanceHash.ToArray();
 }
 
-internal sealed class VerifiedProductionMailboxRouteContinuityRevocation
+/// <summary>
+/// Non-forgeable observation of one exact owner-signed terminal RCR1. The constructor and
+/// signature-policy seam remain internal; callers can persist the exact canonical bytes/hash but
+/// cannot manufacture a verified revocation from a decoded model.
+/// </summary>
+public sealed class VerifiedProductionMailboxRouteContinuityRevocation
 {
     private readonly ProductionMailboxRouteContinuityRevocation _revocation;
+    private readonly byte[] _canonicalBytes;
     private readonly byte[] _canonicalHash;
 
     internal VerifiedProductionMailboxRouteContinuityRevocation(
         ProductionMailboxRouteContinuityRevocation revocation,
+        ReadOnlySpan<byte> canonicalBytes,
         ReadOnlySpan<byte> canonicalHash)
     {
         _revocation = ProductionMailboxRouteContinuityCopy.Clone(revocation);
+        _canonicalBytes = canonicalBytes.ToArray();
         _canonicalHash = canonicalHash.ToArray();
     }
 
-    internal ProductionMailboxRouteContinuityRevocation Revocation =>
+    public ProductionMailboxRouteContinuityRevocation Revocation =>
         ProductionMailboxRouteContinuityCopy.Clone(_revocation);
-    internal ReadOnlyMemory<byte> CanonicalHash => _canonicalHash.ToArray();
+    public ReadOnlyMemory<byte> CanonicalBytes => _canonicalBytes.ToArray();
+    public ReadOnlyMemory<byte> CanonicalHash => _canonicalHash.ToArray();
 }
 
 internal sealed class VerifiedProductionMailboxRouteRevocationCheckpoint
@@ -109,6 +118,18 @@ internal sealed class VerifiedProductionMailboxRouteRevocationCheckpoint
 
 public static class ProductionMailboxRouteContinuityVerifier
 {
+    /// <summary>
+    /// Verifies an exact canonical owner-signed terminal RCR1 against an already verified
+    /// continuity enrollment using the production sodium verifier.
+    /// </summary>
+    public static VerifiedProductionMailboxRouteContinuityRevocation VerifyOwnerRevocation(
+        ReadOnlySpan<byte> encoded,
+        VerifiedProductionMailboxRouteContinuityEnrollment enrollment,
+        ulong nowUnixSeconds,
+        uint clockSkewSeconds) => VerifyTerminalRevocation(encoded,
+            (enrollment ?? throw new ArgumentNullException(nameof(enrollment))).VerifiedDelegation,
+            nowUnixSeconds, clockSkewSeconds, new SodiumProductionMailboxRouteSignatureVerifier());
+
     /// <summary>
     /// Verifies the complete owner-delegation plus live old-issuer acceptance closure using the
     /// production sodium verifier. No generic forward-route capability is returned.
@@ -290,7 +311,7 @@ public static class ProductionMailboxRouteContinuityVerifier
             throw Error(ProductionMailboxRouteContinuityError.InvalidField,
                 "RCR1 owner signature is invalid.");
         return new VerifiedProductionMailboxRouteContinuityRevocation(
-            revocation, SHA256.HashData(frozen));
+            revocation, frozen, SHA256.HashData(frozen));
     }
 
     internal static VerifiedProductionMailboxRouteRevocationCheckpoint VerifyRevocationCheckpoint(
