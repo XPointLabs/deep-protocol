@@ -293,3 +293,210 @@ public static class ProductionMailboxSelectionSuccessorCodec
         ProductionMailboxSelectionSuccessorError error,
         string message) => new(error, message);
 }
+
+/// <summary>Strict clean-break PSS2 codec. Signing transcripts remain internal to sealed flows.</summary>
+public static class ProductionMailboxSelectionSuccessorV2Codec
+{
+    private static ReadOnlySpan<byte> Magic => "PSS2"u8;
+    private static ReadOnlySpan<byte> OldIssuerDomain =>
+        "Deep/production-mailbox/selection-successor/v2/old"u8;
+    private static ReadOnlySpan<byte> CurrentIssuerDomain =>
+        "Deep/production-mailbox/selection-successor/v2/current"u8;
+
+    public static byte[] Encode(ProductionMailboxSelectionSuccessorV2Proof value)
+    {
+        var frozen = Freeze(value);
+        ValidateRoute(frozen);
+        var pss1 = ProductionMailboxSelectionSuccessorCodec.Encode(frozen.Selection);
+        var variableLength = pss1.Length - ProductionMailboxSelectionSuccessorConstants.FixedCoreLength;
+        var output = new byte[checked(pss1.Length + ProductionMailboxSelectionSuccessorV2Constants.RouteBlockLength)];
+        pss1.AsSpan(0, ProductionMailboxSelectionSuccessorConstants.FixedCoreLength)
+            .CopyTo(output.AsSpan(0, ProductionMailboxSelectionSuccessorV2Constants.RouteBlockOffset));
+        Magic.CopyTo(output);
+        output[4] = ProductionMailboxSelectionSuccessorV2Constants.Version;
+        WriteRouteBlock(frozen, output.AsSpan(ProductionMailboxSelectionSuccessorV2Constants.RouteBlockOffset,
+            ProductionMailboxSelectionSuccessorV2Constants.RouteBlockLength));
+        pss1.AsSpan(ProductionMailboxSelectionSuccessorConstants.FixedCoreLength, variableLength)
+            .CopyTo(output.AsSpan(ProductionMailboxSelectionSuccessorV2Constants.FixedCoreLength));
+        return output;
+    }
+
+    public static ProductionMailboxSelectionSuccessorV2Proof Decode(ReadOnlySpan<byte> encoded)
+    {
+        if (encoded.Length < ProductionMailboxSelectionSuccessorV2Constants.FixedCoreLength +
+                ProductionMailboxSelectionSuccessorV2Constants.SignatureBytes ||
+            encoded.Length > ProductionMailboxSelectionSuccessorV2Constants.MaximumArtifactBytes)
+            throw Error(ProductionMailboxSelectionSuccessorError.InvalidLength,
+                "PSS2 length is outside its strict bounds.");
+        if (!encoded[..4].SequenceEqual(Magic))
+            throw Error(ProductionMailboxSelectionSuccessorError.InvalidMagic, "PSS2 magic is invalid.");
+        if (encoded[4] != ProductionMailboxSelectionSuccessorV2Constants.Version)
+            throw Error(ProductionMailboxSelectionSuccessorError.UnsupportedVersion,
+                "PSS2 version is unsupported.");
+        var frozen = encoded.ToArray();
+        var pss1 = new byte[checked(frozen.Length - ProductionMailboxSelectionSuccessorV2Constants.RouteBlockLength)];
+        frozen.AsSpan(0, ProductionMailboxSelectionSuccessorV2Constants.RouteBlockOffset)
+            .CopyTo(pss1.AsSpan());
+        "PSS1"u8.CopyTo(pss1);
+        pss1[4] = ProductionMailboxSelectionSuccessorConstants.Version;
+        frozen.AsSpan(ProductionMailboxSelectionSuccessorV2Constants.FixedCoreLength)
+            .CopyTo(pss1.AsSpan(ProductionMailboxSelectionSuccessorConstants.FixedCoreLength));
+        var selection = ProductionMailboxSelectionSuccessorCodec.Decode(pss1);
+        var route = frozen.AsSpan(ProductionMailboxSelectionSuccessorV2Constants.RouteBlockOffset,
+            ProductionMailboxSelectionSuccessorV2Constants.RouteBlockLength);
+        if (route.Slice(34, 6).IndexOfAnyExcept((byte)0) >= 0)
+            throw Error(ProductionMailboxSelectionSuccessorError.ReservedFieldNotZero,
+                "PSS2 route-block reserved bytes must be zero.");
+        var value = new ProductionMailboxSelectionSuccessorV2Proof
+        {
+            Selection = selection,
+            CanonicalTransitionContextHash = route[..32].ToArray(),
+            PredecessorAuthorizationKind = (ProductionMailboxRouteAuthorizationKind)route[32],
+            NewAuthorizationKind = (ProductionMailboxRouteAuthorizationKind)route[33],
+            PredecessorCanonicalRouteAuthorizationHash = route.Slice(40, 32).ToArray(),
+            PredecessorRouteAuthorizationSequence = BinaryPrimitives.ReadUInt64BigEndian(route.Slice(72, 8)),
+            FreshCanonicalRouteCertificateHash = route.Slice(80, 32).ToArray(),
+            NewCanonicalRouteAuthorizationHash = route.Slice(112, 32).ToArray(),
+            NewRouteAuthorizationSequence = BinaryPrimitives.ReadUInt64BigEndian(route.Slice(144, 8)),
+            CanonicalRevocationCheckpointHash = route.Slice(152, 32).ToArray()
+        };
+        ValidateRoute(value);
+        if (!frozen.AsSpan().SequenceEqual(Encode(value)))
+            throw Error(ProductionMailboxSelectionSuccessorError.NonCanonical, "PSS2 is not canonical.");
+        return value;
+    }
+
+    public static byte[] ComputeCanonicalHash(ProductionMailboxSelectionSuccessorV2Proof value) =>
+        SHA256.HashData(Encode(value));
+
+    internal static byte[] GetOldIssuerSigningBytes(ProductionMailboxSelectionSuccessorV2Proof value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        if (value.Selection.Mode != ProductionMailboxSelectionSuccessorMode.DirectPromotion)
+            throw Error(ProductionMailboxSelectionSuccessorError.InvalidTransitionMode,
+                "Offline PSS2 has no retired-issuer transcript.");
+        return GetSigningBytes(value, OldIssuerDomain);
+    }
+
+    internal static byte[] GetCurrentIssuerSigningBytes(ProductionMailboxSelectionSuccessorV2Proof value) =>
+        GetSigningBytes(value, CurrentIssuerDomain);
+
+    private static byte[] GetSigningBytes(ProductionMailboxSelectionSuccessorV2Proof value,
+        ReadOnlySpan<byte> domain)
+    {
+        var frozen = Freeze(value);
+        ValidateRoute(frozen);
+        // Signatures are terminal and excluded from both transcripts. Use deterministic non-zero
+        // placeholders only to pass the artifact-shape validator; caller signature memory is never
+        // reread and cannot influence the returned transcript.
+        var placeholder = Enumerable.Repeat((byte)0xA5,
+            ProductionMailboxSelectionSuccessorConstants.Ed25519SignatureLength).ToArray();
+        var transcriptValue = frozen with
+        {
+            Selection = frozen.Selection with
+            {
+                OldIssuerSignature = frozen.Selection.Mode ==
+                    ProductionMailboxSelectionSuccessorMode.DirectPromotion
+                        ? placeholder : new byte[ProductionMailboxSelectionSuccessorConstants.Ed25519SignatureLength],
+                NewIssuerSignature = placeholder
+            }
+        };
+        var encoded = Encode(transcriptValue);
+        var withoutSignatures = encoded.AsSpan(0,
+            encoded.Length - ProductionMailboxSelectionSuccessorV2Constants.SignatureBytes);
+        return [.. domain, .. withoutSignatures];
+    }
+
+    private static ProductionMailboxSelectionSuccessorV2Proof Freeze(
+        ProductionMailboxSelectionSuccessorV2Proof value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        ArgumentNullException.ThrowIfNull(value.Selection);
+        PreflightSelection(value.Selection);
+        PreflightHash(value.CanonicalTransitionContextHash, nameof(value.CanonicalTransitionContextHash));
+        PreflightHash(value.PredecessorCanonicalRouteAuthorizationHash,
+            nameof(value.PredecessorCanonicalRouteAuthorizationHash));
+        PreflightHash(value.FreshCanonicalRouteCertificateHash, nameof(value.FreshCanonicalRouteCertificateHash));
+        PreflightHash(value.NewCanonicalRouteAuthorizationHash, nameof(value.NewCanonicalRouteAuthorizationHash));
+        PreflightHash(value.CanonicalRevocationCheckpointHash, nameof(value.CanonicalRevocationCheckpointHash));
+        return ProductionMailboxSelectionSuccessorCopy.Clone(value);
+    }
+
+    private static void PreflightSelection(ProductionMailboxSelectionSuccessorProof value)
+    {
+        if (value.NetworkId.Length != 16 || value.MailboxOwnerEd25519PublicKey.Length != 32 ||
+            value.BlindedMailboxId.Length != 32 || value.BlindedPlacementId.Length != 32 ||
+            value.SelectionInputCommitment.Length != 32 ||
+            value.OldCanonicalAuthorityHash.Length != 32 || value.NewCanonicalAuthorityHash.Length != 32 ||
+            value.OldCanonicalTopologyHash.Length != 32 || value.NewCanonicalTopologyHash.Length != 32 ||
+            value.OldCanonicalSelectionHash.Length != 32 || value.NewCanonicalSelectionHash.Length != 32 ||
+            value.CanonicalNewAuthority.Length is < 1 or > ProductionMailboxAuthorityConstants.MaximumArtifactBytes ||
+            value.OldCanonicalSelection.Length is < 1 or >
+                ProductionMailboxTopologyConstants.MaximumSelectionArtifactBytes ||
+            value.NewCanonicalSelection.Length is < 1 or >
+                ProductionMailboxTopologyConstants.MaximumSelectionArtifactBytes ||
+            value.OldIssuerSignature.Length != 64 || value.NewIssuerSignature.Length != 64)
+            throw Error(ProductionMailboxSelectionSuccessorError.InvalidLength,
+                "PSS2 nested selection field length is outside its strict bound.");
+    }
+
+    private static void ValidateRoute(ProductionMailboxSelectionSuccessorV2Proof value)
+    {
+        if (value.PredecessorAuthorizationKind is not ProductionMailboxRouteAuthorizationKind.OwnerPRA2 and
+            not ProductionMailboxRouteAuthorizationKind.DelegatedRCA1 ||
+            value.NewAuthorizationKind is not ProductionMailboxRouteAuthorizationKind.OwnerPRA2 and
+            not ProductionMailboxRouteAuthorizationKind.DelegatedRCA1)
+            throw Error(ProductionMailboxSelectionSuccessorError.InvalidField,
+                "PSS2 route authorization kind is invalid.");
+        NonzeroHash(value.CanonicalTransitionContextHash, "RTC1 hash");
+        NonzeroHash(value.PredecessorCanonicalRouteAuthorizationHash, "predecessor route hash");
+        NonzeroHash(value.FreshCanonicalRouteCertificateHash, "fresh PRC1 hash");
+        NonzeroHash(value.NewCanonicalRouteAuthorizationHash, "new route authorization hash");
+        if (value.PredecessorRouteAuthorizationSequence == 0 ||
+            value.PredecessorRouteAuthorizationSequence == ulong.MaxValue ||
+            value.NewRouteAuthorizationSequence != value.PredecessorRouteAuthorizationSequence + 1 ||
+            value.NewRouteAuthorizationSequence == ulong.MaxValue)
+            throw Error(ProductionMailboxSelectionSuccessorError.InvalidField,
+                "PSS2 route sequence is invalid.");
+        if (value.NewAuthorizationKind == ProductionMailboxRouteAuthorizationKind.OwnerPRA2)
+        {
+            if (value.CanonicalRevocationCheckpointHash.Length != 32 ||
+                value.CanonicalRevocationCheckpointHash.Span.IndexOfAnyExcept((byte)0) >= 0)
+                throw Error(ProductionMailboxSelectionSuccessorError.InvalidField,
+                    "Owner PSS2 must have an all-zero RCH1 slot.");
+        }
+        else
+        {
+            NonzeroHash(value.CanonicalRevocationCheckpointHash, "RCH1 hash");
+        }
+    }
+
+    private static void WriteRouteBlock(ProductionMailboxSelectionSuccessorV2Proof value, Span<byte> route)
+    {
+        value.CanonicalTransitionContextHash.Span.CopyTo(route[..32]);
+        route[32] = (byte)value.PredecessorAuthorizationKind;
+        route[33] = (byte)value.NewAuthorizationKind;
+        value.PredecessorCanonicalRouteAuthorizationHash.Span.CopyTo(route.Slice(40, 32));
+        BinaryPrimitives.WriteUInt64BigEndian(route.Slice(72, 8), value.PredecessorRouteAuthorizationSequence);
+        value.FreshCanonicalRouteCertificateHash.Span.CopyTo(route.Slice(80, 32));
+        value.NewCanonicalRouteAuthorizationHash.Span.CopyTo(route.Slice(112, 32));
+        BinaryPrimitives.WriteUInt64BigEndian(route.Slice(144, 8), value.NewRouteAuthorizationSequence);
+        value.CanonicalRevocationCheckpointHash.Span.CopyTo(route.Slice(152, 32));
+    }
+
+    private static void PreflightHash(ReadOnlyMemory<byte> value, string name)
+    {
+        if (value.Length != 32)
+            throw Error(ProductionMailboxSelectionSuccessorError.InvalidField, $"PSS2 {name} length is invalid.");
+    }
+
+    private static void NonzeroHash(ReadOnlyMemory<byte> value, string name)
+    {
+        PreflightHash(value, name);
+        if (value.Span.IndexOfAnyExcept((byte)0) < 0)
+            throw Error(ProductionMailboxSelectionSuccessorError.InvalidField, $"PSS2 {name} is all zero.");
+    }
+
+    private static ProductionMailboxSelectionSuccessorException Error(
+        ProductionMailboxSelectionSuccessorError error, string message) => new(error, message);
+}

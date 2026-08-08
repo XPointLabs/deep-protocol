@@ -8,6 +8,96 @@ namespace Deep.Protocol.DeepExtension.MailboxTopology;
 
 public static class ProductionMailboxSelectionSuccessorVerifier
 {
+    public static VerifiedProductionMailboxRouteSelectionTransition VerifyDirectRouteSelectionTransition(
+        ReadOnlySpan<byte> encodedSuccessor,
+        ReadOnlySpan<byte> canonicalFreshRouteCertificate,
+        ReadOnlySpan<byte> canonicalTransitionContext,
+        ReadOnlySpan<byte> canonicalRouteAuthorization,
+        ReadOnlySpan<byte> canonicalRevocationCheckpoint,
+        VerifiedProductionMailboxAuthority oldAuthority,
+        VerifiedProductionMailboxTopology oldTopology,
+        VerifiedProductionMailboxAuthority currentAuthority,
+        VerifiedProductionMailboxRevocationSnapshot currentRevocations,
+        VerifiedProductionMailboxTopology currentTopology,
+        ProductionMailboxSelectionSuccessorVerificationContext selectionContext,
+        ProductionMailboxRouteSelectionTransitionVerificationContext routeContext)
+    {
+        var inputs = FreezeRouteInputs(encodedSuccessor, canonicalFreshRouteCertificate,
+            canonicalTransitionContext, canonicalRouteAuthorization, canonicalRevocationCheckpoint,
+            routeContext);
+        var pss = ProductionMailboxSelectionSuccessorV2Codec.Decode(inputs.Successor);
+        if (pss.Selection.Mode != ProductionMailboxSelectionSuccessorMode.DirectPromotion)
+            throw Error(ProductionMailboxSelectionSuccessorError.InvalidTransitionMode,
+                "Direct route transition requires DirectPromotion PSS2.");
+        var selection = VerifyV2SelectionClosure(inputs.Successor, oldAuthority, oldTopology,
+            currentAuthority, currentTopology, selectionContext,
+            new SodiumProductionMailboxAuthoritySignatureVerifier(),
+            new SodiumProductionMailboxTopologySignatureVerifier(),
+            new SodiumProductionMailboxSelectionSuccessorSignatureVerifier());
+        return VerifyRouteClosure(inputs, pss, selection, offlineClosure: null, currentAuthority,
+            currentRevocations, currentTopology, selectionContext.NowUnixSeconds,
+            selectionContext.ClockSkewSeconds);
+    }
+
+    public static VerifiedProductionMailboxRouteSelectionTransition
+        VerifyOfflineRouteSelectionTransitionClosure(
+        ReadOnlySpan<byte> encodedSuccessor,
+        ReadOnlySpan<byte> canonicalNewAuthority,
+        ReadOnlySpan<byte> canonicalNewRevocationSnapshot,
+        ReadOnlySpan<byte> canonicalNewTopology,
+        ReadOnlySpan<byte> canonicalOldSelection,
+        ReadOnlySpan<byte> canonicalNewCurrentSelection,
+        ReadOnlySpan<byte> canonicalNewNextSelection,
+        ReadOnlySpan<byte> canonicalFreshRouteCertificate,
+        ReadOnlySpan<byte> canonicalTransitionContext,
+        ReadOnlySpan<byte> canonicalRouteAuthorization,
+        ReadOnlySpan<byte> canonicalRevocationCheckpoint,
+        VerifiedProductionMailboxAuthority oldAuthority,
+        VerifiedProductionMailboxTopology oldTopology,
+        ProductionMailboxOfflineCheckpointClosureVerificationContext selectionContext,
+        ProductionMailboxRouteSelectionTransitionVerificationContext routeContext)
+    {
+        var inputs = FreezeRouteInputs(encodedSuccessor, canonicalFreshRouteCertificate,
+            canonicalTransitionContext, canonicalRouteAuthorization, canonicalRevocationCheckpoint,
+            routeContext);
+        var pss = ProductionMailboxSelectionSuccessorV2Codec.Decode(inputs.Successor);
+        if (pss.Selection.Mode != ProductionMailboxSelectionSuccessorMode.OfflineCheckpoint)
+            throw Error(ProductionMailboxSelectionSuccessorError.InvalidTransitionMode,
+                "Offline route transition requires OfflineCheckpoint PSS2.");
+        var offline = VerifyOfflineCheckpointClosureCore(inputs.Successor, canonicalNewAuthority,
+            canonicalNewRevocationSnapshot, canonicalNewTopology, canonicalOldSelection,
+            canonicalNewCurrentSelection, canonicalNewNextSelection, oldAuthority, oldTopology,
+            selectionContext, new SodiumProductionMailboxAuthoritySignatureVerifier(),
+            new SodiumProductionMailboxRevocationSnapshotSignatureVerifier(),
+            new SodiumProductionMailboxTopologySignatureVerifier(),
+            new SodiumProductionMailboxSelectionSuccessorSignatureVerifier(), isV2: true);
+        return VerifyRouteClosure(inputs, pss, offline.Successor, offline, offline.Authority,
+            offline.Revocations, offline.Topology, selectionContext.VerifiedAtUnixSeconds,
+            selectionContext.ClockSkewSeconds);
+    }
+
+    internal static VerifiedProductionMailboxSelectionSuccessor VerifyV2SelectionClosure(
+        ReadOnlySpan<byte> encoded,
+        VerifiedProductionMailboxAuthority oldAuthority,
+        VerifiedProductionMailboxTopology oldTopology,
+        VerifiedProductionMailboxAuthority currentAuthority,
+        VerifiedProductionMailboxTopology currentTopology,
+        ProductionMailboxSelectionSuccessorVerificationContext context,
+        IProductionMailboxAuthoritySignatureVerifier authoritySignatureVerifier,
+        IProductionMailboxTopologySignatureVerifier selectionSignatureVerifier,
+        IProductionMailboxSelectionSuccessorSignatureVerifier successorSignatureVerifier)
+    {
+        if (encoded.Length < ProductionMailboxSelectionSuccessorV2Constants.FixedCoreLength +
+                ProductionMailboxSelectionSuccessorV2Constants.SignatureBytes ||
+            encoded.Length > ProductionMailboxSelectionSuccessorV2Constants.MaximumArtifactBytes)
+            throw Error(ProductionMailboxSelectionSuccessorError.InvalidLength,
+                "PSS2 length is outside its strict bounds.");
+        var frozen = encoded.ToArray();
+        return VerifyCore(frozen, oldAuthority, oldTopology, currentAuthority, currentTopology,
+            Freeze(context), authoritySignatureVerifier, selectionSignatureVerifier,
+            successorSignatureVerifier, isV2: true);
+    }
+
     public static VerifiedProductionMailboxSelectionSuccessor VerifyDirectPromotion(
         ReadOnlySpan<byte> encoded,
         VerifiedProductionMailboxAuthority oldAuthority,
@@ -86,7 +176,8 @@ public static class ProductionMailboxSelectionSuccessorVerifier
         IProductionMailboxAuthoritySignatureVerifier authoritySignatureVerifier,
         IProductionMailboxRevocationSnapshotSignatureVerifier revocationSignatureVerifier,
         IProductionMailboxTopologySignatureVerifier topologySignatureVerifier,
-        IProductionMailboxSelectionSuccessorSignatureVerifier successorSignatureVerifier)
+        IProductionMailboxSelectionSuccessorSignatureVerifier successorSignatureVerifier,
+        bool isV2 = false)
     {
         ArgumentNullException.ThrowIfNull(oldAuthority);
         ArgumentNullException.ThrowIfNull(oldTopology);
@@ -101,7 +192,7 @@ public static class ProductionMailboxSelectionSuccessorVerifier
         ValidateClosureContext(frozenContext);
         PreflightClosureArtifacts(encodedSuccessor, canonicalNewAuthority,
             canonicalNewRevocationSnapshot, canonicalNewTopology, canonicalOldSelection,
-            canonicalNewCurrentSelection, canonicalNewNextSelection);
+            canonicalNewCurrentSelection, canonicalNewNextSelection, isV2);
         var frozenSuccessor = encodedSuccessor.ToArray();
         var frozenAuthority = canonicalNewAuthority.ToArray();
         var frozenRevocations = canonicalNewRevocationSnapshot.ToArray();
@@ -110,9 +201,11 @@ public static class ProductionMailboxSelectionSuccessorVerifier
         var frozenCurrentSelection = canonicalNewCurrentSelection.ToArray();
         var frozenNextSelection = canonicalNewNextSelection.ToArray();
         PreflightClosureArtifacts(frozenSuccessor, frozenAuthority, frozenRevocations,
-            frozenTopology, frozenOldSelection, frozenCurrentSelection, frozenNextSelection);
+            frozenTopology, frozenOldSelection, frozenCurrentSelection, frozenNextSelection, isV2);
 
-        var proof = ProductionMailboxSelectionSuccessorCodec.Decode(frozenSuccessor);
+        var proof = isV2
+            ? ProductionMailboxSelectionSuccessorV2Codec.Decode(frozenSuccessor).Selection
+            : ProductionMailboxSelectionSuccessorCodec.Decode(frozenSuccessor);
         if (proof.Mode != ProductionMailboxSelectionSuccessorMode.OfflineCheckpoint)
             throw Error(ProductionMailboxSelectionSuccessorError.InvalidTransitionMode,
                 "This entry point accepts offline-checkpoint PSS1 only.");
@@ -147,7 +240,7 @@ public static class ProductionMailboxSelectionSuccessorVerifier
         var components = VerifyOfflineCheckpointComponents(
             frozenSuccessor, oldAuthority, oldTopology, frozenTopology,
             successorContext, authoritySignatureVerifier, topologySignatureVerifier,
-            successorSignatureVerifier);
+            successorSignatureVerifier, isV2);
         Equal(components.Authority.CanonicalAuthorityHash.Span, SHA256.HashData(frozenAuthority),
             ProductionMailboxSelectionSuccessorError.AuthorityNotSuccessor,
             "Verified PMA1 hash differs from the complete closure.");
@@ -191,6 +284,8 @@ public static class ProductionMailboxSelectionSuccessorVerifier
             nextSelection.Proof.Generation != topologyValue.NextEpoch.Generation)
             throw Error(ProductionMailboxSelectionSuccessorError.EpochMismatch,
                 "Offline checkpoint next PMS1 is bound to the wrong epoch.");
+        VerifySuccessorContainedInSelection(components.Successor.Proof,
+            nextSelection.Proof, "offline next PMS1");
 
         var anchor = new ProductionMailboxOfflineCheckpointCommitAnchor(
             frozenContext.PinnedMrXPublicKeySha256.Span,
@@ -224,7 +319,8 @@ public static class ProductionMailboxSelectionSuccessorVerifier
         ProductionMailboxSelectionSuccessorVerificationContext context,
         IProductionMailboxAuthoritySignatureVerifier authoritySignatureVerifier,
         IProductionMailboxTopologySignatureVerifier topologySignatureVerifier,
-        IProductionMailboxSelectionSuccessorSignatureVerifier successorSignatureVerifier)
+        IProductionMailboxSelectionSuccessorSignatureVerifier successorSignatureVerifier,
+        bool isV2 = false)
     {
         ArgumentNullException.ThrowIfNull(oldAuthority);
         ArgumentNullException.ThrowIfNull(oldTopology);
@@ -235,7 +331,9 @@ public static class ProductionMailboxSelectionSuccessorVerifier
         ValidateContextLengths(context);
         var frozenContext = Freeze(context);
         ValidateContext(frozenContext);
-        var proof = ProductionMailboxSelectionSuccessorCodec.Decode(frozenEncoded);
+        var proof = isV2
+            ? ProductionMailboxSelectionSuccessorV2Codec.Decode(frozenEncoded).Selection
+            : ProductionMailboxSelectionSuccessorCodec.Decode(frozenEncoded);
         if (proof.Mode != ProductionMailboxSelectionSuccessorMode.OfflineCheckpoint)
             throw Error(ProductionMailboxSelectionSuccessorError.InvalidTransitionMode,
                 "This entry point accepts offline-checkpoint PSS1 only.");
@@ -287,7 +385,7 @@ public static class ProductionMailboxSelectionSuccessorVerifier
         }
         var successor = VerifyCore(frozenEncoded, oldAuthority, oldTopology, currentAuthority,
             currentTopology, frozenContext, authoritySignatureVerifier, topologySignatureVerifier,
-            successorSignatureVerifier);
+            successorSignatureVerifier, isV2);
         return new OfflineCheckpointComponents(successor, currentAuthority, currentTopology);
     }
 
@@ -300,7 +398,8 @@ public static class ProductionMailboxSelectionSuccessorVerifier
         ProductionMailboxSelectionSuccessorVerificationContext context,
         IProductionMailboxAuthoritySignatureVerifier authoritySignatureVerifier,
         IProductionMailboxTopologySignatureVerifier selectionSignatureVerifier,
-        IProductionMailboxSelectionSuccessorSignatureVerifier successorSignatureVerifier)
+        IProductionMailboxSelectionSuccessorSignatureVerifier successorSignatureVerifier,
+        bool isV2 = false)
     {
         ArgumentNullException.ThrowIfNull(oldAuthority);
         ArgumentNullException.ThrowIfNull(oldTopology);
@@ -311,7 +410,8 @@ public static class ProductionMailboxSelectionSuccessorVerifier
         ArgumentNullException.ThrowIfNull(selectionSignatureVerifier);
         ArgumentNullException.ThrowIfNull(successorSignatureVerifier);
         var frozenContext = context;
-        var proof = ProductionMailboxSelectionSuccessorCodec.Decode(frozenBytes);
+        var v2 = isV2 ? ProductionMailboxSelectionSuccessorV2Codec.Decode(frozenBytes) : null;
+        var proof = v2?.Selection ?? ProductionMailboxSelectionSuccessorCodec.Decode(frozenBytes);
         VerifyWindow(proof.IssuedAtUnixSeconds, proof.ExpiresAtUnixSeconds,
             frozenContext.NowUnixSeconds, frozenContext.ClockSkewSeconds, "PSS1");
 
@@ -405,11 +505,7 @@ public static class ProductionMailboxSelectionSuccessorVerifier
             throw Error(ProductionMailboxSelectionSuccessorError.EpochMismatch,
                 "PSS1 epoch fields do not match the embedded selections.");
 
-        if (proof.IssuedAtUnixSeconds < newSelectionValue.IssuedAtUnixSeconds ||
-            proof.IssuedAtUnixSeconds > newSelectionValue.ExpiresAtUnixSeconds ||
-            proof.ExpiresAtUnixSeconds > newSelectionValue.ExpiresAtUnixSeconds)
-            throw Error(ProductionMailboxSelectionSuccessorError.InvalidValidityWindow,
-                "PSS1 must be contained in the live new PMS1 window.");
+        VerifySuccessorContainedInSelection(proof, newSelectionValue, "new/current PMS1");
 
         switch (proof.Mode)
         {
@@ -417,10 +513,8 @@ public static class ProductionMailboxSelectionSuccessorVerifier
                 VerifyDirectPromotion(proof, oldAuthorityValue, oldAuthorityHash,
                     newAuthorityValue, oldTopologyValue, oldTopologyHash, newTopologyValue,
                     oldSelectionValue, newSelectionValue, oldSelection.Replicas, newSelection.Replicas);
-                if (proof.IssuedAtUnixSeconds < oldSelectionValue.IssuedAtUnixSeconds ||
-                    proof.IssuedAtUnixSeconds > oldSelectionValue.ExpiresAtUnixSeconds)
-                    throw Error(ProductionMailboxSelectionSuccessorError.InvalidValidityWindow,
-                        "Direct PSS1 issuance must also be contained in the old PMS1 window.");
+                VerifySuccessorContainedInSelection(proof, oldSelectionValue,
+                    "direct old/next PMS1");
                 break;
             case ProductionMailboxSelectionSuccessorMode.OfflineCheckpoint:
                 VerifyOfflineCheckpoint(proof, oldAuthorityValue, newAuthorityValue,
@@ -434,13 +528,16 @@ public static class ProductionMailboxSelectionSuccessorVerifier
 
         var newKey = newAuthorityValue.MailboxIssuerEd25519PublicKey.ToArray();
         var newSignature = proof.NewIssuerSignature.ToArray();
-        var newSigningBytes = ProductionMailboxSelectionSuccessorCodec.GetNewIssuerSigningBytes(proof);
+        var newSigningBytes = v2 is null
+            ? ProductionMailboxSelectionSuccessorCodec.GetNewIssuerSigningBytes(proof)
+            : ProductionMailboxSelectionSuccessorV2Codec.GetCurrentIssuerSigningBytes(v2);
         if (proof.Mode == ProductionMailboxSelectionSuccessorMode.DirectPromotion)
         {
             var oldKey = oldAuthorityValue.MailboxIssuerEd25519PublicKey.ToArray();
             var oldSignature = proof.OldIssuerSignature.ToArray();
-            var oldSigningBytes =
-                ProductionMailboxSelectionSuccessorCodec.GetOldIssuerSigningBytes(proof);
+            var oldSigningBytes = v2 is null
+                ? ProductionMailboxSelectionSuccessorCodec.GetOldIssuerSigningBytes(proof)
+                : ProductionMailboxSelectionSuccessorV2Codec.GetOldIssuerSigningBytes(v2);
             if (!successorSignatureVerifier.Verify(oldKey, oldSigningBytes, oldSignature))
                 throw Error(ProductionMailboxSelectionSuccessorError.InvalidOldIssuerSignature,
                     "PSS1 old-issuer signature is invalid.");
@@ -450,6 +547,18 @@ public static class ProductionMailboxSelectionSuccessorVerifier
                 "PSS1 new-issuer signature is invalid.");
         return new VerifiedProductionMailboxSelectionSuccessor(
             proof, SHA256.HashData(frozenBytes), oldSelection, newSelection);
+    }
+
+    internal static void VerifySuccessorContainedInSelection(
+        ProductionMailboxSelectionSuccessorProof successor,
+        ProductionMailboxSelectionProof selection,
+        string selectionName)
+    {
+        if (successor.IssuedAtUnixSeconds < selection.IssuedAtUnixSeconds ||
+            successor.IssuedAtUnixSeconds > selection.ExpiresAtUnixSeconds ||
+            successor.ExpiresAtUnixSeconds > selection.ExpiresAtUnixSeconds)
+            throw Error(ProductionMailboxSelectionSuccessorError.InvalidValidityWindow,
+                $"PSS lifetime escapes {selectionName}.");
     }
 
     private static VerifiedProductionMailboxAuthority VerifyEmbeddedNewAuthority(
@@ -568,13 +677,17 @@ public static class ProductionMailboxSelectionSuccessorVerifier
         ReadOnlySpan<byte> topology,
         ReadOnlySpan<byte> oldSelection,
         ReadOnlySpan<byte> currentSelection,
-        ReadOnlySpan<byte> nextSelection)
+        ReadOnlySpan<byte> nextSelection,
+        bool isV2 = false)
     {
         // Check every scalar length before copying even the first field. A malformed late field
         // must not cause earlier multi-megabyte artifacts to be cloned.
-        if (successor.Length < ProductionMailboxSelectionSuccessorConstants.FixedCoreLength +
-                ProductionMailboxSelectionSuccessorConstants.SignatureBytes ||
-            successor.Length > ProductionMailboxSelectionSuccessorConstants.MaximumArtifactBytes ||
+        var successorMinimum = (isV2 ? ProductionMailboxSelectionSuccessorV2Constants.FixedCoreLength :
+            ProductionMailboxSelectionSuccessorConstants.FixedCoreLength) +
+            ProductionMailboxSelectionSuccessorConstants.SignatureBytes;
+        var successorMaximum = isV2 ? ProductionMailboxSelectionSuccessorV2Constants.MaximumArtifactBytes :
+            ProductionMailboxSelectionSuccessorConstants.MaximumArtifactBytes;
+        if (successor.Length < successorMinimum || successor.Length > successorMaximum ||
             authority.Length is < 1 or > ProductionMailboxAuthorityConstants.MaximumArtifactBytes ||
             revocations.Length <
                 ProductionMailboxRevocationSnapshotConstants.FixedArtifactBytesWithoutSerials ||
@@ -1066,6 +1179,321 @@ public static class ProductionMailboxSelectionSuccessorVerifier
             throw Error(ProductionMailboxSelectionSuccessorError.Expired, $"{name} has expired.");
     }
 
+    private static FrozenRouteInputs FreezeRouteInputs(
+        ReadOnlySpan<byte> successor,
+        ReadOnlySpan<byte> certificate,
+        ReadOnlySpan<byte> transition,
+        ReadOnlySpan<byte> authorization,
+        ReadOnlySpan<byte> checkpoint,
+        ProductionMailboxRouteSelectionTransitionVerificationContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        if (successor.Length < ProductionMailboxSelectionSuccessorV2Constants.FixedCoreLength +
+                ProductionMailboxSelectionSuccessorV2Constants.SignatureBytes ||
+            successor.Length > ProductionMailboxSelectionSuccessorV2Constants.MaximumArtifactBytes ||
+            certificate.Length != ProductionMailboxRouteAdvertisementConstants.CanonicalCertificateLength ||
+            transition.Length != ProductionMailboxRouteAuthorizationConstants.CanonicalTransitionContextLength ||
+            authorization.Length is not ProductionMailboxRouteAuthorizationConstants.CanonicalAdvertisementV2Length and
+                not ProductionMailboxRouteAuthorizationConstants.CanonicalContinuityActivationLength ||
+            checkpoint.Length is not 0 and
+                not ProductionMailboxRouteContinuityConstants.CanonicalRevocationCheckpointLength ||
+            context.ExpectedRouteDomainHash.Length != 32 ||
+            context.CanonicalOldRouteOriginLkg.Length !=
+                ProductionMailboxRouteContinuityConstants.CanonicalRouteOriginLkgLength)
+            throw Error(ProductionMailboxSelectionSuccessorError.InvalidLength,
+                "PSS2 route closure has an invalid fixed artifact length.");
+        return new(
+            successor.ToArray(), certificate.ToArray(), transition.ToArray(), authorization.ToArray(),
+            checkpoint.ToArray(), context.ExpectedRouteDomainHash.ToArray(),
+            context.CanonicalOldRouteOriginLkg.ToArray(), context.ContinuityEnrollment);
+    }
+
+    private static VerifiedProductionMailboxRouteSelectionTransition VerifyRouteClosure(
+        FrozenRouteInputs inputs,
+        ProductionMailboxSelectionSuccessorV2Proof pss,
+        VerifiedProductionMailboxSelectionSuccessor selection,
+        VerifiedProductionMailboxOfflineCheckpointClosure? offlineClosure,
+        VerifiedProductionMailboxAuthority currentAuthority,
+        VerifiedProductionMailboxRevocationSnapshot currentRevocations,
+        VerifiedProductionMailboxTopology currentTopology,
+        ulong now,
+        uint skew)
+    {
+        ArgumentNullException.ThrowIfNull(currentAuthority);
+        ArgumentNullException.ThrowIfNull(currentRevocations);
+        ArgumentNullException.ThrowIfNull(currentTopology);
+        ProductionMailboxRouteAuthorizationVerifier.ValidateClock(now, skew);
+        var currentAuthorityValue = currentAuthority.Authority;
+        var currentRevocationValue = currentRevocations.Snapshot;
+        var currentTopologyValue = currentTopology.Snapshot;
+        VerifyExactCurrentRouteControlPlane(currentAuthority, currentRevocations, currentTopology);
+        var oldRol = ProductionMailboxRouteContinuityCodec.DecodeRouteOriginLkg(inputs.OldRouteOriginLkg);
+        var oldRolHash = ProductionMailboxRouteContinuityCodec.ComputeRouteOriginLkgHash(oldRol);
+        Equal(oldRol.RouteDomainHash.Span, inputs.ExpectedRouteDomainHash,
+            ProductionMailboxSelectionSuccessorError.RouteMismatch,
+            "Protected ROL1 route domain differs from expected route.");
+        Equal(oldRol.NetworkId.Span, pss.Selection.NetworkId.Span,
+            ProductionMailboxSelectionSuccessorError.NetworkMismatch,
+            "Protected ROL1 network differs from PSS2.");
+        if (oldRol.AuthorizationKind != pss.PredecessorAuthorizationKind ||
+            oldRol.AuthorizationSequence != pss.PredecessorRouteAuthorizationSequence)
+            throw Error(ProductionMailboxSelectionSuccessorError.RouteMismatch,
+                "PSS2 route predecessor scalar state differs from protected ROL1.");
+        Equal(oldRol.CanonicalAuthorizationHash.Span,
+            pss.PredecessorCanonicalRouteAuthorizationHash.Span,
+            ProductionMailboxSelectionSuccessorError.RouteMismatch,
+            "PSS2 route predecessor hash differs from protected ROL1.");
+
+        var routeVerifier = new SodiumProductionMailboxRouteSignatureVerifier();
+        var certificate = ProductionMailboxRouteCertificateVerifier.Verify(inputs.Certificate,
+            currentAuthority, now, skew, routeVerifier);
+        var certificateValue = certificate.Certificate;
+        Equal(certificateValue.MailboxOwnerEd25519PublicKey.Span,
+            pss.Selection.MailboxOwnerEd25519PublicKey.Span,
+            ProductionMailboxSelectionSuccessorError.OwnerMismatch, "PSS2 PRC1 owner mismatch.");
+        Equal(certificateValue.BlindedMailboxId.Span, pss.Selection.BlindedMailboxId.Span,
+            ProductionMailboxSelectionSuccessorError.RouteMismatch, "PSS2 PRC1 mailbox mismatch.");
+        Equal(certificateValue.BlindedPlacementId.Span, pss.Selection.BlindedPlacementId.Span,
+            ProductionMailboxSelectionSuccessorError.RouteMismatch, "PSS2 PRC1 placement mismatch.");
+        Equal(certificateValue.SelectionInputCommitment.Span,
+            pss.Selection.SelectionInputCommitment.Span,
+            ProductionMailboxSelectionSuccessorError.RouteMismatch,
+            "PSS2 PRC1 selection input mismatch.");
+        var routeDomain = ProductionMailboxRouteAdvertisementCodec.ComputeRouteDomainHash(certificateValue);
+        Equal(routeDomain, inputs.ExpectedRouteDomainHash,
+            ProductionMailboxSelectionSuccessorError.RouteMismatch, "PSS2 PRC1 route-domain mismatch.");
+
+        var rtc = ProductionMailboxRouteAuthorizationVerifier.VerifyTransitionContext(inputs.Transition,
+            pss.Selection.NetworkId.Span, routeDomain,
+            pss.Selection.OldCanonicalSelectionHash.Span,
+            pss.Selection.NewCanonicalSelectionHash.Span, oldRolHash,
+            oldRol.RouteVerifiedAtUnixSeconds, oldRol.LocalCommitGeneration);
+        var rtcValue = rtc.Context;
+        if (rtcValue.Mode != pss.Selection.Mode ||
+            rtcValue.PredecessorAuthorizationKind != pss.PredecessorAuthorizationKind ||
+            rtcValue.NewAuthorizationKind != pss.NewAuthorizationKind ||
+            rtcValue.PredecessorRouteAuthorizationSequence != pss.PredecessorRouteAuthorizationSequence ||
+            rtcValue.NewRouteAuthorizationSequence != pss.NewRouteAuthorizationSequence)
+            throw Error(ProductionMailboxSelectionSuccessorError.RouteMismatch,
+                "RTC1 scalar transition differs from PSS2.");
+        Equal(rtc.CanonicalHash.Span, pss.CanonicalTransitionContextHash.Span,
+            ProductionMailboxSelectionSuccessorError.RouteMismatch, "PSS2 RTC1 hash mismatch.");
+        Equal(rtcValue.PredecessorCanonicalRouteAuthorizationHash.Span,
+            pss.PredecessorCanonicalRouteAuthorizationHash.Span,
+            ProductionMailboxSelectionSuccessorError.RouteMismatch, "RTC1 predecessor hash mismatch.");
+        Equal(rtcValue.FreshCanonicalRouteCertificateHash.Span,
+            certificate.CanonicalCertificateHash.Span,
+            ProductionMailboxSelectionSuccessorError.RouteMismatch, "RTC1 PRC1 hash mismatch.");
+        Equal(certificate.CanonicalCertificateHash.Span, pss.FreshCanonicalRouteCertificateHash.Span,
+            ProductionMailboxSelectionSuccessorError.RouteMismatch, "PSS2 PRC1 hash mismatch.");
+        Equal(rtcValue.CurrentCanonicalAuthorityHash.Span,
+            currentAuthority.CanonicalAuthorityHash.Span,
+            ProductionMailboxSelectionSuccessorError.AuthorityNotSuccessor, "RTC1 PMA1 hash mismatch.");
+        if (rtcValue.CurrentAuthorityGeneration != currentAuthority.Authority.AuthorityGeneration)
+            throw Error(ProductionMailboxSelectionSuccessorError.AuthorityNotSuccessor,
+                "RTC1 PMA1 generation mismatch.");
+        ProductionMailboxRouteAuthorizationVerifier.VerifyLive(rtcValue.NotBeforeUnixSeconds,
+            rtcValue.ExpiresAtUnixSeconds, now, skew, "RTC1");
+
+        byte[] authorizationHash;
+        ulong authorizationNotBefore;
+        ulong authorizationExpires;
+        if (pss.NewAuthorizationKind == ProductionMailboxRouteAuthorizationKind.OwnerPRA2)
+        {
+            if (inputs.Enrollment is not null || inputs.Checkpoint.Length != 0 ||
+                rtcValue.TransitionSalt.Span.IndexOfAnyExcept((byte)0) >= 0 ||
+                rtcValue.ContinuityTransitionCommitment.Span.IndexOfAnyExcept((byte)0) >= 0 ||
+                rtcValue.CanonicalRevocationCheckpointHash.Span.IndexOfAnyExcept((byte)0) >= 0)
+                throw Error(ProductionMailboxSelectionSuccessorError.RouteMismatch,
+                    "Owner PSS2 contains delegated continuity state.");
+            var owner = ProductionMailboxRouteAuthorizationVerifier.VerifyOwnerAuthorization(
+                inputs.Authorization, currentAuthority,
+                new ProductionMailboxOwnerRouteAuthorizationVerificationContext
+                {
+                    ExpectedNetworkId = pss.Selection.NetworkId.ToArray(),
+                    ExpectedRouteDomainHash = routeDomain,
+                    ExpectedPredecessorKind = oldRol.AuthorizationKind,
+                    ExpectedPredecessorHash = oldRol.CanonicalAuthorizationHash.ToArray(),
+                    ExpectedPredecessorSequence = oldRol.AuthorizationSequence,
+                    NowUnixSeconds = now,
+                    ClockSkewSeconds = skew
+                }, routeVerifier);
+            authorizationHash = owner.CanonicalHash.ToArray();
+            authorizationNotBefore = owner.Advertisement.PublishedAtUnixSeconds;
+            authorizationExpires = owner.Advertisement.ExpiresAtUnixSeconds;
+            if (owner.Advertisement.Sequence != pss.NewRouteAuthorizationSequence)
+                throw Error(ProductionMailboxSelectionSuccessorError.RouteMismatch,
+                    "PRA2 sequence differs from PSS2.");
+        }
+        else
+        {
+            var enrollment = inputs.Enrollment ?? throw Error(
+                ProductionMailboxSelectionSuccessorError.RouteMismatch,
+                "Delegated PSS2 requires a sealed RCD1/RDA1 enrollment capability.");
+            Equal(oldRol.CanonicalDelegationHash.Span, enrollment.CanonicalDelegationHash.Span,
+                ProductionMailboxSelectionSuccessorError.RouteMismatch,
+                "Protected ROL1 RCD1 differs from enrollment.");
+            Equal(oldRol.CanonicalDelegationAcceptanceHash.Span,
+                enrollment.CanonicalAcceptanceHash.Span,
+                ProductionMailboxSelectionSuccessorError.RouteMismatch,
+                "Protected ROL1 RDA1 differs from enrollment.");
+            var rch = ProductionMailboxRouteContinuityVerifier.VerifyRevocationCheckpoint(
+                inputs.Checkpoint, currentAuthority, currentRevocations,
+                enrollment.VerifiedDelegation, rtcValue.TransitionSalt.Span,
+                rtcValue.ContinuityTransitionCommitment.Span, oldRol.OwnerRevocationGeneration,
+                oldRol.OwnerRevocationHeadHash.Span, now, skew, routeVerifier);
+            Equal(rch.CanonicalHash.Span, pss.CanonicalRevocationCheckpointHash.Span,
+                ProductionMailboxSelectionSuccessorError.RouteMismatch, "PSS2 RCH1 hash mismatch.");
+            Equal(rch.CanonicalHash.Span, rtcValue.CanonicalRevocationCheckpointHash.Span,
+                ProductionMailboxSelectionSuccessorError.RouteMismatch, "RTC1 RCH1 hash mismatch.");
+            var activation = ProductionMailboxRouteAuthorizationVerifier.VerifyDelegatedActivation(
+                inputs.Authorization, currentAuthority, currentRevocations, certificate, rch, rtc,
+                enrollment, now, skew, routeVerifier);
+            authorizationHash = activation.CanonicalHash.ToArray();
+            authorizationNotBefore = activation.Activation.IssuedAtUnixSeconds;
+            authorizationExpires = activation.Activation.ExpiresAtUnixSeconds;
+        }
+        Equal(authorizationHash, pss.NewCanonicalRouteAuthorizationHash.Span,
+            ProductionMailboxSelectionSuccessorError.RouteMismatch,
+            "PSS2 route authorization hash mismatch.");
+        VerifyRouteSelectionContainment(pss.Selection, rtcValue, authorizationNotBefore,
+            authorizationExpires, currentAuthorityValue, currentRevocationValue,
+            currentTopologyValue);
+
+        if (oldRol.LocalCommitGeneration == ulong.MaxValue)
+            throw Error(ProductionMailboxSelectionSuccessorError.InvalidField,
+                "Protected ROL1 local generation is terminal.");
+        var nextRol = new ProductionMailboxRouteOriginLkg
+        {
+            NetworkId = oldRol.NetworkId.ToArray(),
+            RouteDomainHash = oldRol.RouteDomainHash.ToArray(),
+            AuthorizationKind = pss.NewAuthorizationKind,
+            CanonicalAuthorizationHash = authorizationHash,
+            AuthorizationSequence = pss.NewRouteAuthorizationSequence,
+            CanonicalDelegationHash = oldRol.CanonicalDelegationHash.ToArray(),
+            CanonicalDelegationAcceptanceHash = oldRol.CanonicalDelegationAcceptanceHash.ToArray(),
+            OwnerRevocationGeneration = oldRol.OwnerRevocationGeneration,
+            OwnerRevocationHeadHash = oldRol.OwnerRevocationHeadHash.ToArray(),
+            RouteVerifiedAtUnixSeconds = oldRol.RouteVerifiedAtUnixSeconds,
+            LocalCommitGeneration = oldRol.LocalCommitGeneration + 1
+        };
+        var canonicalNextRol = ProductionMailboxRouteContinuityCodec.EncodeRouteOriginLkg(nextRol);
+        var nextRolHash = ProductionMailboxRouteContinuityCodec.ComputeRouteOriginLkgHash(nextRol);
+        var controlPlaneBinding = offlineClosure is not null
+            ? offlineClosure.TranscriptSha256.ToArray()
+            : SHA256.HashData([
+                .. "Deep/production-mailbox/route-selection-control-plane/v1"u8,
+                .. currentAuthority.CanonicalAuthorityHash.Span,
+                .. currentAuthority.Authority.Revocation.SnapshotHash.Span,
+                .. pss.Selection.NewCanonicalTopologyHash.Span,
+                .. pss.Selection.NewCanonicalSelectionHash.Span]);
+        var transcript = BuildRouteSelectionTranscript(inputs.Successor, inputs.Certificate,
+            inputs.Transition, inputs.Authorization, inputs.Checkpoint, inputs.OldRouteOriginLkg,
+            canonicalNextRol, controlPlaneBinding, now);
+        return new VerifiedProductionMailboxRouteSelectionTransition(selection, offlineClosure,
+            pss.NewAuthorizationKind, pss.NewRouteAuthorizationSequence, inputs.Successor,
+            inputs.Certificate, inputs.Transition, inputs.Authorization, inputs.Checkpoint,
+            canonicalNextRol, nextRolHash, transcript, SHA256.HashData(transcript));
+    }
+
+    internal static void VerifyExactCurrentRouteControlPlane(
+        VerifiedProductionMailboxAuthority authority,
+        VerifiedProductionMailboxRevocationSnapshot revocations,
+        VerifiedProductionMailboxTopology topology)
+    {
+        var authorityValue = authority.Authority;
+        var revocationValue = revocations.Snapshot;
+        var topologyValue = topology.Snapshot;
+        Equal(revocationValue.NetworkId.Span, authorityValue.NetworkId.Span,
+            ProductionMailboxSelectionSuccessorError.NetworkMismatch,
+            "PSS2 PMR1 network differs from current PMA1.");
+        Equal(revocations.CanonicalSnapshotHash.Span, authorityValue.Revocation.SnapshotHash.Span,
+            ProductionMailboxSelectionSuccessorError.AuthorityNotSuccessor,
+            "PSS2 PMR1 snapshot differs from current PMA1.");
+        Equal(revocationValue.RevocationHeadHash.Span, authorityValue.Revocation.HeadHash.Span,
+            ProductionMailboxSelectionSuccessorError.AuthorityNotSuccessor,
+            "PSS2 PMR1 head differs from current PMA1.");
+        if (revocationValue.AuthorityGeneration != authorityValue.AuthorityGeneration ||
+            revocationValue.RevocationGeneration != authorityValue.Revocation.Generation)
+            throw Error(ProductionMailboxSelectionSuccessorError.AuthorityNotSuccessor,
+                "PSS2 PMR1 generation differs from current PMA1.");
+
+        Equal(topologyValue.NetworkId.Span, authorityValue.NetworkId.Span,
+            ProductionMailboxSelectionSuccessorError.NetworkMismatch,
+            "PSS2 PMT1 network differs from current PMA1.");
+        Equal(topologyValue.CanonicalAuthorityHash.Span, authority.CanonicalAuthorityHash.Span,
+            ProductionMailboxSelectionSuccessorError.TopologyNotSuccessor,
+            "PSS2 PMT1 authority hash differs from current PMA1.");
+        if (topologyValue.AuthorityGeneration != authorityValue.AuthorityGeneration)
+            throw Error(ProductionMailboxSelectionSuccessorError.TopologyNotSuccessor,
+                "PSS2 PMT1 authority generation differs from current PMA1.");
+    }
+
+    internal static void VerifyRouteSelectionContainment(
+        ProductionMailboxSelectionSuccessorProof selection,
+        ProductionMailboxRouteTransitionContext transition,
+        ulong authorizationNotBefore,
+        ulong authorizationExpires,
+        ProductionMailboxAuthority authority,
+        ProductionMailboxRevocationSnapshot revocations,
+        ProductionMailboxTopologySnapshot topology)
+    {
+        RequireContained(transition.NotBeforeUnixSeconds, transition.ExpiresAtUnixSeconds,
+            authorizationNotBefore, authorizationExpires, "RTC1", "route authorization");
+        RequireContained(selection.IssuedAtUnixSeconds, selection.ExpiresAtUnixSeconds,
+            transition.NotBeforeUnixSeconds, transition.ExpiresAtUnixSeconds, "PSS2", "RTC1");
+        RequireContained(selection.IssuedAtUnixSeconds, selection.ExpiresAtUnixSeconds,
+            authorizationNotBefore, authorizationExpires, "PSS2", "route authorization");
+        RequireContained(selection.IssuedAtUnixSeconds, selection.ExpiresAtUnixSeconds,
+            authority.CurrentEpoch.NotBeforeUnixSeconds, authority.CurrentEpoch.NotAfterUnixSeconds,
+            "PSS2", "PMA1 current epoch");
+        RequireContained(selection.IssuedAtUnixSeconds, selection.ExpiresAtUnixSeconds,
+            authority.MrXApproval.RolloutNotBeforeUnixSeconds,
+            authority.MrXApproval.RolloutNotAfterUnixSeconds, "PSS2", "PMA1 rollout");
+        RequireContained(selection.IssuedAtUnixSeconds, selection.ExpiresAtUnixSeconds,
+            authority.Revocation.IssuedAtUnixSeconds, authority.Revocation.ExpiresAtUnixSeconds,
+            "PSS2", "PMA1 revocation window");
+        RequireContained(selection.IssuedAtUnixSeconds, selection.ExpiresAtUnixSeconds,
+            revocations.IssuedAtUnixSeconds, revocations.ExpiresAtUnixSeconds, "PSS2", "PMR1");
+        RequireContained(selection.IssuedAtUnixSeconds, selection.ExpiresAtUnixSeconds,
+            topology.IssuedAtUnixSeconds, topology.ExpiresAtUnixSeconds, "PSS2", "PMT1");
+        RequireContained(selection.IssuedAtUnixSeconds, selection.ExpiresAtUnixSeconds,
+            topology.CurrentEpoch.NotBeforeUnixSeconds, topology.CurrentEpoch.NotAfterUnixSeconds,
+            "PSS2", "PMT1 current epoch");
+    }
+
+    private static void RequireContained(
+        ulong childFrom,
+        ulong childUntil,
+        ulong parentFrom,
+        ulong parentUntil,
+        string childName,
+        string parentName)
+    {
+        if (childFrom < parentFrom || childUntil > parentUntil)
+            throw Error(ProductionMailboxSelectionSuccessorError.InvalidValidityWindow,
+                $"{childName} lifetime escapes {parentName}.");
+    }
+
+    private static byte[] BuildRouteSelectionTranscript(params object[] values)
+    {
+        var domain = "Deep/production-mailbox/route-selection-activation/v1"u8.ToArray();
+        var blobs = values[..^1].Cast<byte[]>().ToArray();
+        var verifiedAt = (ulong)values[^1];
+        var length = checked(domain.Length + 8 + blobs.Sum(static item => checked(4 + item.Length)));
+        var result = new byte[length];
+        var offset = 0;
+        domain.CopyTo(result, offset); offset += domain.Length;
+        BinaryPrimitives.WriteUInt64BigEndian(result.AsSpan(offset, 8), verifiedAt); offset += 8;
+        foreach (var blob in blobs)
+        {
+            BinaryPrimitives.WriteUInt32BigEndian(result.AsSpan(offset, 4), checked((uint)blob.Length));
+            offset += 4;
+            blob.CopyTo(result, offset); offset += blob.Length;
+        }
+        return result;
+    }
+
     private static void FixedNonzero(ReadOnlyMemory<byte> value, int length, string name)
     {
         if (value.Length != length || value.Span.IndexOfAnyExcept((byte)0) < 0)
@@ -1087,4 +1515,14 @@ public static class ProductionMailboxSelectionSuccessorVerifier
         VerifiedProductionMailboxSelectionSuccessor Successor,
         VerifiedProductionMailboxAuthority Authority,
         VerifiedProductionMailboxTopology Topology);
+
+    private sealed record FrozenRouteInputs(
+        byte[] Successor,
+        byte[] Certificate,
+        byte[] Transition,
+        byte[] Authorization,
+        byte[] Checkpoint,
+        byte[] ExpectedRouteDomainHash,
+        byte[] OldRouteOriginLkg,
+        VerifiedProductionMailboxRouteContinuityEnrollment? Enrollment);
 }

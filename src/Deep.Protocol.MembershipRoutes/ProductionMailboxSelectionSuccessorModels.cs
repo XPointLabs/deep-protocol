@@ -20,6 +20,18 @@ public static class ProductionMailboxSelectionSuccessorConstants
     public const int MaximumClockSkewSeconds = 300;
 }
 
+public static class ProductionMailboxSelectionSuccessorV2Constants
+{
+    public const string Schema = "production-mailbox-selection-successor.v2";
+    public const byte Version = 2;
+    public const int FixedCoreLength = 600;
+    public const int RouteBlockOffset = 416;
+    public const int RouteBlockLength = 184;
+    public const int SignatureBytes = 128;
+    public const int MaximumArtifactBytes = ProductionMailboxSelectionSuccessorConstants.MaximumArtifactBytes +
+        RouteBlockLength;
+}
+
 public enum ProductionMailboxSelectionSuccessorMode : byte
 {
     DirectPromotion = 1,
@@ -91,6 +103,95 @@ public sealed record ProductionMailboxSelectionSuccessorProof
     public required ReadOnlyMemory<byte> NewCanonicalSelection { get; init; }
     public required ReadOnlyMemory<byte> OldIssuerSignature { get; init; }
     public required ReadOnlyMemory<byte> NewIssuerSignature { get; init; }
+}
+
+/// <summary>
+/// Clean-break PSS2 selection successor carrying an exact route-authorization transition. The
+/// nested selection fields occupy the PSS1-compatible absolute prefix, but PSS1 and PSS2 codecs
+/// reject one another's magic/version.
+/// </summary>
+public sealed record ProductionMailboxSelectionSuccessorV2Proof
+{
+    public required ProductionMailboxSelectionSuccessorProof Selection { get; init; }
+    public required ReadOnlyMemory<byte> CanonicalTransitionContextHash { get; init; }
+    public required ProductionMailboxRouteAuthorizationKind PredecessorAuthorizationKind { get; init; }
+    public required ProductionMailboxRouteAuthorizationKind NewAuthorizationKind { get; init; }
+    public required ReadOnlyMemory<byte> PredecessorCanonicalRouteAuthorizationHash { get; init; }
+    public required ulong PredecessorRouteAuthorizationSequence { get; init; }
+    public required ReadOnlyMemory<byte> FreshCanonicalRouteCertificateHash { get; init; }
+    public required ReadOnlyMemory<byte> NewCanonicalRouteAuthorizationHash { get; init; }
+    public required ulong NewRouteAuthorizationSequence { get; init; }
+    public required ReadOnlyMemory<byte> CanonicalRevocationCheckpointHash { get; init; }
+}
+
+/// <summary>Exact protected route state required by the unified PSS2 transition verifier.</summary>
+public sealed record ProductionMailboxRouteSelectionTransitionVerificationContext
+{
+    public required ReadOnlyMemory<byte> ExpectedRouteDomainHash { get; init; }
+    public required ReadOnlyMemory<byte> CanonicalOldRouteOriginLkg { get; init; }
+    /// <summary>Required only for DelegatedRCA1; forbidden for OwnerPRA2.</summary>
+    public VerifiedProductionMailboxRouteContinuityEnrollment? ContinuityEnrollment { get; init; }
+}
+
+/// <summary>
+/// Non-forgeable complete route+selection transition result. Exact verified bytes are retained for
+/// one caller-owned atomic LKG publication; no generic route-forward capability is exposed.
+/// </summary>
+public sealed class VerifiedProductionMailboxRouteSelectionTransition
+{
+    private readonly byte[] _canonicalSuccessor;
+    private readonly byte[] _canonicalRouteCertificate;
+    private readonly byte[] _canonicalTransitionContext;
+    private readonly byte[] _canonicalRouteAuthorization;
+    private readonly byte[] _canonicalRevocationCheckpoint;
+    private readonly byte[] _canonicalNextRouteOriginLkg;
+    private readonly byte[] _nextRouteOriginLkgHash;
+    private readonly byte[] _canonicalTranscript;
+    private readonly byte[] _transcriptHash;
+
+    internal VerifiedProductionMailboxRouteSelectionTransition(
+        VerifiedProductionMailboxSelectionSuccessor selectionSuccessor,
+        VerifiedProductionMailboxOfflineCheckpointClosure? offlineClosure,
+        ProductionMailboxRouteAuthorizationKind authorizationKind,
+        ulong authorizationSequence,
+        ReadOnlySpan<byte> canonicalSuccessor,
+        ReadOnlySpan<byte> canonicalRouteCertificate,
+        ReadOnlySpan<byte> canonicalTransitionContext,
+        ReadOnlySpan<byte> canonicalRouteAuthorization,
+        ReadOnlySpan<byte> canonicalRevocationCheckpoint,
+        ReadOnlySpan<byte> canonicalNextRouteOriginLkg,
+        ReadOnlySpan<byte> nextRouteOriginLkgHash,
+        ReadOnlySpan<byte> canonicalTranscript,
+        ReadOnlySpan<byte> transcriptHash)
+    {
+        SelectionSuccessor = selectionSuccessor ?? throw new ArgumentNullException(nameof(selectionSuccessor));
+        OfflineClosure = offlineClosure;
+        AuthorizationKind = authorizationKind;
+        AuthorizationSequence = authorizationSequence;
+        _canonicalSuccessor = canonicalSuccessor.ToArray();
+        _canonicalRouteCertificate = canonicalRouteCertificate.ToArray();
+        _canonicalTransitionContext = canonicalTransitionContext.ToArray();
+        _canonicalRouteAuthorization = canonicalRouteAuthorization.ToArray();
+        _canonicalRevocationCheckpoint = canonicalRevocationCheckpoint.ToArray();
+        _canonicalNextRouteOriginLkg = canonicalNextRouteOriginLkg.ToArray();
+        _nextRouteOriginLkgHash = nextRouteOriginLkgHash.ToArray();
+        _canonicalTranscript = canonicalTranscript.ToArray();
+        _transcriptHash = transcriptHash.ToArray();
+    }
+
+    public VerifiedProductionMailboxSelectionSuccessor SelectionSuccessor { get; }
+    public VerifiedProductionMailboxOfflineCheckpointClosure? OfflineClosure { get; }
+    public ProductionMailboxRouteAuthorizationKind AuthorizationKind { get; }
+    public ulong AuthorizationSequence { get; }
+    public ReadOnlyMemory<byte> CanonicalSuccessor => _canonicalSuccessor.ToArray();
+    public ReadOnlyMemory<byte> CanonicalRouteCertificate => _canonicalRouteCertificate.ToArray();
+    public ReadOnlyMemory<byte> CanonicalTransitionContext => _canonicalTransitionContext.ToArray();
+    public ReadOnlyMemory<byte> CanonicalRouteAuthorization => _canonicalRouteAuthorization.ToArray();
+    public ReadOnlyMemory<byte> CanonicalRevocationCheckpoint => _canonicalRevocationCheckpoint.ToArray();
+    public ReadOnlyMemory<byte> CanonicalNextRouteOriginLkg => _canonicalNextRouteOriginLkg.ToArray();
+    public ReadOnlyMemory<byte> NextRouteOriginLkgHash => _nextRouteOriginLkgHash.ToArray();
+    public ReadOnlyMemory<byte> CanonicalTranscript => _canonicalTranscript.ToArray();
+    public ReadOnlyMemory<byte> TranscriptHash => _transcriptHash.ToArray();
 }
 
 public sealed record ProductionMailboxSelectionSuccessorVerificationContext
@@ -332,5 +433,20 @@ internal static class ProductionMailboxSelectionSuccessorCopy
         NewCanonicalSelection = value.NewCanonicalSelection.ToArray(),
         OldIssuerSignature = value.OldIssuerSignature.ToArray(),
         NewIssuerSignature = value.NewIssuerSignature.ToArray()
+    };
+
+    public static ProductionMailboxSelectionSuccessorV2Proof Clone(
+        ProductionMailboxSelectionSuccessorV2Proof value) => new()
+    {
+        Selection = Clone(value.Selection),
+        CanonicalTransitionContextHash = value.CanonicalTransitionContextHash.ToArray(),
+        PredecessorAuthorizationKind = value.PredecessorAuthorizationKind,
+        NewAuthorizationKind = value.NewAuthorizationKind,
+        PredecessorCanonicalRouteAuthorizationHash = value.PredecessorCanonicalRouteAuthorizationHash.ToArray(),
+        PredecessorRouteAuthorizationSequence = value.PredecessorRouteAuthorizationSequence,
+        FreshCanonicalRouteCertificateHash = value.FreshCanonicalRouteCertificateHash.ToArray(),
+        NewCanonicalRouteAuthorizationHash = value.NewCanonicalRouteAuthorizationHash.ToArray(),
+        NewRouteAuthorizationSequence = value.NewRouteAuthorizationSequence,
+        CanonicalRevocationCheckpointHash = value.CanonicalRevocationCheckpointHash.ToArray()
     };
 }

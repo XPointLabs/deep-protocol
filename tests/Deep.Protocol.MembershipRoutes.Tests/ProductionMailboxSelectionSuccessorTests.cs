@@ -42,6 +42,407 @@ public sealed class ProductionMailboxSelectionSuccessorTests
     }
 
     [Fact]
+    public void Pss2CodecIsCanonicalAndCleanBreaksPss1()
+    {
+        var fixture = CreateFixture();
+        var value = new ProductionMailboxSelectionSuccessorV2Proof
+        {
+            Selection = fixture.Proof,
+            CanonicalTransitionContextHash = Bytes(210, 32),
+            PredecessorAuthorizationKind = ProductionMailboxRouteAuthorizationKind.OwnerPRA2,
+            NewAuthorizationKind = ProductionMailboxRouteAuthorizationKind.DelegatedRCA1,
+            PredecessorCanonicalRouteAuthorizationHash = Bytes(211, 32),
+            PredecessorRouteAuthorizationSequence = 7,
+            FreshCanonicalRouteCertificateHash = Bytes(212, 32),
+            NewCanonicalRouteAuthorizationHash = Bytes(213, 32),
+            NewRouteAuthorizationSequence = 8,
+            CanonicalRevocationCheckpointHash = Bytes(214, 32)
+        };
+
+        var encoded = ProductionMailboxSelectionSuccessorV2Codec.Encode(value);
+        Assert.Equal("PSS2"u8.ToArray(), encoded[..4]);
+        Assert.Equal(ProductionMailboxSelectionSuccessorV2Constants.FixedCoreLength +
+            fixture.Proof.CanonicalNewAuthority.Length + fixture.Proof.OldCanonicalSelection.Length +
+            fixture.Proof.NewCanonicalSelection.Length + ProductionMailboxSelectionSuccessorV2Constants.SignatureBytes,
+            encoded.Length);
+        Assert.Equal(encoded, ProductionMailboxSelectionSuccessorV2Codec.Encode(
+            ProductionMailboxSelectionSuccessorV2Codec.Decode(encoded)));
+        Assert.Throws<ProductionMailboxSelectionSuccessorException>(() =>
+            ProductionMailboxSelectionSuccessorCodec.Decode(encoded));
+        var pss1 = ProductionMailboxSelectionSuccessorCodec.Encode(fixture.Proof);
+        Assert.Throws<ProductionMailboxSelectionSuccessorException>(() =>
+            ProductionMailboxSelectionSuccessorV2Codec.Decode(pss1));
+    }
+
+    [Fact]
+    public void Pss2SelectionClosureUsesV2DomainsAndVerifiesDirectPromotion()
+    {
+        var fixture = CreateFixture();
+        var unsignedSelection = fixture.Proof with
+        {
+            OldIssuerSignature = new byte[64],
+            NewIssuerSignature = new byte[64]
+        };
+        var unsigned = new ProductionMailboxSelectionSuccessorV2Proof
+        {
+            Selection = unsignedSelection,
+            CanonicalTransitionContextHash = Bytes(220, 32),
+            PredecessorAuthorizationKind = ProductionMailboxRouteAuthorizationKind.OwnerPRA2,
+            NewAuthorizationKind = ProductionMailboxRouteAuthorizationKind.DelegatedRCA1,
+            PredecessorCanonicalRouteAuthorizationHash = Bytes(221, 32),
+            PredecessorRouteAuthorizationSequence = 7,
+            FreshCanonicalRouteCertificateHash = Bytes(222, 32),
+            NewCanonicalRouteAuthorizationHash = Bytes(223, 32),
+            NewRouteAuthorizationSequence = 8,
+            CanonicalRevocationCheckpointHash = Bytes(224, 32)
+        };
+        var signed = unsigned with
+        {
+            Selection = unsignedSelection with
+            {
+                OldIssuerSignature = PublicKeyAuth.SignDetached(
+                    ProductionMailboxSelectionSuccessorV2Codec.GetOldIssuerSigningBytes(unsigned),
+                    fixture.OldIssuerPrivateKey),
+                NewIssuerSignature = PublicKeyAuth.SignDetached(
+                    ProductionMailboxSelectionSuccessorV2Codec.GetCurrentIssuerSigningBytes(unsigned),
+                    fixture.NewIssuerPrivateKey)
+            }
+        };
+        var verified = ProductionMailboxSelectionSuccessorVerifier.VerifyV2SelectionClosure(
+            ProductionMailboxSelectionSuccessorV2Codec.Encode(signed), fixture.OldAuthority,
+            fixture.OldTopology, fixture.NewAuthority, fixture.NewTopology, fixture.Context,
+            new SodiumProductionMailboxAuthoritySignatureVerifier(),
+            new SodiumProductionMailboxTopologySignatureVerifier(),
+            new SodiumProductionMailboxSelectionSuccessorSignatureVerifier());
+        Assert.Equal(fixture.Proof.NewCanonicalSelectionHash.ToArray(),
+            verified.NewSelection.CanonicalSelectionHash.ToArray());
+    }
+
+    [Fact]
+    public void Pss2DirectRejectsExpiryEscapeFromOldNextPms()
+    {
+        var f = CreateFixture();
+        var escapedOld = SignSelection(
+            ProductionMailboxTopologyCodec.DecodeSelection(f.Proof.OldCanonicalSelection.Span) with
+            { ExpiresAtUnixSeconds = f.Proof.ExpiresAtUnixSeconds - 1 },
+            f.OldIssuerPrivateKey);
+        var escapedOldBytes = ProductionMailboxTopologyCodec.EncodeSelection(escapedOld);
+        var escapedOldHash = SHA256.HashData(escapedOldBytes);
+        var unsignedSelection = f.Proof with
+        {
+            OldCanonicalSelection = escapedOldBytes,
+            OldCanonicalSelectionHash = escapedOldHash,
+            OldIssuerSignature = new byte[64],
+            NewIssuerSignature = new byte[64]
+        };
+        var unsigned = new ProductionMailboxSelectionSuccessorV2Proof
+        {
+            Selection = unsignedSelection,
+            CanonicalTransitionContextHash = Bytes(220, 32),
+            PredecessorAuthorizationKind = ProductionMailboxRouteAuthorizationKind.OwnerPRA2,
+            NewAuthorizationKind = ProductionMailboxRouteAuthorizationKind.OwnerPRA2,
+            PredecessorCanonicalRouteAuthorizationHash = Bytes(221, 32),
+            PredecessorRouteAuthorizationSequence = 7,
+            FreshCanonicalRouteCertificateHash = Bytes(222, 32),
+            NewCanonicalRouteAuthorizationHash = Bytes(223, 32),
+            NewRouteAuthorizationSequence = 8,
+            CanonicalRevocationCheckpointHash = new byte[32]
+        };
+        var signed = unsigned with
+        {
+            Selection = unsignedSelection with
+            {
+                OldIssuerSignature = PublicKeyAuth.SignDetached(
+                    ProductionMailboxSelectionSuccessorV2Codec.GetOldIssuerSigningBytes(unsigned),
+                    f.OldIssuerPrivateKey),
+                NewIssuerSignature = PublicKeyAuth.SignDetached(
+                    ProductionMailboxSelectionSuccessorV2Codec.GetCurrentIssuerSigningBytes(unsigned),
+                    f.NewIssuerPrivateKey)
+            }
+        };
+        var context = f.Context with { ExpectedOldCanonicalSelectionHash = escapedOldHash };
+        AssertError(ProductionMailboxSelectionSuccessorError.InvalidValidityWindow, () =>
+            ProductionMailboxSelectionSuccessorVerifier.VerifyV2SelectionClosure(
+                ProductionMailboxSelectionSuccessorV2Codec.Encode(signed), f.OldAuthority,
+                f.OldTopology, f.NewAuthority, f.NewTopology, context,
+                new SodiumProductionMailboxAuthoritySignatureVerifier(),
+                new SodiumProductionMailboxTopologySignatureVerifier(),
+                new SodiumProductionMailboxSelectionSuccessorSignatureVerifier()));
+    }
+
+    [Fact]
+    public void UnifiedDirectOwnerRouteTransitionProducesAtomicDefensiveLkg()
+    {
+        var f = CreateFixture();
+        var unsignedCertificate = new ProductionMailboxRouteCertificate
+        {
+            NetworkId = f.Proof.NetworkId,
+            AuthorityGeneration = f.NewAuthority.Authority.AuthorityGeneration,
+            CanonicalAuthorityHash = f.NewAuthority.CanonicalAuthorityHash,
+            IssuerEd25519PublicKey = f.NewAuthority.Authority.MailboxIssuerEd25519PublicKey,
+            MailboxOwnerEd25519PublicKey = f.Proof.MailboxOwnerEd25519PublicKey,
+            BlindedMailboxId = f.Proof.BlindedMailboxId,
+            BlindedPlacementId = f.Proof.BlindedPlacementId,
+            SelectionInputCommitment = f.Proof.SelectionInputCommitment,
+            IssuedAtUnixSeconds = Now - 5,
+            ExpiresAtUnixSeconds = Now + 100,
+            IssuerSignature = new byte[64]
+        };
+        var certificate = unsignedCertificate with
+        {
+            IssuerSignature = PublicKeyAuth.SignDetached(
+                ProductionMailboxRouteAdvertisementCodec.GetCertificateSigningBytes(unsignedCertificate),
+                f.NewIssuerPrivateKey)
+        };
+        var certificateBytes = ProductionMailboxRouteAdvertisementCodec.EncodeCertificate(certificate);
+        var certificateHash = SHA256.HashData(certificateBytes);
+        var routeDomain = ProductionMailboxRouteAdvertisementCodec.ComputeRouteDomainHash(certificate);
+        var predecessorHash = Bytes(225, 32);
+        var oldRol = new ProductionMailboxRouteOriginLkg
+        {
+            NetworkId = f.Proof.NetworkId,
+            RouteDomainHash = routeDomain,
+            AuthorizationKind = ProductionMailboxRouteAuthorizationKind.OwnerPRA2,
+            CanonicalAuthorizationHash = predecessorHash,
+            AuthorizationSequence = 1,
+            CanonicalDelegationHash = new byte[32],
+            CanonicalDelegationAcceptanceHash = new byte[32],
+            OwnerRevocationGeneration = 0,
+            OwnerRevocationHeadHash = new byte[32],
+            RouteVerifiedAtUnixSeconds = Now - 20,
+            LocalCommitGeneration = 1
+        };
+        var oldRolBytes = ProductionMailboxRouteContinuityCodec.EncodeRouteOriginLkg(oldRol);
+        var oldRolHash = ProductionMailboxRouteContinuityCodec.ComputeRouteOriginLkgHash(oldRol);
+        var unsignedPra = new ProductionMailboxRouteAdvertisementV2
+        {
+            Certificate = certificate,
+            PredecessorAuthorizationKind = oldRol.AuthorizationKind,
+            PredecessorCanonicalRouteAuthorizationHash = predecessorHash,
+            PredecessorRouteAuthorizationSequence = 1,
+            Sequence = 2,
+            PublishedAtUnixSeconds = Now,
+            ExpiresAtUnixSeconds = Now + 100,
+            OwnerSignature = new byte[64]
+        };
+        var pra = unsignedPra with
+        {
+            OwnerSignature = PublicKeyAuth.SignDetached(
+                ProductionMailboxRouteAuthorizationCodec.GetAdvertisementV2SigningBytes(unsignedPra),
+                f.OwnerPrivateKey)
+        };
+        var praBytes = ProductionMailboxRouteAuthorizationCodec.EncodeAdvertisementV2(pra);
+        var praHash = SHA256.HashData(praBytes);
+        var rtc = new ProductionMailboxRouteTransitionContext
+        {
+            Mode = ProductionMailboxSelectionSuccessorMode.DirectPromotion,
+            PredecessorAuthorizationKind = oldRol.AuthorizationKind,
+            NewAuthorizationKind = ProductionMailboxRouteAuthorizationKind.OwnerPRA2,
+            NetworkId = f.Proof.NetworkId,
+            RouteDomainHash = routeDomain,
+            OldCanonicalSelectionHash = f.Proof.OldCanonicalSelectionHash,
+            NewCanonicalSelectionHash = f.Proof.NewCanonicalSelectionHash,
+            PredecessorCanonicalRouteAuthorizationHash = predecessorHash,
+            PredecessorRouteAuthorizationSequence = 1,
+            FreshCanonicalRouteCertificateHash = certificateHash,
+            NewRouteAuthorizationSequence = 2,
+            TransitionSalt = new byte[32],
+            ContinuityTransitionCommitment = new byte[32],
+            CanonicalRevocationCheckpointHash = new byte[32],
+            CurrentCanonicalAuthorityHash = f.NewAuthority.CanonicalAuthorityHash,
+            CurrentAuthorityGeneration = f.NewAuthority.Authority.AuthorityGeneration,
+            SealedOldRouteOriginLkgHash = oldRolHash,
+            OldRouteVerifiedAtUnixSeconds = oldRol.RouteVerifiedAtUnixSeconds,
+            OldLocalRouteCommitGeneration = oldRol.LocalCommitGeneration,
+            NotBeforeUnixSeconds = Now,
+            ExpiresAtUnixSeconds = Now + 100
+        };
+        var rtcBytes = ProductionMailboxRouteAuthorizationCodec.EncodeTransitionContext(rtc);
+        var unsignedSelection = f.Proof with
+        {
+            OldIssuerSignature = new byte[64],
+            NewIssuerSignature = new byte[64]
+        };
+        var unsignedPss = new ProductionMailboxSelectionSuccessorV2Proof
+        {
+            Selection = unsignedSelection,
+            CanonicalTransitionContextHash =
+                ProductionMailboxRouteAuthorizationCodec.ComputeTransitionContextHash(rtc),
+            PredecessorAuthorizationKind = oldRol.AuthorizationKind,
+            NewAuthorizationKind = ProductionMailboxRouteAuthorizationKind.OwnerPRA2,
+            PredecessorCanonicalRouteAuthorizationHash = predecessorHash,
+            PredecessorRouteAuthorizationSequence = 1,
+            FreshCanonicalRouteCertificateHash = certificateHash,
+            NewCanonicalRouteAuthorizationHash = praHash,
+            NewRouteAuthorizationSequence = 2,
+            CanonicalRevocationCheckpointHash = new byte[32]
+        };
+        var signedPss = unsignedPss with
+        {
+            Selection = unsignedSelection with
+            {
+                OldIssuerSignature = PublicKeyAuth.SignDetached(
+                    ProductionMailboxSelectionSuccessorV2Codec.GetOldIssuerSigningBytes(unsignedPss),
+                    f.OldIssuerPrivateKey),
+                NewIssuerSignature = PublicKeyAuth.SignDetached(
+                    ProductionMailboxSelectionSuccessorV2Codec.GetCurrentIssuerSigningBytes(unsignedPss),
+                    f.NewIssuerPrivateKey)
+            }
+        };
+        var result = ProductionMailboxSelectionSuccessorVerifier.VerifyDirectRouteSelectionTransition(
+            ProductionMailboxSelectionSuccessorV2Codec.Encode(signedPss), certificateBytes,
+            rtcBytes, praBytes, [], f.OldAuthority, f.OldTopology, f.NewAuthority,
+            VerifyCurrentRevocations(f), f.NewTopology, f.Context,
+            new ProductionMailboxRouteSelectionTransitionVerificationContext
+            {
+                ExpectedRouteDomainHash = routeDomain,
+                CanonicalOldRouteOriginLkg = oldRolBytes
+            });
+        Assert.Equal(ProductionMailboxRouteAuthorizationKind.OwnerPRA2, result.AuthorizationKind);
+        Assert.Equal(2UL, result.AuthorizationSequence);
+        Assert.Equal(SHA256.HashData(result.CanonicalTranscript.Span), result.TranscriptHash.ToArray());
+        var exposed = result.CanonicalNextRouteOriginLkg.ToArray(); exposed[0] ^= 1;
+        Assert.NotEqual(exposed, result.CanonicalNextRouteOriginLkg.ToArray());
+    }
+
+    [Fact]
+    public void Pss2RouteClosureRequiresExactCurrentPmrAndWholeIntervalContainment()
+    {
+        var f = CreateFixture();
+        var other = CreateFixture(
+            mode: ProductionMailboxSelectionSuccessorMode.OfflineCheckpoint,
+            authorityAdvance: 65);
+        var currentRevocations = VerifyCurrentRevocations(f);
+        var otherRevocations = VerifyCurrentRevocations(other);
+        Assert.Throws<ProductionMailboxSelectionSuccessorException>(() =>
+            ProductionMailboxSelectionSuccessorVerifier.VerifyExactCurrentRouteControlPlane(
+                f.NewAuthority, otherRevocations, f.NewTopology));
+
+        var selection = f.Proof with
+        {
+            IssuedAtUnixSeconds = Now,
+            ExpiresAtUnixSeconds = Now + 10
+        };
+        var transition = new ProductionMailboxRouteTransitionContext
+        {
+            Mode = ProductionMailboxSelectionSuccessorMode.DirectPromotion,
+            PredecessorAuthorizationKind = ProductionMailboxRouteAuthorizationKind.OwnerPRA2,
+            NewAuthorizationKind = ProductionMailboxRouteAuthorizationKind.OwnerPRA2,
+            NetworkId = f.Proof.NetworkId,
+            RouteDomainHash = Bytes(1, 32),
+            OldCanonicalSelectionHash = f.Proof.OldCanonicalSelectionHash,
+            NewCanonicalSelectionHash = f.Proof.NewCanonicalSelectionHash,
+            PredecessorCanonicalRouteAuthorizationHash = Bytes(2, 32),
+            PredecessorRouteAuthorizationSequence = 1,
+            FreshCanonicalRouteCertificateHash = Bytes(3, 32),
+            NewRouteAuthorizationSequence = 2,
+            TransitionSalt = new byte[32],
+            ContinuityTransitionCommitment = new byte[32],
+            CanonicalRevocationCheckpointHash = new byte[32],
+            CurrentCanonicalAuthorityHash = f.NewAuthority.CanonicalAuthorityHash,
+            CurrentAuthorityGeneration = f.NewAuthority.Authority.AuthorityGeneration,
+            SealedOldRouteOriginLkgHash = Bytes(4, 32),
+            OldRouteVerifiedAtUnixSeconds = Now - 10,
+            OldLocalRouteCommitGeneration = 1,
+            NotBeforeUnixSeconds = Now - 1,
+            ExpiresAtUnixSeconds = Now + 20
+        };
+        var authority = f.NewAuthority.Authority;
+        var revocations = currentRevocations.Snapshot;
+        var topology = f.NewTopology.Snapshot;
+
+        ProductionMailboxSelectionSuccessorVerifier.VerifyRouteSelectionContainment(
+            selection, transition, Now - 1, Now + 20, authority, revocations, topology);
+        Assert.Throws<ProductionMailboxSelectionSuccessorException>(() =>
+            ProductionMailboxSelectionSuccessorVerifier.VerifyRouteSelectionContainment(
+                selection, transition with { ExpiresAtUnixSeconds = Now + 9 },
+                Now - 1, Now + 20, authority, revocations, topology));
+        Assert.Throws<ProductionMailboxSelectionSuccessorException>(() =>
+            ProductionMailboxSelectionSuccessorVerifier.VerifyRouteSelectionContainment(
+                selection, transition, Now - 1, Now + 9, authority, revocations, topology));
+        Assert.Throws<ProductionMailboxSelectionSuccessorException>(() =>
+            ProductionMailboxSelectionSuccessorVerifier.VerifyRouteSelectionContainment(
+                selection, transition, Now - 1, Now + 20, authority,
+                revocations with { ExpiresAtUnixSeconds = Now + 9 }, topology));
+        Assert.Throws<ProductionMailboxSelectionSuccessorException>(() =>
+            ProductionMailboxSelectionSuccessorVerifier.VerifyRouteSelectionContainment(
+                selection, transition, Now - 1, Now + 20,
+                authority with
+                {
+                    CurrentEpoch = authority.CurrentEpoch with { NotAfterUnixSeconds = Now + 9 }
+                }, revocations, topology));
+        Assert.Throws<ProductionMailboxSelectionSuccessorException>(() =>
+            ProductionMailboxSelectionSuccessorVerifier.VerifyRouteSelectionContainment(
+                selection, transition, Now - 1, Now + 20, authority, revocations,
+                topology with { ExpiresAtUnixSeconds = Now + 9 }));
+    }
+
+    [Fact]
+    public void Pss2OfflineCompleteClosureRetainsForwardCheckpointSecurity()
+    {
+        var f = CreateFixture(mode: ProductionMailboxSelectionSuccessorMode.OfflineCheckpoint,
+            authorityAdvance: 65, topologyAdvance: 65);
+        var unsignedSelection = f.Proof with
+        {
+            OldIssuerSignature = new byte[64],
+            NewIssuerSignature = new byte[64]
+        };
+        var unsigned = new ProductionMailboxSelectionSuccessorV2Proof
+        {
+            Selection = unsignedSelection,
+            CanonicalTransitionContextHash = Bytes(230, 32),
+            PredecessorAuthorizationKind = ProductionMailboxRouteAuthorizationKind.OwnerPRA2,
+            NewAuthorizationKind = ProductionMailboxRouteAuthorizationKind.OwnerPRA2,
+            PredecessorCanonicalRouteAuthorizationHash = Bytes(231, 32),
+            PredecessorRouteAuthorizationSequence = 4,
+            FreshCanonicalRouteCertificateHash = Bytes(232, 32),
+            NewCanonicalRouteAuthorizationHash = Bytes(233, 32),
+            NewRouteAuthorizationSequence = 5,
+            CanonicalRevocationCheckpointHash = new byte[32]
+        };
+        var signed = unsigned with
+        {
+            Selection = unsignedSelection with
+            {
+                NewIssuerSignature = PublicKeyAuth.SignDetached(
+                    ProductionMailboxSelectionSuccessorV2Codec.GetCurrentIssuerSigningBytes(unsigned),
+                    f.NewIssuerPrivateKey)
+            }
+        };
+        var verified = ProductionMailboxSelectionSuccessorVerifier.VerifyOfflineCheckpointClosureCore(
+            ProductionMailboxSelectionSuccessorV2Codec.Encode(signed),
+            ProductionMailboxAuthorityCodec.Encode(f.NewAuthority.Authority), f.NewRevocationSnapshot,
+            ProductionMailboxTopologyCodec.Encode(f.NewTopology.Snapshot),
+            f.Proof.OldCanonicalSelection.Span, f.Proof.NewCanonicalSelection.Span,
+            f.NewNextSelection, f.OldAuthority, f.OldTopology, CompleteContext(f),
+            new SodiumProductionMailboxAuthoritySignatureVerifier(),
+            new SodiumProductionMailboxRevocationSnapshotSignatureVerifier(),
+            new SodiumProductionMailboxTopologySignatureVerifier(),
+            new SodiumProductionMailboxSelectionSuccessorSignatureVerifier(), isV2: true);
+        Assert.Equal(ProductionMailboxSelectionSuccessorMode.OfflineCheckpoint,
+            verified.Successor.Proof.Mode);
+        Assert.Equal(ProductionMailboxSelectionSuccessorV2Codec.Encode(signed),
+            verified.CanonicalSuccessor.ToArray());
+
+        var escapedNext = SignSelection(
+            ProductionMailboxTopologyCodec.DecodeSelection(f.NewNextSelection) with
+            { ExpiresAtUnixSeconds = f.Proof.ExpiresAtUnixSeconds - 1 },
+            f.NewIssuerPrivateKey);
+        AssertError(ProductionMailboxSelectionSuccessorError.InvalidValidityWindow, () =>
+            ProductionMailboxSelectionSuccessorVerifier.VerifyOfflineCheckpointClosureCore(
+                ProductionMailboxSelectionSuccessorV2Codec.Encode(signed),
+                ProductionMailboxAuthorityCodec.Encode(f.NewAuthority.Authority),
+                f.NewRevocationSnapshot, ProductionMailboxTopologyCodec.Encode(f.NewTopology.Snapshot),
+                f.Proof.OldCanonicalSelection.Span, f.Proof.NewCanonicalSelection.Span,
+                ProductionMailboxTopologyCodec.EncodeSelection(escapedNext),
+                f.OldAuthority, f.OldTopology, CompleteContext(f),
+                new SodiumProductionMailboxAuthoritySignatureVerifier(),
+                new SodiumProductionMailboxRevocationSnapshotSignatureVerifier(),
+                new SodiumProductionMailboxTopologySignatureVerifier(),
+                new SodiumProductionMailboxSelectionSuccessorSignatureVerifier(), isV2: true));
+    }
+
+    [Fact]
     public void DualClosureSuccessor_VerifiesExactOldNextAndNewCurrent()
     {
         var f = CreateFixture();
@@ -328,7 +729,7 @@ public sealed class ProductionMailboxSelectionSuccessorTests
             ProductionMailboxSelectionSuccessorCodec.GetNewIssuerSigningBytes(f.Proof));
         Assert.NotEqual(f.Proof.OldIssuerSignature.ToArray(), f.Proof.NewIssuerSignature.ToArray());
         _ = Verify(f);
-        Assert.Equal("416368A12E6F617FDFCA9951D6BB7709B356A4350CF522ADC16BCA57D3B69B24",
+        Assert.Equal("C721B22EBE91D74997B89ACF0C13AB3CF593938E13017EEDA36F7A4D7E924B54",
             Convert.ToHexString(SHA256.HashData(encoded)));
         AssertError(ProductionMailboxSelectionSuccessorError.InvalidLength,
             () => ProductionMailboxSelectionSuccessorCodec.Decode(encoded[..^1]));
@@ -949,6 +1350,14 @@ public sealed class ProductionMailboxSelectionSuccessorTests
             f.OldTopology,
             context ?? CompleteContext(f));
 
+    private static VerifiedProductionMailboxRevocationSnapshot VerifyCurrentRevocations(Fixture f) =>
+        ProductionMailboxRevocationSnapshotVerifier.Verify(
+            f.NewRevocationSnapshot,
+            f.NewAuthority,
+            f.Context.NowUnixSeconds,
+            f.Context.ClockSkewSeconds,
+            new SodiumProductionMailboxRevocationSnapshotSignatureVerifier());
+
     private static ProductionMailboxOfflineCheckpointClosureVerificationContext CompleteContext(
         Fixture f)
     {
@@ -1034,45 +1443,42 @@ public sealed class ProductionMailboxSelectionSuccessorTests
                 ? oldAuthorityHash : Bytes(211, 32),
             newCurrentEpoch, newNextEpoch, Now);
         byte[] newRevocationSnapshot = [];
-        if (mode == ProductionMailboxSelectionSuccessorMode.OfflineCheckpoint)
+        newAuthorityValue = newAuthorityValue with
         {
-            newAuthorityValue = newAuthorityValue with
+            Revocation = newAuthorityValue.Revocation with
             {
-                Revocation = newAuthorityValue.Revocation with
-                {
-                    Generation = oldAuthorityValue.Revocation.Generation + 1,
-                    PreviousHeadHash = oldAuthorityValue.Revocation.HeadHash,
-                    HeadHash = Bytes(26, 32)
-                }
-            };
-            var unsignedRevocations = new ProductionMailboxRevocationSnapshot
-            {
-                NetworkId = newAuthorityValue.NetworkId,
-                AuthorityGeneration = newAuthorityValue.AuthorityGeneration,
-                AuthorityBindingHash = ProductionMailboxRevocationSnapshotCodec
-                    .ComputeAuthorityBindingHash(newAuthorityValue),
-                RevocationGeneration = newAuthorityValue.Revocation.Generation,
-                RevocationHeadHash = newAuthorityValue.Revocation.HeadHash,
-                PreviousRevocationHeadHash = newAuthorityValue.Revocation.PreviousHeadHash,
-                IssuedAtUnixSeconds = newAuthorityValue.Revocation.IssuedAtUnixSeconds,
-                ExpiresAtUnixSeconds = newAuthorityValue.Revocation.ExpiresAtUnixSeconds,
-                RevokedGrantSerials = [],
-                IssuerSignature = new byte[64]
-            };
-            var signedRevocations = unsignedRevocations with
-            {
-                IssuerSignature = PublicKeyAuth.SignDetached(
-                    ProductionMailboxRevocationSnapshotCodec.GetSigningBytes(unsignedRevocations),
-                    newIssuer.PrivateKey)
-            };
-            newRevocationSnapshot = ProductionMailboxRevocationSnapshotCodec.Encode(
-                signedRevocations);
-            newAuthorityValue = newAuthorityValue with
-            {
-                Revocation = newAuthorityValue.Revocation with
-                { SnapshotHash = SHA256.HashData(newRevocationSnapshot) }
-            };
-        }
+                Generation = oldAuthorityValue.Revocation.Generation + 1,
+                PreviousHeadHash = oldAuthorityValue.Revocation.HeadHash,
+                HeadHash = Bytes(26, 32)
+            }
+        };
+        var unsignedRevocations = new ProductionMailboxRevocationSnapshot
+        {
+            NetworkId = newAuthorityValue.NetworkId,
+            AuthorityGeneration = newAuthorityValue.AuthorityGeneration,
+            AuthorityBindingHash = ProductionMailboxRevocationSnapshotCodec
+                .ComputeAuthorityBindingHash(newAuthorityValue),
+            RevocationGeneration = newAuthorityValue.Revocation.Generation,
+            RevocationHeadHash = newAuthorityValue.Revocation.HeadHash,
+            PreviousRevocationHeadHash = newAuthorityValue.Revocation.PreviousHeadHash,
+            IssuedAtUnixSeconds = newAuthorityValue.Revocation.IssuedAtUnixSeconds,
+            ExpiresAtUnixSeconds = newAuthorityValue.Revocation.ExpiresAtUnixSeconds,
+            RevokedGrantSerials = [],
+            IssuerSignature = new byte[64]
+        };
+        var signedRevocations = unsignedRevocations with
+        {
+            IssuerSignature = PublicKeyAuth.SignDetached(
+                ProductionMailboxRevocationSnapshotCodec.GetSigningBytes(unsignedRevocations),
+                newIssuer.PrivateKey)
+        };
+        newRevocationSnapshot = ProductionMailboxRevocationSnapshotCodec.Encode(
+            signedRevocations);
+        newAuthorityValue = newAuthorityValue with
+        {
+            Revocation = newAuthorityValue.Revocation with
+            { SnapshotHash = SHA256.HashData(newRevocationSnapshot) }
+        };
         newAuthorityValue = SignAuthority(newAuthorityValue, mrX.PrivateKey);
         var newAuthority = mode == ProductionMailboxSelectionSuccessorMode.DirectPromotion
             ? ProductionMailboxAuthorityVerifier.Verify(newAuthorityValue,
@@ -1164,8 +1570,11 @@ public sealed class ProductionMailboxSelectionSuccessorTests
                 }, new SodiumProductionMailboxTopologySignatureVerifier());
 
         var placement = new BlindedPlacementId(Bytes(201, 32));
+        var oldSelectionExpires = mode == ProductionMailboxSelectionSuccessorMode.DirectPromotion
+            ? Now + 100
+            : oldNow + 90;
         var oldSelection = Selection(oldAuthority, oldTopology, oldTopologyValue.NextEpoch,
-            promotedDescriptors, placement, oldIssuer.PrivateKey, oldNow, oldNow + 90);
+            promotedDescriptors, placement, oldIssuer.PrivateKey, oldNow, oldSelectionExpires);
         var newSelection = Selection(newAuthority, newTopology, newTopologyValue.CurrentEpoch,
             newCurrentDescriptors, placement, newIssuer.PrivateKey, Now - 5, Now + 200);
         var newNextSelection = Selection(newAuthority, newTopology, newTopologyValue.NextEpoch,
@@ -1214,7 +1623,7 @@ public sealed class ProductionMailboxSelectionSuccessorTests
             ClockSkewSeconds = 0
         };
         return new Fixture(oldAuthority, oldTopology, newAuthority, newTopology, proof, context,
-            oldIssuer.PrivateKey, newIssuer.PrivateKey, mrX.PrivateKey,
+            oldIssuer.PrivateKey, newIssuer.PrivateKey, owner.PrivateKey, mrX.PrivateKey,
             newCurrentDescriptors, placement, newRevocationSnapshot, newNextSelectionBytes);
     }
 
@@ -1494,6 +1903,7 @@ public sealed class ProductionMailboxSelectionSuccessorTests
         ProductionMailboxSelectionSuccessorVerificationContext Context,
         byte[] OldIssuerPrivateKey,
         byte[] NewIssuerPrivateKey,
+        byte[] OwnerPrivateKey,
         byte[] MrXPrivateKey,
         MembershipRouteDescriptor[] PromotedDescriptors,
         BlindedPlacementId Placement,
