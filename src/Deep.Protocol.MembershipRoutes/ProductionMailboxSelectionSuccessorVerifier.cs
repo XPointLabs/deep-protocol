@@ -1,4 +1,6 @@
 using System.Security.Cryptography;
+using System.Buffers.Binary;
+using System.Text;
 using Deep.Protocol.DeepExtension.MailboxAuthority;
 using Deep.Protocol.DeepExtension.MailboxCapabilities;
 
@@ -31,11 +33,194 @@ public static class ProductionMailboxSelectionSuccessorVerifier
             authoritySignatureVerifier, selectionSignatureVerifier, successorSignatureVerifier);
     }
 
-    public static VerifiedProductionMailboxSelectionSuccessor VerifyOfflineCheckpoint(
+    internal static VerifiedProductionMailboxSelectionSuccessor VerifyOfflineCheckpoint(
         ReadOnlySpan<byte> encoded,
         VerifiedProductionMailboxAuthority oldAuthority,
         VerifiedProductionMailboxTopology oldTopology,
         ReadOnlySpan<byte> canonicalNewTopology,
+        ProductionMailboxSelectionSuccessorVerificationContext context,
+        IProductionMailboxAuthoritySignatureVerifier authoritySignatureVerifier,
+        IProductionMailboxTopologySignatureVerifier topologySignatureVerifier,
+        IProductionMailboxSelectionSuccessorSignatureVerifier successorSignatureVerifier)
+    {
+        var frozenEncoded = FreezeBounded(encoded);
+        var frozenTopology = FreezeArtifact(canonicalNewTopology, 1,
+            ProductionMailboxTopologyConstants.MaximumTopologyArtifactBytes, "PMT1");
+        return VerifyOfflineCheckpointComponents(frozenEncoded, oldAuthority, oldTopology,
+            frozenTopology, context, authoritySignatureVerifier,
+            topologySignatureVerifier, successorSignatureVerifier).Successor;
+    }
+
+    public static VerifiedProductionMailboxOfflineCheckpointClosure VerifyOfflineCheckpointClosure(
+        ReadOnlySpan<byte> encodedSuccessor,
+        ReadOnlySpan<byte> canonicalNewAuthority,
+        ReadOnlySpan<byte> canonicalNewRevocationSnapshot,
+        ReadOnlySpan<byte> canonicalNewTopology,
+        ReadOnlySpan<byte> canonicalOldSelection,
+        ReadOnlySpan<byte> canonicalNewCurrentSelection,
+        ReadOnlySpan<byte> canonicalNewNextSelection,
+        VerifiedProductionMailboxAuthority oldAuthority,
+        VerifiedProductionMailboxTopology oldTopology,
+        ProductionMailboxOfflineCheckpointClosureVerificationContext context)
+        => VerifyOfflineCheckpointClosureCore(
+            encodedSuccessor, canonicalNewAuthority, canonicalNewRevocationSnapshot,
+            canonicalNewTopology, canonicalOldSelection, canonicalNewCurrentSelection,
+            canonicalNewNextSelection, oldAuthority, oldTopology, context,
+            new SodiumProductionMailboxAuthoritySignatureVerifier(),
+            new SodiumProductionMailboxRevocationSnapshotSignatureVerifier(),
+            new SodiumProductionMailboxTopologySignatureVerifier(),
+            new SodiumProductionMailboxSelectionSuccessorSignatureVerifier());
+
+    internal static VerifiedProductionMailboxOfflineCheckpointClosure
+        VerifyOfflineCheckpointClosureCore(
+        ReadOnlySpan<byte> encodedSuccessor,
+        ReadOnlySpan<byte> canonicalNewAuthority,
+        ReadOnlySpan<byte> canonicalNewRevocationSnapshot,
+        ReadOnlySpan<byte> canonicalNewTopology,
+        ReadOnlySpan<byte> canonicalOldSelection,
+        ReadOnlySpan<byte> canonicalNewCurrentSelection,
+        ReadOnlySpan<byte> canonicalNewNextSelection,
+        VerifiedProductionMailboxAuthority oldAuthority,
+        VerifiedProductionMailboxTopology oldTopology,
+        ProductionMailboxOfflineCheckpointClosureVerificationContext context,
+        IProductionMailboxAuthoritySignatureVerifier authoritySignatureVerifier,
+        IProductionMailboxRevocationSnapshotSignatureVerifier revocationSignatureVerifier,
+        IProductionMailboxTopologySignatureVerifier topologySignatureVerifier,
+        IProductionMailboxSelectionSuccessorSignatureVerifier successorSignatureVerifier)
+    {
+        ArgumentNullException.ThrowIfNull(oldAuthority);
+        ArgumentNullException.ThrowIfNull(oldTopology);
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(authoritySignatureVerifier);
+        ArgumentNullException.ThrowIfNull(revocationSignatureVerifier);
+        ArgumentNullException.ThrowIfNull(topologySignatureVerifier);
+        ArgumentNullException.ThrowIfNull(successorSignatureVerifier);
+
+        ValidateClosureContextLengths(context);
+        var frozenContext = Freeze(context);
+        ValidateClosureContext(frozenContext);
+        PreflightClosureArtifacts(encodedSuccessor, canonicalNewAuthority,
+            canonicalNewRevocationSnapshot, canonicalNewTopology, canonicalOldSelection,
+            canonicalNewCurrentSelection, canonicalNewNextSelection);
+        var frozenSuccessor = encodedSuccessor.ToArray();
+        var frozenAuthority = canonicalNewAuthority.ToArray();
+        var frozenRevocations = canonicalNewRevocationSnapshot.ToArray();
+        var frozenTopology = canonicalNewTopology.ToArray();
+        var frozenOldSelection = canonicalOldSelection.ToArray();
+        var frozenCurrentSelection = canonicalNewCurrentSelection.ToArray();
+        var frozenNextSelection = canonicalNewNextSelection.ToArray();
+        PreflightClosureArtifacts(frozenSuccessor, frozenAuthority, frozenRevocations,
+            frozenTopology, frozenOldSelection, frozenCurrentSelection, frozenNextSelection);
+
+        var proof = ProductionMailboxSelectionSuccessorCodec.Decode(frozenSuccessor);
+        if (proof.Mode != ProductionMailboxSelectionSuccessorMode.OfflineCheckpoint)
+            throw Error(ProductionMailboxSelectionSuccessorError.InvalidTransitionMode,
+                "This entry point accepts offline-checkpoint PSS1 only.");
+        Equal(proof.CanonicalNewAuthority.Span, frozenAuthority,
+            ProductionMailboxSelectionSuccessorError.AuthorityNotSuccessor,
+            "PSS1 embedded PMA1 differs from the supplied complete closure.");
+        Equal(proof.OldCanonicalSelection.Span, frozenOldSelection,
+            ProductionMailboxSelectionSuccessorError.SelectionMismatch,
+            "PSS1 historical PMS1 differs from the caller's exact durable bytes.");
+        Equal(proof.NewCanonicalSelection.Span, frozenCurrentSelection,
+            ProductionMailboxSelectionSuccessorError.SelectionMismatch,
+            "PSS1 current PMS1 differs from the supplied complete closure.");
+        Equal(SHA256.HashData(frozenOldSelection),
+            frozenContext.ExpectedOldCanonicalSelectionHash.Span,
+            ProductionMailboxSelectionSuccessorError.SelectionMismatch,
+            "Historical PMS1 hash differs from the protected LKG.");
+        VerifyOldLkg(oldAuthority, oldTopology, frozenContext);
+
+        var successorContext = new ProductionMailboxSelectionSuccessorVerificationContext
+        {
+            ExpectedNetworkId = frozenContext.ExpectedNetworkId,
+            ExpectedMailboxOwnerEd25519PublicKey =
+                frozenContext.ExpectedMailboxOwnerEd25519PublicKey,
+            ExpectedBlindedMailboxId = frozenContext.ExpectedBlindedMailboxId,
+            ExpectedBlindedPlacementId = frozenContext.ExpectedBlindedPlacementId,
+            PinnedMrXPublicKeySha256 = frozenContext.PinnedMrXPublicKeySha256,
+            ExpectedOldCanonicalSelectionHash =
+                frozenContext.ExpectedOldCanonicalSelectionHash,
+            NowUnixSeconds = frozenContext.VerifiedAtUnixSeconds,
+            ClockSkewSeconds = frozenContext.ClockSkewSeconds
+        };
+        var components = VerifyOfflineCheckpointComponents(
+            frozenSuccessor, oldAuthority, oldTopology, frozenTopology,
+            successorContext, authoritySignatureVerifier, topologySignatureVerifier,
+            successorSignatureVerifier);
+        Equal(components.Authority.CanonicalAuthorityHash.Span, SHA256.HashData(frozenAuthority),
+            ProductionMailboxSelectionSuccessorError.AuthorityNotSuccessor,
+            "Verified PMA1 hash differs from the complete closure.");
+        Equal(components.Topology.CanonicalTopologyHash.Span, SHA256.HashData(frozenTopology),
+            ProductionMailboxSelectionSuccessorError.TopologyNotSuccessor,
+            "Verified PMT1 hash differs from the complete closure.");
+        Equal(components.Successor.NewSelection.CanonicalSelectionHash.Span,
+            SHA256.HashData(frozenCurrentSelection),
+            ProductionMailboxSelectionSuccessorError.SelectionMismatch,
+            "Verified current PMS1 hash differs from the complete closure.");
+
+        VerifiedProductionMailboxRevocationSnapshot revocations;
+        VerifiedProductionMailboxSelection nextSelection;
+        try
+        {
+            revocations = ProductionMailboxRevocationSnapshotVerifier.Verify(
+                frozenRevocations, components.Authority,
+                frozenContext.VerifiedAtUnixSeconds, frozenContext.ClockSkewSeconds,
+                revocationSignatureVerifier);
+            nextSelection = ProductionMailboxSelectionVerifier.Verify(
+                frozenNextSelection, components.Authority, components.Topology,
+                new BlindedPlacementId(frozenContext.ExpectedBlindedPlacementId.Span),
+                frozenContext.VerifiedAtUnixSeconds, frozenContext.ClockSkewSeconds,
+                topologySignatureVerifier);
+        }
+        catch (ProductionMailboxRevocationSnapshotException ex)
+        {
+            throw Error(ProductionMailboxSelectionSuccessorError.AuthorityNotSuccessor,
+                $"Offline checkpoint PMR1 is invalid: {ex.Message}");
+        }
+        catch (ProductionMailboxTopologyException ex)
+        {
+            throw Error(ProductionMailboxSelectionSuccessorError.SelectionMismatch,
+                $"Offline checkpoint next PMS1 is invalid: {ex.Message}");
+        }
+        var authorityValue = components.Authority.Authority;
+        var topologyValue = components.Topology.Snapshot;
+        if (nextSelection.Proof.Epoch != authorityValue.NextEpoch.Epoch ||
+            nextSelection.Proof.Generation != authorityValue.NextEpoch.Generation ||
+            nextSelection.Proof.Epoch != topologyValue.NextEpoch.Epoch ||
+            nextSelection.Proof.Generation != topologyValue.NextEpoch.Generation)
+            throw Error(ProductionMailboxSelectionSuccessorError.EpochMismatch,
+                "Offline checkpoint next PMS1 is bound to the wrong epoch.");
+
+        var anchor = new ProductionMailboxOfflineCheckpointCommitAnchor(
+            frozenContext.PinnedMrXPublicKeySha256.Span,
+            frozenContext.ExpectedNetworkId.Span,
+            authorityValue.AuthorityGeneration,
+            components.Authority.CanonicalAuthorityHash.Span,
+            authorityValue.Revocation.Generation,
+            authorityValue.Revocation.HeadHash.Span,
+            authorityValue.Revocation.SnapshotHash.Span,
+            topologyValue.TopologyGeneration,
+            components.Topology.CanonicalTopologyHash.Span,
+            components.Successor.NewSelection.CanonicalSelectionHash.Span,
+            nextSelection.CanonicalSelectionHash.Span,
+            frozenContext.VerifiedAtUnixSeconds);
+        var transcript = BuildClosureTranscript(frozenSuccessor, frozenAuthority,
+            frozenRevocations, frozenTopology, frozenOldSelection, frozenCurrentSelection,
+            frozenNextSelection, frozenContext, anchor);
+        return new VerifiedProductionMailboxOfflineCheckpointClosure(
+            components.Successor, components.Authority, revocations, components.Topology,
+            components.Successor.NewSelection, nextSelection, anchor,
+            frozenSuccessor, frozenAuthority, frozenRevocations, frozenTopology,
+            frozenOldSelection, frozenCurrentSelection, frozenNextSelection,
+            transcript, SHA256.HashData(transcript));
+    }
+
+    private static OfflineCheckpointComponents VerifyOfflineCheckpointComponents(
+        byte[] frozenEncoded,
+        VerifiedProductionMailboxAuthority oldAuthority,
+        VerifiedProductionMailboxTopology oldTopology,
+        byte[] frozenNewTopology,
         ProductionMailboxSelectionSuccessorVerificationContext context,
         IProductionMailboxAuthoritySignatureVerifier authoritySignatureVerifier,
         IProductionMailboxTopologySignatureVerifier topologySignatureVerifier,
@@ -50,7 +235,6 @@ public static class ProductionMailboxSelectionSuccessorVerifier
         ValidateContextLengths(context);
         var frozenContext = Freeze(context);
         ValidateContext(frozenContext);
-        var frozenEncoded = FreezeBounded(encoded);
         var proof = ProductionMailboxSelectionSuccessorCodec.Decode(frozenEncoded);
         if (proof.Mode != ProductionMailboxSelectionSuccessorMode.OfflineCheckpoint)
             throw Error(ProductionMailboxSelectionSuccessorError.InvalidTransitionMode,
@@ -86,8 +270,8 @@ public static class ProductionMailboxSelectionSuccessorVerifier
         VerifiedProductionMailboxTopology currentTopology;
         try
         {
-            currentTopology = ProductionMailboxTopologyVerifier.VerifyForwardCheckpoint(
-                canonicalNewTopology, currentAuthority,
+            currentTopology = ProductionMailboxTopologyVerifier.VerifyForwardCheckpointOwned(
+                frozenNewTopology, currentAuthority,
                 new ProductionMailboxTopologyCheckpointVerificationContext
                 {
                     LastCommittedTopologyGeneration =
@@ -101,9 +285,10 @@ public static class ProductionMailboxSelectionSuccessorVerifier
             throw Error(ProductionMailboxSelectionSuccessorError.TopologyNotSuccessor,
                 $"PSS1 current PMT1 checkpoint is invalid: {ex.Message}");
         }
-        return VerifyCore(frozenEncoded, oldAuthority, oldTopology, currentAuthority, currentTopology,
-            frozenContext, authoritySignatureVerifier, topologySignatureVerifier,
+        var successor = VerifyCore(frozenEncoded, oldAuthority, oldTopology, currentAuthority,
+            currentTopology, frozenContext, authoritySignatureVerifier, topologySignatureVerifier,
             successorSignatureVerifier);
+        return new OfflineCheckpointComponents(successor, currentAuthority, currentTopology);
     }
 
     private static VerifiedProductionMailboxSelectionSuccessor VerifyCore(
@@ -376,6 +561,232 @@ public static class ProductionMailboxSelectionSuccessorVerifier
         return encoded.ToArray();
     }
 
+    private static void PreflightClosureArtifacts(
+        ReadOnlySpan<byte> successor,
+        ReadOnlySpan<byte> authority,
+        ReadOnlySpan<byte> revocations,
+        ReadOnlySpan<byte> topology,
+        ReadOnlySpan<byte> oldSelection,
+        ReadOnlySpan<byte> currentSelection,
+        ReadOnlySpan<byte> nextSelection)
+    {
+        // Check every scalar length before copying even the first field. A malformed late field
+        // must not cause earlier multi-megabyte artifacts to be cloned.
+        if (successor.Length < ProductionMailboxSelectionSuccessorConstants.FixedCoreLength +
+                ProductionMailboxSelectionSuccessorConstants.SignatureBytes ||
+            successor.Length > ProductionMailboxSelectionSuccessorConstants.MaximumArtifactBytes ||
+            authority.Length is < 1 or > ProductionMailboxAuthorityConstants.MaximumArtifactBytes ||
+            revocations.Length <
+                ProductionMailboxRevocationSnapshotConstants.FixedArtifactBytesWithoutSerials ||
+            revocations.Length > ProductionMailboxRevocationSnapshotConstants.MaximumArtifactBytes ||
+            topology.Length is < 780 or >
+                ProductionMailboxTopologyConstants.MaximumTopologyArtifactBytes ||
+            oldSelection.Length is < 1 or >
+                ProductionMailboxTopologyConstants.MaximumSelectionArtifactBytes ||
+            currentSelection.Length is < 1 or >
+                ProductionMailboxTopologyConstants.MaximumSelectionArtifactBytes ||
+            nextSelection.Length is < 1 or >
+                ProductionMailboxTopologyConstants.MaximumSelectionArtifactBytes)
+            throw Error(ProductionMailboxSelectionSuccessorError.InvalidLength,
+                "Offline checkpoint closure artifact length is outside its strict bounds.");
+
+        PreflightRevocationSnapshot(revocations);
+        PreflightTopology(topology);
+    }
+
+    private static void PreflightRevocationSnapshot(ReadOnlySpan<byte> encoded)
+    {
+        const int countOffset = 152;
+        var count = BinaryPrimitives.ReadUInt16LittleEndian(encoded.Slice(countOffset, 2));
+        var expectedLength = checked(
+            ProductionMailboxRevocationSnapshotConstants.FixedArtifactBytesWithoutSerials +
+            count * ProductionMailboxRevocationSnapshotConstants.RevokedGrantSerialBytes);
+        if (count > ProductionMailboxRevocationSnapshotConstants.MaximumRevokedGrantSerials ||
+            encoded.Length != expectedLength)
+            throw Error(ProductionMailboxSelectionSuccessorError.InvalidLength,
+                "PMR1 length does not match its bounded serial count.");
+    }
+
+    private static void PreflightTopology(ReadOnlySpan<byte> encoded)
+    {
+        var offset = 120;
+        for (var epoch = 0; epoch < 2; epoch++)
+        {
+            SkipTopology(encoded, ref offset, 96);
+            var count = ReadTopologyUInt16(encoded, ref offset);
+            SkipTopology(encoded, ref offset, 2);
+            if (count is < 2 or > ProductionMailboxTopologyConstants.MaximumNodesPerEpoch)
+                throw Error(ProductionMailboxSelectionSuccessorError.InvalidLength,
+                    "PMT1 node count is outside its strict bounds.");
+            for (var node = 0; node < count; node++)
+            {
+                SkipTopology(encoded, ref offset, 32);
+                var endpointLength = ReadTopologyUInt16(encoded, ref offset);
+                if (endpointLength is < 1 or > ProductionMailboxTopologyConstants.MaximumEndpointBytes)
+                    throw Error(ProductionMailboxSelectionSuccessorError.InvalidLength,
+                        "PMT1 endpoint length is outside its strict bounds.");
+                SkipTopology(encoded, ref offset, checked(endpointLength + 64));
+            }
+        }
+        SkipTopology(encoded, ref offset, 64);
+        if (offset != encoded.Length)
+            throw Error(ProductionMailboxSelectionSuccessorError.InvalidLength,
+                "PMT1 length does not match its bounded structure.");
+    }
+
+    private static ushort ReadTopologyUInt16(ReadOnlySpan<byte> encoded, ref int offset)
+    {
+        SkipTopology(encoded, ref offset, 2, advance: false);
+        var value = BinaryPrimitives.ReadUInt16BigEndian(encoded.Slice(offset, 2));
+        offset += 2;
+        return value;
+    }
+
+    private static void SkipTopology(
+        ReadOnlySpan<byte> encoded, ref int offset, int count, bool advance = true)
+    {
+        if (offset < 0 || count < 0 || offset > encoded.Length - count)
+            throw Error(ProductionMailboxSelectionSuccessorError.InvalidLength,
+                "PMT1 is truncated or its count-derived length overflows.");
+        if (advance) offset = checked(offset + count);
+    }
+
+    private static byte[] FreezeArtifact(
+        ReadOnlySpan<byte> encoded, int minimumLength, int maximumLength, string name)
+    {
+        if (encoded.Length < minimumLength || encoded.Length > maximumLength)
+            throw Error(ProductionMailboxSelectionSuccessorError.InvalidLength,
+                $"{name} length is outside its strict bounds.");
+        return encoded.ToArray();
+    }
+
+    private static void VerifyOldLkg(
+        VerifiedProductionMailboxAuthority oldAuthority,
+        VerifiedProductionMailboxTopology oldTopology,
+        ProductionMailboxOfflineCheckpointClosureVerificationContext context)
+    {
+        var authority = oldAuthority.Authority;
+        var topology = oldTopology.Snapshot;
+        Equal(authority.NetworkId.Span, context.ExpectedNetworkId.Span,
+            ProductionMailboxSelectionSuccessorError.NetworkMismatch,
+            "Protected old PMA1 belongs to another network.");
+        Equal(SHA256.HashData(authority.MrXApprovalEd25519PublicKey.Span),
+            context.PinnedMrXPublicKeySha256.Span,
+            ProductionMailboxSelectionSuccessorError.AuthorityNotSuccessor,
+            "Protected old PMA1 is not rooted in the pinned Mr. X key.");
+        if (authority.AuthorityGeneration != context.ExpectedOldAuthorityGeneration ||
+            authority.Revocation.Generation != context.ExpectedOldRevocationGeneration)
+            throw Error(ProductionMailboxSelectionSuccessorError.AuthorityNotSuccessor,
+                "Protected old PMA1 generation differs from the exact LKG.");
+        Equal(oldAuthority.CanonicalAuthorityHash.Span,
+            context.ExpectedOldCanonicalAuthorityHash.Span,
+            ProductionMailboxSelectionSuccessorError.AuthorityNotSuccessor,
+            "Protected old PMA1 hash differs from the exact LKG.");
+        Equal(authority.Revocation.HeadHash.Span,
+            context.ExpectedOldRevocationHeadHash.Span,
+            ProductionMailboxSelectionSuccessorError.AuthorityNotSuccessor,
+            "Protected old revocation head differs from the exact LKG.");
+        Equal(authority.Revocation.SnapshotHash.Span,
+            context.ExpectedOldRevocationSnapshotHash.Span,
+            ProductionMailboxSelectionSuccessorError.AuthorityNotSuccessor,
+            "Protected old revocation snapshot differs from the exact LKG.");
+        if (topology.TopologyGeneration != context.ExpectedOldTopologyGeneration)
+            throw Error(ProductionMailboxSelectionSuccessorError.TopologyNotSuccessor,
+                "Protected old PMT1 generation differs from the exact LKG.");
+        Equal(oldTopology.CanonicalTopologyHash.Span,
+            context.ExpectedOldCanonicalTopologyHash.Span,
+            ProductionMailboxSelectionSuccessorError.TopologyNotSuccessor,
+            "Protected old PMT1 hash differs from the exact LKG.");
+        Equal(topology.NetworkId.Span, context.ExpectedNetworkId.Span,
+            ProductionMailboxSelectionSuccessorError.NetworkMismatch,
+            "Protected old PMT1 belongs to another network.");
+        if (topology.AuthorityGeneration != authority.AuthorityGeneration)
+            throw Error(ProductionMailboxSelectionSuccessorError.TopologyNotSuccessor,
+                "Protected old PMT1 is not coupled to the protected old PMA1.");
+        Equal(topology.CanonicalAuthorityHash.Span,
+            oldAuthority.CanonicalAuthorityHash.Span,
+            ProductionMailboxSelectionSuccessorError.TopologyNotSuccessor,
+            "Protected old PMT1 names another PMA1 hash.");
+        var expectedSelectionInput = ProductionMailboxReplicaSelection
+            .ComputeSelectionInputCommitment(
+                new BlindedPlacementId(context.ExpectedBlindedPlacementId.Span));
+        Equal(expectedSelectionInput, context.ExpectedSelectionInputCommitment.Span,
+            ProductionMailboxSelectionSuccessorError.RouteMismatch,
+            "Protected route selection input differs from its placement.");
+    }
+
+    private static byte[] BuildClosureTranscript(
+        ReadOnlySpan<byte> successor,
+        ReadOnlySpan<byte> authority,
+        ReadOnlySpan<byte> revocations,
+        ReadOnlySpan<byte> topology,
+        ReadOnlySpan<byte> oldSelection,
+        ReadOnlySpan<byte> currentSelection,
+        ReadOnlySpan<byte> nextSelection,
+        ProductionMailboxOfflineCheckpointClosureVerificationContext context,
+        ProductionMailboxOfflineCheckpointCommitAnchor anchor)
+    {
+        using var stream = new MemoryStream();
+        stream.Write("POC1"u8);
+        stream.WriteByte(1);
+        WriteFramed(stream, successor);
+        WriteFramed(stream, authority);
+        WriteFramed(stream, revocations);
+        WriteFramed(stream, topology);
+        WriteFramed(stream, oldSelection);
+        WriteFramed(stream, currentSelection);
+        WriteFramed(stream, nextSelection);
+        WriteFramed(stream, context.ExpectedNetworkId.Span);
+        WriteFramed(stream, context.ExpectedMailboxOwnerEd25519PublicKey.Span);
+        WriteFramed(stream, context.ExpectedBlindedMailboxId.Span);
+        WriteFramed(stream, context.ExpectedBlindedPlacementId.Span);
+        WriteFramed(stream, context.ExpectedSelectionInputCommitment.Span);
+        WriteFramed(stream, context.PinnedMrXPublicKeySha256.Span);
+        WriteUInt64(stream, context.ExpectedOldAuthorityGeneration);
+        WriteFramed(stream, context.ExpectedOldCanonicalAuthorityHash.Span);
+        WriteUInt64(stream, context.ExpectedOldRevocationGeneration);
+        WriteFramed(stream, context.ExpectedOldRevocationHeadHash.Span);
+        WriteFramed(stream, context.ExpectedOldRevocationSnapshotHash.Span);
+        WriteUInt64(stream, context.ExpectedOldTopologyGeneration);
+        WriteFramed(stream, context.ExpectedOldCanonicalTopologyHash.Span);
+        WriteFramed(stream, context.ExpectedOldCanonicalSelectionHash.Span);
+        WriteUInt64(stream, context.VerifiedAtUnixSeconds);
+        WriteUInt32(stream, context.ClockSkewSeconds);
+        WriteFramed(stream, anchor.MrXPublicKeySha256.Span);
+        WriteFramed(stream, anchor.NetworkId.Span);
+        WriteUInt64(stream, anchor.AuthorityGeneration);
+        WriteFramed(stream, anchor.AuthorityHash.Span);
+        WriteUInt64(stream, anchor.RevocationGeneration);
+        WriteFramed(stream, anchor.RevocationHeadHash.Span);
+        WriteFramed(stream, anchor.RevocationSnapshotHash.Span);
+        WriteUInt64(stream, anchor.TopologyGeneration);
+        WriteFramed(stream, anchor.TopologyHash.Span);
+        WriteFramed(stream, anchor.CurrentSelectionHash.Span);
+        WriteFramed(stream, anchor.NextSelectionHash.Span);
+        WriteUInt64(stream, anchor.VerifiedAtUnixSeconds);
+        return stream.ToArray();
+    }
+
+    private static void WriteFramed(Stream stream, ReadOnlySpan<byte> value)
+    {
+        WriteUInt32(stream, checked((uint)value.Length));
+        stream.Write(value);
+    }
+
+    private static void WriteUInt32(Stream stream, uint value)
+    {
+        Span<byte> encoded = stackalloc byte[4];
+        BinaryPrimitives.WriteUInt32BigEndian(encoded, value);
+        stream.Write(encoded);
+    }
+
+    private static void WriteUInt64(Stream stream, ulong value)
+    {
+        Span<byte> encoded = stackalloc byte[8];
+        BinaryPrimitives.WriteUInt64BigEndian(encoded, value);
+        stream.Write(encoded);
+    }
+
     private static void VerifyOfflineCheckpoint(
         ProductionMailboxSelectionSuccessorProof proof,
         ProductionMailboxAuthority oldAuthority,
@@ -551,6 +962,24 @@ public static class ProductionMailboxSelectionSuccessorVerifier
         ExpectedOldCanonicalSelectionHash = context.ExpectedOldCanonicalSelectionHash.ToArray()
     };
 
+    private static ProductionMailboxOfflineCheckpointClosureVerificationContext Freeze(
+        ProductionMailboxOfflineCheckpointClosureVerificationContext context) => context with
+    {
+        ExpectedNetworkId = context.ExpectedNetworkId.ToArray(),
+        ExpectedMailboxOwnerEd25519PublicKey =
+            context.ExpectedMailboxOwnerEd25519PublicKey.ToArray(),
+        ExpectedBlindedMailboxId = context.ExpectedBlindedMailboxId.ToArray(),
+        ExpectedBlindedPlacementId = context.ExpectedBlindedPlacementId.ToArray(),
+        ExpectedSelectionInputCommitment = context.ExpectedSelectionInputCommitment.ToArray(),
+        PinnedMrXPublicKeySha256 = context.PinnedMrXPublicKeySha256.ToArray(),
+        ExpectedOldCanonicalAuthorityHash =
+            context.ExpectedOldCanonicalAuthorityHash.ToArray(),
+        ExpectedOldRevocationHeadHash = context.ExpectedOldRevocationHeadHash.ToArray(),
+        ExpectedOldRevocationSnapshotHash = context.ExpectedOldRevocationSnapshotHash.ToArray(),
+        ExpectedOldCanonicalTopologyHash = context.ExpectedOldCanonicalTopologyHash.ToArray(),
+        ExpectedOldCanonicalSelectionHash = context.ExpectedOldCanonicalSelectionHash.ToArray()
+    };
+
     private static void ValidateContextLengths(
         ProductionMailboxSelectionSuccessorVerificationContext context)
     {
@@ -562,6 +991,57 @@ public static class ProductionMailboxSelectionSuccessorVerifier
             context.ExpectedOldCanonicalSelectionHash.Length != 32)
             throw Error(ProductionMailboxSelectionSuccessorError.InvalidField,
                 "PSS1 verification context field length is invalid.");
+    }
+
+    private static void ValidateClosureContextLengths(
+        ProductionMailboxOfflineCheckpointClosureVerificationContext context)
+    {
+        if (context.ExpectedNetworkId.Length != 16 ||
+            context.ExpectedMailboxOwnerEd25519PublicKey.Length != 32 ||
+            context.ExpectedBlindedMailboxId.Length != 32 ||
+            context.ExpectedBlindedPlacementId.Length != 32 ||
+            context.ExpectedSelectionInputCommitment.Length != 32 ||
+            context.PinnedMrXPublicKeySha256.Length != 32 ||
+            context.ExpectedOldCanonicalAuthorityHash.Length != 32 ||
+            context.ExpectedOldRevocationHeadHash.Length != 32 ||
+            context.ExpectedOldRevocationSnapshotHash.Length != 32 ||
+            context.ExpectedOldCanonicalTopologyHash.Length != 32 ||
+            context.ExpectedOldCanonicalSelectionHash.Length != 32)
+            throw Error(ProductionMailboxSelectionSuccessorError.InvalidField,
+                "Offline checkpoint closure context field length is invalid.");
+    }
+
+    private static void ValidateClosureContext(
+        ProductionMailboxOfflineCheckpointClosureVerificationContext context)
+    {
+        FixedNonzero(context.ExpectedNetworkId, 16, "expected network ID");
+        FixedNonzero(context.ExpectedMailboxOwnerEd25519PublicKey, 32,
+            "expected mailbox owner key");
+        FixedNonzero(context.ExpectedBlindedMailboxId, 32, "expected blinded mailbox ID");
+        FixedNonzero(context.ExpectedBlindedPlacementId, 32,
+            "expected blinded placement ID");
+        FixedNonzero(context.ExpectedSelectionInputCommitment, 32,
+            "expected selection input commitment");
+        FixedNonzero(context.PinnedMrXPublicKeySha256, 32,
+            "pinned Mr. X public-key hash");
+        FixedNonzero(context.ExpectedOldCanonicalAuthorityHash, 32,
+            "expected old PMA1 hash");
+        FixedNonzero(context.ExpectedOldRevocationHeadHash, 32,
+            "expected old revocation head hash");
+        FixedNonzero(context.ExpectedOldRevocationSnapshotHash, 32,
+            "expected old revocation snapshot hash");
+        FixedNonzero(context.ExpectedOldCanonicalTopologyHash, 32,
+            "expected old PMT1 hash");
+        FixedNonzero(context.ExpectedOldCanonicalSelectionHash, 32,
+            "expected old PMS1 hash");
+        if (context.ExpectedOldAuthorityGeneration == 0 ||
+            context.ExpectedOldRevocationGeneration == 0 ||
+            context.ExpectedOldTopologyGeneration == 0 ||
+            context.VerifiedAtUnixSeconds == 0 ||
+            context.ClockSkewSeconds >
+                ProductionMailboxSelectionSuccessorConstants.MaximumClockSkewSeconds)
+            throw Error(ProductionMailboxSelectionSuccessorError.InvalidField,
+                "Offline checkpoint closure context is incomplete or unsafe.");
     }
 
     private static void ValidateContext(ProductionMailboxSelectionSuccessorVerificationContext context)
@@ -602,4 +1082,9 @@ public static class ProductionMailboxSelectionSuccessorVerifier
     private static ProductionMailboxSelectionSuccessorException Error(
         ProductionMailboxSelectionSuccessorError error,
         string message) => new(error, message);
+
+    private readonly record struct OfflineCheckpointComponents(
+        VerifiedProductionMailboxSelectionSuccessor Successor,
+        VerifiedProductionMailboxAuthority Authority,
+        VerifiedProductionMailboxTopology Topology);
 }

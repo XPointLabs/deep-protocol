@@ -20,8 +20,25 @@ public sealed class ProductionMailboxSelectionSuccessorTests
             "VerifyForwardCheckpoint", BindingFlags.Public | BindingFlags.Static));
         Assert.Null(typeof(ProductionMailboxTopologyVerifier).GetMethod(
             "VerifyForwardCheckpoint", BindingFlags.Public | BindingFlags.Static));
-        Assert.NotNull(typeof(ProductionMailboxSelectionSuccessorVerifier).GetMethod(
+        Assert.Null(typeof(ProductionMailboxSelectionSuccessorVerifier).GetMethod(
             "VerifyOfflineCheckpoint", BindingFlags.Public | BindingFlags.Static));
+        Assert.NotNull(typeof(ProductionMailboxSelectionSuccessorVerifier).GetMethod(
+            "VerifyOfflineCheckpointClosure", BindingFlags.Public | BindingFlags.Static));
+        Assert.Null(typeof(ProductionMailboxSelectionSuccessorVerifier).GetMethod(
+            "VerifyOfflineCheckpointClosureCore", BindingFlags.Public | BindingFlags.Static));
+        Assert.DoesNotContain(typeof(ProductionMailboxSelectionSuccessorVerifier).GetMethod(
+                "VerifyOfflineCheckpointClosure", BindingFlags.Public | BindingFlags.Static)!
+            .GetParameters(), parameter =>
+                typeof(IProductionMailboxAuthoritySignatureVerifier).IsAssignableFrom(parameter.ParameterType) ||
+                typeof(IProductionMailboxRevocationSnapshotSignatureVerifier).IsAssignableFrom(parameter.ParameterType) ||
+                typeof(IProductionMailboxTopologySignatureVerifier).IsAssignableFrom(parameter.ParameterType) ||
+                typeof(IProductionMailboxSelectionSuccessorSignatureVerifier).IsAssignableFrom(parameter.ParameterType));
+        Assert.True(typeof(VerifiedProductionMailboxOfflineCheckpointClosure).IsSealed);
+        Assert.Empty(typeof(VerifiedProductionMailboxOfflineCheckpointClosure)
+            .GetConstructors(BindingFlags.Public | BindingFlags.Instance));
+        Assert.True(typeof(ProductionMailboxOfflineCheckpointCommitAnchor).IsSealed);
+        Assert.Empty(typeof(ProductionMailboxOfflineCheckpointCommitAnchor)
+            .GetConstructors(BindingFlags.Public | BindingFlags.Instance));
     }
 
     [Fact]
@@ -39,6 +56,260 @@ public sealed class ProductionMailboxSelectionSuccessorTests
             verified.OldSelection.Replicas.Select(r => Convert.ToHexString(r.ReplicaId.Span)),
             verified.NewSelection.Replicas.Select(r => Convert.ToHexString(r.ReplicaId.Span)));
         Assert.NotEqual(f.Proof.OldCanonicalSelection.ToArray(), f.Proof.NewCanonicalSelection.ToArray());
+    }
+
+    [Fact]
+    public void CompleteOfflineCheckpointOwnsExactClosureAndNextCommitAnchor()
+    {
+        var f = CreateFixture(
+            mode: ProductionMailboxSelectionSuccessorMode.OfflineCheckpoint,
+            authorityAdvance: 65, topologyAdvance: 10_000);
+        var verified = VerifyComplete(f);
+
+        Assert.Equal(ProductionMailboxSelectionSuccessorMode.OfflineCheckpoint,
+            verified.Successor.Proof.Mode);
+        Assert.Equal(ProductionMailboxAuthorityCodec.Encode(f.NewAuthority.Authority),
+            verified.CanonicalNewAuthority.ToArray());
+        Assert.Equal(f.NewRevocationSnapshot, verified.CanonicalNewRevocationSnapshot.ToArray());
+        Assert.Equal(ProductionMailboxTopologyCodec.Encode(f.NewTopology.Snapshot),
+            verified.CanonicalNewTopology.ToArray());
+        Assert.Equal(f.Proof.OldCanonicalSelection.ToArray(),
+            verified.CanonicalOldSelection.ToArray());
+        Assert.Equal(f.Proof.NewCanonicalSelection.ToArray(),
+            verified.CanonicalNewCurrentSelection.ToArray());
+        Assert.Equal(f.NewNextSelection, verified.CanonicalNewNextSelection.ToArray());
+        Assert.Equal(SHA256.HashData(verified.CanonicalTranscript.Span),
+            verified.TranscriptSha256.ToArray());
+        Assert.Equal(f.NewAuthority.Authority.AuthorityGeneration,
+            verified.NextCommitAnchor.AuthorityGeneration);
+        Assert.Equal(f.NewTopology.Snapshot.TopologyGeneration,
+            verified.NextCommitAnchor.TopologyGeneration);
+        Assert.Equal(Now, verified.NextCommitAnchor.VerifiedAtUnixSeconds);
+
+        var authorityCopy = verified.CanonicalNewAuthority.ToArray();
+        authorityCopy[0] ^= 0xff;
+        var anchorCopy = verified.NextCommitAnchor.AuthorityHash.ToArray();
+        anchorCopy[0] ^= 0xff;
+        Assert.Equal(ProductionMailboxAuthorityCodec.Encode(f.NewAuthority.Authority),
+            verified.CanonicalNewAuthority.ToArray());
+        Assert.Equal(f.NewAuthority.CanonicalAuthorityHash.ToArray(),
+            verified.NextCommitAnchor.AuthorityHash.ToArray());
+    }
+
+    [Fact]
+    public void CompleteOfflineCheckpointBindsEveryOldLkgAndExactHistoricalSelection()
+    {
+        var f = CreateFixture(mode: ProductionMailboxSelectionSuccessorMode.OfflineCheckpoint,
+            authorityAdvance: 65, topologyAdvance: 65);
+        var context = CompleteContext(f);
+        var mutations = new ProductionMailboxOfflineCheckpointClosureVerificationContext[]
+        {
+            context with { ExpectedNetworkId = Bytes(240, 16) },
+            context with { PinnedMrXPublicKeySha256 = Bytes(241, 32) },
+            context with { ExpectedOldAuthorityGeneration = context.ExpectedOldAuthorityGeneration + 1 },
+            context with { ExpectedOldCanonicalAuthorityHash = Bytes(242, 32) },
+            context with { ExpectedOldRevocationGeneration = context.ExpectedOldRevocationGeneration + 1 },
+            context with { ExpectedOldRevocationHeadHash = Bytes(243, 32) },
+            context with { ExpectedOldRevocationSnapshotHash = Bytes(244, 32) },
+            context with { ExpectedOldTopologyGeneration = context.ExpectedOldTopologyGeneration + 1 },
+            context with { ExpectedOldCanonicalTopologyHash = Bytes(245, 32) },
+            context with { ExpectedOldCanonicalSelectionHash = Bytes(246, 32) },
+            context with { ExpectedSelectionInputCommitment = Bytes(247, 32) }
+        };
+        foreach (var mutation in mutations)
+            Assert.Throws<ProductionMailboxSelectionSuccessorException>(() =>
+                VerifyComplete(f, context: mutation));
+
+        var changedOld = f.Proof.OldCanonicalSelection.ToArray();
+        changedOld[^1] ^= 1;
+        AssertError(ProductionMailboxSelectionSuccessorError.SelectionMismatch,
+            () => VerifyComplete(f, oldSelection: changedOld));
+    }
+
+    [Fact]
+    public void CompleteOfflineCheckpointRejectsSplitClosureAndCrossMode()
+    {
+        var f = CreateFixture(mode: ProductionMailboxSelectionSuccessorMode.OfflineCheckpoint,
+            authorityAdvance: 65, topologyAdvance: 65);
+        var changedAuthority = ProductionMailboxAuthorityCodec.Encode(f.NewAuthority.Authority);
+        changedAuthority[^1] ^= 1;
+        AssertError(ProductionMailboxSelectionSuccessorError.AuthorityNotSuccessor,
+            () => VerifyComplete(f, authority: changedAuthority));
+        var changedCurrent = f.Proof.NewCanonicalSelection.ToArray();
+        changedCurrent[^1] ^= 1;
+        AssertError(ProductionMailboxSelectionSuccessorError.SelectionMismatch,
+            () => VerifyComplete(f, currentSelection: changedCurrent));
+        var changedRevocations = f.NewRevocationSnapshot.ToArray();
+        changedRevocations[^1] ^= 1;
+        AssertError(ProductionMailboxSelectionSuccessorError.AuthorityNotSuccessor,
+            () => VerifyComplete(f, revocations: changedRevocations));
+        var changedNext = f.NewNextSelection.ToArray();
+        changedNext[^1] ^= 1;
+        AssertError(ProductionMailboxSelectionSuccessorError.SelectionMismatch,
+            () => VerifyComplete(f, nextSelection: changedNext));
+
+        var direct = CreateFixture();
+        var offline = CreateFixture(mode: ProductionMailboxSelectionSuccessorMode.OfflineCheckpoint,
+            authorityAdvance: 65, topologyAdvance: 65);
+        AssertError(ProductionMailboxSelectionSuccessorError.InvalidTransitionMode,
+            () => VerifyComplete(direct, revocations: offline.NewRevocationSnapshot));
+    }
+
+    [Fact]
+    public void CompleteOfflineCheckpointPreflightsAllInputsBeforeCallbacks()
+    {
+        var f = CreateFixture(mode: ProductionMailboxSelectionSuccessorMode.OfflineCheckpoint,
+            authorityAdvance: 65, topologyAdvance: 65);
+        var verifier = new CountingSignatureVerifier();
+        var huge = new byte[8 * 1024 * 1024];
+        AssertError(ProductionMailboxSelectionSuccessorError.InvalidLength, () =>
+            ProductionMailboxSelectionSuccessorVerifier.VerifyOfflineCheckpointClosureCore(
+                ProductionMailboxSelectionSuccessorCodec.Encode(f.Proof), huge,
+                f.NewRevocationSnapshot, ProductionMailboxTopologyCodec.Encode(f.NewTopology.Snapshot),
+                f.Proof.OldCanonicalSelection.Span, f.Proof.NewCanonicalSelection.Span,
+                f.NewNextSelection, f.OldAuthority, f.OldTopology, CompleteContext(f),
+                verifier, verifier, verifier, verifier));
+        Assert.Equal(0, verifier.CallbackCount);
+
+        var malformed = CompleteContext(f) with { ExpectedOldCanonicalAuthorityHash = huge };
+        AssertError(ProductionMailboxSelectionSuccessorError.InvalidField,
+            () => VerifyComplete(f, context: malformed));
+        Assert.Equal(0, verifier.CallbackCount);
+    }
+
+    [Fact]
+    public void CompleteOfflineCheckpointFreezesEveryInputBeforeFirstCallback()
+    {
+        var f = CreateFixture(mode: ProductionMailboxSelectionSuccessorMode.OfflineCheckpoint,
+            authorityAdvance: 65, topologyAdvance: 65);
+        var successor = ProductionMailboxSelectionSuccessorCodec.Encode(f.Proof);
+        var authority = ProductionMailboxAuthorityCodec.Encode(f.NewAuthority.Authority);
+        var revocations = f.NewRevocationSnapshot.ToArray();
+        var topology = ProductionMailboxTopologyCodec.Encode(f.NewTopology.Snapshot);
+        var oldSelection = f.Proof.OldCanonicalSelection.ToArray();
+        var currentSelection = f.Proof.NewCanonicalSelection.ToArray();
+        var nextSelection = f.NewNextSelection.ToArray();
+        var expectedAuthority = authority.ToArray();
+        var expectedTranscriptInputs = new[]
+        {
+            successor.ToArray(), authority.ToArray(), revocations.ToArray(), topology.ToArray(),
+            oldSelection.ToArray(), currentSelection.ToArray(), nextSelection.ToArray()
+        };
+        var verifier = new MutatingAllSignatureVerifier(() =>
+        {
+            successor[0] ^= 1;
+            authority[0] ^= 1;
+            revocations[0] ^= 1;
+            topology[0] ^= 1;
+            oldSelection[0] ^= 1;
+            currentSelection[0] ^= 1;
+            nextSelection[0] ^= 1;
+        });
+
+        var verified = ProductionMailboxSelectionSuccessorVerifier
+            .VerifyOfflineCheckpointClosureCore(
+                successor, authority, revocations, topology, oldSelection, currentSelection,
+                nextSelection, f.OldAuthority, f.OldTopology, CompleteContext(f),
+                verifier, verifier, verifier, verifier);
+
+        Assert.Equal(expectedAuthority, verified.CanonicalNewAuthority.ToArray());
+        Assert.Equal(expectedTranscriptInputs[0], verified.CanonicalSuccessor.ToArray());
+        Assert.Equal(expectedTranscriptInputs[2], verified.CanonicalNewRevocationSnapshot.ToArray());
+        Assert.Equal(expectedTranscriptInputs[3], verified.CanonicalNewTopology.ToArray());
+        Assert.Equal(expectedTranscriptInputs[4], verified.CanonicalOldSelection.ToArray());
+        Assert.Equal(expectedTranscriptInputs[5], verified.CanonicalNewCurrentSelection.ToArray());
+        Assert.Equal(expectedTranscriptInputs[6], verified.CanonicalNewNextSelection.ToArray());
+    }
+
+    [Fact]
+    public void CompleteOfflineCheckpointRejectsEveryOversizedArtifactWithoutCallback()
+    {
+        var f = CreateFixture(mode: ProductionMailboxSelectionSuccessorMode.OfflineCheckpoint,
+            authorityAdvance: 65, topologyAdvance: 65);
+        var valid = new[]
+        {
+            ProductionMailboxSelectionSuccessorCodec.Encode(f.Proof),
+            ProductionMailboxAuthorityCodec.Encode(f.NewAuthority.Authority),
+            f.NewRevocationSnapshot,
+            ProductionMailboxTopologyCodec.Encode(f.NewTopology.Snapshot),
+            f.Proof.OldCanonicalSelection.ToArray(),
+            f.Proof.NewCanonicalSelection.ToArray(),
+            f.NewNextSelection
+        };
+        for (var field = 0; field < valid.Length; field++)
+        {
+            var fields = valid.Select(static value => value.ToArray()).ToArray();
+            fields[field] = new byte[8 * 1024 * 1024];
+            var verifier = new CountingSignatureVerifier();
+            var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            AssertError(ProductionMailboxSelectionSuccessorError.InvalidLength, () =>
+                ProductionMailboxSelectionSuccessorVerifier.VerifyOfflineCheckpointClosureCore(
+                    fields[0], fields[1], fields[2], fields[3], fields[4], fields[5], fields[6],
+                    f.OldAuthority, f.OldTopology, CompleteContext(f), verifier, verifier,
+                    verifier, verifier));
+            var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+            Assert.Equal(0, verifier.CallbackCount);
+            Assert.True(allocated < 1024 * 1024,
+                $"Oversized complete-closure field {field} allocated {allocated} bytes.");
+        }
+    }
+
+    [Fact]
+    public void CompleteOfflineCheckpointRejectsMalformedBoundedPmrAndPmtBeforeCopy()
+    {
+        var f = CreateFixture(mode: ProductionMailboxSelectionSuccessorMode.OfflineCheckpoint,
+            authorityAdvance: 65, topologyAdvance: 65);
+        var successor = ProductionMailboxSelectionSuccessorCodec.Encode(f.Proof);
+        var authority = ProductionMailboxAuthorityCodec.Encode(f.NewAuthority.Authority);
+        var topology = ProductionMailboxTopologyCodec.Encode(f.NewTopology.Snapshot);
+        var oldSelection = f.Proof.OldCanonicalSelection.ToArray();
+        var currentSelection = f.Proof.NewCanonicalSelection.ToArray();
+        var nextSelection = f.NewNextSelection.ToArray();
+        var malformedPmr = new byte[
+            ProductionMailboxRevocationSnapshotConstants.MaximumArtifactBytes];
+        var malformedMaxPmt = new byte[
+            ProductionMailboxTopologyConstants.MaximumTopologyArtifactBytes];
+        var malformedNodeCount = topology.ToArray();
+        malformedNodeCount[216] = 0;
+        malformedNodeCount[217] = 0;
+        var malformedEndpointLength = topology.ToArray();
+        malformedEndpointLength[252] = 0;
+        malformedEndpointLength[253] = 0;
+        var cases = new (byte[] Pmr, byte[] Pmt)[]
+        {
+            (malformedPmr, topology),
+            (f.NewRevocationSnapshot, malformedMaxPmt),
+            (f.NewRevocationSnapshot, malformedNodeCount),
+            (f.NewRevocationSnapshot, malformedEndpointLength),
+            (f.NewRevocationSnapshot, topology[..^1]),
+            (f.NewRevocationSnapshot, [.. topology, 0])
+        };
+
+        foreach (var item in cases)
+        {
+            var verifier = new CountingSignatureVerifier();
+            var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            AssertError(ProductionMailboxSelectionSuccessorError.InvalidLength, () =>
+                ProductionMailboxSelectionSuccessorVerifier.VerifyOfflineCheckpointClosureCore(
+                    successor, authority, item.Pmr, item.Pmt, oldSelection, currentSelection,
+                    nextSelection, f.OldAuthority, f.OldTopology, CompleteContext(f), verifier,
+                    verifier, verifier, verifier));
+            var allocated = GC.GetAllocatedBytesForCurrentThread() - allocatedBefore;
+            Assert.Equal(0, verifier.CallbackCount);
+            Assert.True(allocated < 1024 * 1024,
+                $"Malformed bounded closure allocated {allocated} bytes before rejection.");
+        }
+    }
+
+    [Fact]
+    public void CompleteOfflineCheckpointTranscriptBindsVerificationPolicy()
+    {
+        var f = CreateFixture(mode: ProductionMailboxSelectionSuccessorMode.OfflineCheckpoint,
+            authorityAdvance: 65, topologyAdvance: 65);
+        var exact = VerifyComplete(f);
+        var skewed = VerifyComplete(f, context: CompleteContext(f) with { ClockSkewSeconds = 1 });
+        Assert.NotEqual(exact.CanonicalTranscript.ToArray(), skewed.CanonicalTranscript.ToArray());
+        Assert.NotEqual(exact.TranscriptSha256.ToArray(), skewed.TranscriptSha256.ToArray());
     }
 
     [Fact]
@@ -656,6 +927,55 @@ public sealed class ProductionMailboxSelectionSuccessorTests
                 new SodiumProductionMailboxSelectionSuccessorSignatureVerifier());
     }
 
+    private static VerifiedProductionMailboxOfflineCheckpointClosure VerifyComplete(
+        Fixture f,
+        byte[]? successor = null,
+        byte[]? authority = null,
+        byte[]? revocations = null,
+        byte[]? topology = null,
+        byte[]? oldSelection = null,
+        byte[]? currentSelection = null,
+        byte[]? nextSelection = null,
+        ProductionMailboxOfflineCheckpointClosureVerificationContext? context = null)
+        => ProductionMailboxSelectionSuccessorVerifier.VerifyOfflineCheckpointClosure(
+            successor ?? ProductionMailboxSelectionSuccessorCodec.Encode(f.Proof),
+            authority ?? ProductionMailboxAuthorityCodec.Encode(f.NewAuthority.Authority),
+            revocations ?? f.NewRevocationSnapshot,
+            topology ?? ProductionMailboxTopologyCodec.Encode(f.NewTopology.Snapshot),
+            oldSelection ?? f.Proof.OldCanonicalSelection.ToArray(),
+            currentSelection ?? f.Proof.NewCanonicalSelection.ToArray(),
+            nextSelection ?? f.NewNextSelection,
+            f.OldAuthority,
+            f.OldTopology,
+            context ?? CompleteContext(f));
+
+    private static ProductionMailboxOfflineCheckpointClosureVerificationContext CompleteContext(
+        Fixture f)
+    {
+        var authority = f.OldAuthority.Authority;
+        var topology = f.OldTopology.Snapshot;
+        return new ProductionMailboxOfflineCheckpointClosureVerificationContext
+        {
+            ExpectedNetworkId = f.Context.ExpectedNetworkId,
+            ExpectedMailboxOwnerEd25519PublicKey =
+                f.Context.ExpectedMailboxOwnerEd25519PublicKey,
+            ExpectedBlindedMailboxId = f.Context.ExpectedBlindedMailboxId,
+            ExpectedBlindedPlacementId = f.Context.ExpectedBlindedPlacementId,
+            ExpectedSelectionInputCommitment = f.Proof.SelectionInputCommitment,
+            PinnedMrXPublicKeySha256 = f.Context.PinnedMrXPublicKeySha256,
+            ExpectedOldAuthorityGeneration = authority.AuthorityGeneration,
+            ExpectedOldCanonicalAuthorityHash = f.OldAuthority.CanonicalAuthorityHash,
+            ExpectedOldRevocationGeneration = authority.Revocation.Generation,
+            ExpectedOldRevocationHeadHash = authority.Revocation.HeadHash,
+            ExpectedOldRevocationSnapshotHash = authority.Revocation.SnapshotHash,
+            ExpectedOldTopologyGeneration = topology.TopologyGeneration,
+            ExpectedOldCanonicalTopologyHash = f.OldTopology.CanonicalTopologyHash,
+            ExpectedOldCanonicalSelectionHash = f.Proof.OldCanonicalSelectionHash,
+            VerifiedAtUnixSeconds = Now,
+            ClockSkewSeconds = 0
+        };
+    }
+
     private static Fixture CreateFixture(
         bool sameIssuerKey = false,
         ProductionMailboxSelectionSuccessorMode mode =
@@ -674,7 +994,7 @@ public sealed class ProductionMailboxSelectionSuccessorTests
         var promotedDescriptors = Descriptors(0x30, 10, oldNow - 50, oldNow + 500);
         var checkpointCurrentDescriptors = Descriptors(0x31, 20, Now - 50, Now + 500);
         var directNextDescriptors = Descriptors(0x50, 11, Now + 400, Now + 900);
-        var checkpointNextDescriptors = Descriptors(0x11, 21, Now + 400, Now + 900);
+        var checkpointNextDescriptors = Descriptors(0x11, 21, Now - 50, Now + 900);
         var oldCurrentEpoch = AuthorityEpoch(9, 70,
             MembershipRouteDescriptorCodec.ComputeRoot(oldCurrentDescriptors), Bytes(8, 32),
             oldNow - 200, oldNow + 100);
@@ -689,7 +1009,7 @@ public sealed class ProductionMailboxSelectionSuccessorTests
             Now + 400, Now + 900);
         var checkpointNextEpoch = AuthorityEpoch(21, 82,
             MembershipRouteDescriptorCodec.ComputeRoot(checkpointNextDescriptors), Bytes(24, 32),
-            Now + 400, Now + 900);
+            Now - 40, Now + 900);
         var newCurrentEpoch = mode == ProductionMailboxSelectionSuccessorMode.DirectPromotion
             ? promotedEpoch : checkpointCurrentEpoch;
         var newCurrentDescriptors = mode == ProductionMailboxSelectionSuccessorMode.DirectPromotion
@@ -713,6 +1033,46 @@ public sealed class ProductionMailboxSelectionSuccessorTests
             previousHash: mode == ProductionMailboxSelectionSuccessorMode.DirectPromotion
                 ? oldAuthorityHash : Bytes(211, 32),
             newCurrentEpoch, newNextEpoch, Now);
+        byte[] newRevocationSnapshot = [];
+        if (mode == ProductionMailboxSelectionSuccessorMode.OfflineCheckpoint)
+        {
+            newAuthorityValue = newAuthorityValue with
+            {
+                Revocation = newAuthorityValue.Revocation with
+                {
+                    Generation = oldAuthorityValue.Revocation.Generation + 1,
+                    PreviousHeadHash = oldAuthorityValue.Revocation.HeadHash,
+                    HeadHash = Bytes(26, 32)
+                }
+            };
+            var unsignedRevocations = new ProductionMailboxRevocationSnapshot
+            {
+                NetworkId = newAuthorityValue.NetworkId,
+                AuthorityGeneration = newAuthorityValue.AuthorityGeneration,
+                AuthorityBindingHash = ProductionMailboxRevocationSnapshotCodec
+                    .ComputeAuthorityBindingHash(newAuthorityValue),
+                RevocationGeneration = newAuthorityValue.Revocation.Generation,
+                RevocationHeadHash = newAuthorityValue.Revocation.HeadHash,
+                PreviousRevocationHeadHash = newAuthorityValue.Revocation.PreviousHeadHash,
+                IssuedAtUnixSeconds = newAuthorityValue.Revocation.IssuedAtUnixSeconds,
+                ExpiresAtUnixSeconds = newAuthorityValue.Revocation.ExpiresAtUnixSeconds,
+                RevokedGrantSerials = [],
+                IssuerSignature = new byte[64]
+            };
+            var signedRevocations = unsignedRevocations with
+            {
+                IssuerSignature = PublicKeyAuth.SignDetached(
+                    ProductionMailboxRevocationSnapshotCodec.GetSigningBytes(unsignedRevocations),
+                    newIssuer.PrivateKey)
+            };
+            newRevocationSnapshot = ProductionMailboxRevocationSnapshotCodec.Encode(
+                signedRevocations);
+            newAuthorityValue = newAuthorityValue with
+            {
+                Revocation = newAuthorityValue.Revocation with
+                { SnapshotHash = SHA256.HashData(newRevocationSnapshot) }
+            };
+        }
         newAuthorityValue = SignAuthority(newAuthorityValue, mrX.PrivateKey);
         var newAuthority = mode == ProductionMailboxSelectionSuccessorMode.DirectPromotion
             ? ProductionMailboxAuthorityVerifier.Verify(newAuthorityValue,
@@ -808,8 +1168,11 @@ public sealed class ProductionMailboxSelectionSuccessorTests
             promotedDescriptors, placement, oldIssuer.PrivateKey, oldNow, oldNow + 90);
         var newSelection = Selection(newAuthority, newTopology, newTopologyValue.CurrentEpoch,
             newCurrentDescriptors, placement, newIssuer.PrivateKey, Now - 5, Now + 200);
+        var newNextSelection = Selection(newAuthority, newTopology, newTopologyValue.NextEpoch,
+            newNextDescriptors, placement, newIssuer.PrivateKey, Now - 5, Now + 200);
         var oldSelectionBytes = ProductionMailboxTopologyCodec.EncodeSelection(oldSelection);
         var newSelectionBytes = ProductionMailboxTopologyCodec.EncodeSelection(newSelection);
+        var newNextSelectionBytes = ProductionMailboxTopologyCodec.EncodeSelection(newNextSelection);
         var proof = new ProductionMailboxSelectionSuccessorProof
         {
             Mode = mode,
@@ -852,7 +1215,7 @@ public sealed class ProductionMailboxSelectionSuccessorTests
         };
         return new Fixture(oldAuthority, oldTopology, newAuthority, newTopology, proof, context,
             oldIssuer.PrivateKey, newIssuer.PrivateKey, mrX.PrivateKey,
-            newCurrentDescriptors, placement);
+            newCurrentDescriptors, placement, newRevocationSnapshot, newNextSelectionBytes);
     }
 
     private static ProductionMailboxAuthority Authority(byte[] issuerPublicKey, byte[] mrXPublicKey,
@@ -1091,8 +1454,24 @@ public sealed class ProductionMailboxSelectionSuccessorTests
         }
     }
 
+    private sealed class MutatingAllSignatureVerifier(Action mutate) :
+        IProductionMailboxAuthoritySignatureVerifier,
+        IProductionMailboxRevocationSnapshotSignatureVerifier,
+        IProductionMailboxTopologySignatureVerifier,
+        IProductionMailboxSelectionSuccessorSignatureVerifier
+    {
+        public bool Verify(ReadOnlySpan<byte> publicKey, ReadOnlySpan<byte> signingBytes,
+            ReadOnlySpan<byte> signature)
+        {
+            mutate();
+            return PublicKeyAuth.VerifyDetached(signature.ToArray(), signingBytes.ToArray(),
+                publicKey.ToArray());
+        }
+    }
+
     private sealed class CountingSignatureVerifier :
         IProductionMailboxAuthoritySignatureVerifier,
+        IProductionMailboxRevocationSnapshotSignatureVerifier,
         IProductionMailboxTopologySignatureVerifier,
         IProductionMailboxSelectionSuccessorSignatureVerifier
     {
@@ -1117,5 +1496,7 @@ public sealed class ProductionMailboxSelectionSuccessorTests
         byte[] NewIssuerPrivateKey,
         byte[] MrXPrivateKey,
         MembershipRouteDescriptor[] PromotedDescriptors,
-        BlindedPlacementId Placement);
+        BlindedPlacementId Placement,
+        byte[] NewRevocationSnapshot,
+        byte[] NewNextSelection);
 }

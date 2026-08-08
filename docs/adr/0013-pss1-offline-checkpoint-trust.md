@@ -48,6 +48,10 @@ not give an attacker a signing capability; the exact local owner/route/PMS ancho
 ## Consequences
 
 Clients must retain exact old PMS1 bytes/hash and old verified closure for historical checking.
-Registry responses must carry the exact live PMA1/PMT1/PMS1 closure. Host persistence must commit
-the complete new closure only after PSS1 success. `VerifyForwardCheckpoint` is restricted to this
-authenticated recovery flow and must not replace normal exact-successor LKG verification.
+Registry responses must carry the exact live PMA1/PMR1/PMT1/current-and-next-PMS1 closure. The
+public protocol entry point returns only a sealed complete capability that owns those exact bytes,
+the historical PMS1, the PSS1, a next commit anchor and a versioned length-framed transcript. It
+does not accept caller-provided signature verifiers. Host persistence must additionally verify and
+bind the new live route, grants and idempotency before atomically committing activation.
+`VerifyForwardCheckpoint` remains internal to this authenticated recovery flow and must not replace
+normal exact-successor LKG verification.

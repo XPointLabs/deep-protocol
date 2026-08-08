@@ -106,6 +106,31 @@ public sealed record ProductionMailboxSelectionSuccessorVerificationContext
     public uint ClockSkewSeconds { get; init; }
 }
 
+/// <summary>
+/// Exact durable recovery context for a complete offline-checkpoint closure.  Every old trust
+/// component is supplied by the caller's protected LKG; downloaded artifacts cannot choose their
+/// own predecessor.
+/// </summary>
+public sealed record ProductionMailboxOfflineCheckpointClosureVerificationContext
+{
+    public required ReadOnlyMemory<byte> ExpectedNetworkId { get; init; }
+    public required ReadOnlyMemory<byte> ExpectedMailboxOwnerEd25519PublicKey { get; init; }
+    public required ReadOnlyMemory<byte> ExpectedBlindedMailboxId { get; init; }
+    public required ReadOnlyMemory<byte> ExpectedBlindedPlacementId { get; init; }
+    public required ReadOnlyMemory<byte> ExpectedSelectionInputCommitment { get; init; }
+    public required ReadOnlyMemory<byte> PinnedMrXPublicKeySha256 { get; init; }
+    public required ulong ExpectedOldAuthorityGeneration { get; init; }
+    public required ReadOnlyMemory<byte> ExpectedOldCanonicalAuthorityHash { get; init; }
+    public required ulong ExpectedOldRevocationGeneration { get; init; }
+    public required ReadOnlyMemory<byte> ExpectedOldRevocationHeadHash { get; init; }
+    public required ReadOnlyMemory<byte> ExpectedOldRevocationSnapshotHash { get; init; }
+    public required ulong ExpectedOldTopologyGeneration { get; init; }
+    public required ReadOnlyMemory<byte> ExpectedOldCanonicalTopologyHash { get; init; }
+    public required ReadOnlyMemory<byte> ExpectedOldCanonicalSelectionHash { get; init; }
+    public required ulong VerifiedAtUnixSeconds { get; init; }
+    public uint ClockSkewSeconds { get; init; }
+}
+
 public interface IProductionMailboxSelectionSuccessorSignatureVerifier
 {
     bool Verify(ReadOnlySpan<byte> publicKey, ReadOnlySpan<byte> signingBytes, ReadOnlySpan<byte> signature);
@@ -145,6 +170,136 @@ public sealed class VerifiedProductionMailboxSelectionSuccessor
     public ReadOnlyMemory<byte> CanonicalSuccessorHash => _canonicalHash.ToArray();
     public VerifiedProductionMailboxSelection OldSelection => _oldSelection;
     public VerifiedProductionMailboxSelection NewSelection => _newSelection;
+}
+
+/// <summary>
+/// Immutable commit observation produced only after a complete offline checkpoint has verified.
+/// It is suitable for constructing a caller-owned atomic LKG update but is not itself a storage
+/// capability.
+/// </summary>
+public sealed class ProductionMailboxOfflineCheckpointCommitAnchor
+{
+    private readonly byte[] _mrXPublicKeySha256;
+    private readonly byte[] _networkId;
+    private readonly byte[] _authorityHash;
+    private readonly byte[] _revocationHeadHash;
+    private readonly byte[] _revocationSnapshotHash;
+    private readonly byte[] _topologyHash;
+    private readonly byte[] _currentSelectionHash;
+    private readonly byte[] _nextSelectionHash;
+
+    internal ProductionMailboxOfflineCheckpointCommitAnchor(
+        ReadOnlySpan<byte> mrXPublicKeySha256,
+        ReadOnlySpan<byte> networkId,
+        ulong authorityGeneration,
+        ReadOnlySpan<byte> authorityHash,
+        ulong revocationGeneration,
+        ReadOnlySpan<byte> revocationHeadHash,
+        ReadOnlySpan<byte> revocationSnapshotHash,
+        ulong topologyGeneration,
+        ReadOnlySpan<byte> topologyHash,
+        ReadOnlySpan<byte> currentSelectionHash,
+        ReadOnlySpan<byte> nextSelectionHash,
+        ulong verifiedAtUnixSeconds)
+    {
+        _mrXPublicKeySha256 = mrXPublicKeySha256.ToArray();
+        _networkId = networkId.ToArray();
+        AuthorityGeneration = authorityGeneration;
+        _authorityHash = authorityHash.ToArray();
+        RevocationGeneration = revocationGeneration;
+        _revocationHeadHash = revocationHeadHash.ToArray();
+        _revocationSnapshotHash = revocationSnapshotHash.ToArray();
+        TopologyGeneration = topologyGeneration;
+        _topologyHash = topologyHash.ToArray();
+        _currentSelectionHash = currentSelectionHash.ToArray();
+        _nextSelectionHash = nextSelectionHash.ToArray();
+        VerifiedAtUnixSeconds = verifiedAtUnixSeconds;
+    }
+
+    public ReadOnlyMemory<byte> MrXPublicKeySha256 => _mrXPublicKeySha256.ToArray();
+    public ReadOnlyMemory<byte> NetworkId => _networkId.ToArray();
+    public ulong AuthorityGeneration { get; }
+    public ReadOnlyMemory<byte> AuthorityHash => _authorityHash.ToArray();
+    public ulong RevocationGeneration { get; }
+    public ReadOnlyMemory<byte> RevocationHeadHash => _revocationHeadHash.ToArray();
+    public ReadOnlyMemory<byte> RevocationSnapshotHash => _revocationSnapshotHash.ToArray();
+    public ulong TopologyGeneration { get; }
+    public ReadOnlyMemory<byte> TopologyHash => _topologyHash.ToArray();
+    public ReadOnlyMemory<byte> CurrentSelectionHash => _currentSelectionHash.ToArray();
+    public ReadOnlyMemory<byte> NextSelectionHash => _nextSelectionHash.ToArray();
+    public ulong VerifiedAtUnixSeconds { get; }
+}
+
+/// <summary>
+/// Non-forgeable complete offline-checkpoint result. Exact canonical bytes are retained so a
+/// caller can atomically bind the same closure that was verified, without rereading mutable input.
+/// </summary>
+public sealed class VerifiedProductionMailboxOfflineCheckpointClosure
+{
+    private readonly byte[] _canonicalSuccessor;
+    private readonly byte[] _canonicalNewAuthority;
+    private readonly byte[] _canonicalNewRevocationSnapshot;
+    private readonly byte[] _canonicalNewTopology;
+    private readonly byte[] _canonicalOldSelection;
+    private readonly byte[] _canonicalNewCurrentSelection;
+    private readonly byte[] _canonicalNewNextSelection;
+    private readonly byte[] _canonicalTranscript;
+    private readonly byte[] _transcriptSha256;
+
+    internal VerifiedProductionMailboxOfflineCheckpointClosure(
+        VerifiedProductionMailboxSelectionSuccessor successor,
+        VerifiedProductionMailboxAuthority authority,
+        VerifiedProductionMailboxRevocationSnapshot revocations,
+        VerifiedProductionMailboxTopology topology,
+        VerifiedProductionMailboxSelection currentSelection,
+        VerifiedProductionMailboxSelection nextSelection,
+        ProductionMailboxOfflineCheckpointCommitAnchor nextCommitAnchor,
+        ReadOnlySpan<byte> canonicalSuccessor,
+        ReadOnlySpan<byte> canonicalNewAuthority,
+        ReadOnlySpan<byte> canonicalNewRevocationSnapshot,
+        ReadOnlySpan<byte> canonicalNewTopology,
+        ReadOnlySpan<byte> canonicalOldSelection,
+        ReadOnlySpan<byte> canonicalNewCurrentSelection,
+        ReadOnlySpan<byte> canonicalNewNextSelection,
+        ReadOnlySpan<byte> canonicalTranscript,
+        ReadOnlySpan<byte> transcriptSha256)
+    {
+        Successor = successor ?? throw new ArgumentNullException(nameof(successor));
+        Authority = authority ?? throw new ArgumentNullException(nameof(authority));
+        Revocations = revocations ?? throw new ArgumentNullException(nameof(revocations));
+        Topology = topology ?? throw new ArgumentNullException(nameof(topology));
+        CurrentSelection = currentSelection ?? throw new ArgumentNullException(nameof(currentSelection));
+        NextSelection = nextSelection ?? throw new ArgumentNullException(nameof(nextSelection));
+        NextCommitAnchor = nextCommitAnchor ?? throw new ArgumentNullException(nameof(nextCommitAnchor));
+        _canonicalSuccessor = canonicalSuccessor.ToArray();
+        _canonicalNewAuthority = canonicalNewAuthority.ToArray();
+        _canonicalNewRevocationSnapshot = canonicalNewRevocationSnapshot.ToArray();
+        _canonicalNewTopology = canonicalNewTopology.ToArray();
+        _canonicalOldSelection = canonicalOldSelection.ToArray();
+        _canonicalNewCurrentSelection = canonicalNewCurrentSelection.ToArray();
+        _canonicalNewNextSelection = canonicalNewNextSelection.ToArray();
+        _canonicalTranscript = canonicalTranscript.ToArray();
+        _transcriptSha256 = transcriptSha256.ToArray();
+    }
+
+    public VerifiedProductionMailboxSelectionSuccessor Successor { get; }
+    public VerifiedProductionMailboxAuthority Authority { get; }
+    public VerifiedProductionMailboxRevocationSnapshot Revocations { get; }
+    public VerifiedProductionMailboxTopology Topology { get; }
+    public VerifiedProductionMailboxSelection CurrentSelection { get; }
+    public VerifiedProductionMailboxSelection NextSelection { get; }
+    public ProductionMailboxOfflineCheckpointCommitAnchor NextCommitAnchor { get; }
+    public ReadOnlyMemory<byte> CanonicalSuccessor => _canonicalSuccessor.ToArray();
+    public ReadOnlyMemory<byte> CanonicalNewAuthority => _canonicalNewAuthority.ToArray();
+    public ReadOnlyMemory<byte> CanonicalNewRevocationSnapshot =>
+        _canonicalNewRevocationSnapshot.ToArray();
+    public ReadOnlyMemory<byte> CanonicalNewTopology => _canonicalNewTopology.ToArray();
+    public ReadOnlyMemory<byte> CanonicalOldSelection => _canonicalOldSelection.ToArray();
+    public ReadOnlyMemory<byte> CanonicalNewCurrentSelection =>
+        _canonicalNewCurrentSelection.ToArray();
+    public ReadOnlyMemory<byte> CanonicalNewNextSelection => _canonicalNewNextSelection.ToArray();
+    public ReadOnlyMemory<byte> CanonicalTranscript => _canonicalTranscript.ToArray();
+    public ReadOnlyMemory<byte> TranscriptSha256 => _transcriptSha256.ToArray();
 }
 
 internal static class ProductionMailboxSelectionSuccessorCopy

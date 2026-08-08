@@ -95,13 +95,14 @@ The old PMS1 is locally pinned exact state, not downloaded bootstrap authority. 
 1. verifies the embedded current PMA1 canonically and live against the pinned Mr. X public-key
    hash, requiring a strictly forward, non-terminal authority generation;
 2. rejects revocation rollback/conflict and terminal revocation generations;
-3. accepts only a `VerifiedProductionMailboxTopology` produced from that exact PMA1/current issuer;
-   bounded-forward PMT1 recovery is strictly forward and non-terminal;
+3. verifies the exact canonical PMR1 and bounded-forward PMT1 against that same current PMA1;
+   recovery is strictly forward and non-terminal;
 4. historically verifies the exact old PMS1 with the retained old closure at old PMS1 issuance;
 5. requires the old anchor to be no more than 365 days old, the new epoch/generation to move
    forward, and the new PMA1/PMT1/PMS1 plus PSS1 to be live now;
-6. recomputes the V2 replica selection and both exact MIP1 proofs for the new closure; replicas may
-   legitimately change across epochs, but caller substitution cannot pass;
+6. requires the bundle PMA1 and current PMS1 bytes to be exact copies of the PSS1-embedded bytes,
+   then verifies both current and next PMS1, recomputing the V2 replica selections and exact MIP1
+   proofs; replicas may legitimately change across epochs, but caller substitution cannot pass;
 7. verifies the current issuer signature over the exact old anchor, owner/blinded route, embedded
    current PMA1 and live new PMS1. The retired-issuer slot must be zero.
 
@@ -112,13 +113,18 @@ during daily or incident-driven rotations. The 365-day local-anchor age is the r
 does not require retaining a private key for that duration.
 
 Forward-checkpoint verifiers are internal recovery primitives. The only public offline entry point
-constructs the current verified PMA1/PMT1 handles inside an authenticated PSS1 OfflineCheckpoint
-flow with exact local-anchor binding. There is no public generic shortcut around ordinary exact LKG
-successor verification.
+accepts the complete bounded PSS1/PMA1/PMR1/PMT1/old-current-next-PMS1 closure, freezes it before
+any signature callback, and constructs all verified handles inside one authenticated
+OfflineCheckpoint flow. Its context binds every old authority, revocation and topology LKG field,
+the pinned Mr. X/network values and the exact historical PMS1 bytes/hash. The sealed result owns
+the exact verified bytes, an immutable next commit anchor, and a versioned, length-framed activation
+transcript. It exposes no signer injection or generic forward-verification shortcut.
 
 ## Atomic host commit
 
-After success, the host atomically commits the new PMA1/PMR1/PMT1 LKG state, new current/next
-bundle and PSS1 audit hash. Failure leaves old durable state unchanged. A host must not commit the
-embedded PMA1 or downloaded route before the whole PSS1 verification and storage transaction
+After success, the host still must live-reverify its PRC1/PRA1 route, MCG2 grants and computed
+issuance idempotency under the new authority, and bind those application artifacts with the
+protocol activation transcript. It then atomically commits the next anchor, exact complete bundle
+and transcript hash. Failure leaves old durable state unchanged. A host must not commit the
+embedded PMA1 or any downloaded route before the whole verification and storage transaction
 succeeds.

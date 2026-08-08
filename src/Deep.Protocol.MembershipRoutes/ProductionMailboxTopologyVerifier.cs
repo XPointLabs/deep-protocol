@@ -120,7 +120,30 @@ public static class ProductionMailboxTopologyVerifier
             context.ClockSkewSeconds > ProductionMailboxTopologyConstants.MaximumClockSkewSeconds)
             throw Error(ProductionMailboxTopologyError.InvalidField,
                 "Topology checkpoint context is incomplete or unsafe.");
-        return VerifyCore(encoded, verifiedAuthority, signatureVerifier,
+        if (encoded.Length > ProductionMailboxTopologyConstants.MaximumTopologyArtifactBytes)
+            throw Error(ProductionMailboxTopologyError.InvalidLength,
+                "PMT1 exceeds its strict maximum length.");
+        return VerifyCore(encoded.ToArray(), verifiedAuthority, signatureVerifier,
+            context.LastCommittedTopologyGeneration, default, context.NowUnixSeconds,
+            context.ClockSkewSeconds, forwardCheckpoint: true);
+    }
+
+    internal static VerifiedProductionMailboxTopology VerifyForwardCheckpointOwned(
+        byte[] ownedEncoded,
+        VerifiedProductionMailboxAuthority verifiedAuthority,
+        ProductionMailboxTopologyCheckpointVerificationContext context,
+        IProductionMailboxTopologySignatureVerifier signatureVerifier)
+    {
+        ArgumentNullException.ThrowIfNull(ownedEncoded);
+        ArgumentNullException.ThrowIfNull(context);
+        if (context.LastCommittedTopologyGeneration == 0 || context.NowUnixSeconds == 0 ||
+            context.ClockSkewSeconds > ProductionMailboxTopologyConstants.MaximumClockSkewSeconds)
+            throw Error(ProductionMailboxTopologyError.InvalidField,
+                "Topology checkpoint context is incomplete or unsafe.");
+        if (ownedEncoded.Length > ProductionMailboxTopologyConstants.MaximumTopologyArtifactBytes)
+            throw Error(ProductionMailboxTopologyError.InvalidLength,
+                "PMT1 exceeds its strict maximum length.");
+        return VerifyCore(ownedEncoded, verifiedAuthority, signatureVerifier,
             context.LastCommittedTopologyGeneration, default, context.NowUnixSeconds,
             context.ClockSkewSeconds, forwardCheckpoint: true);
     }
@@ -137,13 +160,16 @@ public static class ProductionMailboxTopologyVerifier
                 "Topology verification context hash length is invalid.");
         context = context with { LastCommittedTopologyHash = context.LastCommittedTopologyHash.ToArray() };
         ValidateContext(context);
-        return VerifyCore(encoded, verifiedAuthority, signatureVerifier,
+        if (encoded.Length > ProductionMailboxTopologyConstants.MaximumTopologyArtifactBytes)
+            throw Error(ProductionMailboxTopologyError.InvalidLength,
+                "PMT1 exceeds its strict maximum length.");
+        return VerifyCore(encoded.ToArray(), verifiedAuthority, signatureVerifier,
             context.LastCommittedTopologyGeneration, context.LastCommittedTopologyHash,
             context.NowUnixSeconds, context.ClockSkewSeconds, forwardCheckpoint: false);
     }
 
     private static VerifiedProductionMailboxTopology VerifyCore(
-        ReadOnlySpan<byte> encoded,
+        byte[] frozenBytes,
         VerifiedProductionMailboxAuthority verifiedAuthority,
         IProductionMailboxTopologySignatureVerifier signatureVerifier,
         ulong lastCommittedTopologyGeneration,
@@ -154,9 +180,6 @@ public static class ProductionMailboxTopologyVerifier
     {
         ArgumentNullException.ThrowIfNull(verifiedAuthority);
         ArgumentNullException.ThrowIfNull(signatureVerifier);
-        if (encoded.Length > ProductionMailboxTopologyConstants.MaximumTopologyArtifactBytes)
-            throw Error(ProductionMailboxTopologyError.InvalidLength, "PMT1 exceeds its strict maximum length.");
-        var frozenBytes = encoded.ToArray();
         var topology = ProductionMailboxTopologyCodec.Decode(frozenBytes);
         var authority = verifiedAuthority.Authority;
         var authorityHash = verifiedAuthority.CanonicalAuthorityHash.ToArray();
