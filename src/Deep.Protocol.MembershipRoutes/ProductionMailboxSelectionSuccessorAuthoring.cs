@@ -68,7 +68,7 @@ public static class ProductionMailboxSelectionSuccessorAuthoring
 {
     private const byte PlaceholderSignatureByte = 0xA5;
 
-    public static async ValueTask<VerifiedProductionMailboxRouteSelectionTransition> AuthorDirectAsync(
+    internal static async ValueTask<VerifiedProductionMailboxRouteSelectionTransition> AuthorDirectAsync(
         ProductionMailboxSelectionSuccessorV2Proof unsignedDraft,
         ReadOnlyMemory<byte> canonicalFreshRouteCertificate,
         ReadOnlyMemory<byte> canonicalTransitionContext,
@@ -153,7 +153,7 @@ public static class ProductionMailboxSelectionSuccessorAuthoring
         }
     }
 
-    public static async ValueTask<VerifiedProductionMailboxRouteSelectionTransition> AuthorOfflineAsync(
+    internal static async ValueTask<VerifiedProductionMailboxRouteSelectionTransition> AuthorOfflineAsync(
         ProductionMailboxSelectionSuccessorV2Proof unsignedDraft,
         ReadOnlyMemory<byte> canonicalNewAuthority,
         ReadOnlyMemory<byte> canonicalNewRevocationSnapshot,

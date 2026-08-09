@@ -248,3 +248,19 @@ tombstone. It includes no link-key implementation, BLE/USB, radio, region defaul
 rewards or battery/background behavior.
 
 Tests use an explicit fake adapter only to verify managed state and wire container behavior.
+
+Slice D keeps route continuity authoring capability-scoped. A sealed historical anchor restores
+only from exact RCD1(552), RDA1(320), pre/enrolled ROL1(224 each), a verified historical
+PMA/PMR/PRC/PRA2 closure, and a protected exact OCR1 binding. Fresh PRC1 and live
+RTC1/PRA2-or-RCH1+RCA1/PSS2 are constructed internally. The public result is cryptographic only:
+it exposes a defensive `CommitPlan` and domain-separated `PlanHash`, never a storage committer,
+durability receipt, publication capability, raw unsigned draft, or injectable production verifier.
+
+Owner control uses OCR1(272), PMCQ1(344), PMCR1(384), and PMFA1(header 48). The OCR1 hash is not a
+PMCQ wire field: it is appended to both the owner signature transcript and request operation-hash
+context. PMCR transitively binds it through the request hash and accepts only the exact protected
+OCR responder key. Its public stream path first verifies the fixed header, request tuple, time and
+responder signature into a sealed read context; only then can bounded payload allocation/read,
+incremental hash verification and nested semantic decoding occur. Codecs are carry-only; Registry and
+client own HTTPS authentication plus confidentiality, durable request-id CAS, response persistence,
+retry and post-CAS authority. Node/path/log exposure is forbidden.

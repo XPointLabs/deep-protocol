@@ -103,6 +103,29 @@ rule or publish node-visible bytes before the durable route+selection transactio
 - Preissued single-successor PRA as the survival design: useful only as a short owner-online Beta
   gate; it does not cover unattended or incident rotations.
 
+## Slice D control boundary
+
+OCR1 certifies a dedicated non-exportable Registry responder key under the exact historical PMA
+mailbox issuer. Slice D supports genesis generation 1 with a zero predecessor only; issuance equals
+RDA accepted-at, all historical anchor windows contain issuance, expiry is contained by RCD and is
+at most 365 days. Compromise grants no route or mailbox authority: operators globally revoke/stop
+responses and require fresh owner enrollment; there is no in-band key rotation.
+
+PMCQ/PMCR message signatures are the durable authority and deliberately omit ephemeral TLS exporter
+state, so exact replay survives reconnect/restart. The host channel is nevertheless required to be
+authenticated and confidential. Registry persists the request row before work and response bytes
+before send, then rereads/authenticates them. Same owner/route/request-id plus the same request hash
+replays exact bytes only while `now < expiresAt`; a changed hash conflicts before callbacks and its
+tombstone remains through the OCR/RCD horizon. At equality it is stale with no skew extension; a
+new request ID on the same RHC is allowed. Protocol provides canonical hashes but does not claim
+that consumer persistence occurred.
+
+Before any owner/issuer callback, live authoring binds the sealed selection intent to the exact
+protected RHC cursor, enrollment identity, current PMA/PMR tuple, current ROL, route identity and
+the complete RTC/authorization/RCH live-window intersection. A later Owner predecessor is
+authenticated by the retained ROL/RHC chain and is not incorrectly pinned to the enrollment PRA.
+The resulting transition and commit plan are crypto/CAS inputs only, never durability authority.
+
 ## Implementation gate
 
 This ADR authorizes no code until independent review approves the fixed layouts in

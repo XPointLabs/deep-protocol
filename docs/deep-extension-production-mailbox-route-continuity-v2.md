@@ -577,3 +577,45 @@ uses the artifact-specific temporal rules below; no blanket rule is inferred for
   sequence with different canonical bytes is a fork. Unknown predecessor, rollback, gap, terminal
   predecessor, partial write and ambiguous durability fail closed and reconcile from the durable
   transaction/journal before any retry.
+
+## Owner-control wire and streaming
+
+OCR1 is exactly 272 bytes: magic/version/reserved `[0..8)`, network `[8..24)`, owner `[24..56)`,
+route domain `[56..88)`, anchor PMA hash `[88..120)`, responder key `[120..152)`, issued/expires/key
+generation at `[152..176)`, previous OCR hash `[176..208)`, and issuer signature `[208..272)`.
+The signature domain covers bytes `[4..208)`. Genesis requires generation 1/zero predecessor.
+
+PMCQ1 is exactly 344 bytes: tags `[0..8)`, issued/expires `[8..24)`, request ID `[24..56)`, network
+`[56..72)`, owner `[72..104)`, route/selection/predecessor-ROL/current-RHC hashes through byte 232,
+batch and authorization sequences `[232..248)`, predecessor authorization hash `[248..280)`, and
+owner signature `[280..344)`. Both signing and request-hash domains append SHA-256(exact verified
+OCR1) as context; that hash is never serialized in PMCQ1.
+
+PMCR1 is exactly 384 bytes: tags `[0..8)`, issued/expires `[8..24)`, request hash/ID `[24..88)`,
+network/route/predecessor ROL/current and next RHC `[88..232)`, sequences `[232..248)`, payload
+hash/length/reserved `[248..288)`, exact OCR responder key `[288..320)`, signature `[320..384)`.
+Responder identity is rejected before payload allocation. Message lifetime is at most 300 seconds,
+future issuance uses configured skew at most 300 seconds, and expiry/action/replay always requires
+`now < expiresAt` without skew extension.
+
+The public streaming composition is authentication-first: verify the exact fixed PMCR1 header
+against the sealed OCR1, PMCQ1 and time window to obtain a sealed read context; only that context
+can authorize the bounded payload reader. The reader hashes incrementally, compares the signed
+payload hash, then performs nested decoding and exact History/Final semantic binding. A bad
+signature/key reads and rents no payload. PMCR network/route/predecessor/current tuple is exact
+PMCQ state; NoChange and Final retain the current RHC tuple, while History advances exactly one
+sequence to the domain-separated hash of its carried RHC1. PMFA mode/kind must equal PMCR tags.
+
+PMFA1 has a fixed 48-byte header: magic/version/mode/kind/reserved `[0..8)` followed by ten big-endian
+u32 lengths for PMA, PMR, PMT, current PMS, next PMS, PSS2, PRC, RTC, RCH, tagged authorization.
+The exact total is `48 + checked(sum10) <= 8,388,656`; Owner requires RCH=0/PRA2=448 and Delegated
+requires RCH=320/RCA1=496. All lengths and nested PMR/PMT/PMS/PSS framing are preflighted before
+rent/copy/crypto/callback. Each bounded artifact is read once into its final owned buffer. A History
+payload reads only the first 64 RHB bytes, derives its exact count/table/payload length, requires
+`derived + 464 == payloadLen`, then rents the full bounded frame. Transported RHC remains inert
+until local `VerifyBatch` recomputes exact matching bytes/hash.
+
+ROL1, RTC1 and RHC1 fields always use their protocol domain hashes
+(`ComputeRouteOriginLkgHash`, `ComputeTransitionContextHash`, and
+`ComputeRouteHistoryCheckpointHash`); raw SHA-256 is used only where the underlying wire contract
+explicitly defines it, including canonical RCH1.

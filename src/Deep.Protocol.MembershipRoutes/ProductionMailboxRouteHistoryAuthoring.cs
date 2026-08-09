@@ -28,6 +28,23 @@ public sealed class VerifiedProductionMailboxRouteHistoryCursor
 
     internal VerifiedProductionMailboxRouteHistoryCheckpoint Checkpoint => _checkpoint;
     internal VerifiedProductionMailboxRouteContinuityEnrollment Enrollment { get; }
+    internal byte[] CanonicalCurrentRouteOriginLkg()
+    {
+        var value = _checkpoint.TrustedCheckpoint;
+        return ProductionMailboxRouteContinuityCodec.EncodeRouteOriginLkg(new ProductionMailboxRouteOriginLkg
+        {
+            NetworkId = value.NetworkId.ToArray(), RouteDomainHash = value.RouteDomainHash.ToArray(),
+            AuthorizationKind = value.CurrentAuthorizationKind,
+            CanonicalAuthorizationHash = value.CurrentCanonicalAuthorizationHash.ToArray(),
+            AuthorizationSequence = value.CurrentAuthorizationSequence,
+            CanonicalDelegationHash = Enrollment.CanonicalDelegationHash.ToArray(),
+            CanonicalDelegationAcceptanceHash = Enrollment.CanonicalAcceptanceHash.ToArray(),
+            OwnerRevocationGeneration = value.OwnerRevocationGeneration,
+            OwnerRevocationHeadHash = value.OwnerRevocationHeadHash.ToArray(),
+            RouteVerifiedAtUnixSeconds = value.RouteVerifiedAtUnixSeconds,
+            LocalCommitGeneration = value.CurrentLocalCommitGeneration
+        });
+    }
     public ReadOnlyMemory<byte> CanonicalCheckpoint => _checkpoint.CanonicalBytes.ToArray();
     public ReadOnlyMemory<byte> CanonicalCheckpointHash => _checkpoint.CanonicalHash.ToArray();
     public ulong LastCommittedBatchSequence => _checkpoint.TrustedCheckpoint.LastCommittedBatchSequence;
@@ -46,18 +63,32 @@ public sealed class ProductionMailboxRouteHistoryBatchCommitPlan
 {
     private readonly byte[] _canonicalBatch;
     private readonly byte[] _canonicalBatchHash;
+    private readonly byte[] _expectedCurrentCheckpoint;
+    private readonly byte[] _expectedCurrentCheckpointHash;
+    private readonly byte[] _expectedCurrentRouteOriginLkgHash;
 
     internal ProductionMailboxRouteHistoryBatchCommitPlan(
         ReadOnlySpan<byte> canonicalBatch,
+        VerifiedProductionMailboxRouteHistoryCursor currentCursor,
         VerifiedProductionMailboxRouteHistoryCursor nextCursor)
     {
         _canonicalBatch = canonicalBatch.ToArray();
         _canonicalBatchHash = SHA256.HashData(_canonicalBatch);
+        _expectedCurrentCheckpoint = currentCursor.CanonicalCheckpoint.ToArray();
+        _expectedCurrentCheckpointHash = currentCursor.CanonicalCheckpointHash.ToArray();
+        _expectedCurrentRouteOriginLkgHash = currentCursor.Checkpoint.TrustedCheckpoint
+            .CurrentRouteOriginLkgHash.ToArray();
+        ExpectedCurrentBatchSequence = currentCursor.LastCommittedBatchSequence;
         NextCursor = nextCursor ?? throw new ArgumentNullException(nameof(nextCursor));
     }
 
     public ReadOnlyMemory<byte> CanonicalBatch => _canonicalBatch.ToArray();
     public ReadOnlyMemory<byte> CanonicalBatchHash => _canonicalBatchHash.ToArray();
+    public ReadOnlyMemory<byte> ExpectedCurrentCheckpoint => _expectedCurrentCheckpoint.ToArray();
+    public ReadOnlyMemory<byte> ExpectedCurrentCheckpointHash => _expectedCurrentCheckpointHash.ToArray();
+    public ReadOnlyMemory<byte> ExpectedCurrentRouteOriginLkgHash =>
+        _expectedCurrentRouteOriginLkgHash.ToArray();
+    public ulong ExpectedCurrentBatchSequence { get; }
     public VerifiedProductionMailboxRouteHistoryCursor NextCursor { get; }
 
     /// <summary>Exports the exact post-commit durable restore tuple.</summary>
@@ -325,7 +356,7 @@ public static class ProductionMailboxRouteHistoryAuthoring
         var batch = BuildBatch(current, frozenLinks);
         var canonical = ProductionMailboxRouteHistoryCodec.Encode(batch);
         var next = VerifyCore(current, canonical);
-        return new(canonical, next);
+        return new(canonical, current, next);
     }
 
     public static VerifiedProductionMailboxRouteHistoryCursor VerifyBatch(
