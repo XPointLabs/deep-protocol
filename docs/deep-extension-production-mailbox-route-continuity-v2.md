@@ -386,14 +386,19 @@ exactly `artifactCount*40 + linkCount*32`; checked arithmetic and the absolute e
 are validated before allocating or invoking a codec/verifier. Every artifact-table row is
 referenced by at least one link; unused rows and payload bytes are non-canonical.
 
-The verifier snapshots the bounded item table once, checks integer overflow and the 8 MiB budget,
-then freezes and verifies one artifact at a time. Links may reference the same unique frozen
+The verifier first performs an allocation-free structural walk of the fixed header, count-derived
+table, every artifact length/hash/framing row, every tagged link index and the exact total. This
+includes PMR count-derived framing. Only then does it freeze the complete bounded batch once,
+repeat the structural walk over the owned bytes, and verify one artifact at a time. Links may reference the same unique frozen
 artifact row; duplicate artifact-table rows are non-canonical. It emits only a sealed internal
 route checkpoint containing the canonical checkpoint hash, delegation binding, new ROL hash,
 exact tagged authorization/RCR state, verified PMA generation/hash, pinned Mr. X hash, batch
-sequence, cumulative batch/link counts and cumulative payload bytes. Only this compact checkpoint
-is retained between batches; prior batch tables and payload bodies are discarded after the durable
-checkpoint commit. Each link's PMA is either the exact retained generation/hash replay or a strict
+sequence, cumulative batch/link counts and cumulative payload bytes. The verifier discards only its
+transient decoded tables and payload buffers after producing the sealed plan. The consumer must
+atomically retain every exact RHB1 with its RHC1, protected context and plan hash for the complete
+bounded history horizon (at most 32 batches and 256 MiB); whole-chain garbage collection is allowed
+only after the history is terminal and no supported cold restore can require it. Each link's PMA is
+either the exact retained generation/hash replay or a strict
 successor accepted by the bounded pinned-Mr. X forward-checkpoint verifier. Authority generations
 may skip only when that exact forward-checkpoint proof verifies; an unproven jump, same-generation
 hash fork or rollback fails closed. RHB batch sequence and route-authorization sequence remain
@@ -401,7 +406,17 @@ contiguous exact `+1`, and authority generations above the RCD ceiling fail clos
 counts advance exactly, remain nonterminal and never exceed 32 batches, 512 links or 256 MiB. The next batch
 exact-binds that checkpoint and starts at its exact predecessor authorization; a batch replay is
 byte-identical, while a fork, gap, rollback or changed payload at the same sequence fails closed.
-No public generic historical verifier or ordinary verified capability is returned. Registry-online
+The sole public ingestion surface is next-only `VerifyNextBatchForCommit` over an exact sealed
+predecessor cursor. It accepts sequence `current+1` only and returns a sealed defensive
+cryptographic commit plan. The plan owns the exact RHB bytes/hash, predecessor and next RHC
+bytes/hashes/protected contexts, predecessor and next canonical ROL plus PRC/auth/RCH/RTC hash
+bindings, cumulative counters, and the exact final PMA/PMR/PRC plus tagged Owner PRA2 or Delegated
+RCH/RTC/RCA tuple. Its domain-separated `PlanHash` binds every field. It is not a durability,
+storage, publication or activation capability. Same-sequence durable replay and fork decisions
+belong to Registry before this next-only call; the replay-capable verifier is internal. Registry's
+atomic append advances only route-history authorization state and preserves independently committed
+selection, PSS and publication state byte-for-byte. No public generic historical verifier or
+ordinary verified capability is returned. Registry-online
 stale refresh can stream resumable exact batches; XNode preposition carries only the final live
 activation for the exact old LKG lineage.
 
@@ -475,7 +490,12 @@ before any artifact/crypto callback: equality with the stored last-batch hash re
 current RHC, while a different hash is a fork. Older sequences are stale. Only sequence current+1
 may advance and must bind the current RHC canonical hash. A checkpoint/hash mismatch, partial or ambiguous checkpoint persistence,
 counter gap/rollback, delegation substitution, PMA fork or changed sealed origin fails closed. On
-restart, the client resumes only from the exact committed RHC; Registry must present a batch whose
+normative cold restore, the client starts only from the exact genesis historical anchor and
+protected genesis RHC, then applies stored batches `1..N` sequentially through
+`VerifyNextBatchForCommit`, comparing every stored RHC, protected context, durable route tuple and
+plan hash. A genesis anchor cannot directly restore an arbitrary post-history RHC, including a head
+whose current PMA or PMR differs from that anchor. On warm restart, the client resumes only from the
+exact committed RHC; Registry must present a batch whose
 previous hash and sequence match it. A committed same-prior/same-sequence batch with different exact
 bytes necessarily produces a different transcript head and is a fork even if its final semantic
 authorization and counters would otherwise match.
@@ -630,7 +650,8 @@ requires RCH=320/RCA1=496. All lengths and nested PMR/PMT/PMS/PSS framing are pr
 rent/copy/crypto/callback. Each bounded artifact is read once into its final owned buffer. A History
 payload reads only the first 64 RHB bytes, derives its exact count/table/payload length, requires
 `derived + 464 == payloadLen`, then rents the full bounded frame. Transported RHC remains inert
-until local `VerifyBatch` recomputes exact matching bytes/hash.
+until local sequential `VerifyNextBatchForCommit` recomputes the exact matching batch, durable route
+state, protected context and plan hash.
 
 ROL1, RTC1 and RHC1 fields always use their protocol domain hashes
 (`ComputeRouteOriginLkgHash`, `ComputeTransitionContextHash`, and

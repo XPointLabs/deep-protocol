@@ -14,20 +14,116 @@ public sealed record ProductionMailboxRouteHistoryAuthoringLink
     public required ReadOnlyMemory<byte> CanonicalAuthorization { get; init; }
 }
 
+internal sealed class ProductionMailboxRouteHistoryArtifactBindings
+{
+    private readonly byte[] _certificateHash;
+    private readonly byte[] _authorizationHash;
+    private readonly byte[] _revocationCheckpointHash;
+    private readonly byte[] _transitionContextHash;
+
+    internal ProductionMailboxRouteHistoryArtifactBindings(
+        ProductionMailboxRouteAuthorizationKind authorizationKind,
+        ReadOnlySpan<byte> certificateHash,
+        ReadOnlySpan<byte> authorizationHash,
+        ReadOnlySpan<byte> revocationCheckpointHash,
+        ReadOnlySpan<byte> transitionContextHash)
+    {
+        AuthorizationKind = authorizationKind;
+        _certificateHash = Fixed(certificateHash, false, "PRC1 hash");
+        _authorizationHash = Fixed(authorizationHash, false, "authorization hash");
+        var delegated = authorizationKind ==
+            ProductionMailboxRouteAuthorizationKind.DelegatedRCA1;
+        if (authorizationKind is not ProductionMailboxRouteAuthorizationKind.OwnerPRA2 and
+            not ProductionMailboxRouteAuthorizationKind.DelegatedRCA1)
+            throw new FormatException("Route-history artifact binding kind is invalid.");
+        _revocationCheckpointHash = Fixed(revocationCheckpointHash, !delegated, "RCH1 hash");
+        _transitionContextHash = Fixed(transitionContextHash, !delegated, "RTC1 hash");
+    }
+
+    internal ProductionMailboxRouteAuthorizationKind AuthorizationKind { get; }
+    internal ReadOnlySpan<byte> CertificateHash => _certificateHash;
+    internal ReadOnlySpan<byte> AuthorizationHash => _authorizationHash;
+    internal ReadOnlySpan<byte> RevocationCheckpointHash => _revocationCheckpointHash;
+    internal ReadOnlySpan<byte> TransitionContextHash => _transitionContextHash;
+
+    internal static ProductionMailboxRouteHistoryArtifactBindings Initial(
+        VerifiedProductionMailboxRouteContinuityEnrollment enrollment)
+    {
+        var delegation = enrollment.Delegation;
+        if (delegation.AnchorAuthorizationKind !=
+            ProductionMailboxRouteAuthorizationKind.OwnerPRA2)
+            throw new FormatException("The route-history genesis authorization must be Owner PRA2.");
+        return new(delegation.AnchorAuthorizationKind,
+            delegation.AnchorCanonicalRouteCertificateHash.Span,
+            delegation.AnchorCanonicalRouteAuthorizationHash.Span,
+            ReadOnlySpan<byte>.Empty, ReadOnlySpan<byte>.Empty);
+    }
+
+    internal static ProductionMailboxRouteHistoryArtifactBindings FromBatch(
+        ProductionMailboxRouteHistoryBatch batch)
+    {
+        ArgumentNullException.ThrowIfNull(batch);
+        var link = batch.Links[^1];
+        var certificateHash = SHA256.HashData(
+            batch.Artifacts[link.RouteCertificateIndex].CanonicalBytes.Span);
+        var authorizationHash = SHA256.HashData(
+            batch.Artifacts[link.AuthorizationIndex].CanonicalBytes.Span);
+        if (link.AuthorizationKind ==
+            ProductionMailboxRouteAuthorizationKind.OwnerPRA2)
+            return new(link.AuthorizationKind, certificateHash, authorizationHash,
+                ReadOnlySpan<byte>.Empty, ReadOnlySpan<byte>.Empty);
+        var checkpointHash = SHA256.HashData(
+            batch.Artifacts[link.RevocationCheckpointIndex].CanonicalBytes.Span);
+        var transitionBytes =
+            batch.Artifacts[link.TransitionContextIndex].CanonicalBytes.Span;
+        var transition = ProductionMailboxRouteAuthorizationCodec
+            .DecodeTransitionContext(transitionBytes);
+        var transitionHash = ProductionMailboxRouteAuthorizationCodec
+            .ComputeTransitionContextHash(transition);
+        return new(link.AuthorizationKind, certificateHash, authorizationHash,
+            checkpointHash, transitionHash);
+    }
+
+    private static byte[] Fixed(ReadOnlySpan<byte> value, bool empty, string name)
+    {
+        if (empty)
+        {
+            if (!value.IsEmpty)
+                throw new FormatException($"Route-history {name} must be absent.");
+            return [];
+        }
+        if (value.Length != 32 || value.IndexOfAnyExcept((byte)0) < 0)
+            throw new FormatException($"Route-history {name} is invalid.");
+        return value.ToArray();
+    }
+}
+
 public sealed class VerifiedProductionMailboxRouteHistoryCursor
 {
     private readonly VerifiedProductionMailboxRouteHistoryCheckpoint _checkpoint;
 
     internal VerifiedProductionMailboxRouteHistoryCursor(
         VerifiedProductionMailboxRouteHistoryCheckpoint checkpoint,
-        VerifiedProductionMailboxRouteContinuityEnrollment enrollment)
+        VerifiedProductionMailboxRouteContinuityEnrollment enrollment,
+        ProductionMailboxRouteHistoryArtifactBindings artifactBindings)
     {
         _checkpoint = checkpoint ?? throw new ArgumentNullException(nameof(checkpoint));
         Enrollment = enrollment ?? throw new ArgumentNullException(nameof(enrollment));
+        ArtifactBindings = artifactBindings ??
+            throw new ArgumentNullException(nameof(artifactBindings));
+    }
+
+    internal VerifiedProductionMailboxRouteHistoryCursor(
+        VerifiedProductionMailboxRouteHistoryCheckpoint checkpoint,
+        VerifiedProductionMailboxRouteContinuityEnrollment enrollment)
+        : this(checkpoint, enrollment,
+            ProductionMailboxRouteHistoryArtifactBindings.Initial(enrollment))
+    {
     }
 
     internal VerifiedProductionMailboxRouteHistoryCheckpoint Checkpoint => _checkpoint;
     internal VerifiedProductionMailboxRouteContinuityEnrollment Enrollment { get; }
+    internal ProductionMailboxRouteHistoryArtifactBindings ArtifactBindings { get; }
     internal byte[] CanonicalCurrentRouteOriginLkg()
     {
         var value = _checkpoint.TrustedCheckpoint;
@@ -59,6 +155,235 @@ public sealed class VerifiedProductionMailboxRouteHistoryCursor
         ProductionMailboxRouteHistoryProtectedRestoreContext.From(this);
 }
 
+/// <summary>
+/// Defensive data-only authorization substate for one exact route-history CAS side. It is not a
+/// storage, durability, publication, or activation capability.
+/// </summary>
+public sealed class ProductionMailboxRouteHistoryDurableRouteState
+{
+    private readonly byte[] _canonicalRol;
+    private readonly byte[] _rolHash;
+    private readonly byte[] _network;
+    private readonly byte[] _route;
+    private readonly byte[] _delegationHash;
+    private readonly byte[] _acceptanceHash;
+    private readonly byte[] _authorizationHash;
+    private readonly byte[] _ownerRevocationHead;
+    private readonly byte[] _authorityHash;
+    private readonly byte[] _revocationHead;
+    private readonly byte[] _revocationSnapshotHash;
+    private readonly byte[] _certificateHash;
+    private readonly byte[] _revocationCheckpointHash;
+    private readonly byte[] _transitionContextHash;
+
+    internal ProductionMailboxRouteHistoryDurableRouteState(
+        VerifiedProductionMailboxRouteHistoryCursor cursor)
+    {
+        var checkpoint = cursor.Checkpoint.TrustedCheckpoint;
+        var canonicalRol = cursor.CanonicalCurrentRouteOriginLkg();
+        var rol = ProductionMailboxRouteContinuityCodec.DecodeRouteOriginLkg(canonicalRol);
+        var computedHash = ProductionMailboxRouteContinuityCodec.ComputeRouteOriginLkgHash(rol);
+        if (!CryptographicOperations.FixedTimeEquals(computedHash,
+                checkpoint.CurrentRouteOriginLkgHash.Span) ||
+            rol.AuthorizationKind != checkpoint.CurrentAuthorizationKind ||
+            rol.AuthorizationKind != cursor.ArtifactBindings.AuthorizationKind ||
+            !CryptographicOperations.FixedTimeEquals(rol.CanonicalAuthorizationHash.Span,
+                checkpoint.CurrentCanonicalAuthorizationHash.Span) ||
+            !CryptographicOperations.FixedTimeEquals(rol.CanonicalAuthorizationHash.Span,
+                cursor.ArtifactBindings.AuthorizationHash) ||
+            rol.AuthorizationSequence != checkpoint.CurrentAuthorizationSequence)
+            throw new FormatException("Route-history durable ROL1 state is inconsistent.");
+        _canonicalRol = canonicalRol;
+        _rolHash = computedHash;
+        _network = rol.NetworkId.ToArray();
+        _route = rol.RouteDomainHash.ToArray();
+        _delegationHash = rol.CanonicalDelegationHash.ToArray();
+        _acceptanceHash = rol.CanonicalDelegationAcceptanceHash.ToArray();
+        AuthorizationKind = rol.AuthorizationKind;
+        _authorizationHash = rol.CanonicalAuthorizationHash.ToArray();
+        AuthorizationSequence = rol.AuthorizationSequence;
+        RouteVerifiedAtUnixSeconds = rol.RouteVerifiedAtUnixSeconds;
+        LocalCommitGeneration = rol.LocalCommitGeneration;
+        OwnerRevocationGeneration = rol.OwnerRevocationGeneration;
+        _ownerRevocationHead = rol.OwnerRevocationHeadHash.ToArray();
+        AuthorityGeneration = checkpoint.CurrentAuthorityGeneration;
+        _authorityHash = checkpoint.CurrentCanonicalAuthorityHash.ToArray();
+        RevocationGeneration = checkpoint.CurrentRevocationGeneration;
+        _revocationHead = checkpoint.CurrentRevocationHeadHash.ToArray();
+        _revocationSnapshotHash = checkpoint.CurrentRevocationSnapshotHash.ToArray();
+        _certificateHash = cursor.ArtifactBindings.CertificateHash.ToArray();
+        _revocationCheckpointHash =
+            cursor.ArtifactBindings.RevocationCheckpointHash.ToArray();
+        _transitionContextHash = cursor.ArtifactBindings.TransitionContextHash.ToArray();
+    }
+
+    public ReadOnlyMemory<byte> CanonicalRouteOriginLkg => _canonicalRol.ToArray();
+    public ReadOnlyMemory<byte> CanonicalRouteOriginLkgHash => _rolHash.ToArray();
+    public ReadOnlyMemory<byte> NetworkId => _network.ToArray();
+    public ReadOnlyMemory<byte> RouteDomainHash => _route.ToArray();
+    public ReadOnlyMemory<byte> CanonicalDelegationHash => _delegationHash.ToArray();
+    public ReadOnlyMemory<byte> CanonicalDelegationAcceptanceHash => _acceptanceHash.ToArray();
+    public ProductionMailboxRouteAuthorizationKind AuthorizationKind { get; }
+    public ReadOnlyMemory<byte> CanonicalAuthorizationHash => _authorizationHash.ToArray();
+    public ulong AuthorizationSequence { get; }
+    public ulong RouteVerifiedAtUnixSeconds { get; }
+    public ulong LocalCommitGeneration { get; }
+    public ulong OwnerRevocationGeneration { get; }
+    public ReadOnlyMemory<byte> OwnerRevocationHeadHash => _ownerRevocationHead.ToArray();
+    public ulong AuthorityGeneration { get; }
+    public ReadOnlyMemory<byte> CanonicalAuthorityHash => _authorityHash.ToArray();
+    public ulong RevocationGeneration { get; }
+    public ReadOnlyMemory<byte> RevocationHeadHash => _revocationHead.ToArray();
+    public ReadOnlyMemory<byte> RevocationSnapshotHash => _revocationSnapshotHash.ToArray();
+    public ReadOnlyMemory<byte> CanonicalRouteCertificateHash => _certificateHash.ToArray();
+    public ReadOnlyMemory<byte> CanonicalOwnerAdvertisementHash =>
+        AuthorizationKind == ProductionMailboxRouteAuthorizationKind.OwnerPRA2
+            ? _authorizationHash.ToArray() : ReadOnlyMemory<byte>.Empty;
+    public ReadOnlyMemory<byte> CanonicalRevocationCheckpointHash =>
+        _revocationCheckpointHash.ToArray();
+    public ReadOnlyMemory<byte> CanonicalTransitionContextHash =>
+        _transitionContextHash.ToArray();
+    public ReadOnlyMemory<byte> CanonicalContinuityActivationHash =>
+        AuthorizationKind == ProductionMailboxRouteAuthorizationKind.DelegatedRCA1
+            ? _authorizationHash.ToArray() : ReadOnlyMemory<byte>.Empty;
+}
+
+/// <summary>Defensive cumulative RHB1 state for one exact side of a caller-owned CAS.</summary>
+public sealed class ProductionMailboxRouteHistoryCumulativeState
+{
+    private readonly byte[] _transcriptHead;
+    private readonly byte[] _lastBatchHash;
+
+    internal ProductionMailboxRouteHistoryCumulativeState(
+        VerifiedProductionMailboxRouteHistoryCursor cursor)
+    {
+        var checkpoint = cursor.Checkpoint.TrustedCheckpoint;
+        LastCommittedBatchSequence = checkpoint.LastCommittedBatchSequence;
+        CumulativeCommittedBatchCount = checkpoint.CumulativeCommittedBatchCount;
+        CumulativeVerifiedRouteLinkCount = checkpoint.CumulativeVerifiedRouteLinkCount;
+        CumulativeCanonicalPayloadBytes = checkpoint.CumulativeCanonicalPayloadBytes;
+        _transcriptHead = checkpoint.HistoryTranscriptHead.ToArray();
+        _lastBatchHash = checkpoint.LastCommittedBatchHash.ToArray();
+    }
+
+    public ulong LastCommittedBatchSequence { get; }
+    public ulong CumulativeCommittedBatchCount { get; }
+    public ulong CumulativeVerifiedRouteLinkCount { get; }
+    public ulong CumulativeCanonicalPayloadBytes { get; }
+    public ReadOnlyMemory<byte> HistoryTranscriptHead => _transcriptHead.ToArray();
+    public ReadOnlyMemory<byte> LastCommittedBatchHash => _lastBatchHash.ToArray();
+}
+
+/// <summary>
+/// Exact verified artifact tuple selected by the final link of one canonical RHB1.
+/// </summary>
+public sealed class ProductionMailboxRouteHistoryFinalArtifacts
+{
+    private readonly byte[] _authority;
+    private readonly byte[] _revocations;
+    private readonly byte[] _certificate;
+    private readonly byte[] _ownerAdvertisement;
+    private readonly byte[] _revocationCheckpoint;
+    private readonly byte[] _transitionContext;
+    private readonly byte[] _continuityActivation;
+    private readonly byte[] _authorityHash;
+    private readonly byte[] _revocationsHash;
+    private readonly byte[] _certificateHash;
+    private readonly byte[] _ownerAdvertisementHash;
+    private readonly byte[] _revocationCheckpointHash;
+    private readonly byte[] _transitionContextSha256;
+    private readonly byte[] _transitionContextHash;
+    private readonly byte[] _continuityActivationHash;
+
+    internal ProductionMailboxRouteHistoryFinalArtifacts(
+        ProductionMailboxRouteHistoryBatch batch,
+        ProductionMailboxRouteHistoryDurableRouteState nextState)
+    {
+        var link = batch.Links[^1];
+        AuthorizationKind = link.AuthorizationKind;
+        _authority = batch.Artifacts[link.AuthorityIndex].CanonicalBytes.ToArray();
+        _revocations = batch.Artifacts[link.RevocationsIndex].CanonicalBytes.ToArray();
+        _certificate = batch.Artifacts[link.RouteCertificateIndex].CanonicalBytes.ToArray();
+        _authorityHash = SHA256.HashData(_authority);
+        _revocationsHash = SHA256.HashData(_revocations);
+        _certificateHash = SHA256.HashData(_certificate);
+        if (AuthorizationKind == ProductionMailboxRouteAuthorizationKind.OwnerPRA2)
+        {
+            _ownerAdvertisement =
+                batch.Artifacts[link.AuthorizationIndex].CanonicalBytes.ToArray();
+            _ownerAdvertisementHash = SHA256.HashData(_ownerAdvertisement);
+            _revocationCheckpoint = [];
+            _transitionContext = [];
+            _continuityActivation = [];
+            _revocationCheckpointHash = [];
+            _transitionContextSha256 = [];
+            _transitionContextHash = [];
+            _continuityActivationHash = [];
+        }
+        else
+        {
+            _ownerAdvertisement = [];
+            _ownerAdvertisementHash = [];
+            _revocationCheckpoint =
+                batch.Artifacts[link.RevocationCheckpointIndex].CanonicalBytes.ToArray();
+            _transitionContext =
+                batch.Artifacts[link.TransitionContextIndex].CanonicalBytes.ToArray();
+            _continuityActivation =
+                batch.Artifacts[link.AuthorizationIndex].CanonicalBytes.ToArray();
+            _revocationCheckpointHash = SHA256.HashData(_revocationCheckpoint);
+            _transitionContextSha256 = SHA256.HashData(_transitionContext);
+            var rtc = ProductionMailboxRouteAuthorizationCodec.DecodeTransitionContext(
+                _transitionContext);
+            _transitionContextHash =
+                ProductionMailboxRouteAuthorizationCodec.ComputeTransitionContextHash(rtc);
+            _continuityActivationHash = SHA256.HashData(_continuityActivation);
+        }
+        if (!CryptographicOperations.FixedTimeEquals(_authorityHash,
+                nextState.CanonicalAuthorityHash.Span) ||
+            !CryptographicOperations.FixedTimeEquals(_revocationsHash,
+                nextState.RevocationSnapshotHash.Span) ||
+            !CryptographicOperations.FixedTimeEquals(_certificateHash,
+                nextState.CanonicalRouteCertificateHash.Span) ||
+            !CryptographicOperations.FixedTimeEquals(
+                AuthorizationKind == ProductionMailboxRouteAuthorizationKind.OwnerPRA2
+                    ? _ownerAdvertisementHash : _continuityActivationHash,
+                nextState.CanonicalAuthorizationHash.Span) ||
+            !OptionalEqual(_revocationCheckpointHash,
+                nextState.CanonicalRevocationCheckpointHash.Span) ||
+            !OptionalEqual(_transitionContextHash,
+                nextState.CanonicalTransitionContextHash.Span))
+            throw new FormatException("RHB1 final artifacts differ from the next durable state.");
+    }
+
+    public ProductionMailboxRouteAuthorizationKind AuthorizationKind { get; }
+    public ReadOnlyMemory<byte> CanonicalAuthority => _authority.ToArray();
+    public ReadOnlyMemory<byte> CanonicalAuthorityHash => _authorityHash.ToArray();
+    public ReadOnlyMemory<byte> CanonicalRevocations => _revocations.ToArray();
+    public ReadOnlyMemory<byte> CanonicalRevocationsHash => _revocationsHash.ToArray();
+    public ReadOnlyMemory<byte> CanonicalRouteCertificate => _certificate.ToArray();
+    public ReadOnlyMemory<byte> CanonicalRouteCertificateHash => _certificateHash.ToArray();
+    public ReadOnlyMemory<byte> CanonicalOwnerAdvertisement => _ownerAdvertisement.ToArray();
+    public ReadOnlyMemory<byte> CanonicalOwnerAdvertisementHash =>
+        _ownerAdvertisementHash.ToArray();
+    public ReadOnlyMemory<byte> CanonicalRevocationCheckpoint =>
+        _revocationCheckpoint.ToArray();
+    public ReadOnlyMemory<byte> CanonicalRevocationCheckpointHash =>
+        _revocationCheckpointHash.ToArray();
+    public ReadOnlyMemory<byte> CanonicalTransitionContext => _transitionContext.ToArray();
+    public ReadOnlyMemory<byte> CanonicalTransitionContextSha256 =>
+        _transitionContextSha256.ToArray();
+    public ReadOnlyMemory<byte> CanonicalTransitionContextHash =>
+        _transitionContextHash.ToArray();
+    public ReadOnlyMemory<byte> CanonicalContinuityActivation =>
+        _continuityActivation.ToArray();
+    public ReadOnlyMemory<byte> CanonicalContinuityActivationHash =>
+        _continuityActivationHash.ToArray();
+
+    private static bool OptionalEqual(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right) =>
+        left.Length == right.Length &&
+        (left.IsEmpty || CryptographicOperations.FixedTimeEquals(left, right));
+}
+
 public sealed class ProductionMailboxRouteHistoryBatchCommitPlan
 {
     private readonly byte[] _canonicalBatch;
@@ -66,13 +391,18 @@ public sealed class ProductionMailboxRouteHistoryBatchCommitPlan
     private readonly byte[] _expectedCurrentCheckpoint;
     private readonly byte[] _expectedCurrentCheckpointHash;
     private readonly byte[] _expectedCurrentRouteOriginLkgHash;
+    private readonly byte[] _planHash;
+    private readonly ProductionMailboxRouteHistoryProtectedRestoreContext _currentContext;
+    private readonly ProductionMailboxRouteHistoryProtectedRestoreContext _nextContext;
 
     internal ProductionMailboxRouteHistoryBatchCommitPlan(
-        ReadOnlySpan<byte> canonicalBatch,
+        byte[] canonicalBatch,
+        ProductionMailboxRouteHistoryBatch decodedBatch,
         VerifiedProductionMailboxRouteHistoryCursor currentCursor,
         VerifiedProductionMailboxRouteHistoryCursor nextCursor)
     {
-        _canonicalBatch = canonicalBatch.ToArray();
+        _canonicalBatch = canonicalBatch ??
+            throw new ArgumentNullException(nameof(canonicalBatch));
         _canonicalBatchHash = SHA256.HashData(_canonicalBatch);
         _expectedCurrentCheckpoint = currentCursor.CanonicalCheckpoint.ToArray();
         _expectedCurrentCheckpointHash = currentCursor.CanonicalCheckpointHash.ToArray();
@@ -80,6 +410,15 @@ public sealed class ProductionMailboxRouteHistoryBatchCommitPlan
             .CurrentRouteOriginLkgHash.ToArray();
         ExpectedCurrentBatchSequence = currentCursor.LastCommittedBatchSequence;
         NextCursor = nextCursor ?? throw new ArgumentNullException(nameof(nextCursor));
+        CurrentDurableRouteState = new(currentCursor);
+        NextDurableRouteState = new(nextCursor);
+        CurrentCumulativeState = new(currentCursor);
+        NextCumulativeState = new(nextCursor);
+        FinalArtifacts = new(decodedBatch ??
+            throw new ArgumentNullException(nameof(decodedBatch)), NextDurableRouteState);
+        _currentContext = currentCursor.ToProtectedRestoreContext();
+        _nextContext = nextCursor.ToProtectedRestoreContext();
+        _planHash = ComputePlanHash();
     }
 
     public ReadOnlyMemory<byte> CanonicalBatch => _canonicalBatch.ToArray();
@@ -88,12 +427,130 @@ public sealed class ProductionMailboxRouteHistoryBatchCommitPlan
     public ReadOnlyMemory<byte> ExpectedCurrentCheckpointHash => _expectedCurrentCheckpointHash.ToArray();
     public ReadOnlyMemory<byte> ExpectedCurrentRouteOriginLkgHash =>
         _expectedCurrentRouteOriginLkgHash.ToArray();
+    public ReadOnlyMemory<byte> ExpectedCurrentRouteOriginLkg =>
+        CurrentDurableRouteState.CanonicalRouteOriginLkg;
     public ulong ExpectedCurrentBatchSequence { get; }
     public VerifiedProductionMailboxRouteHistoryCursor NextCursor { get; }
+    public ProductionMailboxRouteHistoryDurableRouteState CurrentDurableRouteState { get; }
+    public ProductionMailboxRouteHistoryDurableRouteState NextDurableRouteState { get; }
+    public ProductionMailboxRouteHistoryCumulativeState CurrentCumulativeState { get; }
+    public ProductionMailboxRouteHistoryCumulativeState NextCumulativeState { get; }
+    public ProductionMailboxRouteHistoryFinalArtifacts FinalArtifacts { get; }
+    public ReadOnlyMemory<byte> PlanHash => _planHash.ToArray();
+
+    public ProductionMailboxRouteHistoryProtectedRestoreContext
+        ToExpectedCurrentProtectedRestoreContext() => Clone(_currentContext);
 
     /// <summary>Exports the exact post-commit durable restore tuple.</summary>
     public ProductionMailboxRouteHistoryProtectedRestoreContext ToProtectedRestoreContext() =>
-        NextCursor.ToProtectedRestoreContext();
+        Clone(_nextContext);
+
+    private byte[] ComputePlanHash()
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        hash.AppendData(
+            "Deep/production-mailbox/route-history-batch-commit-plan/v1"u8);
+        AppendBlob(hash, _canonicalBatch);
+        AppendBlob(hash, _expectedCurrentCheckpoint);
+        AppendContext(hash, _currentContext);
+        AppendRouteState(hash, CurrentDurableRouteState);
+        AppendCumulativeState(hash, CurrentCumulativeState);
+        AppendBlob(hash, NextCursor.CanonicalCheckpoint.Span);
+        AppendContext(hash, _nextContext);
+        AppendRouteState(hash, NextDurableRouteState);
+        AppendCumulativeState(hash, NextCumulativeState);
+        hash.AppendData([(byte)FinalArtifacts.AuthorizationKind]);
+        AppendBlob(hash, FinalArtifacts.CanonicalAuthority.Span);
+        AppendBlob(hash, FinalArtifacts.CanonicalRevocations.Span);
+        AppendBlob(hash, FinalArtifacts.CanonicalRouteCertificate.Span);
+        AppendBlob(hash, FinalArtifacts.CanonicalOwnerAdvertisement.Span);
+        AppendBlob(hash, FinalArtifacts.CanonicalRevocationCheckpoint.Span);
+        AppendBlob(hash, FinalArtifacts.CanonicalTransitionContext.Span);
+        AppendBlob(hash, FinalArtifacts.CanonicalContinuityActivation.Span);
+        AppendBlob(hash, FinalArtifacts.CanonicalTransitionContextHash.Span);
+        return hash.GetHashAndReset();
+    }
+
+    private static void AppendContext(IncrementalHash hash,
+        ProductionMailboxRouteHistoryProtectedRestoreContext value)
+    {
+        AppendBlob(hash, value.CanonicalCheckpoint.Span);
+        AppendBlob(hash, value.CanonicalCheckpointHash.Span);
+        AppendU64(hash, value.LastCommittedBatchSequence);
+        AppendBlob(hash, value.LastCommittedBatchHash.Span);
+        AppendBlob(hash, value.CurrentRouteOriginLkgHash.Span);
+        AppendBlob(hash, value.EnrollmentCanonicalDelegationHash.Span);
+        AppendBlob(hash, value.EnrollmentCanonicalAcceptanceHash.Span);
+        AppendBlob(hash, value.NetworkId.Span);
+        AppendBlob(hash, value.RouteDomainHash.Span);
+        AppendBlob(hash, value.DelegationHistoryBinding.Span);
+        AppendBlob(hash, value.PinnedMrXPublicKeySha256.Span);
+        AppendU64(hash, value.CurrentAuthorityGeneration);
+        AppendBlob(hash, value.CurrentCanonicalAuthorityHash.Span);
+        AppendU64(hash, value.CurrentRevocationGeneration);
+        AppendBlob(hash, value.CurrentRevocationHeadHash.Span);
+        AppendBlob(hash, value.CurrentRevocationSnapshotHash.Span);
+    }
+
+    private static void AppendRouteState(IncrementalHash hash,
+        ProductionMailboxRouteHistoryDurableRouteState value)
+    {
+        AppendBlob(hash, value.CanonicalRouteOriginLkg.Span);
+        AppendBlob(hash, value.CanonicalRouteOriginLkgHash.Span);
+        hash.AppendData([(byte)value.AuthorizationKind]);
+        AppendBlob(hash, value.CanonicalAuthorizationHash.Span);
+        AppendU64(hash, value.AuthorizationSequence);
+        AppendU64(hash, value.RouteVerifiedAtUnixSeconds);
+        AppendU64(hash, value.LocalCommitGeneration);
+        AppendU64(hash, value.OwnerRevocationGeneration);
+        AppendBlob(hash, value.OwnerRevocationHeadHash.Span);
+        AppendU64(hash, value.AuthorityGeneration);
+        AppendBlob(hash, value.CanonicalAuthorityHash.Span);
+        AppendU64(hash, value.RevocationGeneration);
+        AppendBlob(hash, value.RevocationHeadHash.Span);
+        AppendBlob(hash, value.RevocationSnapshotHash.Span);
+        AppendBlob(hash, value.CanonicalRouteCertificateHash.Span);
+        AppendBlob(hash, value.CanonicalRevocationCheckpointHash.Span);
+        AppendBlob(hash, value.CanonicalTransitionContextHash.Span);
+    }
+
+    private static void AppendCumulativeState(IncrementalHash hash,
+        ProductionMailboxRouteHistoryCumulativeState value)
+    {
+        AppendU64(hash, value.LastCommittedBatchSequence);
+        AppendU64(hash, value.CumulativeCommittedBatchCount);
+        AppendU64(hash, value.CumulativeVerifiedRouteLinkCount);
+        AppendU64(hash, value.CumulativeCanonicalPayloadBytes);
+        AppendBlob(hash, value.HistoryTranscriptHead.Span);
+        AppendBlob(hash, value.LastCommittedBatchHash.Span);
+    }
+
+    private static void AppendBlob(IncrementalHash hash, ReadOnlySpan<byte> value)
+    {
+        Span<byte> length = stackalloc byte[4];
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(
+            length, checked((uint)value.Length));
+        hash.AppendData(length);
+        hash.AppendData(value);
+    }
+
+    private static void AppendU64(IncrementalHash hash, ulong value)
+    {
+        Span<byte> encoded = stackalloc byte[8];
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt64BigEndian(encoded, value);
+        hash.AppendData(encoded);
+    }
+
+    private static ProductionMailboxRouteHistoryProtectedRestoreContext Clone(
+        ProductionMailboxRouteHistoryProtectedRestoreContext value) => new(
+        value.CanonicalCheckpoint, value.CanonicalCheckpointHash,
+        value.LastCommittedBatchSequence, value.LastCommittedBatchHash,
+        value.CurrentRouteOriginLkgHash, value.EnrollmentCanonicalDelegationHash,
+        value.EnrollmentCanonicalAcceptanceHash, value.NetworkId, value.RouteDomainHash,
+        value.DelegationHistoryBinding, value.PinnedMrXPublicKeySha256,
+        value.CurrentAuthorityGeneration, value.CurrentCanonicalAuthorityHash,
+        value.CurrentRevocationGeneration, value.CurrentRevocationHeadHash,
+        value.CurrentRevocationSnapshotHash);
 }
 
 /// <summary>
@@ -355,19 +812,32 @@ public static class ProductionMailboxRouteHistoryAuthoring
         var frozenLinks = Freeze(links);
         var batch = BuildBatch(current, frozenLinks);
         var canonical = ProductionMailboxRouteHistoryCodec.Encode(batch);
-        var next = VerifyCore(current, canonical);
-        return new(canonical, current, next);
+        var verified = VerifyCore(current, canonical, requireNext: true);
+        return new(verified.Advance.CanonicalBatch,
+            verified.Advance.Batch!, current, verified.Cursor);
     }
 
-    public static VerifiedProductionMailboxRouteHistoryCursor VerifyBatch(
+    /// <summary>
+    /// Verifies one exact next canonical RHB1 against a sealed predecessor and returns the complete
+    /// defensive cryptographic data required by a caller-owned atomic history/route-state CAS.
+    /// This method does not attest storage, durability, replay handling, or publication.
+    /// </summary>
+    public static ProductionMailboxRouteHistoryBatchCommitPlan VerifyNextBatchForCommit(
         VerifiedProductionMailboxRouteHistoryCursor current,
         ReadOnlySpan<byte> canonicalBatch)
     {
         ArgumentNullException.ThrowIfNull(current);
-        if (canonicalBatch.Length < ProductionMailboxRouteHistoryConstants.HeaderLength ||
-            canonicalBatch.Length > ProductionMailboxRouteHistoryConstants.MaximumEncodedBytes)
-            throw new FormatException("RHB1 length is outside its strict bound.");
-        return VerifyCore(current, canonicalBatch);
+        var verified = VerifyCore(current, canonicalBatch, requireNext: true);
+        return new(verified.Advance.CanonicalBatch,
+            verified.Advance.Batch!, current, verified.Cursor);
+    }
+
+    internal static VerifiedProductionMailboxRouteHistoryCursor VerifyBatch(
+        VerifiedProductionMailboxRouteHistoryCursor current,
+        ReadOnlySpan<byte> canonicalBatch)
+    {
+        ArgumentNullException.ThrowIfNull(current);
+        return VerifyCore(current, canonicalBatch, requireNext: false).Cursor;
     }
 
     /// <summary>
@@ -380,8 +850,20 @@ public static class ProductionMailboxRouteHistoryAuthoring
         ProductionMailboxRouteHistoryProtectedRestoreContext protectedState)
     {
         ArgumentNullException.ThrowIfNull(anchor);
-        return RestoreCursor(canonicalCheckpoint, anchor.EnrollmentState.Enrollment,
+        var restored = RestoreCursor(canonicalCheckpoint, anchor.EnrollmentState.Enrollment,
             anchor.AnchorAuthority, anchor.AnchorRevocations, protectedState);
+        var checkpoint = restored.Checkpoint.TrustedCheckpoint;
+        var delegation = restored.Enrollment.Delegation;
+        if (checkpoint.LastCommittedBatchSequence != 0 ||
+            checkpoint.CurrentAuthorizationKind != delegation.AnchorAuthorizationKind ||
+            checkpoint.CurrentAuthorizationSequence !=
+                delegation.AnchorRouteAuthorizationSequence ||
+            !CryptographicOperations.FixedTimeEquals(
+                checkpoint.CurrentCanonicalAuthorizationHash.Span,
+                delegation.AnchorCanonicalRouteAuthorizationHash.Span))
+            throw new FormatException(
+                "Public RHC1 restore accepts only the exact genesis checkpoint; replay later batches sequentially.");
+        return restored;
     }
 
     internal static VerifiedProductionMailboxRouteHistoryCursor RestoreCursor(
@@ -441,16 +923,25 @@ public static class ProductionMailboxRouteHistoryAuthoring
         return new(new VerifiedProductionMailboxRouteHistoryCheckpoint(checkpoint, frozen), enrollment);
     }
 
-    private static VerifiedProductionMailboxRouteHistoryCursor VerifyCore(
+    private static (VerifiedProductionMailboxRouteHistoryCursor Cursor,
+        ProductionMailboxRouteHistoryAdvanceResult Advance) VerifyCore(
         VerifiedProductionMailboxRouteHistoryCursor current,
-        ReadOnlySpan<byte> canonicalBatch)
+        ReadOnlySpan<byte> canonicalBatch,
+        bool requireNext)
     {
         var old = current.Checkpoint.TrustedCheckpoint;
         var verifier = new ProductionMailboxRouteHistoryCryptographicLinkVerifier(
             old.NetworkId, old.RouteDomainHash, old.PinnedMrXPublicKeySha256, current.Enrollment);
-        var next = ProductionMailboxRouteHistoryVerifier.Advance(
-            canonicalBatch, current.Checkpoint, verifier);
-        return ReferenceEquals(next, current.Checkpoint) ? current : new(next, current.Enrollment);
+        var advance = requireNext
+            ? ProductionMailboxRouteHistoryVerifier.AdvanceNextForCommit(
+                canonicalBatch, current.Checkpoint, verifier)
+            : ProductionMailboxRouteHistoryVerifier.AdvanceWithReplay(
+                canonicalBatch, current.Checkpoint, verifier);
+        if (!advance.Advanced)
+            return (current, advance);
+        var bindings = ProductionMailboxRouteHistoryArtifactBindings.FromBatch(
+            advance.Batch!);
+        return (new(advance.Checkpoint, current.Enrollment, bindings), advance);
     }
 
     private static void VerifyCheckpointClosure(

@@ -48,6 +48,26 @@ internal interface IProductionMailboxRouteHistoryLinkVerifier
         ProductionMailboxRouteHistoryLinkVerificationState predecessor);
 }
 
+internal sealed class ProductionMailboxRouteHistoryAdvanceResult
+{
+    internal ProductionMailboxRouteHistoryAdvanceResult(
+        VerifiedProductionMailboxRouteHistoryCheckpoint checkpoint,
+        ProductionMailboxRouteHistoryBatch? batch,
+        byte[] canonicalBatch,
+        bool advanced)
+    {
+        Checkpoint = checkpoint;
+        Batch = batch;
+        CanonicalBatch = canonicalBatch;
+        Advanced = advanced;
+    }
+
+    internal VerifiedProductionMailboxRouteHistoryCheckpoint Checkpoint { get; }
+    internal ProductionMailboxRouteHistoryBatch? Batch { get; }
+    internal byte[] CanonicalBatch { get; }
+    internal bool Advanced { get; }
+}
+
 /// <summary>Production internal verifier for one exact historical route link.</summary>
 internal sealed class ProductionMailboxRouteHistoryCryptographicLinkVerifier(
     ReadOnlyMemory<byte> expectedNetworkId,
@@ -251,25 +271,50 @@ internal static class ProductionMailboxRouteHistoryVerifier
         ReadOnlySpan<byte> encodedBatch,
         VerifiedProductionMailboxRouteHistoryCheckpoint current,
         IProductionMailboxRouteHistoryLinkVerifier linkVerifier)
+        => AdvanceCore(encodedBatch, current, linkVerifier, allowReplay: true).Checkpoint;
+
+    internal static ProductionMailboxRouteHistoryAdvanceResult AdvanceWithReplay(
+        ReadOnlySpan<byte> encodedBatch,
+        VerifiedProductionMailboxRouteHistoryCheckpoint current,
+        IProductionMailboxRouteHistoryLinkVerifier linkVerifier)
+        => AdvanceCore(encodedBatch, current, linkVerifier, allowReplay: true);
+
+    internal static ProductionMailboxRouteHistoryAdvanceResult AdvanceNextForCommit(
+        ReadOnlySpan<byte> encodedBatch,
+        VerifiedProductionMailboxRouteHistoryCheckpoint current,
+        IProductionMailboxRouteHistoryLinkVerifier linkVerifier)
+        => AdvanceCore(encodedBatch, current, linkVerifier, allowReplay: false,
+            preSnapshotTestHook: null);
+
+    internal static ProductionMailboxRouteHistoryAdvanceResult AdvanceNextForCommit(
+        ReadOnlySpan<byte> encodedBatch,
+        VerifiedProductionMailboxRouteHistoryCheckpoint current,
+        IProductionMailboxRouteHistoryLinkVerifier linkVerifier,
+        Action preSnapshotTestHook)
+        => AdvanceCore(encodedBatch, current, linkVerifier, allowReplay: false,
+            preSnapshotTestHook ?? throw new ArgumentNullException(nameof(preSnapshotTestHook)));
+
+    private static ProductionMailboxRouteHistoryAdvanceResult AdvanceCore(
+        ReadOnlySpan<byte> encodedBatch,
+        VerifiedProductionMailboxRouteHistoryCheckpoint current,
+        IProductionMailboxRouteHistoryLinkVerifier linkVerifier,
+        bool allowReplay,
+        Action? preSnapshotTestHook = null)
     {
         ArgumentNullException.ThrowIfNull(current);
         ArgumentNullException.ThrowIfNull(linkVerifier);
-        if (encodedBatch.Length < ProductionMailboxRouteHistoryConstants.HeaderLength ||
-            encodedBatch.Length > ProductionMailboxRouteHistoryConstants.MaximumEncodedBytes)
-            throw new FormatException("RHB1 length is outside its strict bound.");
-        var frozenBatch = encodedBatch.ToArray();
-        if (!frozenBatch.AsSpan(0, 4).SequenceEqual("RHB1"u8) ||
-            frozenBatch[4] != ProductionMailboxRouteHistoryConstants.Version ||
-            frozenBatch.AsSpan(5, 3).IndexOfAnyExcept((byte)0) >= 0)
-            throw new FormatException("RHB1 header is invalid.");
-        var sequence = BinaryPrimitives.ReadUInt64BigEndian(frozenBatch.AsSpan(8, 8));
+        var preflight = ProductionMailboxRouteHistoryCodec.PreflightHeader(encodedBatch);
+        var sequence = preflight.BatchSequence;
         var old = current.TrustedCheckpoint;
         if (sequence == old.LastCommittedBatchSequence)
         {
-            var replayHash = SHA256.HashData(frozenBatch);
+            if (!allowReplay)
+                throw new FormatException(
+                    "RHB1 commit-plan verification requires the exact next sequence.");
+            var replayHash = SHA256.HashData(encodedBatch);
             if (!CryptographicOperations.FixedTimeEquals(replayHash, old.LastCommittedBatchHash.Span))
                 throw new FormatException("RHB1 same-sequence replay conflicts with the durable batch.");
-            return current;
+            return new(current, null, [], advanced: false);
         }
         if (old.OwnerRevocationGeneration == 1 &&
             old.OwnerRevocationHeadHash.Length == 32 &&
@@ -280,17 +325,46 @@ internal static class ProductionMailboxRouteHistoryVerifier
             sequence != old.LastCommittedBatchSequence + 1)
             throw new FormatException("RHB1 batch sequence is stale or has a gap.");
         var currentHash = current.CanonicalHash.Span;
-        if (!CryptographicOperations.FixedTimeEquals(frozenBatch.AsSpan(16, 32), currentHash))
+        if (!CryptographicOperations.FixedTimeEquals(encodedBatch.Slice(16, 32), currentHash))
             throw new FormatException("RHB1 does not bind the exact current RHC1.");
-        var batch = ProductionMailboxRouteHistoryCodec.Decode(frozenBatch);
-        var payloadBytes = checked((ulong)batch.Artifacts.Sum(static item => item.CanonicalBytes.Length));
         if (old.CumulativeCommittedBatchCount >= ProductionMailboxRouteHistoryConstants.MaximumBatches ||
             old.CumulativeVerifiedRouteLinkCount >
-                ProductionMailboxRouteHistoryConstants.MaximumCumulativeLinks - (ulong)batch.Links.Count ||
+                (ulong)ProductionMailboxRouteHistoryConstants.MaximumCumulativeLinks -
+                preflight.LinkCount ||
             old.CumulativeCanonicalPayloadBytes >
-                ProductionMailboxRouteHistoryConstants.MaximumCumulativePayloadBytes - payloadBytes ||
-            old.CurrentLocalCommitGeneration > ulong.MaxValue - (ulong)batch.Links.Count)
+                ProductionMailboxRouteHistoryConstants.MaximumCumulativePayloadBytes -
+                checked((ulong)preflight.PayloadBytes) ||
+            old.CurrentLocalCommitGeneration > ulong.MaxValue - preflight.LinkCount)
             throw new FormatException("RHB1 cumulative state is terminal or exceeds its bound.");
+        ProductionMailboxRouteHistoryCodec.PreflightCanonical(
+            encodedBatch, validateNestedFraming: !allowReplay,
+            expectedFirstPredecessorSequence: old.CurrentAuthorizationSequence);
+        preSnapshotTestHook?.Invoke();
+        var frozenBatch = encodedBatch.ToArray();
+        var ownedPreflight = ProductionMailboxRouteHistoryCodec
+            .PreflightCanonical(frozenBatch, validateNestedFraming: !allowReplay,
+                expectedFirstPredecessorSequence: old.CurrentAuthorizationSequence);
+        if (ownedPreflight != preflight ||
+            !CryptographicOperations.FixedTimeEquals(
+                frozenBatch.AsSpan(16, 32), currentHash) ||
+            old.LastCommittedBatchSequence == ulong.MaxValue ||
+            ownedPreflight.BatchSequence != old.LastCommittedBatchSequence + 1 ||
+            old.CumulativeCommittedBatchCount >=
+                ProductionMailboxRouteHistoryConstants.MaximumBatches ||
+            old.CumulativeVerifiedRouteLinkCount >
+                (ulong)ProductionMailboxRouteHistoryConstants.MaximumCumulativeLinks -
+                ownedPreflight.LinkCount ||
+            old.CumulativeCanonicalPayloadBytes >
+                ProductionMailboxRouteHistoryConstants.MaximumCumulativePayloadBytes -
+                checked((ulong)ownedPreflight.PayloadBytes) ||
+            old.CurrentLocalCommitGeneration > ulong.MaxValue -
+                ownedPreflight.LinkCount)
+            throw new FormatException(
+                "RHB1 owned snapshot differs from its preflight or durable predecessor.");
+        var batch = ProductionMailboxRouteHistoryCodec.DecodeOwned(
+            frozenBatch, validateNestedFraming: !allowReplay);
+        var payloadBytes = checked(
+            (ulong)batch.Artifacts.Sum(static item => item.CanonicalBytes.Length));
 
         var state = new ProductionMailboxRouteHistoryLinkVerificationState
         {
@@ -346,7 +420,8 @@ internal static class ProductionMailboxRouteHistoryVerifier
             LastCommittedBatchHash = SHA256.HashData(frozenBatch)
         };
         var canonical = ProductionMailboxRouteContinuityCodec.EncodeRouteHistoryCheckpoint(nextCheckpoint);
-        return new(nextCheckpoint, canonical);
+        return new(new VerifiedProductionMailboxRouteHistoryCheckpoint(
+            nextCheckpoint, canonical), batch, frozenBatch, advanced: true);
     }
 
     private static void ValidateNext(ProductionMailboxRouteHistoryLinkVerificationState previous,

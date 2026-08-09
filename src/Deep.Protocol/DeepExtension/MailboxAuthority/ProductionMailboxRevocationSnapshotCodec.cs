@@ -72,6 +72,27 @@ public static class ProductionMailboxRevocationSnapshotCodec
         return result;
     }
 
+    internal static void PreflightCanonical(ReadOnlySpan<byte> encoded)
+    {
+        const int countOffset = 152;
+        if (encoded.Length < ProductionMailboxRevocationSnapshotConstants
+                .FixedArtifactBytesWithoutSerials ||
+            !encoded[..4].SequenceEqual(Magic) ||
+            encoded[4] != ProductionMailboxRevocationSnapshotConstants.Version ||
+            encoded.Slice(5, 3).IndexOfAnyExcept((byte)0) >= 0)
+            throw Error(ProductionMailboxRevocationSnapshotError.InvalidLength,
+                "PMR1 framing is invalid.");
+        var count = BinaryPrimitives.ReadUInt16LittleEndian(
+            encoded.Slice(countOffset, sizeof(ushort)));
+        var expectedLength = checked(
+            ProductionMailboxRevocationSnapshotConstants.FixedArtifactBytesWithoutSerials +
+            count * ProductionMailboxRevocationSnapshotConstants.RevokedGrantSerialBytes);
+        if (count > ProductionMailboxRevocationSnapshotConstants.MaximumRevokedGrantSerials ||
+            encoded.Length != expectedLength)
+            throw Error(ProductionMailboxRevocationSnapshotError.InvalidLength,
+                "PMR1 count-derived length is invalid.");
+    }
+
     public static byte[] ComputeCanonicalHash(ProductionMailboxRevocationSnapshot snapshot) =>
         SHA256.HashData(Encode(snapshot));
 

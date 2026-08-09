@@ -267,6 +267,21 @@ public partial enrollment committer, standalone OCR authorer, precommit anchor/c
 durability result or publication capability. Registry atomically writes and protected-rereads the
 plan before restoring the sealed anchor and anchor-bound cursor.
 
+Protocol E exposes one next-only historical ingestion operation,
+`VerifyNextBatchForCommit(sealedCursor, exactRHB1)`. The raw replay-capable batch verifier is
+internal. Before one bounded snapshot it validates the exact count-derived RHB framing, nested PMR
+framing, artifact hashes/tags/indexes, sequence `current+1`, predecessor checkpoint and cumulative
+terminal limits; it repeats structural validation over the owned bytes before production Sodium
+verification. The sealed result is a defensive cryptographic plan containing exact predecessor and
+next RHC/protected contexts, canonical ROL and route-artifact bindings, cumulative state, final
+tagged PMA/PMR/PRC/PRA2-or-RCH/RTC/RCA artifacts, and a domain-separated `PlanHash`. It claims no
+storage, replay, durability, publication or activation authority. Registry owns same-sequence
+replay/fork CAS and atomically advances only route-history authorization state while preserving
+selection/PSS/publication bytes. It retains every exact batch, checkpoint, protected context and
+plan hash through the bounded history horizon; only the whole terminal chain may be garbage-collected.
+Cold restore starts at the exact genesis anchor/RHC and replays
+batches `1..N` sequentially; arbitrary post-history RHC restore from the genesis anchor is rejected.
+
 Owner control uses OCR1(272), PMCQ1(344), PMCR1(384), and PMFA1(header 48). The OCR1 hash is not a
 PMCQ wire field: it is appended to both the owner signature transcript and request operation-hash
 context. PMCR transitively binds it through the request hash and accepts only the exact protected
