@@ -256,6 +256,17 @@ RTC1/PRA2-or-RCH1+RCA1/PSS2 are constructed internally. The public result is cry
 it exposes a defensive `CommitPlan` and domain-separated `PlanHash`, never a storage committer,
 durability receipt, publication capability, raw unsigned draft, or injectable production verifier.
 
+Slice D2 makes continuity genesis a two-step cryptographic operation. `VerifyGenesisIntent`
+freezes and production-verifies the exact owner RCD1, pre-enrollment ROL1 and historical
+PMA/PMR/PRC/PRA2 closure before Registry prepares an HSM responder key. After Registry durably
+reserves that intent and chooses authoritative `acceptedAt`, `AuthorGenesisAsync` signs RDA1 then
+OCR1 outside the store and derives the enrolled ROL1 and initial RHC1. It returns only a defensive
+`ProductionMailboxRouteContinuityGenesisCommitPlan`: exact anchor and genesis artifacts, both
+protected restore contexts, predecessor CAS fields and a domain-separated `PlanHash`. There is no
+public partial enrollment committer, standalone OCR authorer, precommit anchor/cursor conversion,
+durability result or publication capability. Registry atomically writes and protected-rereads the
+plan before restoring the sealed anchor and anchor-bound cursor.
+
 Owner control uses OCR1(272), PMCQ1(344), PMCR1(384), and PMFA1(header 48). The OCR1 hash is not a
 PMCQ wire field: it is appended to both the owner signature transcript and request operation-hash
 context. PMCR transitively binds it through the request hash and accepts only the exact protected

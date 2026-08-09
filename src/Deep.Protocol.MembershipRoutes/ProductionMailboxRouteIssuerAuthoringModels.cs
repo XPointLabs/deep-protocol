@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Security.Cryptography;
 using Deep.Protocol.DeepExtension.MailboxAuthority;
 using Deep.Protocol.DeepExtension.MailboxCapabilities;
@@ -84,6 +85,100 @@ public delegate ValueTask<int> ProductionMailboxPrc1Signer(
     ProductionMailboxPrc1SigningRequest request,
     Memory<byte> signatureDestination,
     CancellationToken cancellationToken);
+
+/// <summary>
+/// Sealed owner/anchor enrollment preflight. It contains only defensively frozen, production-
+/// verified cryptographic input; transaction time and responder-key material are supplied later.
+/// </summary>
+public sealed class VerifiedProductionMailboxRouteContinuityGenesisIntent
+{
+    private readonly byte[] _canonicalDelegation;
+    private readonly byte[] _canonicalPreRouteOriginLkg;
+    private readonly byte[] _canonicalAuthority;
+    private readonly byte[] _canonicalRevocations;
+    private readonly byte[] _canonicalRouteCertificate;
+    private readonly byte[] _canonicalRouteAuthorization;
+    private readonly byte[] _delegationHash;
+    private readonly byte[] _preRouteOriginLkgHash;
+    private readonly byte[] _intentHash;
+    private readonly byte[] _networkId;
+    private readonly byte[] _mailboxOwner;
+    private readonly byte[] _routeDomain;
+    private readonly byte[] _selectionInputCommitment;
+
+    internal VerifiedProductionMailboxRouteContinuityGenesisIntent(
+        ReadOnlySpan<byte> canonicalDelegation,
+        ReadOnlySpan<byte> canonicalPreRouteOriginLkg,
+        ReadOnlySpan<byte> canonicalAuthority,
+        ReadOnlySpan<byte> canonicalRevocations,
+        ReadOnlySpan<byte> canonicalRouteCertificate,
+        ReadOnlySpan<byte> canonicalRouteAuthorization,
+        VerifiedProductionMailboxAuthority authority,
+        VerifiedProductionMailboxRevocationSnapshot revocations,
+        VerifiedProductionMailboxRouteCertificate routeCertificate,
+        VerifiedProductionMailboxRouteAdvertisementV2 routeAuthorization,
+        ulong verifiedAtUnixSeconds,
+        uint clockSkewSeconds)
+    {
+        _canonicalDelegation = canonicalDelegation.ToArray();
+        _canonicalPreRouteOriginLkg = canonicalPreRouteOriginLkg.ToArray();
+        _canonicalAuthority = canonicalAuthority.ToArray();
+        _canonicalRevocations = canonicalRevocations.ToArray();
+        _canonicalRouteCertificate = canonicalRouteCertificate.ToArray();
+        _canonicalRouteAuthorization = canonicalRouteAuthorization.ToArray();
+        var delegation = ProductionMailboxRouteContinuityCodec.DecodeDelegation(
+            _canonicalDelegation);
+        _networkId = delegation.NetworkId.ToArray();
+        _mailboxOwner = delegation.MailboxOwnerEd25519PublicKey.ToArray();
+        _routeDomain = delegation.RouteDomainHash.ToArray();
+        _selectionInputCommitment = delegation.SelectionInputCommitment.ToArray();
+        _delegationHash = SHA256.HashData(_canonicalDelegation);
+        _preRouteOriginLkgHash = ProductionMailboxRouteContinuityCodec.ComputeRouteOriginLkgHash(
+            ProductionMailboxRouteContinuityCodec.DecodeRouteOriginLkg(_canonicalPreRouteOriginLkg));
+        _intentHash = HashItems("Deep/production-mailbox/continuity-genesis-intent/v1"u8,
+            _canonicalAuthority, _canonicalRevocations, _canonicalRouteCertificate,
+            _canonicalRouteAuthorization, _canonicalDelegation, _canonicalPreRouteOriginLkg);
+        Authority = authority; Revocations = revocations; RouteCertificate = routeCertificate;
+        RouteAuthorization = routeAuthorization;
+        VerifiedAtUnixSeconds = verifiedAtUnixSeconds; ClockSkewSeconds = clockSkewSeconds;
+    }
+
+    public ReadOnlyMemory<byte> CanonicalDelegation => _canonicalDelegation.ToArray();
+    public ReadOnlyMemory<byte> CanonicalDelegationHash => _delegationHash.ToArray();
+    public ReadOnlyMemory<byte> CanonicalPreDelegationRouteOriginLkg =>
+        _canonicalPreRouteOriginLkg.ToArray();
+    public ReadOnlyMemory<byte> PreDelegationRouteOriginLkgHash =>
+        _preRouteOriginLkgHash.ToArray();
+    public ReadOnlyMemory<byte> IntentHash => _intentHash.ToArray();
+    public ReadOnlyMemory<byte> NetworkId => _networkId.ToArray();
+    public ReadOnlyMemory<byte> MailboxOwnerEd25519PublicKey => _mailboxOwner.ToArray();
+    public ReadOnlyMemory<byte> RouteDomainHash => _routeDomain.ToArray();
+    public ReadOnlyMemory<byte> SelectionInputCommitment =>
+        _selectionInputCommitment.ToArray();
+    internal ReadOnlyMemory<byte> CanonicalAuthority => _canonicalAuthority;
+    internal ReadOnlyMemory<byte> CanonicalRevocations => _canonicalRevocations;
+    internal ReadOnlyMemory<byte> CanonicalRouteCertificate => _canonicalRouteCertificate;
+    internal ReadOnlyMemory<byte> CanonicalRouteAuthorization => _canonicalRouteAuthorization;
+    internal VerifiedProductionMailboxAuthority Authority { get; }
+    internal VerifiedProductionMailboxRevocationSnapshot Revocations { get; }
+    internal VerifiedProductionMailboxRouteCertificate RouteCertificate { get; }
+    internal VerifiedProductionMailboxRouteAdvertisementV2 RouteAuthorization { get; }
+    internal ulong VerifiedAtUnixSeconds { get; }
+    internal uint ClockSkewSeconds { get; }
+
+    private static byte[] HashItems(ReadOnlySpan<byte> domain, params byte[][] items)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        hash.AppendData(domain);
+        Span<byte> length = stackalloc byte[4];
+        foreach (var item in items)
+        {
+            BinaryPrimitives.WriteUInt32BigEndian(length, checked((uint)item.Length));
+            hash.AppendData(length); hash.AppendData(item);
+        }
+        return hash.GetHashAndReset();
+    }
+}
 
 /// <summary>
 /// Authenticated durable fields which bind an exact historical continuity enrollment and OCR1.
@@ -297,10 +392,227 @@ public sealed class VerifiedProductionMailboxRouteCertificateIntent
 }
 
 /// <summary>
+/// Defensive cryptographic data for one caller-owned atomic genesis CAS. This plan does not attest
+/// storage, durability, replay handling, publication, or a successful commit.
+/// </summary>
+public sealed class ProductionMailboxRouteContinuityGenesisCommitPlan
+{
+    private readonly byte[] _expectedPreRol;
+    private readonly byte[] _expectedPreRolHash;
+    private readonly byte[] _expectedPreviousDelegationHash;
+    private readonly byte[] _intentHash;
+    private readonly byte[] _authority;
+    private readonly byte[] _authorityHash;
+    private readonly byte[] _revocations;
+    private readonly byte[] _revocationsHash;
+    private readonly byte[] _certificate;
+    private readonly byte[] _certificateHash;
+    private readonly byte[] _authorization;
+    private readonly byte[] _authorizationHash;
+    private readonly byte[] _delegation;
+    private readonly byte[] _delegationHash;
+    private readonly byte[] _acceptance;
+    private readonly byte[] _acceptanceHash;
+    private readonly byte[] _enrolledRol;
+    private readonly byte[] _enrolledRolHash;
+    private readonly byte[] _ocr;
+    private readonly byte[] _ocrHash;
+    private readonly byte[] _initialRhc;
+    private readonly byte[] _initialRhcHash;
+    private readonly byte[] _planHash;
+    private readonly ProductionMailboxRouteContinuityProtectedEnrollmentContext _enrollmentContext;
+    private readonly ProductionMailboxRouteHistoryProtectedRestoreContext _historyContext;
+
+    internal ProductionMailboxRouteContinuityGenesisCommitPlan(
+        VerifiedProductionMailboxRouteContinuityGenesisIntent intent,
+        VerifiedProductionMailboxRouteContinuityEnrollmentState enrollmentState,
+        VerifiedProductionMailboxHistoricalRouteAnchor anchor,
+        VerifiedProductionMailboxRouteHistoryCursor initialCursor,
+        ReadOnlySpan<byte> canonicalAcceptance,
+        ReadOnlySpan<byte> canonicalOcr)
+    {
+        var delegation = enrollmentState.Enrollment.Delegation;
+        var preRol = enrollmentState.PreDelegationRouteOrigin;
+        _expectedPreRol = intent.CanonicalPreDelegationRouteOriginLkg.ToArray();
+        _expectedPreRolHash = enrollmentState.PreDelegationRouteOriginLkgHash.ToArray();
+        ExpectedPreDelegationLocalCommitGeneration = preRol.LocalCommitGeneration;
+        ExpectedPreviousDelegationSequence = delegation.DelegationSequence - 1;
+        _expectedPreviousDelegationHash = delegation.PreviousCanonicalDelegationHash.ToArray();
+        _intentHash = intent.IntentHash.ToArray();
+        _authority = intent.CanonicalAuthority.ToArray();
+        _authorityHash = intent.Authority.CanonicalAuthorityHash.ToArray();
+        _revocations = intent.CanonicalRevocations.ToArray();
+        _revocationsHash = intent.Revocations.CanonicalSnapshotHash.ToArray();
+        _certificate = intent.CanonicalRouteCertificate.ToArray();
+        _certificateHash = intent.RouteCertificate.CanonicalCertificateHash.ToArray();
+        _authorization = intent.CanonicalRouteAuthorization.ToArray();
+        _authorizationHash = intent.RouteAuthorization.CanonicalHash.ToArray();
+        _delegation = intent.CanonicalDelegation.ToArray();
+        _delegationHash = enrollmentState.Enrollment.CanonicalDelegationHash.ToArray();
+        _acceptance = canonicalAcceptance.ToArray();
+        _acceptanceHash = enrollmentState.Enrollment.CanonicalAcceptanceHash.ToArray();
+        _enrolledRol = enrollmentState.CanonicalEnrolledRouteOriginLkg.ToArray();
+        _enrolledRolHash = enrollmentState.EnrolledRouteOriginLkgHash.ToArray();
+        _ocr = canonicalOcr.ToArray();
+        _ocrHash = anchor.CanonicalOwnerControlResponderCertificateHash.ToArray();
+        _initialRhc = initialCursor.CanonicalCheckpoint.ToArray();
+        _initialRhcHash = initialCursor.CanonicalCheckpointHash.ToArray();
+        _enrollmentContext = anchor.ToProtectedRestoreContext();
+        _historyContext = initialCursor.ToProtectedRestoreContext();
+        AcceptedAtUnixSeconds = enrollmentState.Enrollment.Acceptance.AcceptedAtUnixSeconds;
+        InternalEnrollmentState = enrollmentState; InternalAnchor = anchor;
+        InternalInitialCursor = initialCursor;
+        _planHash = ComputePlanHash();
+    }
+
+    public ReadOnlyMemory<byte> ExpectedPreDelegationRouteOriginLkg => _expectedPreRol.ToArray();
+    public ReadOnlyMemory<byte> ExpectedPreDelegationRouteOriginLkgHash => _expectedPreRolHash.ToArray();
+    public ulong ExpectedPreDelegationLocalCommitGeneration { get; }
+    public ulong ExpectedPreviousDelegationSequence { get; }
+    public ReadOnlyMemory<byte> ExpectedPreviousDelegationHash =>
+        _expectedPreviousDelegationHash.ToArray();
+    public ReadOnlyMemory<byte> GenesisIntentHash => _intentHash.ToArray();
+    public ReadOnlyMemory<byte> CanonicalAnchorAuthority => _authority.ToArray();
+    public ReadOnlyMemory<byte> CanonicalAnchorAuthorityHash => _authorityHash.ToArray();
+    public ReadOnlyMemory<byte> CanonicalAnchorRevocations => _revocations.ToArray();
+    public ReadOnlyMemory<byte> CanonicalAnchorRevocationsHash => _revocationsHash.ToArray();
+    public ReadOnlyMemory<byte> CanonicalAnchorRouteCertificate => _certificate.ToArray();
+    public ReadOnlyMemory<byte> CanonicalAnchorRouteCertificateHash => _certificateHash.ToArray();
+    public ReadOnlyMemory<byte> CanonicalAnchorRouteAuthorization => _authorization.ToArray();
+    public ReadOnlyMemory<byte> CanonicalAnchorRouteAuthorizationHash => _authorizationHash.ToArray();
+    public ReadOnlyMemory<byte> CanonicalDelegation => _delegation.ToArray();
+    public ReadOnlyMemory<byte> CanonicalDelegationHash => _delegationHash.ToArray();
+    public ReadOnlyMemory<byte> CanonicalAcceptance => _acceptance.ToArray();
+    public ReadOnlyMemory<byte> CanonicalAcceptanceHash => _acceptanceHash.ToArray();
+    public ReadOnlyMemory<byte> CanonicalEnrolledRouteOriginLkg => _enrolledRol.ToArray();
+    public ReadOnlyMemory<byte> EnrolledRouteOriginLkgHash => _enrolledRolHash.ToArray();
+    public ReadOnlyMemory<byte> CanonicalOwnerControlResponderCertificate => _ocr.ToArray();
+    public ReadOnlyMemory<byte> CanonicalOwnerControlResponderCertificateHash => _ocrHash.ToArray();
+    public ReadOnlyMemory<byte> CanonicalInitialRouteHistoryCheckpoint => _initialRhc.ToArray();
+    public ReadOnlyMemory<byte> CanonicalInitialRouteHistoryCheckpointHash => _initialRhcHash.ToArray();
+    public ulong AcceptedAtUnixSeconds { get; }
+    public ReadOnlyMemory<byte> PlanHash => _planHash.ToArray();
+
+    public ProductionMailboxRouteContinuityProtectedEnrollmentContext
+        ToProtectedEnrollmentRestoreContext() => Clone(_enrollmentContext);
+    public ProductionMailboxRouteHistoryProtectedRestoreContext
+        ToProtectedRouteHistoryRestoreContext() => Clone(_historyContext);
+
+    internal VerifiedProductionMailboxRouteContinuityEnrollmentState InternalEnrollmentState { get; }
+    internal VerifiedProductionMailboxHistoricalRouteAnchor InternalAnchor { get; }
+    internal VerifiedProductionMailboxRouteHistoryCursor InternalInitialCursor { get; }
+
+    private byte[] ComputePlanHash()
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        hash.AppendData("Deep/production-mailbox/continuity-genesis-commit-plan/v1"u8);
+        Append(hash, U64(ExpectedPreDelegationLocalCommitGeneration));
+        Append(hash, U64(ExpectedPreviousDelegationSequence));
+        foreach (var item in new[]
+                 {
+                     _expectedPreRol, _expectedPreRolHash, _expectedPreviousDelegationHash,
+                     _intentHash,
+                     _authority, _authorityHash, _revocations, _revocationsHash,
+                     _certificate, _certificateHash, _authorization, _authorizationHash,
+                     _delegation, _delegationHash, _acceptance, _acceptanceHash,
+                     _enrolledRol, _enrolledRolHash, _ocr, _ocrHash, _initialRhc, _initialRhcHash
+                 })
+            Append(hash, item);
+        AppendEnrollmentContext(hash, _enrollmentContext);
+        AppendHistoryContext(hash, _historyContext);
+        return hash.GetHashAndReset();
+    }
+
+    private static void AppendEnrollmentContext(IncrementalHash hash,
+        ProductionMailboxRouteContinuityProtectedEnrollmentContext value)
+    {
+        foreach (var item in new[]
+                 {
+                     value.NetworkId, value.MailboxOwnerEd25519PublicKey,
+                     value.PinnedMrXPublicKeySha256, value.BlindedMailboxId,
+                     value.BlindedPlacementId, value.RouteDomainHash,
+                     value.SelectionInputCommitment, value.AnchorCanonicalAuthorityHash,
+                     value.AnchorCanonicalRouteCertificateHash,
+                     value.AnchorCanonicalRouteAuthorizationHash,
+                     value.PreviousCanonicalDelegationHash, value.CanonicalDelegationHash,
+                     value.CanonicalAcceptanceHash, value.PreDelegationRouteOriginLkgHash,
+                     value.EnrolledRouteOriginLkgHash,
+                     value.CanonicalOwnerControlResponderCertificate,
+                     value.CanonicalOwnerControlResponderCertificateHash
+                 })
+            Append(hash, item.Span);
+        Append(hash, U64(value.AnchorAuthorityGeneration));
+        Append(hash, [(byte)value.AnchorAuthorizationKind]);
+        Append(hash, U64(value.AnchorRouteAuthorizationSequence));
+        Append(hash, U64(value.RouteVerifiedAtUnixSeconds));
+        Append(hash, U64(value.AcceptedAtUnixSeconds));
+        Append(hash, U64(value.PreviousDelegationSequence));
+    }
+
+    private static void AppendHistoryContext(IncrementalHash hash,
+        ProductionMailboxRouteHistoryProtectedRestoreContext value)
+    {
+        foreach (var item in new[]
+                 {
+                     value.CanonicalCheckpoint, value.CanonicalCheckpointHash,
+                     value.LastCommittedBatchHash, value.CurrentRouteOriginLkgHash,
+                     value.EnrollmentCanonicalDelegationHash,
+                     value.EnrollmentCanonicalAcceptanceHash, value.NetworkId,
+                     value.RouteDomainHash, value.DelegationHistoryBinding,
+                     value.PinnedMrXPublicKeySha256, value.CurrentCanonicalAuthorityHash,
+                     value.CurrentRevocationHeadHash, value.CurrentRevocationSnapshotHash
+                 })
+            Append(hash, item.Span);
+        Append(hash, U64(value.LastCommittedBatchSequence));
+        Append(hash, U64(value.CurrentAuthorityGeneration));
+        Append(hash, U64(value.CurrentRevocationGeneration));
+    }
+
+    private static void Append(IncrementalHash hash, ReadOnlySpan<byte> item)
+    {
+        Span<byte> length = stackalloc byte[4];
+        BinaryPrimitives.WriteUInt32BigEndian(length, checked((uint)item.Length));
+        hash.AppendData(length); hash.AppendData(item);
+    }
+
+    private static byte[] U64(ulong value)
+    {
+        var bytes = new byte[8];
+        BinaryPrimitives.WriteUInt64BigEndian(bytes, value);
+        return bytes;
+    }
+
+    private static ProductionMailboxRouteContinuityProtectedEnrollmentContext Clone(
+        ProductionMailboxRouteContinuityProtectedEnrollmentContext value) => new(
+        value.NetworkId, value.MailboxOwnerEd25519PublicKey, value.PinnedMrXPublicKeySha256,
+        value.BlindedMailboxId, value.BlindedPlacementId, value.RouteDomainHash,
+        value.SelectionInputCommitment, value.AnchorAuthorityGeneration,
+        value.AnchorCanonicalAuthorityHash, value.AnchorCanonicalRouteCertificateHash,
+        value.AnchorAuthorizationKind, value.AnchorCanonicalRouteAuthorizationHash,
+        value.AnchorRouteAuthorizationSequence, value.RouteVerifiedAtUnixSeconds,
+        value.AcceptedAtUnixSeconds, value.PreviousDelegationSequence,
+        value.PreviousCanonicalDelegationHash, value.CanonicalDelegationHash,
+        value.CanonicalAcceptanceHash, value.PreDelegationRouteOriginLkgHash,
+        value.EnrolledRouteOriginLkgHash, value.CanonicalOwnerControlResponderCertificate,
+        value.CanonicalOwnerControlResponderCertificateHash);
+
+    private static ProductionMailboxRouteHistoryProtectedRestoreContext Clone(
+        ProductionMailboxRouteHistoryProtectedRestoreContext value) => new(
+        value.CanonicalCheckpoint, value.CanonicalCheckpointHash,
+        value.LastCommittedBatchSequence, value.LastCommittedBatchHash,
+        value.CurrentRouteOriginLkgHash, value.EnrollmentCanonicalDelegationHash,
+        value.EnrollmentCanonicalAcceptanceHash, value.NetworkId, value.RouteDomainHash,
+        value.DelegationHistoryBinding, value.PinnedMrXPublicKeySha256,
+        value.CurrentAuthorityGeneration, value.CurrentCanonicalAuthorityHash,
+        value.CurrentRevocationGeneration, value.CurrentRevocationHeadHash,
+        value.CurrentRevocationSnapshotHash);
+}
+
+/// <summary>
 /// Exact one-shot CAS plan for the caller's protected enrollment store. The committer must compare
 /// every expected predecessor field and atomically publish the exact RCD1/RDA1/post-RDA ROL1 set.
 /// </summary>
-public sealed class ProductionMailboxRouteContinuityEnrollmentCommitPlan
+internal sealed class ProductionMailboxRouteContinuityEnrollmentCommitPlan
 {
     private readonly byte[] _expectedOldRouteOriginLkg;
     private readonly byte[] _expectedOldRouteOriginLkgHash;
@@ -356,7 +668,7 @@ public sealed class ProductionMailboxRouteContinuityEnrollmentCommitPlan
         _enrolledRouteOriginLkgHash.ToArray();
 }
 
-public delegate ValueTask<bool> ProductionMailboxRouteContinuityEnrollmentCommitter(
+internal delegate ValueTask<bool> ProductionMailboxRouteContinuityEnrollmentCommitter(
     ProductionMailboxRouteContinuityEnrollmentCommitPlan plan,
     CancellationToken cancellationToken);
 
@@ -364,7 +676,7 @@ public delegate ValueTask<bool> ProductionMailboxRouteContinuityEnrollmentCommit
 /// Non-forgeable completion of the two-phase continuity enrollment. It owns the verified RCD/RDA
 /// closure and both exact protected ROL1 snapshots needed for the caller's atomic CAS commit.
 /// </summary>
-public sealed class VerifiedProductionMailboxRouteContinuityEnrollmentState
+internal sealed class VerifiedProductionMailboxRouteContinuityEnrollmentState
 {
     private readonly byte[] _preDelegationRouteOriginLkg;
     private readonly byte[] _preDelegationRouteOriginLkgHash;

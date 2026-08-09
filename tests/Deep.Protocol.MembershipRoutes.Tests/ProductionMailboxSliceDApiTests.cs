@@ -19,6 +19,10 @@ public sealed class ProductionMailboxSliceDApiTests
         Assert.Empty(typeof(VerifiedProductionMailboxOwnerControlRequest).GetConstructors());
         Assert.Empty(typeof(VerifiedProductionMailboxOwnerControlResponse).GetConstructors());
         Assert.Empty(typeof(VerifiedProductionMailboxOwnerControlResponseHeader).GetConstructors());
+        Assert.Empty(typeof(VerifiedProductionMailboxRouteContinuityGenesisIntent)
+            .GetConstructors());
+        Assert.Empty(typeof(ProductionMailboxRouteContinuityGenesisCommitPlan)
+            .GetConstructors());
         Assert.DoesNotContain(typeof(ProductionMailboxSelectionSuccessorAuthoring).GetMethods(
             BindingFlags.Public | BindingFlags.Static), static method =>
             method.Name is "AuthorDirectAsync" or "AuthorOfflineAsync");
@@ -33,6 +37,16 @@ public sealed class ProductionMailboxSliceDApiTests
             method.Name == "ReadVerifiedResponsePayloadAsync" &&
             method.GetParameters().Any(static parameter =>
                 parameter.ParameterType == typeof(VerifiedProductionMailboxOwnerControlResponseHeader)));
+        var issuer = typeof(ProductionMailboxRouteIssuerAuthoring).GetMethods(
+            BindingFlags.Public | BindingFlags.Static);
+        Assert.Single(issuer, static method => method.Name == "VerifyGenesisIntent");
+        var genesis = Assert.Single(issuer, static method => method.Name == "AuthorGenesisAsync");
+        Assert.DoesNotContain(genesis.GetParameters(), static parameter =>
+            parameter.ParameterType.Name.Contains("Commit", StringComparison.Ordinal) ||
+            parameter.ParameterType.Name.Contains("Store", StringComparison.Ordinal));
+        Assert.DoesNotContain(issuer, static method => method.Name is
+            "AcceptDelegationAsync" or "AuthorOwnerControlResponderCertificateAsync" or
+            "CreateHistoricalAnchor");
     }
 
     [Fact]

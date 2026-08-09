@@ -221,6 +221,17 @@ ROL hash. Later RTC/PSS transitions bind the currently sealed predecessor ROL, w
 the already-existing RCD/RDA hashes. `RouteVerifiedAt` remains the original owner-route
 verification time across these recomputations; the local commit generation advances exactly one.
 
+Genesis authoring is split around Registry's durable prepare. First, `VerifyGenesisIntent`
+validates and owns the exact RCD1, owner-only pre-ROL1 and historical PMA1/PMR1/PRC1/PRA2 closure;
+it accepts no responder key, transaction time or callback. Registry may prepare an HSM key only
+after this succeeds. Registry then persists an intent-hash reservation and chooses monotonic
+authoritative `acceptedAt`. Outside the store, `AuthorGenesisAsync` repeats the owned closure at
+`authorNow`, validates responder/OCR inputs before callbacks, signs RDA1 then OCR1, and derives the
+enrolled ROL1 plus initial RHC1. Its commit plan is data only. The final store CAS compares the
+exact predecessor ROL/hash/generation and previous-delegation tuple, and atomically writes the
+full anchor, RCD1/RDA1, both ROL1 values, OCR1, genesis RHC1 and both protected restore contexts.
+Only a protected reread may be used for `RestoreHistoricalAnchor` and anchor-bound `RestoreCursor`.
+
 ## RTC1 — unsigned route/selection transition context (408 bytes)
 
 RTC is canonical bytes hashed with the RTC domain. It is not authorization by itself.
@@ -573,6 +584,12 @@ uses the artifact-specific temporal rules below; no blanket rule is inferred for
   predecessor CAS, selection predecessor/LKG, publication outbox and capacity-barrier reference in
   one durable transaction for the affected transition. It reads acceptance/publish time inside
   that transaction. A later step cannot publish node-visible bytes before this commit.
+- A prepared genesis `acceptedAt` is positive, nonterminal and no later than `authorNow`, but it
+  need not remain within clock skew of a later retry. It must be historically contained by every
+  signed anchor/RCD acceptance window. Every authoring retry requires strict
+  `authorNow < min(RCD.expiresAt, intended OCR.expiresAt)`; equality is stale and skew never
+  extends this action lifetime. Registry's authenticated prepare/CAS is the time authority;
+  Protocol attests only the resulting cryptographic tuple.
 - Exact canonical command/artifact replay returns the exact committed result. Same generation or
   sequence with different canonical bytes is a fork. Unknown predecessor, rollback, gap, terminal
   predecessor, partial write and ambiguous durability fail closed and reconcile from the durable

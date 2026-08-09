@@ -10,7 +10,7 @@ namespace Deep.Protocol.DeepExtension.MailboxTopology;
 /// </summary>
 public static class ProductionMailboxRouteIssuerAuthoring
 {
-    public static async ValueTask<VerifiedProductionMailboxOwnerControlResponderCertificate>
+    internal static async ValueTask<VerifiedProductionMailboxOwnerControlResponderCertificate>
         AuthorOwnerControlResponderCertificateAsync(
             VerifiedProductionMailboxRouteContinuityEnrollmentState enrollmentState,
             VerifiedProductionMailboxAuthority anchorAuthority,
@@ -51,6 +51,7 @@ public static class ProductionMailboxRouteIssuerAuthoring
             anchorAuthority.Authority.MailboxIssuerEd25519PublicKey.Span);
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var written = await signer(request, signature, cancellationToken).ConfigureAwait(false);
             if (written != 64) throw new FormatException("OCR1 issuer signer must write exactly 64 bytes.");
             var signed = value with { AnchorIssuerSignature = signature.ToArray() };
@@ -67,7 +68,7 @@ public static class ProductionMailboxRouteIssuerAuthoring
         }
     }
 
-    public static VerifiedProductionMailboxHistoricalRouteAnchor CreateHistoricalAnchor(
+    internal static VerifiedProductionMailboxHistoricalRouteAnchor CreateHistoricalAnchor(
         VerifiedProductionMailboxRouteContinuityEnrollmentState enrollmentState,
         VerifiedProductionMailboxAuthority anchorAuthority,
         VerifiedProductionMailboxRevocationSnapshot anchorRevocations,
@@ -191,7 +192,146 @@ public static class ProductionMailboxRouteIssuerAuthoring
             anchorAuthorization, ocr, ocrBytes, ocrHash);
     }
 
-    public static async ValueTask<VerifiedProductionMailboxRouteContinuityEnrollmentState>
+    /// <summary>
+    /// Verifies and freezes the owner-signed RCD1, predecessor ROL1 and exact historical anchor
+    /// before Registry allocates a responder key or prepares durable transaction state.
+    /// </summary>
+    public static VerifiedProductionMailboxRouteContinuityGenesisIntent VerifyGenesisIntent(
+        ReadOnlyMemory<byte> canonicalDelegation,
+        ReadOnlyMemory<byte> canonicalPreDelegationRouteOriginLkg,
+        VerifiedProductionMailboxAuthority anchorAuthority,
+        VerifiedProductionMailboxRevocationSnapshot anchorRevocations,
+        VerifiedProductionMailboxRouteCertificate anchorCertificate,
+        VerifiedProductionMailboxRouteAdvertisementV2 anchorAuthorization,
+        ulong nowUnixSeconds,
+        uint clockSkewSeconds = 0) => VerifyGenesisIntentCore(
+        canonicalDelegation, canonicalPreDelegationRouteOriginLkg, anchorAuthority,
+        anchorRevocations, anchorCertificate, anchorAuthorization, nowUnixSeconds,
+        clockSkewSeconds);
+
+    /// <summary>
+    /// Authors the exact RDA1/OCR1/genesis-RHC1 cryptographic tuple outside the caller's store.
+    /// The returned plan is data only; it cannot attest persistence, CAS success or publication.
+    /// </summary>
+    public static async ValueTask<ProductionMailboxRouteContinuityGenesisCommitPlan>
+        AuthorGenesisAsync(
+            VerifiedProductionMailboxRouteContinuityGenesisIntent intent,
+            ulong acceptedAtUnixSeconds,
+            ulong authorNowUnixSeconds,
+            ReadOnlyMemory<byte> responderEd25519PublicKey,
+            ulong ocrExpiresAtUnixSeconds,
+            ProductionMailboxRda1Signer acceptanceSigner,
+            ProductionMailboxOcr1Signer responderCertificateSigner,
+            CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(intent);
+        ArgumentNullException.ThrowIfNull(acceptanceSigner);
+        ArgumentNullException.ThrowIfNull(responderCertificateSigner);
+        ProductionMailboxRouteAuthorizationVerifier.ValidateClock(
+            authorNowUnixSeconds, intent.ClockSkewSeconds);
+        if (responderEd25519PublicKey.Length != 32 ||
+            responderEd25519PublicKey.Span.IndexOfAnyExcept((byte)0) < 0)
+            throw new FormatException("Genesis OCR1 responder key must be exact and non-zero.");
+        if (acceptedAtUnixSeconds is 0 or ulong.MaxValue ||
+            acceptedAtUnixSeconds > authorNowUnixSeconds ||
+            ocrExpiresAtUnixSeconds <= acceptedAtUnixSeconds ||
+            ocrExpiresAtUnixSeconds == ulong.MaxValue ||
+            ocrExpiresAtUnixSeconds - acceptedAtUnixSeconds >
+                ProductionMailboxOwnerControlConstants.MaximumResponderCertificateLifetimeSeconds)
+            throw new FormatException("Genesis authoritative time or OCR1 lifetime is invalid.");
+        var frozenResponderKey = responderEd25519PublicKey.ToArray();
+
+        // Repeat the complete owned owner/anchor closure at authoring time. Using authorNow as the
+        // provisional acceptance time makes all anchor/RCD expiry checks strict; skew never extends
+        // the action lifetime.
+        var repeated = VerifyGenesisIntentCore(intent.CanonicalDelegation,
+            intent.CanonicalPreDelegationRouteOriginLkg, intent.Authority, intent.Revocations,
+            intent.RouteCertificate, intent.RouteAuthorization, authorNowUnixSeconds,
+            intent.ClockSkewSeconds);
+        EqualProtected(repeated.IntentHash.Span, intent.IntentHash.Span, "genesis intent hash");
+        var delegationBytes = intent.CanonicalDelegation.ToArray();
+        var preRolBytes = intent.CanonicalPreDelegationRouteOriginLkg.ToArray();
+        var delegation = ProductionMailboxRouteContinuityCodec.DecodeDelegation(delegationBytes);
+        var preRol = ProductionMailboxRouteContinuityCodec.DecodeRouteOriginLkg(preRolBytes);
+        if (authorNowUnixSeconds >= delegation.ExpiresAtUnixSeconds ||
+            authorNowUnixSeconds >= ocrExpiresAtUnixSeconds ||
+            ocrExpiresAtUnixSeconds > delegation.ExpiresAtUnixSeconds)
+            throw new FormatException("Genesis RCD1/OCR1 is not strictly live at authoring time.");
+
+        var unsignedAcceptance = CreateAcceptance(delegation, acceptedAtUnixSeconds,
+            PlaceholderSignature());
+        var acceptanceSigningBytes = ProductionMailboxRouteContinuityCodec
+            .GetDelegationAcceptanceSigningBytes(unsignedAcceptance);
+        var historicalContext = EnrollmentContextFromFrozenDelegation(
+            delegation, acceptedAtUnixSeconds, 0);
+        var provisionalAcceptanceBytes = ProductionMailboxRouteContinuityCodec
+            .EncodeDelegationAcceptance(unsignedAcceptance);
+        var provisionalEnrollment = ProductionMailboxRouteContinuityVerifier.VerifyEnrollment(
+            delegationBytes, provisionalAcceptanceBytes, intent.Authority, intent.Revocations,
+            intent.RouteCertificate, intent.RouteAuthorization, historicalContext,
+            new ExactTranscriptAcceptingVerifier(
+                intent.Authority.Authority.MailboxIssuerEd25519PublicKey.Span,
+                acceptanceSigningBytes));
+        var provisionalState = CreateEnrollmentState(provisionalEnrollment, preRol);
+        var provisionalOcr = CreateOcr(provisionalState, intent.Authority,
+            frozenResponderKey, ocrExpiresAtUnixSeconds, PlaceholderSignature());
+        VerifyOcrHistoricalClosure(provisionalOcr,
+            ProductionMailboxOwnerControlTransportCodec.EncodeResponderCertificate(provisionalOcr),
+            delegation, provisionalEnrollment.Acceptance, intent.Authority, intent.Revocations,
+            intent.RouteCertificate, intent.RouteAuthorization, verifySignature: false);
+
+        var signature = new byte[ProductionMailboxRouteContinuityConstants.Ed25519SignatureLength];
+        var request = new ProductionMailboxRda1SigningRequest(acceptanceSigningBytes);
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var written = await acceptanceSigner(request, signature, cancellationToken)
+                .ConfigureAwait(false);
+            EnsureSignatureLength(written, "RDA1");
+            var signedAcceptance = unsignedAcceptance with
+            {
+                AnchorIssuerSignature = signature.ToArray()
+            };
+            var acceptanceBytes = ProductionMailboxRouteContinuityCodec
+                .EncodeDelegationAcceptance(signedAcceptance);
+            var enrollment = ProductionMailboxRouteContinuityVerifier.VerifyEnrollment(
+                delegationBytes, acceptanceBytes, intent.Authority, intent.Revocations,
+                intent.RouteCertificate, intent.RouteAuthorization, historicalContext);
+            var enrollmentState = CreateEnrollmentState(enrollment, preRol);
+            var verifiedOcr = await AuthorOwnerControlResponderCertificateAsync(
+                enrollmentState, intent.Authority, intent.Revocations, intent.RouteCertificate,
+                intent.RouteAuthorization, frozenResponderKey, ocrExpiresAtUnixSeconds,
+                responderCertificateSigner, cancellationToken).ConfigureAwait(false);
+            var anchor = CreateHistoricalAnchor(enrollmentState, intent.Authority,
+                intent.Revocations, intent.RouteCertificate, intent.RouteAuthorization,
+                verifiedOcr);
+            var cursor = ProductionMailboxRouteHistoryAuthoring.CreateInitialCursor(
+                enrollmentState, intent.Authority, intent.Revocations);
+            var plan = new ProductionMailboxRouteContinuityGenesisCommitPlan(intent,
+                enrollmentState, anchor, cursor, acceptanceBytes, verifiedOcr.CanonicalBytes.Span);
+
+            // Reconstruct both sealed post-CAS capabilities from exact plan bytes and protected
+            // exports before returning any caller-observable data.
+            var restoredAnchor = RestoreHistoricalAnchor(plan.CanonicalDelegation,
+                plan.CanonicalAcceptance, plan.ExpectedPreDelegationRouteOriginLkg,
+                plan.CanonicalEnrolledRouteOriginLkg,
+                plan.CanonicalOwnerControlResponderCertificate, intent.Authority,
+                intent.Revocations, intent.RouteCertificate, intent.RouteAuthorization,
+                plan.ToProtectedEnrollmentRestoreContext());
+            _ = ProductionMailboxRouteHistoryAuthoring.RestoreCursor(
+                plan.CanonicalInitialRouteHistoryCheckpoint.Span, restoredAnchor,
+                plan.ToProtectedRouteHistoryRestoreContext());
+            return plan;
+        }
+        finally
+        {
+            request.Clear();
+            CryptographicOperations.ZeroMemory(acceptanceSigningBytes);
+            CryptographicOperations.ZeroMemory(signature);
+        }
+    }
+
+    internal static async ValueTask<VerifiedProductionMailboxRouteContinuityEnrollmentState>
         AcceptDelegationAsync(
             ReadOnlyMemory<byte> canonicalDelegation,
             ReadOnlyMemory<byte> canonicalPreDelegationRouteOriginLkg,
@@ -630,7 +770,7 @@ public static class ProductionMailboxRouteIssuerAuthoring
             throw new FormatException($"Historical protected {name} binding differs.");
     }
 
-    public static async ValueTask<VerifiedProductionMailboxDelegatedRouteAuthorization>
+    internal static async ValueTask<VerifiedProductionMailboxDelegatedRouteAuthorization>
         AuthorDelegatedActivationAsync(
             VerifiedProductionMailboxRouteContinuityEnrollmentState enrollmentState,
             VerifiedProductionMailboxSelectionTransitionIntent selectionIntent,
@@ -848,6 +988,156 @@ public static class ProductionMailboxRouteIssuerAuthoring
             CryptographicOperations.ZeroMemory(checkpointSigningBytes);
             CryptographicOperations.ZeroMemory(checkpointSignature);
         }
+    }
+
+    private static VerifiedProductionMailboxRouteContinuityGenesisIntent VerifyGenesisIntentCore(
+        ReadOnlyMemory<byte> canonicalDelegation,
+        ReadOnlyMemory<byte> canonicalPreDelegationRouteOriginLkg,
+        VerifiedProductionMailboxAuthority anchorAuthority,
+        VerifiedProductionMailboxRevocationSnapshot anchorRevocations,
+        VerifiedProductionMailboxRouteCertificate anchorCertificate,
+        VerifiedProductionMailboxRouteAdvertisementV2 anchorAuthorization,
+        ulong nowUnixSeconds,
+        uint clockSkewSeconds)
+    {
+        ArgumentNullException.ThrowIfNull(anchorAuthority);
+        ArgumentNullException.ThrowIfNull(anchorRevocations);
+        ArgumentNullException.ThrowIfNull(anchorCertificate);
+        ArgumentNullException.ThrowIfNull(anchorAuthorization);
+        if (canonicalDelegation.Length !=
+                ProductionMailboxRouteContinuityConstants.CanonicalDelegationLength ||
+            canonicalPreDelegationRouteOriginLkg.Length !=
+                ProductionMailboxRouteContinuityConstants.CanonicalRouteOriginLkgLength)
+            throw ContinuityError(ProductionMailboxRouteContinuityError.InvalidLength,
+                "Genesis RCD1/pre-ROL1 length is invalid.");
+        ProductionMailboxRouteAuthorizationVerifier.ValidateClock(nowUnixSeconds, clockSkewSeconds);
+        var delegationBytes = canonicalDelegation.ToArray();
+        var preRolBytes = canonicalPreDelegationRouteOriginLkg.ToArray();
+        var delegation = ProductionMailboxRouteContinuityCodec.DecodeDelegation(delegationBytes);
+        var preRol = ProductionMailboxRouteContinuityCodec.DecodeRouteOriginLkg(preRolBytes);
+        if (!delegationBytes.AsSpan().SequenceEqual(
+                ProductionMailboxRouteContinuityCodec.EncodeDelegation(delegation)) ||
+            !preRolBytes.AsSpan().SequenceEqual(
+                ProductionMailboxRouteContinuityCodec.EncodeRouteOriginLkg(preRol)))
+            throw new FormatException("Genesis RCD1/pre-ROL1 is not canonical.");
+        VerifyPreDelegationRouteOrigin(delegation, preRol);
+
+        var authorityBytes = ProductionMailboxAuthorityCodec.Encode(anchorAuthority.Authority);
+        var revocationBytes = ProductionMailboxRevocationSnapshotCodec.Encode(
+            anchorRevocations.Snapshot);
+        var certificateBytes = ProductionMailboxRouteAdvertisementCodec.EncodeCertificate(
+            anchorCertificate.Certificate);
+        var authorizationBytes = anchorAuthorization.CanonicalBytes.ToArray();
+        EqualProtected(ProductionMailboxAuthorityCodec.ComputeCanonicalHash(
+            anchorAuthority.Authority), anchorAuthority.CanonicalAuthorityHash.Span,
+            "genesis PMA1 canonical hash");
+        EqualProtected(ProductionMailboxRevocationSnapshotCodec.ComputeCanonicalHash(
+            anchorRevocations.Snapshot), anchorRevocations.CanonicalSnapshotHash.Span,
+            "genesis PMR1 canonical hash");
+        EqualProtected(ProductionMailboxRouteAdvertisementCodec
+            .ComputeCertificateCanonicalHash(anchorCertificate.Certificate),
+            anchorCertificate.CanonicalCertificateHash.Span,
+            "genesis PRC1 canonical hash");
+        EqualProtected(ProductionMailboxRouteAuthorizationCodec
+            .ComputeAdvertisementV2CanonicalHash(anchorAuthorization.Advertisement),
+            anchorAuthorization.CanonicalHash.Span, "genesis PRA2 canonical hash");
+        if (!authorizationBytes.AsSpan().SequenceEqual(
+                ProductionMailboxRouteAuthorizationCodec.EncodeAdvertisementV2(
+                    anchorAuthorization.Advertisement)))
+            throw new FormatException("Genesis PRA2 canonical bytes differ.");
+
+        var provisionalAcceptance = CreateAcceptance(delegation, nowUnixSeconds,
+            PlaceholderSignature());
+        var signingBytes = ProductionMailboxRouteContinuityCodec
+            .GetDelegationAcceptanceSigningBytes(provisionalAcceptance);
+        try
+        {
+            _ = ProductionMailboxRouteContinuityVerifier.VerifyEnrollment(delegationBytes,
+                ProductionMailboxRouteContinuityCodec.EncodeDelegationAcceptance(
+                    provisionalAcceptance), anchorAuthority, anchorRevocations,
+                anchorCertificate, anchorAuthorization,
+                EnrollmentContextFromFrozenDelegation(delegation, nowUnixSeconds,
+                    clockSkewSeconds),
+                new ExactTranscriptAcceptingVerifier(
+                    anchorAuthority.Authority.MailboxIssuerEd25519PublicKey.Span,
+                    signingBytes));
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(signingBytes);
+        }
+        return new VerifiedProductionMailboxRouteContinuityGenesisIntent(delegationBytes,
+            preRolBytes, authorityBytes, revocationBytes, certificateBytes, authorizationBytes,
+            anchorAuthority, anchorRevocations, anchorCertificate, anchorAuthorization,
+            nowUnixSeconds, clockSkewSeconds);
+    }
+
+    private static ProductionMailboxRouteDelegationAcceptance CreateAcceptance(
+        ProductionMailboxRouteContinuityDelegation delegation,
+        ulong acceptedAtUnixSeconds,
+        ReadOnlyMemory<byte> signature) => new()
+    {
+        NetworkId = delegation.NetworkId.ToArray(),
+        RouteDomainHash = delegation.RouteDomainHash.ToArray(),
+        CanonicalDelegationHash = SHA256.HashData(
+            ProductionMailboxRouteContinuityCodec.EncodeDelegation(delegation)),
+        AnchorAuthorityGeneration = delegation.AnchorAuthorityGeneration,
+        AnchorCanonicalAuthorityHash = delegation.AnchorCanonicalAuthorityHash.ToArray(),
+        AnchorCanonicalRouteCertificateHash =
+            delegation.AnchorCanonicalRouteCertificateHash.ToArray(),
+        AnchorAuthorizationKind = delegation.AnchorAuthorizationKind,
+        AnchorCanonicalRouteAuthorizationHash =
+            delegation.AnchorCanonicalRouteAuthorizationHash.ToArray(),
+        AnchorRouteAuthorizationSequence = delegation.AnchorRouteAuthorizationSequence,
+        PreDelegationRouteOriginLkgHash = delegation.PreDelegationRouteOriginLkgHash.ToArray(),
+        RouteVerifiedAtUnixSeconds = delegation.RouteVerifiedAtUnixSeconds,
+        AcceptedAtUnixSeconds = acceptedAtUnixSeconds,
+        AnchorIssuerSignature = signature.ToArray()
+    };
+
+    private static ProductionMailboxOwnerControlResponderCertificate CreateOcr(
+        VerifiedProductionMailboxRouteContinuityEnrollmentState enrollmentState,
+        VerifiedProductionMailboxAuthority anchorAuthority,
+        ReadOnlySpan<byte> responderEd25519PublicKey,
+        ulong expiresAtUnixSeconds,
+        ReadOnlyMemory<byte> signature)
+    {
+        var delegation = enrollmentState.Enrollment.Delegation;
+        return new ProductionMailboxOwnerControlResponderCertificate
+        {
+            NetworkId = delegation.NetworkId.ToArray(),
+            MailboxOwnerEd25519PublicKey = delegation.MailboxOwnerEd25519PublicKey.ToArray(),
+            RouteDomainHash = delegation.RouteDomainHash.ToArray(),
+            AnchorCanonicalAuthorityHash = anchorAuthority.CanonicalAuthorityHash.ToArray(),
+            ResponderEd25519PublicKey = responderEd25519PublicKey.ToArray(),
+            IssuedAtUnixSeconds = enrollmentState.Enrollment.Acceptance.AcceptedAtUnixSeconds,
+            ExpiresAtUnixSeconds = expiresAtUnixSeconds,
+            KeyGeneration = 1,
+            PreviousCanonicalCertificateHash = new byte[32],
+            AnchorIssuerSignature = signature.ToArray()
+        };
+    }
+
+    private static VerifiedProductionMailboxRouteContinuityEnrollmentState CreateEnrollmentState(
+        VerifiedProductionMailboxRouteContinuityEnrollment enrollment,
+        ProductionMailboxRouteOriginLkg preRol)
+    {
+        var enrolled = new ProductionMailboxRouteOriginLkg
+        {
+            NetworkId = preRol.NetworkId.ToArray(),
+            RouteDomainHash = preRol.RouteDomainHash.ToArray(),
+            AuthorizationKind = preRol.AuthorizationKind,
+            CanonicalAuthorizationHash = preRol.CanonicalAuthorizationHash.ToArray(),
+            AuthorizationSequence = preRol.AuthorizationSequence,
+            CanonicalDelegationHash = enrollment.CanonicalDelegationHash.ToArray(),
+            CanonicalDelegationAcceptanceHash = enrollment.CanonicalAcceptanceHash.ToArray(),
+            OwnerRevocationGeneration = 0,
+            OwnerRevocationHeadHash = new byte[32],
+            RouteVerifiedAtUnixSeconds = preRol.RouteVerifiedAtUnixSeconds,
+            LocalCommitGeneration = checked(preRol.LocalCommitGeneration + 1)
+        };
+        return new VerifiedProductionMailboxRouteContinuityEnrollmentState(enrollment, preRol,
+            enrolled);
     }
 
     private static ProductionMailboxRouteContinuityEnrollmentVerificationContext

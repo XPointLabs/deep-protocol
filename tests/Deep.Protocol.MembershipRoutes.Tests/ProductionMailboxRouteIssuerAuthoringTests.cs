@@ -399,6 +399,12 @@ public sealed class ProductionMailboxRouteIssuerAuthoringTests
         Assert.Empty(typeof(VerifiedProductionMailboxRouteContinuityEnrollmentState).GetConstructors());
         Assert.Empty(typeof(VerifiedProductionMailboxSelectionTransitionIntent).GetConstructors());
         Assert.Empty(typeof(VerifiedProductionMailboxDelegatedRouteAuthorization).GetConstructors());
+        Assert.False(typeof(ProductionMailboxRouteContinuityEnrollmentCommitPlan).IsPublic);
+        Assert.False(typeof(VerifiedProductionMailboxRouteContinuityEnrollmentState).IsPublic);
+        Assert.Empty(typeof(VerifiedProductionMailboxRouteContinuityGenesisIntent)
+            .GetConstructors(BindingFlags.Public | BindingFlags.Instance));
+        Assert.Empty(typeof(ProductionMailboxRouteContinuityGenesisCommitPlan)
+            .GetConstructors(BindingFlags.Public | BindingFlags.Instance));
         Assert.NotEqual(typeof(ProductionMailboxRda1Signer), typeof(ProductionMailboxRch1Signer));
         Assert.NotEqual(typeof(ProductionMailboxRch1Signer), typeof(ProductionMailboxRca1Signer));
         Assert.DoesNotContain(typeof(ProductionMailboxRouteIssuerAuthoring).GetMethods(
@@ -407,6 +413,10 @@ public sealed class ProductionMailboxRouteIssuerAuthoringTests
             method.GetParameters().Any(parameter =>
                 typeof(IProductionMailboxRouteSignatureVerifier)
                     .IsAssignableFrom(parameter.ParameterType)));
+        Assert.DoesNotContain(typeof(ProductionMailboxRouteIssuerAuthoring).GetMethods(
+            BindingFlags.Public | BindingFlags.Static), static method =>
+            method.Name is "AcceptDelegationAsync" or
+                "AuthorOwnerControlResponderCertificateAsync" or "CreateHistoricalAnchor");
     }
 
     private static ValueTask<VerifiedProductionMailboxRouteContinuityEnrollmentState>

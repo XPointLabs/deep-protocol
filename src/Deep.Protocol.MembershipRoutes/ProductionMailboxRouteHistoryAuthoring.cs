@@ -277,7 +277,7 @@ public sealed class ProductionMailboxRouteHistoryProtectedRestoreContext
 /// </summary>
 public static class ProductionMailboxRouteHistoryAuthoring
 {
-    public static VerifiedProductionMailboxRouteHistoryCursor CreateInitialCursor(
+    internal static VerifiedProductionMailboxRouteHistoryCursor CreateInitialCursor(
         VerifiedProductionMailboxRouteContinuityEnrollmentState enrollmentState,
         VerifiedProductionMailboxAuthority anchorAuthority,
         VerifiedProductionMailboxRevocationSnapshot anchorRevocations)
@@ -370,7 +370,21 @@ public static class ProductionMailboxRouteHistoryAuthoring
         return VerifyCore(current, canonicalBatch);
     }
 
+    /// <summary>
+    /// Restores a cursor only from the one sealed historical anchor committed with the RHC1.
+    /// Independent enrollment/control-plane handles are not accepted at the public boundary.
+    /// </summary>
     public static VerifiedProductionMailboxRouteHistoryCursor RestoreCursor(
+        ReadOnlySpan<byte> canonicalCheckpoint,
+        VerifiedProductionMailboxHistoricalRouteAnchor anchor,
+        ProductionMailboxRouteHistoryProtectedRestoreContext protectedState)
+    {
+        ArgumentNullException.ThrowIfNull(anchor);
+        return RestoreCursor(canonicalCheckpoint, anchor.EnrollmentState.Enrollment,
+            anchor.AnchorAuthority, anchor.AnchorRevocations, protectedState);
+    }
+
+    internal static VerifiedProductionMailboxRouteHistoryCursor RestoreCursor(
         ReadOnlySpan<byte> canonicalCheckpoint,
         VerifiedProductionMailboxRouteContinuityEnrollment enrollment,
         VerifiedProductionMailboxAuthority currentAuthority,
