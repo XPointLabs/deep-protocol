@@ -20,6 +20,8 @@ public sealed partial class ProductionMailboxSliceDApiTests
         Assert.Empty(typeof(VerifiedProductionMailboxOwnerControlResponse).GetConstructors());
         Assert.Empty(typeof(VerifiedProductionMailboxOwnerControlResponseHeader).GetConstructors());
         Assert.Empty(typeof(ProductionMailboxOwnerControlHistoryResponsePlan).GetConstructors());
+        Assert.Empty(typeof(VerifiedProductionMailboxOwnerControlHistoryResponseSegments)
+            .GetConstructors());
         Assert.Null(typeof(ProductionMailboxOwnerControlHistoryResponsePlan)
             .GetProperty("CanonicalPayload"));
         Assert.Empty(typeof(VerifiedProductionMailboxRouteContinuityGenesisIntent)
@@ -52,6 +54,10 @@ public sealed partial class ProductionMailboxSliceDApiTests
             typeof(ProductionMailboxOwnerControlResponseSigner),
             typeof(CancellationToken)
         }, historyAuthor.GetParameters().Select(static value => value.ParameterType).ToArray());
+        Assert.Single(transport, static method =>
+            method.Name == "VerifyHistoryResponseSegments" &&
+            method.ReturnType == typeof(
+                VerifiedProductionMailboxOwnerControlHistoryResponseSegments));
         Assert.DoesNotContain(transport, static method =>
             method.Name == "AuthorHistoryResponseAsync");
         Assert.DoesNotContain(typeof(ProductionMailboxOwnerControlHistoryResponsePlan)

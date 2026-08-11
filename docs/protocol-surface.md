@@ -301,6 +301,10 @@ has no combined payload property and grants no storage or publication authority.
 two internally owned payload parts incrementally in wire order, rebinds the request to the supplied
 OCR1 and full predecessor state before the typed responder signer, repeats owned validation after the
 callback, and self-verifies the final header with production Sodium.
+`VerifyHistoryResponseSegments` accepts only that verified header, the sealed batch commit plan,
+and the expected durable response hash; it recomputes the payload and response-domain hashes over
+the separate exact RHB1 then RHC1 segments without concatenation and returns a sealed crypto-only
+confirmation. It grants no storage, authorization, or delivery authority.
 
 `Deep.Protocol.Native` is a separate, consumer-unreferenced dark path for the approved Deep-native
 clean break. Its first surface is `DeepRecoveryV1`: exact 256-bit entropy, canonical English BIP-39

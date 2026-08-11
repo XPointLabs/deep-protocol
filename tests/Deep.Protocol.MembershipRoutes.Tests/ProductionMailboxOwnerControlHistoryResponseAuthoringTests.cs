@@ -46,6 +46,15 @@ public sealed partial class ProductionMailboxSliceDApiTests
 
         var header = ProductionMailboxOwnerControlTransportCodec.VerifyResponseHeader(
             plan.CanonicalHeader.Span, fixture.Request, fixture.Live.Anchor, Now, 0);
+        var segmented = ProductionMailboxOwnerControlTransportCodec
+            .VerifyHistoryResponseSegments(header, fixture.History,
+                plan.CanonicalResponseHash);
+        Assert.Equal(plan.CanonicalResponseHash.ToArray(),
+            segmented.CanonicalResponseHash.ToArray());
+        var wrongResponseHash = plan.CanonicalResponseHash.ToArray();
+        wrongResponseHash[^1] ^= 1;
+        Assert.Throws<FormatException>(() => ProductionMailboxOwnerControlTransportCodec
+            .VerifyHistoryResponseSegments(header, fixture.History, wrongResponseHash));
         await using var stream = new SegmentedReadStream(batch, checkpoint);
         var verified = await ProductionMailboxOwnerControlTransportCodec
             .ReadVerifiedResponsePayloadAsync(stream, header);

@@ -575,6 +575,39 @@ public static class ProductionMailboxOwnerControlTransportCodec
         return hash.GetHashAndReset();
     }
 
+    public static VerifiedProductionMailboxOwnerControlHistoryResponseSegments
+        VerifyHistoryResponseSegments(
+        VerifiedProductionMailboxOwnerControlResponseHeader verifiedHeader,
+        ProductionMailboxRouteHistoryBatchCommitPlan history,
+        ReadOnlyMemory<byte> expectedCanonicalResponseHash,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(verifiedHeader);
+        ArgumentNullException.ThrowIfNull(history);
+        if (expectedCanonicalResponseHash.Length != 32 ||
+            expectedCanonicalResponseHash.Span.IndexOfAnyExcept((byte)0) < 0)
+            throw new FormatException("Expected PMCR1 History response hash is invalid.");
+        cancellationToken.ThrowIfCancellationRequested();
+        var payloadHash = ComputeHistoryPayloadHash(history, cancellationToken);
+        byte[]? responseHash = null;
+        try
+        {
+            BindVerifiedHistoryHeader(verifiedHeader, history,
+                checked(history.TrustedCanonicalBatch.Length +
+                    history.TrustedNextCheckpoint.Length), payloadHash);
+            responseHash = ComputeHistoryResponseHash(
+                verifiedHeader.CanonicalBytes.Span, history, cancellationToken);
+            if (!FixedEqual(responseHash, expectedCanonicalResponseHash.Span))
+                throw new FormatException("PMCR1 History segmented response hash differs.");
+            return new(responseHash);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(payloadHash);
+            if (responseHash is not null) CryptographicOperations.ZeroMemory(responseHash);
+        }
+    }
+
     private static void AppendCancellable(IncrementalHash hash, ReadOnlySpan<byte> value,
         CancellationToken cancellationToken)
     {

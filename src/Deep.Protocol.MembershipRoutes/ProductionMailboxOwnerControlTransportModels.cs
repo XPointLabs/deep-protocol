@@ -170,6 +170,26 @@ public sealed class ProductionMailboxOwnerControlHistoryResponsePlan
     public ReadOnlyMemory<byte> BatchCommitPlanHash => _history.PlanHash;
 }
 
+/// <summary>
+/// Non-forgeable confirmation that a verified PMCR1 History header, a sealed route-history
+/// commit plan, and an expected durable response hash name the same segmented response.
+/// It attests cryptographic equality only, never storage, authorization, or delivery.
+/// </summary>
+public sealed class VerifiedProductionMailboxOwnerControlHistoryResponseSegments
+{
+    private readonly byte[] _responseHash;
+
+    internal VerifiedProductionMailboxOwnerControlHistoryResponseSegments(
+        ReadOnlySpan<byte> responseHash)
+    {
+        if (responseHash.Length != 32 || responseHash.IndexOfAnyExcept((byte)0) < 0)
+            throw new FormatException("History response-segment hash is invalid.");
+        _responseHash = responseHash.ToArray();
+    }
+
+    public ReadOnlyMemory<byte> CanonicalResponseHash => _responseHash.ToArray();
+}
+
 public sealed class VerifiedProductionMailboxOwnerControlResponderCertificate
 {
     private readonly byte[] _canonical;

@@ -669,6 +669,10 @@ enrollment, predecessor ROL/RHC/batch/auth tuple and plan. It repeats owned vali
 callback and self-verifies the exact PMCR1 with production Sodium. The response plan is not a
 durability, replay, publication, or delivery receipt; Registry persists and rereads its exact header,
 separate payload parts and response hash under the durable request-ID CAS.
+Before delivery, `VerifyHistoryResponseSegments(verified header, sealed batch commit plan,
+expected response hash)` incrementally repeats the exact RHB1-then-RHC1 payload binding and full
+response-domain hash. The sealed result confirms equality only and cannot be converted to durable,
+authorization, publication, or delivery authority.
 
 ROL1, RTC1 and RHC1 fields always use their protocol domain hashes
 (`ComputeRouteOriginLkgHash`, `ComputeTransitionContextHash`, and
