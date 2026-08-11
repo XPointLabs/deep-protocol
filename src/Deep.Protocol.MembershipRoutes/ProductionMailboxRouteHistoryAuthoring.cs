@@ -379,6 +379,15 @@ public sealed class ProductionMailboxRouteHistoryFinalArtifacts
     public ReadOnlyMemory<byte> CanonicalContinuityActivationHash =>
         _continuityActivationHash.ToArray();
 
+    internal ReadOnlySpan<byte> TrustedCanonicalAuthority => _authority;
+    internal ReadOnlySpan<byte> TrustedCanonicalRevocations => _revocations;
+    internal ReadOnlySpan<byte> TrustedCanonicalRouteCertificate => _certificate;
+    internal ReadOnlySpan<byte> TrustedCanonicalOwnerAdvertisement => _ownerAdvertisement;
+    internal ReadOnlySpan<byte> TrustedCanonicalRevocationCheckpoint => _revocationCheckpoint;
+    internal ReadOnlySpan<byte> TrustedCanonicalTransitionContext => _transitionContext;
+    internal ReadOnlySpan<byte> TrustedCanonicalContinuityActivation => _continuityActivation;
+    internal ReadOnlySpan<byte> TrustedCanonicalTransitionContextHash => _transitionContextHash;
+
     private static bool OptionalEqual(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right) =>
         left.Length == right.Length &&
         (left.IsEmpty || CryptographicOperations.FixedTimeEquals(left, right));
@@ -391,6 +400,8 @@ public sealed class ProductionMailboxRouteHistoryBatchCommitPlan
     private readonly byte[] _expectedCurrentCheckpoint;
     private readonly byte[] _expectedCurrentCheckpointHash;
     private readonly byte[] _expectedCurrentRouteOriginLkgHash;
+    private readonly byte[] _nextCheckpoint;
+    private readonly byte[] _nextCheckpointHash;
     private readonly byte[] _planHash;
     private readonly ProductionMailboxRouteHistoryProtectedRestoreContext _currentContext;
     private readonly ProductionMailboxRouteHistoryProtectedRestoreContext _nextContext;
@@ -410,6 +421,9 @@ public sealed class ProductionMailboxRouteHistoryBatchCommitPlan
             .CurrentRouteOriginLkgHash.ToArray();
         ExpectedCurrentBatchSequence = currentCursor.LastCommittedBatchSequence;
         NextCursor = nextCursor ?? throw new ArgumentNullException(nameof(nextCursor));
+        _nextCheckpoint = nextCursor.CanonicalCheckpoint.ToArray();
+        _nextCheckpointHash = nextCursor.CanonicalCheckpointHash.ToArray();
+        NextBatchSequence = nextCursor.LastCommittedBatchSequence;
         CurrentDurableRouteState = new(currentCursor);
         NextDurableRouteState = new(nextCursor);
         CurrentCumulativeState = new(currentCursor);
@@ -430,6 +444,7 @@ public sealed class ProductionMailboxRouteHistoryBatchCommitPlan
     public ReadOnlyMemory<byte> ExpectedCurrentRouteOriginLkg =>
         CurrentDurableRouteState.CanonicalRouteOriginLkg;
     public ulong ExpectedCurrentBatchSequence { get; }
+    public ulong NextBatchSequence { get; }
     public VerifiedProductionMailboxRouteHistoryCursor NextCursor { get; }
     public ProductionMailboxRouteHistoryDurableRouteState CurrentDurableRouteState { get; }
     public ProductionMailboxRouteHistoryDurableRouteState NextDurableRouteState { get; }
@@ -437,6 +452,51 @@ public sealed class ProductionMailboxRouteHistoryBatchCommitPlan
     public ProductionMailboxRouteHistoryCumulativeState NextCumulativeState { get; }
     public ProductionMailboxRouteHistoryFinalArtifacts FinalArtifacts { get; }
     public ReadOnlyMemory<byte> PlanHash => _planHash.ToArray();
+
+    internal ReadOnlySpan<byte> TrustedCanonicalBatch => _canonicalBatch;
+    internal ReadOnlySpan<byte> TrustedCanonicalBatchHash => _canonicalBatchHash;
+    internal ReadOnlySpan<byte> TrustedExpectedCurrentCheckpoint => _expectedCurrentCheckpoint;
+    internal ReadOnlySpan<byte> TrustedExpectedCurrentCheckpointHash =>
+        _expectedCurrentCheckpointHash;
+    internal ReadOnlySpan<byte> TrustedExpectedCurrentRouteOriginLkgHash =>
+        _expectedCurrentRouteOriginLkgHash;
+    internal ReadOnlySpan<byte> TrustedNextCheckpoint => _nextCheckpoint;
+    internal ReadOnlySpan<byte> TrustedNextCheckpointHash => _nextCheckpointHash;
+    internal ReadOnlySpan<byte> TrustedPlanHash => _planHash;
+    internal ProductionMailboxRouteHistoryProtectedRestoreContext TrustedCurrentContext =>
+        _currentContext;
+
+    internal void RevalidateOwnedForHistoryTransport()
+    {
+        if (_canonicalBatch.Length < ProductionMailboxRouteHistoryConstants.HeaderLength ||
+            _canonicalBatch.Length > ProductionMailboxRouteHistoryConstants.MaximumEncodedBytes ||
+            _expectedCurrentCheckpoint.Length !=
+                ProductionMailboxRouteContinuityConstants.CanonicalRouteHistoryCheckpointLength ||
+            _expectedCurrentCheckpointHash.Length != 32 ||
+            _expectedCurrentRouteOriginLkgHash.Length != 32 ||
+            _nextCheckpoint.Length !=
+                ProductionMailboxRouteContinuityConstants.CanonicalRouteHistoryCheckpointLength ||
+            _nextCheckpointHash.Length != 32 ||
+            _planHash.Length != 32 || ExpectedCurrentBatchSequence == ulong.MaxValue ||
+            NextBatchSequence != checked(ExpectedCurrentBatchSequence + 1))
+            throw new FormatException("History transport plan framing or sequence is invalid.");
+        ProductionMailboxRouteHistoryCodec.PreflightCanonical(_canonicalBatch,
+            validateNestedFraming: true,
+            CurrentDurableRouteState.AuthorizationSequence);
+        if (!CryptographicOperations.FixedTimeEquals(SHA256.HashData(_canonicalBatch),
+                _canonicalBatchHash))
+            throw new FormatException("History transport batch hash is invalid.");
+        var checkpoint = ProductionMailboxRouteContinuityCodec.DecodeRouteHistoryCheckpoint(
+            _nextCheckpoint);
+        if (!CryptographicOperations.FixedTimeEquals(
+                ProductionMailboxRouteContinuityCodec.ComputeRouteHistoryCheckpointHash(checkpoint),
+                _nextCheckpointHash) ||
+            checkpoint.LastCommittedBatchSequence != NextBatchSequence ||
+            !CryptographicOperations.FixedTimeEquals(checkpoint.LastCommittedBatchHash.Span,
+                _canonicalBatchHash) ||
+            !CryptographicOperations.FixedTimeEquals(ComputePlanHash(), _planHash))
+            throw new FormatException("History transport plan owned state is inconsistent.");
+    }
 
     public ProductionMailboxRouteHistoryProtectedRestoreContext
         ToExpectedCurrentProtectedRestoreContext() => Clone(_currentContext);
@@ -455,19 +515,19 @@ public sealed class ProductionMailboxRouteHistoryBatchCommitPlan
         AppendContext(hash, _currentContext);
         AppendRouteState(hash, CurrentDurableRouteState);
         AppendCumulativeState(hash, CurrentCumulativeState);
-        AppendBlob(hash, NextCursor.CanonicalCheckpoint.Span);
+        AppendBlob(hash, _nextCheckpoint);
         AppendContext(hash, _nextContext);
         AppendRouteState(hash, NextDurableRouteState);
         AppendCumulativeState(hash, NextCumulativeState);
         hash.AppendData([(byte)FinalArtifacts.AuthorizationKind]);
-        AppendBlob(hash, FinalArtifacts.CanonicalAuthority.Span);
-        AppendBlob(hash, FinalArtifacts.CanonicalRevocations.Span);
-        AppendBlob(hash, FinalArtifacts.CanonicalRouteCertificate.Span);
-        AppendBlob(hash, FinalArtifacts.CanonicalOwnerAdvertisement.Span);
-        AppendBlob(hash, FinalArtifacts.CanonicalRevocationCheckpoint.Span);
-        AppendBlob(hash, FinalArtifacts.CanonicalTransitionContext.Span);
-        AppendBlob(hash, FinalArtifacts.CanonicalContinuityActivation.Span);
-        AppendBlob(hash, FinalArtifacts.CanonicalTransitionContextHash.Span);
+        AppendBlob(hash, FinalArtifacts.TrustedCanonicalAuthority);
+        AppendBlob(hash, FinalArtifacts.TrustedCanonicalRevocations);
+        AppendBlob(hash, FinalArtifacts.TrustedCanonicalRouteCertificate);
+        AppendBlob(hash, FinalArtifacts.TrustedCanonicalOwnerAdvertisement);
+        AppendBlob(hash, FinalArtifacts.TrustedCanonicalRevocationCheckpoint);
+        AppendBlob(hash, FinalArtifacts.TrustedCanonicalTransitionContext);
+        AppendBlob(hash, FinalArtifacts.TrustedCanonicalContinuityActivation);
+        AppendBlob(hash, FinalArtifacts.TrustedCanonicalTransitionContextHash);
         return hash.GetHashAndReset();
     }
 

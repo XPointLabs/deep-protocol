@@ -117,11 +117,57 @@ public sealed class VerifiedProductionMailboxOwnerControlRequest
         ReadOnlySpan<byte> canonical, ReadOnlySpan<byte> hash)
     { Request = request; _canonical = canonical.ToArray(); _hash = hash.ToArray(); }
     internal ProductionMailboxOwnerControlRequest Request { get; }
+    internal ReadOnlySpan<byte> TrustedCanonicalBytes => _canonical;
+    internal ReadOnlySpan<byte> TrustedCanonicalHash => _hash;
     public ReadOnlyMemory<byte> CanonicalBytes => _canonical.ToArray();
     public ReadOnlyMemory<byte> CanonicalHash => _hash.ToArray();
     public ulong ExpiresAtUnixSeconds => Request.ExpiresAtUnixSeconds;
     public ProductionMailboxSelectionSuccessorMode Mode => Request.Mode;
     public ProductionMailboxRouteAuthorizationKind ExpectedAuthorizationKind => Request.ExpectedAuthorizationKind;
+}
+
+/// <summary>
+/// Defensive, crypto-only authoring result for one exact PMCR1 History response. The RHB1 and
+/// RHC1 remain separate; this type attests neither persistence nor delivery.
+/// </summary>
+public sealed class ProductionMailboxOwnerControlHistoryResponsePlan
+{
+    private readonly byte[] _canonicalHeader;
+    private readonly byte[] _payloadHash;
+    private readonly byte[] _responseHash;
+    private readonly ProductionMailboxRouteHistoryBatchCommitPlan _history;
+
+    internal ProductionMailboxOwnerControlHistoryResponsePlan(
+        ReadOnlySpan<byte> canonicalHeader,
+        uint payloadLength,
+        ReadOnlySpan<byte> payloadHash,
+        ReadOnlySpan<byte> responseHash,
+        ProductionMailboxRouteHistoryBatchCommitPlan history)
+    {
+        if (canonicalHeader.Length != ProductionMailboxOwnerControlConstants.ResponseHeaderLength ||
+            payloadLength == 0 ||
+            payloadHash.Length != 32 || payloadHash.IndexOfAnyExcept((byte)0) < 0 ||
+            responseHash.Length != 32 || responseHash.IndexOfAnyExcept((byte)0) < 0)
+            throw new FormatException("History response plan fields are invalid.");
+        _canonicalHeader = canonicalHeader.ToArray();
+        PayloadLength = payloadLength;
+        _payloadHash = payloadHash.ToArray();
+        _responseHash = responseHash.ToArray();
+        _history = history ?? throw new ArgumentNullException(nameof(history));
+    }
+
+    public ReadOnlyMemory<byte> CanonicalHeader => _canonicalHeader.ToArray();
+    public uint PayloadLength { get; }
+    public ReadOnlyMemory<byte> PayloadSha256 => _payloadHash.ToArray();
+    public ReadOnlyMemory<byte> CanonicalResponseHash => _responseHash.ToArray();
+    public ReadOnlyMemory<byte> CanonicalRouteHistoryBatch => _history.CanonicalBatch;
+    public ReadOnlyMemory<byte> CanonicalRouteHistoryBatchHash => _history.CanonicalBatchHash;
+    public ReadOnlyMemory<byte> CanonicalRouteHistoryCheckpoint =>
+        _history.TrustedNextCheckpoint.ToArray();
+    public ReadOnlyMemory<byte> CanonicalRouteHistoryCheckpointHash =>
+        _history.TrustedNextCheckpointHash.ToArray();
+    public ulong NextRouteHistoryBatchSequence => _history.NextBatchSequence;
+    public ReadOnlyMemory<byte> BatchCommitPlanHash => _history.PlanHash;
 }
 
 public sealed class VerifiedProductionMailboxOwnerControlResponderCertificate

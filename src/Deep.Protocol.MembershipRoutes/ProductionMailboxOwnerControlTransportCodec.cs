@@ -107,6 +107,8 @@ public static class ProductionMailboxOwnerControlTransportCodec
         ValidateMessageWindow(response.IssuedAtUnixSeconds, response.ExpiresAtUnixSeconds,
             nowUnixSeconds, clockSkewSeconds, "PMCR1");
         if (response.IssuedAtUnixSeconds < request.Request.IssuedAtUnixSeconds ||
+            response.IssuedAtUnixSeconds <
+                anchor.OwnerControlResponderCertificate.IssuedAtUnixSeconds ||
             response.ExpiresAtUnixSeconds > request.Request.ExpiresAtUnixSeconds ||
             response.ExpiresAtUnixSeconds > anchor.OwnerControlResponderCertificate.ExpiresAtUnixSeconds ||
             !CryptographicOperations.FixedTimeEquals(response.CanonicalRequestHash.Span,
@@ -174,7 +176,8 @@ public static class ProductionMailboxOwnerControlTransportCodec
         return VerifyResponsePayload(verifiedHeader, payload);
     }
 
-    public static ValueTask<VerifiedProductionMailboxOwnerControlResponse> AuthorHistoryResponseAsync(
+    public static async ValueTask<ProductionMailboxOwnerControlHistoryResponsePlan>
+        AuthorHistoryResponseHeaderAsync(
         VerifiedProductionMailboxOwnerControlRequest request,
         VerifiedProductionMailboxHistoricalRouteAnchor anchor,
         ProductionMailboxRouteHistoryBatchCommitPlan history,
@@ -182,23 +185,84 @@ public static class ProductionMailboxOwnerControlTransportCodec
         ProductionMailboxOwnerControlResponseSigner signer,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(history);
+        ArgumentNullException.ThrowIfNull(request); ArgumentNullException.ThrowIfNull(anchor);
+        ArgumentNullException.ThrowIfNull(history); ArgumentNullException.ThrowIfNull(signer);
+        cancellationToken.ThrowIfCancellationRequested();
+        BindHistoryAuthoringInputs(request, anchor, history, issuedAt, expiresAt);
+        history.RevalidateOwnedForHistoryTransport();
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var payloadLength = checked(history.TrustedCanonicalBatch.Length +
+            history.TrustedNextCheckpoint.Length);
+        if (payloadLength > ProductionMailboxOwnerControlConstants.MaximumHistoryFrameBytes)
+            throw new FormatException("History response payload exceeds its exact bound.");
+        var payloadHash = ComputeHistoryPayloadHash(history, cancellationToken);
         var req = request.Request;
-        if (!FixedEqual(req.PredecessorRouteOriginLkgHash.Span,
-                history.ExpectedCurrentRouteOriginLkgHash.Span) ||
-            !FixedEqual(req.CurrentRouteHistoryCheckpointHash.Span,
-                history.ExpectedCurrentCheckpointHash.Span) ||
-            req.CurrentRouteHistoryBatchSequence != history.ExpectedCurrentBatchSequence)
-            throw new FormatException("History plan differs from the exact PMCQ1 predecessor CAS tuple.");
-        var payload = new byte[checked(history.CanonicalBatch.Length +
-            history.NextCursor.CanonicalCheckpoint.Length)];
-        history.CanonicalBatch.Span.CopyTo(payload);
-        history.NextCursor.CanonicalCheckpoint.Span.CopyTo(payload.AsSpan(history.CanonicalBatch.Length));
-        _ = DecodeHistoryPayload(payload);
-        return AuthorResponseAsync(request, anchor, ProductionMailboxOwnerControlResponseKind.History,
-            payload, history.NextCursor.CanonicalCheckpointHash,
-            history.NextCursor.LastCommittedBatchSequence, issuedAt, expiresAt, signer,
-            cancellationToken);
+        var responder = anchor.OwnerControlResponderCertificate.ResponderEd25519PublicKey;
+        var response = new ProductionMailboxOwnerControlResponseHeader
+        {
+            Kind = ProductionMailboxOwnerControlResponseKind.History,
+            Mode = req.Mode, AuthorizationKind = req.ExpectedAuthorizationKind,
+            IssuedAtUnixSeconds = issuedAt, ExpiresAtUnixSeconds = expiresAt,
+            CanonicalRequestHash = request.TrustedCanonicalHash.ToArray(),
+            RequestId = req.RequestId.ToArray(), NetworkId = req.NetworkId.ToArray(),
+            RouteDomainHash = req.RouteDomainHash.ToArray(),
+            PredecessorRouteOriginLkgHash = req.PredecessorRouteOriginLkgHash.ToArray(),
+            CurrentRouteHistoryCheckpointHash = req.CurrentRouteHistoryCheckpointHash.ToArray(),
+            NextRouteHistoryCheckpointHash = history.TrustedNextCheckpointHash.ToArray(),
+            CurrentRouteHistoryBatchSequence = req.CurrentRouteHistoryBatchSequence,
+            NextRouteHistoryBatchSequence = history.NextBatchSequence,
+            PayloadSha256 = payloadHash.ToArray(), PayloadLength = checked((uint)payloadLength),
+            ResponderEd25519PublicKey = responder.ToArray(), ResponderSignature = new byte[64]
+        };
+        var signingBytes = GetResponseSigningBytes(response);
+        var signature = new byte[64];
+        var signingRequest = new ProductionMailboxOwnerControlResponseSigningRequest(
+            signingBytes, responder.Span);
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var written = await signer(signingRequest, signature, cancellationToken)
+                .ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (written != 64)
+                throw new FormatException("PMCR1 responder signer must write exactly 64 bytes.");
+            var frozenSignature = signature.ToArray();
+
+            BindHistoryAuthoringInputs(request, anchor, history, issuedAt, expiresAt);
+            history.RevalidateOwnedForHistoryTransport();
+            var repeatedPayloadHash = ComputeHistoryPayloadHash(history, cancellationToken);
+            try
+            {
+                if (!FixedEqual(payloadHash, repeatedPayloadHash))
+                    throw new FormatException("History response payload changed during signing.");
+                var signed = response with { ResponderSignature = frozenSignature };
+                var header = EncodeResponseHeader(signed);
+                var verifiedHeader = VerifyResponseHeader(header, request, anchor, issuedAt, 0);
+                BindVerifiedHistoryHeader(verifiedHeader, history, payloadLength, payloadHash);
+                var responseHash = ComputeHistoryResponseHash(header, history, cancellationToken);
+                try
+                {
+                    return new(header, checked((uint)payloadLength), payloadHash, responseHash,
+                        history);
+                }
+                finally
+                {
+                    CryptographicOperations.ZeroMemory(responseHash);
+                }
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(repeatedPayloadHash);
+            }
+        }
+        finally
+        {
+            signingRequest.Clear();
+            CryptographicOperations.ZeroMemory(signingBytes);
+            CryptographicOperations.ZeroMemory(signature);
+            CryptographicOperations.ZeroMemory(payloadHash);
+        }
     }
 
     public static ValueTask<VerifiedProductionMailboxOwnerControlResponse> AuthorFinalActivationResponseAsync(
@@ -285,7 +349,9 @@ public static class ProductionMailboxOwnerControlTransportCodec
             PayloadSha256 = SHA256.HashData(payload.Span), PayloadLength = checked((uint)payload.Length),
             ResponderEd25519PublicKey = responder.ToArray(), ResponderSignature = new byte[64]
         };
-        if (issuedAt < req.IssuedAtUnixSeconds || expiresAt > req.ExpiresAtUnixSeconds ||
+        if (issuedAt < req.IssuedAtUnixSeconds ||
+            issuedAt < anchor.OwnerControlResponderCertificate.IssuedAtUnixSeconds ||
+            expiresAt > req.ExpiresAtUnixSeconds ||
             expiresAt > anchor.OwnerControlResponderCertificate.ExpiresAtUnixSeconds)
             throw new FormatException("PMCR1 authoring window exceeds PMCQ1/OCR1.");
         var signingBytes = GetResponseSigningBytes(response); var signature = new byte[64];
@@ -363,7 +429,8 @@ public static class ProductionMailboxOwnerControlTransportCodec
         var delegation = anchor.EnrollmentState.Enrollment.Delegation;
         var rolBytes = cursor.CanonicalCurrentRouteOriginLkg();
         var rol = ProductionMailboxRouteContinuityCodec.DecodeRouteOriginLkg(rolBytes);
-        if (request.ExpiresAtUnixSeconds > ocr.ExpiresAtUnixSeconds ||
+        if (request.IssuedAtUnixSeconds < ocr.IssuedAtUnixSeconds ||
+            request.ExpiresAtUnixSeconds > ocr.ExpiresAtUnixSeconds ||
             !FixedEqual(request.NetworkId.Span, delegation.NetworkId.Span) ||
             !FixedEqual(request.MailboxOwnerEd25519PublicKey.Span, delegation.MailboxOwnerEd25519PublicKey.Span) ||
             !FixedEqual(request.RouteDomainHash.Span, delegation.RouteDomainHash.Span) ||
@@ -373,6 +440,7 @@ public static class ProductionMailboxOwnerControlTransportCodec
             !FixedEqual(request.CurrentRouteHistoryCheckpointHash.Span, cursor.CanonicalCheckpointHash.Span) ||
             request.CurrentRouteHistoryBatchSequence != cursor.LastCommittedBatchSequence ||
             request.PredecessorAuthorizationSequence != rol.AuthorizationSequence ||
+            request.ExpectedAuthorizationKind != rol.AuthorizationKind ||
             !FixedEqual(request.PredecessorAuthorizationHash.Span, rol.CanonicalAuthorizationHash.Span) ||
             !FixedEqual(cursor.Enrollment.CanonicalDelegationHash.Span,
                 anchor.EnrollmentState.Enrollment.CanonicalDelegationHash.Span))
@@ -386,6 +454,136 @@ public static class ProductionMailboxOwnerControlTransportCodec
         else if (kind == ProductionMailboxOwnerControlResponseKind.FinalActivation) _ = DecodeFinalActivation(payload);
         else if (kind == ProductionMailboxOwnerControlResponseKind.NoChange && !payload.IsEmpty)
             throw new FormatException("PMCR1 NoChange payload must be empty.");
+    }
+
+    private static void BindHistoryAuthoringInputs(
+        VerifiedProductionMailboxOwnerControlRequest request,
+        VerifiedProductionMailboxHistoricalRouteAnchor anchor,
+        ProductionMailboxRouteHistoryBatchCommitPlan history,
+        ulong issuedAt, ulong expiresAt)
+    {
+        if (request.TrustedCanonicalBytes.Length !=
+                ProductionMailboxOwnerControlConstants.RequestLength ||
+            request.TrustedCanonicalHash.Length != 32)
+            throw new FormatException("Sealed PMCQ1 state is invalid.");
+        ScalarWindow(issuedAt, expiresAt, "PMCR1");
+        var req = request.Request;
+        var ocr = anchor.OwnerControlResponderCertificate;
+        if (issuedAt < req.IssuedAtUnixSeconds || issuedAt < ocr.IssuedAtUnixSeconds ||
+            expiresAt > req.ExpiresAtUnixSeconds ||
+            expiresAt > ocr.ExpiresAtUnixSeconds)
+            throw new FormatException("PMCR1 authoring window exceeds PMCQ1/OCR1.");
+
+        var canonicalOcr = anchor.CanonicalOwnerControlResponderCertificate.ToArray();
+        var ocrHash = anchor.CanonicalOwnerControlResponderCertificateHash.ToArray();
+        var canonicalRequest = EncodeRequest(req);
+        var recomputedRequestHash = Array.Empty<byte>();
+        var requestSigningBytes = Array.Empty<byte>();
+        try
+        {
+            if (canonicalOcr.Length !=
+                    ProductionMailboxOwnerControlConstants.ResponderCertificateLength ||
+                ocrHash.Length != 32 ||
+                !FixedEqual(Hash(OcrHashDomain, canonicalOcr), ocrHash) ||
+                !FixedEqual(canonicalRequest, request.TrustedCanonicalBytes))
+                throw new FormatException("PMCQ1 differs from the supplied protected OCR1 anchor.");
+            recomputedRequestHash = ComputeRequestHash(req, ocrHash);
+            requestSigningBytes = GetRequestSigningBytes(req, ocrHash);
+            if (!FixedEqual(recomputedRequestHash, request.TrustedCanonicalHash) ||
+                !new SodiumProductionMailboxRouteSignatureVerifier().Verify(
+                    req.MailboxOwnerEd25519PublicKey.Span, requestSigningBytes,
+                    req.OwnerSignature.Span))
+                throw new FormatException("PMCQ1 authority differs from the supplied protected OCR1 anchor.");
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(canonicalOcr);
+            CryptographicOperations.ZeroMemory(ocrHash);
+            CryptographicOperations.ZeroMemory(canonicalRequest);
+            CryptographicOperations.ZeroMemory(recomputedRequestHash);
+            CryptographicOperations.ZeroMemory(requestSigningBytes);
+        }
+
+        var delegation = anchor.EnrollmentState.Enrollment.Delegation;
+        var enrollment = anchor.EnrollmentState.Enrollment;
+        var current = history.CurrentDurableRouteState;
+        var context = history.TrustedCurrentContext;
+        if (!FixedEqual(req.NetworkId.Span, delegation.NetworkId.Span) ||
+            !FixedEqual(req.MailboxOwnerEd25519PublicKey.Span,
+                delegation.MailboxOwnerEd25519PublicKey.Span) ||
+            !FixedEqual(req.RouteDomainHash.Span, delegation.RouteDomainHash.Span) ||
+            !FixedEqual(req.SelectionInputCommitment.Span,
+                delegation.SelectionInputCommitment.Span) ||
+            !FixedEqual(req.NetworkId.Span, current.NetworkId.Span) ||
+            !FixedEqual(req.RouteDomainHash.Span, current.RouteDomainHash.Span) ||
+            !FixedEqual(enrollment.CanonicalDelegationHash.Span,
+                current.CanonicalDelegationHash.Span) ||
+            !FixedEqual(enrollment.CanonicalAcceptanceHash.Span,
+                current.CanonicalDelegationAcceptanceHash.Span) ||
+            !FixedEqual(enrollment.CanonicalDelegationHash.Span,
+                context.EnrollmentCanonicalDelegationHash.Span) ||
+            !FixedEqual(enrollment.CanonicalAcceptanceHash.Span,
+                context.EnrollmentCanonicalAcceptanceHash.Span) ||
+            !FixedEqual(req.PredecessorRouteOriginLkgHash.Span,
+                history.TrustedExpectedCurrentRouteOriginLkgHash) ||
+            !FixedEqual(req.CurrentRouteHistoryCheckpointHash.Span,
+                history.TrustedExpectedCurrentCheckpointHash) ||
+            req.CurrentRouteHistoryBatchSequence != history.ExpectedCurrentBatchSequence ||
+            req.PredecessorAuthorizationSequence != current.AuthorizationSequence ||
+            req.ExpectedAuthorizationKind != current.AuthorizationKind ||
+            !FixedEqual(req.PredecessorAuthorizationHash.Span,
+                current.CanonicalAuthorizationHash.Span))
+            throw new FormatException(
+                "History plan differs from the exact PMCQ1/anchor predecessor state.");
+    }
+
+    private static void BindVerifiedHistoryHeader(
+        VerifiedProductionMailboxOwnerControlResponseHeader verifiedHeader,
+        ProductionMailboxRouteHistoryBatchCommitPlan history,
+        int payloadLength, ReadOnlySpan<byte> payloadHash)
+    {
+        var response = verifiedHeader.Response;
+        if (response.Kind != ProductionMailboxOwnerControlResponseKind.History ||
+            response.PayloadLength != checked((uint)payloadLength) ||
+            !FixedEqual(response.PayloadSha256.Span, payloadHash) ||
+            !FixedEqual(response.NextRouteHistoryCheckpointHash.Span,
+                history.TrustedNextCheckpointHash) ||
+            response.NextRouteHistoryBatchSequence != history.NextBatchSequence)
+            throw new FormatException("PMCR1 History header differs from its sealed payload plan.");
+    }
+
+    private static byte[] ComputeHistoryPayloadHash(
+        ProductionMailboxRouteHistoryBatchCommitPlan history,
+        CancellationToken cancellationToken)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        AppendCancellable(hash, history.TrustedCanonicalBatch, cancellationToken);
+        AppendCancellable(hash, history.TrustedNextCheckpoint, cancellationToken);
+        return hash.GetHashAndReset();
+    }
+
+    private static byte[] ComputeHistoryResponseHash(
+        ReadOnlySpan<byte> canonicalHeader,
+        ProductionMailboxRouteHistoryBatchCommitPlan history,
+        CancellationToken cancellationToken)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        hash.AppendData(ResponseHashDomain);
+        hash.AppendData(canonicalHeader);
+        AppendCancellable(hash, history.TrustedCanonicalBatch, cancellationToken);
+        AppendCancellable(hash, history.TrustedNextCheckpoint, cancellationToken);
+        return hash.GetHashAndReset();
+    }
+
+    private static void AppendCancellable(IncrementalHash hash, ReadOnlySpan<byte> value,
+        CancellationToken cancellationToken)
+    {
+        const int chunkLength = 64 * 1024;
+        for (var offset = 0; offset < value.Length; offset += chunkLength)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            hash.AppendData(value.Slice(offset, Math.Min(chunkLength, value.Length - offset)));
+        }
     }
 
     private static VerifiedProductionMailboxOwnerControlResponse VerifyResponsePayload(

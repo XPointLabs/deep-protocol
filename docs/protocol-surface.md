@@ -290,3 +290,14 @@ responder signature into a sealed read context; only then can bounded payload al
 incremental hash verification and nested semantic decoding occur. Codecs are carry-only; Registry and
 client own HTTPS authentication plus confidentiality, durable request-id CAS, response persistence,
 retry and post-CAS authority. Node/path/log exposure is forbidden.
+Request issuance is lower-bounded by the exact protected OCR1 issuance; response issuance is
+lower-bounded by both OCR1 and PMCQ1, with equality accepted. PMCQ1 and History response authoring
+also require its authorization tag to equal the sealed current cursor/plan authorization kind.
+
+History responses are authored only by `AuthorHistoryResponseHeaderAsync` from an exact verified
+PMCQ1, its sealed historical OCR/enrollment anchor, and a sealed next-batch commit plan. The sealed
+result exposes the PMCR1 header and response bindings plus separate defensive RHB1/RHC1 values; it
+has no combined payload property and grants no storage or publication authority. Protocol hashes the
+two internally owned payload parts incrementally in wire order, rebinds the request to the supplied
+OCR1 and full predecessor state before the typed responder signer, repeats owned validation after the
+callback, and self-verifies the final header with production Sodium.

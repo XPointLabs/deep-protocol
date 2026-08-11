@@ -634,6 +634,10 @@ hash/length/reserved `[248..288)`, exact OCR responder key `[288..320)`, signatu
 Responder identity is rejected before payload allocation. Message lifetime is at most 300 seconds,
 future issuance uses configured skew at most 300 seconds, and expiry/action/replay always requires
 `now < expiresAt` without skew extension.
+PMCQ1 issuance must be at or after the protected OCR1 issuance, and PMCR1 issuance must be at or
+after both its exact PMCQ1 and OCR1 issuance; equality is valid. The PMCQ1 authorization tag must
+equal the sealed current ROL/cursor authorization kind. History authoring repeats that equality
+against the batch plan's exact current durable route state before the responder callback.
 
 The public streaming composition is authentication-first: verify the exact fixed PMCR1 header
 against the sealed OCR1, PMCQ1 and time window to obtain a sealed read context; only that context
@@ -652,6 +656,19 @@ payload reads only the first 64 RHB bytes, derives its exact count/table/payload
 `derived + 464 == payloadLen`, then rents the full bounded frame. Transported RHC remains inert
 until local sequential `VerifyNextBatchForCommit` recomputes the exact matching batch, durable route
 state, protected context and plan hash.
+
+The responder-side History authoring surface is only
+`AuthorHistoryResponseHeaderAsync(verified PMCQ1, historical anchor, sealed batch commit plan,
+issuedAt, expiresAt, typed responder signer)`. It returns a sealed, crypto-only response plan with
+the exact PMCR1 header, payload length/hash, response hash, and separate exact RHB1 and RHC1
+descriptors. It never constructs or exposes a combined `RHB1 || RHC1` buffer. Payload SHA-256 and
+the response-domain hash are computed incrementally over the internally owned canonical RHB1 and
+then the saved next RHC1. Before the responder callback, the authorer rebinds the PMCQ1 hash and
+owner signature to the exact OCR1 in the supplied historical anchor and matches the anchor,
+enrollment, predecessor ROL/RHC/batch/auth tuple and plan. It repeats owned validation after the
+callback and self-verifies the exact PMCR1 with production Sodium. The response plan is not a
+durability, replay, publication, or delivery receipt; Registry persists and rereads its exact header,
+separate payload parts and response hash under the durable request-ID CAS.
 
 ROL1, RTC1 and RHC1 fields always use their protocol domain hashes
 (`ComputeRouteOriginLkgHash`, `ComputeTransitionContextHash`, and

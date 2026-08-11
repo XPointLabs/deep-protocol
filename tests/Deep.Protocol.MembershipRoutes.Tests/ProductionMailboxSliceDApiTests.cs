@@ -8,7 +8,7 @@ using Xunit;
 
 namespace Deep.Protocol.MembershipRoutes.Tests;
 
-public sealed class ProductionMailboxSliceDApiTests
+public sealed partial class ProductionMailboxSliceDApiTests
 {
     private const ulong Now = 1_800_000_000;
     [Fact]
@@ -19,6 +19,9 @@ public sealed class ProductionMailboxSliceDApiTests
         Assert.Empty(typeof(VerifiedProductionMailboxOwnerControlRequest).GetConstructors());
         Assert.Empty(typeof(VerifiedProductionMailboxOwnerControlResponse).GetConstructors());
         Assert.Empty(typeof(VerifiedProductionMailboxOwnerControlResponseHeader).GetConstructors());
+        Assert.Empty(typeof(ProductionMailboxOwnerControlHistoryResponsePlan).GetConstructors());
+        Assert.Null(typeof(ProductionMailboxOwnerControlHistoryResponsePlan)
+            .GetProperty("CanonicalPayload"));
         Assert.Empty(typeof(VerifiedProductionMailboxRouteContinuityGenesisIntent)
             .GetConstructors());
         Assert.Empty(typeof(ProductionMailboxRouteContinuityGenesisCommitPlan)
@@ -37,6 +40,23 @@ public sealed class ProductionMailboxSliceDApiTests
             method.Name == "ReadVerifiedResponsePayloadAsync" &&
             method.GetParameters().Any(static parameter =>
                 parameter.ParameterType == typeof(VerifiedProductionMailboxOwnerControlResponseHeader)));
+        var historyAuthor = Assert.Single(transport, static method =>
+            method.Name == "AuthorHistoryResponseHeaderAsync" &&
+            method.ReturnType == typeof(ValueTask<ProductionMailboxOwnerControlHistoryResponsePlan>));
+        Assert.Equal(new[]
+        {
+            typeof(VerifiedProductionMailboxOwnerControlRequest),
+            typeof(VerifiedProductionMailboxHistoricalRouteAnchor),
+            typeof(ProductionMailboxRouteHistoryBatchCommitPlan),
+            typeof(ulong), typeof(ulong),
+            typeof(ProductionMailboxOwnerControlResponseSigner),
+            typeof(CancellationToken)
+        }, historyAuthor.GetParameters().Select(static value => value.ParameterType).ToArray());
+        Assert.DoesNotContain(transport, static method =>
+            method.Name == "AuthorHistoryResponseAsync");
+        Assert.DoesNotContain(typeof(ProductionMailboxOwnerControlHistoryResponsePlan)
+            .GetProperties(), static property => property.Name.Contains("Durab",
+                StringComparison.OrdinalIgnoreCase) || property.Name == "CanonicalPayload");
         var issuer = typeof(ProductionMailboxRouteIssuerAuthoring).GetMethods(
             BindingFlags.Public | BindingFlags.Static);
         Assert.Single(issuer, static method => method.Name == "VerifyGenesisIntent");
@@ -132,6 +152,12 @@ public sealed class ProductionMailboxSliceDApiTests
             result.CommitPlan.CanonicalSelectionSuccessorV2.Span);
         Assert.Equal(ProductionMailboxRouteAuthorizationCodec.ComputeTransitionContextHash(rtc),
             successor.CanonicalTransitionContextHash.ToArray());
+
+        // PMCQ1's authorization tag describes the sealed current cursor. A transition that changes
+        // authorization kind is still authored above, but its final response is requested only
+        // after the consumer has a matching current-kind cursor.
+        if (delegated)
+            return;
 
         ValueTask<VerifiedProductionMailboxOwnerControlRequest> requestTask = (delegated, offline) switch
         {
