@@ -301,3 +301,12 @@ has no combined payload property and grants no storage or publication authority.
 two internally owned payload parts incrementally in wire order, rebinds the request to the supplied
 OCR1 and full predecessor state before the typed responder signer, repeats owned validation after the
 callback, and self-verifies the final header with production Sodium.
+
+`Deep.Protocol.Native` is a separate, consumer-unreferenced dark path for the approved Deep-native
+clean break. Its first surface is `DeepRecoveryV1`: exact 256-bit entropy, canonical English BIP-39
+24-word checksum phrases, and domain-separated HKDF-SHA-512 account/recovery/backup role seeds bound
+to `networkId16` and an unsigned 64-bit account generation. Device keys are not derived from the
+phrase, role seeds are not publicly exported, and disposed sealed capabilities zero their owned
+buffers. The reserved PQ role seed does not activate ML-KEM/ML-DSA or select a provider. This project
+has no production consumer, Session parser, wire negotiation, fallback, storage authority, or
+publication authority. See `deep-native-recovery-v1.md`.
