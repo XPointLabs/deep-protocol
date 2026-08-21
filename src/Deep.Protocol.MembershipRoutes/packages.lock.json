@@ -2,11 +2,6 @@
   "version": 1,
   "dependencies": {
     "net10.0": {
-      "Google.Protobuf": {
-        "type": "Transitive",
-        "resolved": "3.32.1",
-        "contentHash": "HbFFRNU46e1E+qhGvwCDAO2EZ80WADqlkNqlOBYvGi7SNxwMPkTrReZgCg9/TrXwLO/n0za+AIiT2IplzqrjZw=="
-      },
       "libsodium": {
         "type": "Transitive",
         "resolved": "1.0.22",
@@ -23,18 +18,7 @@
       "deep.protocol": {
         "type": "Project",
         "dependencies": {
-          "Deep.Protocol.Abstractions": "[1.0.0, )",
-          "Deep.Protocol.Protobuf": "[1.0.0, )",
           "Sodium.Core": "[1.4.1, )"
-        }
-      },
-      "deep.protocol.abstractions": {
-        "type": "Project"
-      },
-      "deep.protocol.protobuf": {
-        "type": "Project",
-        "dependencies": {
-          "Google.Protobuf": "[3.32.1, )"
         }
       }
     }

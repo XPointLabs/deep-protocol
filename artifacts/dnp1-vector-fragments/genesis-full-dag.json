@@ -1,0 +1,72 @@
+{
+  "normativeHead": "2562b11cdacdcc6e60cf79bdb6265b4f4687fbbe",
+  "mappings": [
+    {
+      "id": "recovery-genesis-terminal-reject",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.DeploymentGovernanceOriginTests.AccountTerminalFence_RejectsGenesisBranchButAllowsOnlyVerifiedResetOldSide",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1DeploymentGovernanceOriginTests.cs"
+    },
+    {
+      "id": "witness-empty-tree-root",
+      "testFqn": "Deep.Protocol.DeepNative.WitnessEvidenceTests.ReplacementWitnessEmptyRoot_BindsEpochIdAndMaximumTreeSize",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1WitnessEvidenceTests.cs"
+    },
+    {
+      "id": "recovery-materialize-candidate-dpl-cold",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.DeploymentGovernanceOriginTests.FirstDeployment_PublicColdOpen_RestoresAndMaterializesCandidateDpl",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1DeploymentGovernanceOriginTests.cs"
+    },
+    {
+      "id": "recovery-genesis-dtc-zero-branch",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.DeploymentGovernanceOriginTests.FirstDeployment_GenesisDtcUsesExactZeroPredecessorBranch",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1DeploymentGovernanceOriginTests.cs"
+    },
+    {
+      "id": "recovery-genesis-keyset-source492-golden",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.DeploymentGovernanceOriginTests.FirstDeployment_GenesisSourceJoinsExact492AndAnchor460",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1DeploymentGovernanceOriginTests.cs"
+    },
+    {
+      "id": "recovery-genesis-identity-context-golden",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.DeploymentGovernanceOriginTests.FirstDeployment_GenesisIdentityContextBindsCurrentProtectedStoreAndExactDtcCatalog",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1DeploymentGovernanceOriginTests.cs"
+    },
+    {
+      "id": "recovery-genesis-release-context-golden",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.DeploymentGovernanceOriginTests.FirstDeployment_GenesisReleaseContextMatchesExactNonterminalAncestryTranscript",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1DeploymentGovernanceOriginTests.cs"
+    },
+    {
+      "id": "recovery-genesis-outer-author-replay",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.DeploymentGovernanceOriginTests.FirstDeployment_PublicPath_ReachesLocalCommittedThroughExactThreeWitnesses",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1DeploymentGovernanceOriginTests.cs"
+    },
+    {
+      "id": "recovery-genesis-author-dcp-dcs-dct-freeze",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.DeploymentGovernanceOriginTests.FirstDeployment_PreExternalAuthorFreezesFourDcpOneDcsOneDctWithSixSignatures",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1DeploymentGovernanceOriginTests.cs"
+    },
+    {
+      "id": "recovery-genesis-candidate-core-cycle-free",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.DeploymentGovernanceOriginTests.FirstDeployment_CandidateCoreIsExact494PreExternalCycleFreeTranscript",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1DeploymentGovernanceOriginTests.cs"
+    },
+    {
+      "id": "recovery-genesis-reset-same-account-bypass",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.DeploymentGovernanceOriginTests.SameAccount_BypassesResetReservationAndFreezesExactDualSignedSuccessor",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1DeploymentGovernanceOriginTests.cs"
+    },
+    {
+      "id": "recovery-drm20-gar-atomic-remint",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.DeploymentGovernanceOriginTests.AccountReset_GarAtomicallyRetainsEvidenceAndMintsExactPostHmacReceipt",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1DeploymentGovernanceOriginTests.cs"
+    }
+  ],
+  "unmapped": [
+    {
+      "id": "recovery-genesis-full-constructibility-dag",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.GenesisFullDagEvidenceTests.PublicDrm20FirstDeployment_ReachesLocalCommittedWithDurableRereads",
+      "reason": "The public first-deployment integration is constructible through LocalCommitted, but the new mandatory GTI/GRR/GAS/GQP/GAJ/key/protector rereads intentionally execute more provider callbacks than this vector's closed 6/1/4/2 callback budget. It remains a regression test and is not executable package evidence until the vector is isolated at the intended callback boundary."
+    }
+  ]
+}

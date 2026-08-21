@@ -19,6 +19,50 @@ public static class MailboxPeerWireV2Codec
 
     public static MailboxPeerWireRequestV2 Decode(ReadOnlySpan<byte> encoded)
     {
+        var layout = PreflightCanonical(encoded);
+
+        var payloadLength = layout.PayloadLength;
+        var senderProofLength = layout.SenderProofLength;
+        var recipientProofLength = layout.RecipientProofLength;
+        var signatureLength = layout.SignatureLength;
+        var payloadOffset = MailboxPeerWireV2Limits.RequestHeaderLength;
+        var senderProofOffset = payloadOffset + payloadLength;
+        var recipientProofOffset = senderProofOffset + senderProofLength;
+        var signatureOffset = recipientProofOffset + recipientProofLength;
+        var request = new MailboxPeerWireRequestV2
+        {
+            Operation = (MailboxPeerReplicationOperation)encoded[5],
+            Epoch = BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(8, 8)),
+            OperationId = encoded.Slice(16, 16).ToArray(),
+            SenderRouterId = encoded.Slice(32, 32).ToArray(),
+            RecipientRouterId = encoded.Slice(64, 32).ToArray(),
+            MembershipCommitment = encoded.Slice(96, 32).ToArray(),
+            PlacementCommitment = encoded.Slice(128, 32).ToArray(),
+            BlindedMailboxId = encoded.Slice(160, 32).ToArray(),
+            Cursor = BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(192, 8)),
+            CreatedAtUnixSeconds =
+                BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(200, 8)),
+            ExpiresAtUnixSeconds =
+                BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(208, 8)),
+            ReplayNonce = encoded.Slice(216, 32).ToArray(),
+            PayloadDigest = encoded.Slice(248, 32).ToArray(),
+            Payload = encoded.Slice(payloadOffset, payloadLength).ToArray(),
+            SenderMembershipProof = MailboxPeerReplicationCodec.DecodeMembershipProof(
+                encoded.Slice(senderProofOffset, senderProofLength)),
+            RecipientMembershipProof = MailboxPeerReplicationCodec.DecodeMembershipProof(
+                encoded.Slice(recipientProofOffset, recipientProofLength)),
+            Signature = encoded.Slice(signatureOffset, signatureLength).ToArray()
+        };
+        ValidateRequest(request, requireSignature: true);
+        return request;
+    }
+
+    /// <summary>
+    /// Performs the complete canonical framing walk without copying caller-owned bytes or
+    /// invoking cryptographic/membership callbacks.
+    /// </summary>
+    internal static PreflightLayout PreflightCanonical(ReadOnlySpan<byte> encoded)
+    {
         if (encoded.Length <
                 MailboxPeerWireV2Limits.MinimumTombstoneRequestLength ||
             encoded.Length > MailboxPeerWireV2Limits.MaximumRequestLength)
@@ -69,33 +113,54 @@ public static class MailboxPeerWireV2Codec
         var senderProofOffset = payloadOffset + payloadLength;
         var recipientProofOffset = senderProofOffset + senderProofLength;
         var signatureOffset = recipientProofOffset + recipientProofLength;
-        var request = new MailboxPeerWireRequestV2
-        {
-            Operation = (MailboxPeerReplicationOperation)encoded[5],
-            Epoch = BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(8, 8)),
-            OperationId = encoded.Slice(16, 16).ToArray(),
-            SenderRouterId = encoded.Slice(32, 32).ToArray(),
-            RecipientRouterId = encoded.Slice(64, 32).ToArray(),
-            MembershipCommitment = encoded.Slice(96, 32).ToArray(),
-            PlacementCommitment = encoded.Slice(128, 32).ToArray(),
-            BlindedMailboxId = encoded.Slice(160, 32).ToArray(),
-            Cursor = BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(192, 8)),
-            CreatedAtUnixSeconds =
-                BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(200, 8)),
-            ExpiresAtUnixSeconds =
-                BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(208, 8)),
-            ReplayNonce = encoded.Slice(216, 32).ToArray(),
-            PayloadDigest = encoded.Slice(248, 32).ToArray(),
-            Payload = encoded.Slice(payloadOffset, payloadLength).ToArray(),
-            SenderMembershipProof = MailboxPeerReplicationCodec.DecodeMembershipProof(
-                encoded.Slice(senderProofOffset, senderProofLength)),
-            RecipientMembershipProof = MailboxPeerReplicationCodec.DecodeMembershipProof(
-                encoded.Slice(recipientProofOffset, recipientProofLength)),
-            Signature = encoded.Slice(signatureOffset, signatureLength).ToArray()
-        };
-        ValidateRequest(request, requireSignature: true);
-        return request;
+        var operation = (MailboxPeerReplicationOperation)encoded[5];
+        if (operation is not (
+                MailboxPeerReplicationOperation.Store or
+                MailboxPeerReplicationOperation.Tombstone))
+            throw Error(MailboxPeerReplicationError.InvalidEnum, "PRQ2 operation is invalid.");
+        if (encoded.Slice(16, 16).IndexOfAnyExcept((byte)0) < 0 ||
+            encoded.Slice(32, 32).IndexOfAnyExcept((byte)0) < 0 ||
+            encoded.Slice(64, 32).IndexOfAnyExcept((byte)0) < 0 ||
+            encoded.Slice(96, 32).IndexOfAnyExcept((byte)0) < 0 ||
+            encoded.Slice(128, 32).IndexOfAnyExcept((byte)0) < 0 ||
+            encoded.Slice(160, 32).IndexOfAnyExcept((byte)0) < 0 ||
+            encoded.Slice(216, 32).IndexOfAnyExcept((byte)0) < 0 ||
+            encoded.Slice(248, 32).IndexOfAnyExcept((byte)0) < 0 ||
+            encoded.Slice(signatureOffset, signatureLength).IndexOfAnyExcept((byte)0) < 0 ||
+            encoded.Slice(32, 32).SequenceEqual(encoded.Slice(64, 32)) ||
+            BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(8, 8)) == 0 ||
+            BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(192, 8)) == 0 ||
+            BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(200, 8)) == 0 ||
+            BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(200, 8)) >=
+                BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(208, 8)))
+            throw Error(MailboxPeerReplicationError.InvalidField,
+                "PRQ2 fixed routing fields are invalid.");
+
+        var payload = encoded.Slice(payloadOffset, payloadLength);
+        if (operation == MailboxPeerReplicationOperation.Store)
+            PreflightEnvelope(payload);
+        else if (payloadLength != MailboxClientLimits.DigestLength)
+            throw Error(MailboxPeerReplicationError.InvalidPayload,
+                "PRQ2 Tombstone requires exactly one envelope digest.");
+
+        PreflightMembershipProof(
+            encoded.Slice(senderProofOffset, senderProofLength),
+            encoded.Slice(32, 32), encoded.Slice(96, 32),
+            BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(8, 8)));
+        PreflightMembershipProof(
+            encoded.Slice(recipientProofOffset, recipientProofLength),
+            encoded.Slice(64, 32), encoded.Slice(96, 32),
+            BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(8, 8)));
+
+        return new PreflightLayout(
+            payloadLength, senderProofLength, recipientProofLength, signatureLength);
     }
+
+    internal readonly record struct PreflightLayout(
+        int PayloadLength,
+        int SenderProofLength,
+        int RecipientProofLength,
+        int SignatureLength);
 
     /// <summary>
     /// Returns the SHA-256 digest signed directly by Ed25519. The digest preimage is
@@ -663,6 +728,29 @@ public static class MailboxPeerWireV2Codec
     private static MailboxEncryptedEnvelope DecodeCanonicalEnvelope(
         ReadOnlySpan<byte> encoded)
     {
+        PreflightEnvelope(encoded);
+        var envelope = new MailboxEncryptedEnvelope
+        {
+            Epoch = BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(8, 8)),
+            MailboxId = new BlindedMailboxId(encoded.Slice(16, 32)),
+            PlacementId = new BlindedPlacementId(encoded.Slice(48, 32)),
+            OperationId = encoded.Slice(80, 16).ToArray(),
+            DeduplicationDigest = encoded.Slice(96, 32).ToArray(),
+            CreatedAtUnixSeconds =
+                BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(128, 8)),
+            ExpiresAtUnixSeconds =
+                BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(136, 8)),
+            Ciphertext = encoded[152..].ToArray()
+        };
+        if (!encoded.SequenceEqual(MailboxClientCodec.EncodeEncryptedEnvelope(envelope)))
+            throw Error(
+                MailboxPeerReplicationError.InvalidPayload,
+                "Nested MEO1 is not canonical.");
+        return envelope;
+    }
+
+    private static void PreflightEnvelope(ReadOnlySpan<byte> encoded)
+    {
         if (encoded.Length < MailboxClientLimits.EncryptedEnvelopeHeaderLength ||
             !encoded[..4].SequenceEqual("MEO1"u8) ||
             encoded[4] != 1 ||
@@ -682,24 +770,45 @@ public static class MailboxPeerWireV2Codec
             throw Error(
                 MailboxPeerReplicationError.InvalidPayload,
                 "Nested MEO1 length is invalid.");
-        var envelope = new MailboxEncryptedEnvelope
-        {
-            Epoch = BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(8, 8)),
-            MailboxId = new BlindedMailboxId(encoded.Slice(16, 32)),
-            PlacementId = new BlindedPlacementId(encoded.Slice(48, 32)),
-            OperationId = encoded.Slice(80, 16).ToArray(),
-            DeduplicationDigest = encoded.Slice(96, 32).ToArray(),
-            CreatedAtUnixSeconds =
-                BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(128, 8)),
-            ExpiresAtUnixSeconds =
-                BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(136, 8)),
-            Ciphertext = encoded[152..].ToArray()
-        };
-        if (!encoded.SequenceEqual(MailboxClientCodec.EncodeEncryptedEnvelope(envelope)))
+        if (encoded.Slice(16, 32).IndexOfAnyExcept((byte)0) < 0 ||
+            encoded.Slice(48, 32).IndexOfAnyExcept((byte)0) < 0 ||
+            encoded.Slice(80, 16).IndexOfAnyExcept((byte)0) < 0 ||
+            encoded.Slice(96, 32).IndexOfAnyExcept((byte)0) < 0 ||
+            BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(8, 8)) == 0 ||
+            BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(128, 8)) == 0 ||
+            BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(128, 8)) >=
+                BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(136, 8)))
             throw Error(
                 MailboxPeerReplicationError.InvalidPayload,
-                "Nested MEO1 is not canonical.");
-        return envelope;
+                "Nested MEO1 scalar fields are invalid.");
+    }
+
+    private static void PreflightMembershipProof(
+        ReadOnlySpan<byte> encoded,
+        ReadOnlySpan<byte> expectedReplicaId,
+        ReadOnlySpan<byte> expectedMembershipCommitment,
+        ulong expectedEpoch)
+    {
+        if (encoded.Length < MailboxPeerReplicationLimits.MembershipProofFixedLength ||
+            encoded.Length >
+                MailboxPeerReplicationLimits.MembershipProofFixedLength +
+                MailboxPeerReplicationLimits.MaximumInclusionProofLength ||
+            !encoded[..4].SequenceEqual("MIP1"u8) ||
+            encoded[4] != 1 ||
+            encoded.Slice(5, 3).IndexOfAnyExcept((byte)0) >= 0 ||
+            encoded.Slice(114, 6).IndexOfAnyExcept((byte)0) >= 0)
+            throw Error(MailboxPeerReplicationError.InvalidMembershipProof,
+                "Nested MIP1 framing is invalid.");
+        var proofLength = BinaryPrimitives.ReadUInt16BigEndian(encoded.Slice(112, 2));
+        if (proofLength == 0 ||
+            proofLength > MailboxPeerReplicationLimits.MaximumInclusionProofLength ||
+            encoded.Length != MailboxPeerReplicationLimits.MembershipProofFixedLength + proofLength ||
+            encoded.Slice(40, 32).IndexOfAnyExcept((byte)0) < 0 ||
+            !encoded.Slice(8, 32).SequenceEqual(expectedReplicaId) ||
+            BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(72, 8)) != expectedEpoch ||
+            !encoded.Slice(80, 32).SequenceEqual(expectedMembershipCommitment))
+            throw Error(MailboxPeerReplicationError.InvalidMembershipProof,
+                "Nested MIP1 is not bound to PRQ2.");
     }
 
     private static ReadOnlyMemory<byte> ExpectedEnvelopeDigest(

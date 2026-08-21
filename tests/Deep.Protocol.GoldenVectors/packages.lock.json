@@ -1,10 +1,6 @@
 {
   "version": 1,
   "dependencies": {
-    "net10.0": {
-      "deep.protocol.abstractions": {
-        "type": "Project"
-      }
-    }
+    "net10.0": {}
   }
 }

@@ -1,0 +1,180 @@
+{
+  "normativeHead": "2562b11cdacdcc6e60cf79bdb6265b4f4687fbbe",
+  "mappings": [
+    {
+      "id": "membership-msm-prior-head-successor",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.MembershipClosureIntegrationTests.MembershipSuccessor_ReusesExactRetainedAuthorityAndVerifiesOnlyTwoOnlineSignatures",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1MembershipClosureIntegrationTests.cs"
+    },
+    {
+      "id": "revocation-terminal-any-index",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.IdentityAuthorityTests.AccountTerminal_IsAcceptedAsFinalEntryAtEveryIndexOneThrough1024",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1IdentityAuthorityTests.cs"
+    },
+    {
+      "id": "revocation-empty-and-prefixes",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.IdentityAuthorityTests.MaximumRevocationSnapshot_RestoresZeroThrough1024PrefixHeadsWithOneSnapshotSignature",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1IdentityAuthorityTests.cs"
+    },
+    {
+      "id": "identity-release-effective-at",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.IdentityAuthorityTests.ReleaseRotationAndWitnessSuccessor_RemainInactiveUntilBothActivationTimes",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1IdentityAuthorityTests.cs"
+    },
+    {
+      "id": "membership-dnrc-fact-set-bounds",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.MembershipAuthorityEvidenceTests.CurrentDnrcFactSetRejectsBoundsDuplicatesMissingUnusedAndMixedSourcesBeforeCallbacks",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1MembershipAuthorityEvidenceTests.cs"
+    },
+    {
+      "id": "identity-release-root-genesis-transition",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.IdentityAuthorityTests.ReleaseRootGenesisPin_IsSoleFirstKrtAndDwdPredecessorBeforeTheirSignatures",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1IdentityAuthorityTests.cs"
+    },
+    {
+      "id": "membership-cross-authority-substitution",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.MembershipAuthorityEvidenceTests.MembershipAndMailboxIssuerAuthorityCannotCrossAuthorizeBeforeCrypto",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1MembershipAuthorityEvidenceTests.cs"
+    },
+    {
+      "id": "identity-router-component-id-self-reference",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.DxpReceiptTests.RouterAndComponentSubjectsExcludeContainingReferencesAndSelfDerivedHashes",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1DxpReceiptTests.cs"
+    },
+    {
+      "id": "witness-rotation-cross-epoch-key-substitution",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.IdentityAuthorityTests.WitnessSuccessor_RetainedKeyChangeAndAllFourReplacementRejectBeforeSignatures",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1IdentityAuthorityTests.cs"
+    },
+    {
+      "id": "witness-authority-head-receipt-cross-feed",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.VectorIdentityCoverageTests.WitnessAuthorityHeadReceiptCrossFeed",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1VectorIdentityCoverageTests.cs"
+    },
+    {
+      "id": "witness-rotation-all-four-replacement",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.IdentityAuthorityTests.WitnessSuccessor_AllFourReplacementRejectsBeforeSignatures",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1IdentityAuthorityTests.cs"
+    },
+    {
+      "id": "identity-release-manifest-signer-substitution",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.VectorIdentityCoverageTests.IdentityReleaseManifestSignerSubstitution",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1VectorIdentityCoverageTests.cs"
+    },
+    {
+      "id": "identity-dxp-mutation-expiry-reuse",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.VectorIdentityCoverageTests.IdentityDxpMutationExpiryReuse",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1VectorIdentityCoverageTests.cs"
+    },
+    {
+      "id": "identity-role-key-reuse",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.VectorIdentityCoverageTests.IdentityRoleKeyReuse",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1VectorIdentityCoverageTests.cs"
+    },
+    {
+      "id": "identity-suite-capability-enums",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.VectorIdentityCoverageTests.IdentitySuiteCapabilityEnums",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1VectorIdentityCoverageTests.cs"
+    },
+    {
+      "id": "revocation-reason-enums",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.VectorIdentityCoverageTests.RevocationReasonEnums",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1VectorIdentityCoverageTests.cs"
+    },
+    {
+      "id": "reset-component-kind-closed-enum",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.VectorIdentityCoverageTests.ResetComponentKindClosedEnum",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1VectorIdentityCoverageTests.cs"
+    },
+    {
+      "id": "identity-release-chain-entry-65",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.VectorIdentityCoverageTests.IdentityReleaseChainEntry65",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1VectorIdentityCoverageTests.cs"
+    },
+    {
+      "id": "identity-dxp-kdf-transcript",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.VectorIdentityCoverageTests.IdentityDxpKdfTranscript",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1VectorIdentityCoverageTests.cs"
+    },
+    {
+      "id": "identity-mailbox-owner-id-noncircular",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.VectorIdentityCoverageTests.IdentityMailboxOwnerIdNoncircular",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1VectorIdentityCoverageTests.cs"
+    },
+    {
+      "id": "witness-enum-latch-reserved",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.VectorIdentityCoverageTests.WitnessEnumLatchReserved",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1VectorIdentityCoverageTests.cs"
+    },
+    {
+      "id": "revocation-ordinary-entry-1024",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.VectorIdentityCoverageTests.RevocationOrdinaryEntry1024",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1VectorIdentityCoverageTests.cs"
+    },
+    {
+      "id": "api-rrm-pin-time-callback-order",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.VectorIdentityCoverageTests.ApiRrmPinTimeCallbackOrder",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1VectorIdentityCoverageTests.cs"
+    },
+    {
+      "id": "identity-release-krt-predecessor-type-cross-feed",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.VectorIdentityCoverageTests.IdentityReleaseKrtPredecessorTypeCrossFeed",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1VectorIdentityCoverageTests.cs"
+    },
+    {
+      "id": "recovery-genesis-base-identity-no-source",
+      "testFqn": "Deep.Protocol.DeepNative.GenesisAuthoringExact15Tests.BaseIdentityContext_HasNoDtcSourceAnchorRsmDrcOrAuthorityMintSurface",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1GenesisAuthoringExact15Tests.cs"
+    },
+    {
+      "id": "recovery-genesis-keyset-shape-order",
+      "testFqn": "Deep.Protocol.DeepNative.GenesisKeySetExact15Tests.Exact296KeySet_AcceptsOnlySixOrderedDistinctHealthyRoles",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1GenesisKeySetExact15Tests.cs"
+    },
+    {
+      "id": "recovery-genesis-keyset-closed-rows",
+      "testFqn": "Deep.Protocol.DeepNative.GenesisKeySetExact15Tests.ClosedRowsAndHealth_RejectMissingExtraUnknownReorderedDuplicateOrUnhealthy",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1GenesisKeySetExact15Tests.cs"
+    },
+    {
+      "id": "recovery-genesis-keyset-provider-cross-feed",
+      "testFqn": "Deep.Protocol.DeepNative.GenesisKeySetExact15Tests.ProviderRoleCrossFeed_RejectsEachSharedLatchOrProtectorSubstitution",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1GenesisKeySetExact15Tests.cs"
+    },
+    {
+      "id": "recovery-genesis-keyset-reflection",
+      "testFqn": "Deep.Protocol.DeepNative.GenesisKeySetExact15Tests.KeySetCapability_IsSealedNonserializableAndHasNoPublicRawIdSurface",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1GenesisKeySetExact15Tests.cs"
+    },
+    {
+      "id": "witness-maximum-tree-fence",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.IdentityAuthorityTests.WitnessMaximumTreeFence_RejectsOversizedLeaseBeforeSignature",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1IdentityAuthorityTests.cs"
+    },
+    {
+      "id": "api-dwd-full-ancestry-bounds",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.IdentityAuthorityTests.ReleaseRootRestoreInput_EnforcesExactTransitionAncestryAndTailBoundsBeforeCrypto",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1IdentityAuthorityTests.cs"
+    },
+    {
+      "id": "witness-subject-policy-closed",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.IdentityAuthorityTests.WitnessSubjectPolicyClosed_RejectsZeroCallerAndLimitSubstitutionBeforeSignature",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1IdentityAuthorityTests.cs"
+    },
+    {
+      "id": "identity-dxp-subject-projection-substitution",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.DxpReceiptTests.SubjectProjectionSubstitution_RejectsCallerRoleAndFullRecordBeforeAgreement",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1DxpReceiptTests.cs"
+    },
+    {
+      "id": "identity-dxp-valid",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.IdentityAuthorityTests.Dxp1_DeviceAndRouterEachDeriveTheSamePossessionProof",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1IdentityAuthorityTests.cs"
+    },
+    {
+      "id": "recovery-genesis-keyset-role-swap",
+      "testFqn": "Deep.Protocol.DeepNative.GenesisKeySetExact15Tests.RoleSwap_RejectsEveryPairAndDplNeverUsesSharedRecoveryHmac",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1GenesisKeySetExact15Tests.cs"
+    }
+  ]
+}

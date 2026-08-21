@@ -8,7 +8,7 @@ Normative contract identifier: `Deep.Protocol/P10B-managed-ingress-h2-v1`.
 
 The public ingress contract carries one bounded, already sealed route/onion frame over HTTP/2.
 It is a transport boundary, not a mailbox authority. The ingress does not parse or branch on
-DPB1, MCP1, MRR1, MQR1, MBE1, future storage evidence, account state or billing state.
+legacy bundle/capability/receipt formats, future storage evidence, account state or billing state.
 
 The exact V1 frame endpoint is:
 

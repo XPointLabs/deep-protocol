@@ -1,0 +1,63 @@
+{
+  "normativeHead": "2562b11cdacdcc6e60cf79bdb6265b4f4687fbbe",
+  "mappings": [
+    {
+      "id": "witness-inclusion-consistency-corrupt",
+      "testFqn": "Deep.Protocol.DeepNative.WitnessTreeVerifierTests.CorruptInclusionConsistencyPriorHeadAndDurabilityRejectWithoutCallbacks",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1WitnessTreeVerifierTests.cs"
+    },
+    {
+      "id": "recovery-genesis-dcm-dual-signer-mutation",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.DeploymentGovernanceOriginTests.DcmDualSignerMutationWrongKeyMalformedAndCancellationReturnNoPlan",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1DeploymentGovernanceOriginTests.cs"
+    },
+    {
+      "id": "recovery-genesis-materialize-dpl-dedicated-key",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.DeploymentGovernanceOriginTests.FirstDeployment_DplMaterializationUsesOnlySealedRoleOneKey",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1DeploymentGovernanceOriginTests.cs"
+    },
+    {
+      "id": "membership-composite-selection-full-tuples",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.MembershipClosureIntegrationTests.CompositeSelection_RequiresFullOrderedRouterDnrMrlAndDpcTuples",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1MembershipClosureIntegrationTests.cs"
+    },
+    {
+      "id": "reset-component-row-substitution",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.DeploymentGovernanceOriginTests.GenesisDcsComponentRows_RejectMissingDuplicateUnsortedAndCrossFeedBeforeCallbacks",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1DeploymentGovernanceOriginTests.cs"
+    },
+    {
+      "id": "recovery-rfc-hash-golden",
+      "outcome": "valid",
+      "callbacks": { "signature": 0, "agreement": 1, "network": 0, "mutation": 0 },
+      "testFqn": "Deep.Protocol.Tests.DeepNative.RecoveryColdProtectedPayloadTests.ColdPayload_ReturnsCandidateOnlyAfterAllFourProtectedHmacsVerify",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/RecoveryColdProtectedPayloadTests.cs"
+    },
+    {
+      "id": "recovery-schema-profile-golden",
+      "outcome": "valid",
+      "callbacks": { "signature": 0, "agreement": 0, "network": 0, "mutation": 0 },
+      "testFqn": "Deep.Protocol.Tests.DeepNative.RecoverySchemaProfileTests.ExactTwentySixDrm20Lines_ProducePinnedFingerprint",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1RecoverySchemaProfileTests.cs"
+    },
+    {
+      "id": "recovery-schema-profile-order-substitution",
+      "outcome": "fail-closed",
+      "callbacks": { "signature": 0, "agreement": 0, "network": 0, "mutation": 0 },
+      "testFqn": "Deep.Protocol.Tests.DeepNative.RecoverySchemaProfileTests.SchemaProfile_ReorderAndSemanticSubstitutionCannotMatchPinnedFingerprint",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1RecoverySchemaProfileTests.cs"
+    },
+    {
+      "id": "recovery-cold-rfc-hsm-key-survival",
+      "outcome": "fail-closed",
+      "callbacks": { "signature": 0, "agreement": 1, "network": 0, "mutation": 0 },
+      "testFqn": "Deep.Protocol.Tests.DeepNative.RecoveryColdProtectedPayloadTests.ColdPayload_WrongSharedHsmKeyFailsClosedAfterOneAeadAndBeforeCandidate",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/RecoveryColdProtectedPayloadTests.cs"
+    },
+    {
+      "id": "recovery-shadow-manifest-inventory-old-dpl",
+      "testFqn": "Deep.Protocol.DeepNative.Batch2EvidenceTests.ShadowManifest723_BindsTypedPredecessorInventoryAndEveryProtectedHash",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1Batch2EvidenceTests.cs"
+    }
+  ]
+}

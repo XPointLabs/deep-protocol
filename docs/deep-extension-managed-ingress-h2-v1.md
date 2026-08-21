@@ -15,7 +15,8 @@ route/onion frame. It is not Session wire behavior and does not modify protobufs
 - error media: `application/vnd.xpoint.deep.ingress-error-v1`;
 - capability media: `application/vnd.xpoint.deep.ingress-capabilities-v1+json`.
 
-The frame body is raw ciphertext, never JSON/base64 or a clear DPB1/capability/receipt. V1 has no
+The frame body is raw native opaque ciphertext, never JSON/base64 or a clear legacy bundle,
+capability, or receipt. V1 has no
 outer accepted, durable or delivered state. Only an independently opened and verified inner
 result can advance such application state.
 

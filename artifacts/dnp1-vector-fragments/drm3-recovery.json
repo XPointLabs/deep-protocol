@@ -1,0 +1,32 @@
+{
+  "normativeHead": "2562b11cdacdcc6e60cf79bdb6265b4f4687fbbe",
+  "mappings": [
+    {
+      "id": "recovery-dtc2-max-target-history",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.Drm3ContainerContractTests.Dtc2MaximumTargetAndHistoryTables_AcceptExact1024AndRejectMaxPlusOne",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1Drm3ContainerContractTests.cs"
+    },
+    {
+      "id": "recovery-dwh-missing-history-reset",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.WitnessHeadHistoryContainerTests.MissingLegacyOrHeadOnlyHistoryCannotBeSynthesizedIntoNormalStoreInput",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1WitnessHeadHistoryContainerTests.cs"
+    },
+    {
+      "id": "recovery-drm2-pin-core-cycle-free",
+      "outcome": "valid",
+      "callbacks": { "signature": 0, "agreement": 1, "network": 0, "mutation": 0 },
+      "testFqn": "Deep.Protocol.Tests.DeepNative.Drm3ContainerContractTests.RecoveryDrm3PinCoreCycleFree_OpensOnceAndRejectsLegacyVersions",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1Drm3ContainerContractTests.cs"
+    },
+    {
+      "id": "recovery-dtc2-history-crossfeed",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.Drm3ContainerContractTests.DtcProtectedHistory_StructuralAxisCrossFeedsRejectBeforeFactAcceptance",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1Drm3ContainerContractTests.cs"
+    },
+    {
+      "id": "recovery-genesis-dtc-existing-cross-feed",
+      "testFqn": "Deep.Protocol.Tests.DeepNative.Drm3ContainerContractTests.DtcPredecessorBranch_RejectsMixedExistingAndGenesisSourceTuples",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1Drm3ContainerContractTests.cs"
+    }
+  ]
+}

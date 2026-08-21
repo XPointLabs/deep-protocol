@@ -36,11 +36,9 @@ if (((Get-Item -LiteralPath $parent -Force).Attributes -band
 $temporary = Join-Path $parent ".deep-protocol-closure-$([Guid]::NewGuid().ToString('N'))"
 $normalizer = Join-Path $PSScriptRoot 'Normalize-NuGetPackage.ps1'
 $expected = [ordered]@{
-    'Deep.Protocol' = @("Deep.Protocol.Abstractions=$ProductionVersion", "Deep.Protocol.Protobuf=$ProductionVersion")
-    'Deep.Protocol.Abstractions' = @()
+    'Deep.Protocol' = @()
     'Deep.Protocol.MembershipRoutes' = @("Deep.Protocol=$ProductionVersion")
     'Deep.Protocol.ProfileCarrier' = @("Deep.Protocol=$ProductionVersion")
-    'Deep.Protocol.Protobuf' = @()
 }
 
 function Read-Identity {
@@ -91,7 +89,7 @@ $debris = @(Get-ChildItem -LiteralPath $inputRoot -Recurse -File |
     Where-Object { $_.Extension -cne '.nupkg' })
 $nested = @($files | Where-Object { $_.Directory.FullName -ine $inputRoot })
 if ($files.Count -ne $expected.Count -or $debris.Count -gt 0 -or $nested.Count -gt 0) {
-    throw "Input closure must contain exactly five root nupkg files and no debris (packages=$($files.Count), debris=$($debris.Count), nested=$($nested.Count))."
+    throw "Input closure must contain exactly three root nupkg files and no debris (packages=$($files.Count), debris=$($debris.Count), nested=$($nested.Count))."
 }
 
 $sourceHandles = [Collections.Generic.List[IO.FileStream]]::new()
@@ -223,4 +221,4 @@ finally {
     }
 }
 
-Write-Output "PASS exact five-package production protocol closure $ProductionVersion"
+Write-Output "PASS exact three-package production protocol closure $ProductionVersion"

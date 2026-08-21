@@ -1,10 +1,7 @@
 using System.Net;
 using System.Text;
 using Deep.Protocol.DeepExtension.ManagedIngress;
-using Deep.Protocol.DeepExtension.OpaqueBundles;
 using Deep.Protocol.GoldenVectors;
-using Deep.Protocol.Abstractions.OnionRequests;
-using Sodium;
 
 namespace Deep.Protocol.Tests.DeepExtension.ManagedIngress;
 
@@ -174,7 +171,7 @@ public sealed class ManagedIngressContractTests
     [Theory]
     [InlineData("MRR1")]
     [InlineData("MQR1")]
-    [InlineData("DPB1")]
+    [InlineData("DPR1")]
     [InlineData("MCP1")]
     public void InnerLookingBytes_RemainOpaqueAndUninterpreted(string prefix)
     {
@@ -214,6 +211,47 @@ public sealed class ManagedIngressContractTests
             ManagedIngressTransportResult.CancelledBeforeForward,
             cancelled.Cancel());
         Assert.Throws<InvalidOperationException>(() => cancelled.MarkForwardStarted());
+    }
+
+    [Fact]
+    public void HttpFramingCompressionAndTrailing_RejectBeforeOpaqueBodyAllocation()
+    {
+        foreach (var request in new[]
+        {
+            CanonicalRequest() with { ContentType = "application/octet-stream" },
+            CanonicalRequest() with { ContentType = ManagedIngressH2Contract.OpaqueMediaType + "; charset=binary" },
+            CanonicalRequest() with { Accept = "*/*" },
+            CanonicalRequest() with { ContentEncoding = "identity" },
+            CanonicalRequest() with { ContentEncoding = "gzip" },
+            CanonicalRequest() with { BodyLength = ManagedIngressLimits.MinimumOpaqueFrameBytes - 1 },
+            CanonicalRequest() with { BodyLength = ManagedIngressLimits.MaximumOpaqueFrameBytes + 1L },
+            CanonicalRequest() with
+            {
+                Headers = [new ManagedIngressHeader("transfer-encoding", "chunked")]
+            },
+            CanonicalRequest() with
+            {
+                Headers = [new ManagedIngressHeader("content-encoding", "identity")]
+            }
+        })
+        {
+            Assert.Throws<ManagedIngressContractException>(() =>
+                ManagedIngressH2Contract.ValidateFrameRequest(request));
+        }
+
+        var exact = new byte[ManagedIngressLimits.MinimumOpaqueFrameBytes];
+        Assert.Equal(ManagedIngressTransportResult.TransitCompleted,
+            ManagedIngressH2Contract.ClassifyFrameResponse(
+                CanonicalFrameResponse(exact.Length), exact));
+        Assert.Equal(ManagedIngressTransportResult.OutcomeUnknown,
+            ManagedIngressH2Contract.ClassifyFrameResponse(
+                CanonicalFrameResponse(exact.Length), exact.Append((byte)0).ToArray()));
+        Assert.Equal(ManagedIngressTransportResult.OutcomeUnknown,
+            ManagedIngressH2Contract.ClassifyFrameResponse(
+                CanonicalFrameResponse(exact.Length + 1), exact));
+        Assert.Equal(ManagedIngressTransportResult.OutcomeUnknown,
+            ManagedIngressH2Contract.ClassifyFrameResponse(
+                CanonicalFrameResponse(exact.Length) with { ContentEncoding = "identity" }, exact));
     }
 
     [Fact]
@@ -509,43 +547,19 @@ public sealed class ManagedIngressContractTests
     }
 
     [Fact]
-    public void MaximumSelectedThreeHopOnionProducerProfile_FitsOuterBound()
+    public void MaximumNativeOpaqueTransitFrame_FitsOuterBound()
     {
-        var destination = PublicKeyBox.GenerateKeyPair();
-        var hops = Enumerable.Range(0, 3)
-            .Select(index =>
-            {
-                var key = PublicKeyBox.GenerateKeyPair();
-                return new OnionServiceNode($"hop-{index}", Array.Empty<byte>(), key.PublicKey);
-            })
-            .ToArray();
-        var payload = new OnionRequestCodec().Build(
-            new OnionRequestBuildOptions
-            {
-                EncryptionType = OnionEncryptionType.XChaCha20,
-                Endpoint = "/api/ingress/internal/opaque-v1",
-                DestinationX25519PublicKey = destination.PublicKey,
-                Hops = hops
-            },
-            new byte[OpaqueBundleLimits.MaximumEncodedLength]);
+        var bytes = new byte[ManagedIngressLimits.MaximumOpaqueFrameBytes];
+        Encoding.ASCII.GetBytes("DPR1").CopyTo(bytes, 0);
 
-        const int minimumEncodedProducerLength = 1_420_309;
-        const int maximumEscapedReplyKeyExpansion = 44 * 5;
-        const int maximumEncodedProducerLength =
-            minimumEncodedProducerLength + maximumEscapedReplyKeyExpansion;
-        Assert.InRange(
-            payload.Body.Length,
-            minimumEncodedProducerLength,
-            maximumEncodedProducerLength);
-        Assert.True(maximumEncodedProducerLength <= ManagedIngressLimits.MaximumOpaqueFrameBytes);
-        var outer = ManagedIngressH2Contract.ValidateOpaqueFrame(payload.Body.Span);
-        Assert.Equal(payload.Body.ToArray(), outer.Bytes.ToArray());
+        var outer = ManagedIngressH2Contract.ValidateOpaqueFrame(bytes);
+
+        Assert.Equal(bytes, outer.Bytes.ToArray());
         var fixture = GoldenVectorLoader.Load("managed-ingress-h2-v1.json")
-            .GetRequired("deep-extension/managed-ingress/v1/max-three-hop-producer");
-        Assert.Equal((ulong)maximumEncodedProducerLength, fixture.TimestampMs);
+            .GetRequired("deep-extension/managed-ingress/v1/max-native-opaque-transit");
+        Assert.Equal((ulong)ManagedIngressLimits.MaximumOpaqueFrameBytes, fixture.TimestampMs);
         Assert.Equal(
-            "DPB1-max=1064960;hops=3;endpoint=/api/ingress/internal/opaque-v1;" +
-            "xchacha20;worst-case-json-escape-bound",
+            "native-opaque-transit;no-inner-codec;exact-outer-maximum",
             fixture.Body);
     }
 
@@ -578,8 +592,8 @@ public sealed class ManagedIngressContractTests
             .ToArray();
 
         Assert.DoesNotContain(referencedTypeNames, name =>
-            name.Contains("OpaqueBundle", StringComparison.Ordinal) ||
-            name.Contains("Mailbox", StringComparison.Ordinal));
+            name.Contains("Mailbox", StringComparison.Ordinal) ||
+            name.Contains("Onion", StringComparison.Ordinal));
     }
 
     [Fact]

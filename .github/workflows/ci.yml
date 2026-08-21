@@ -25,26 +25,36 @@ jobs:
       - name: Build
         run: dotnet build Deep.Protocol.slnx --configuration Release --no-restore
 
-      - name: Protocol golden-vector gate
-        run: >
-          dotnet test tests/Deep.Protocol.Tests/Deep.Protocol.Tests.csproj
-          --configuration Release
-          --no-build
-          --filter "FullyQualifiedName~GoldenVectorTests"
+      - name: Offline reference corpus gate
+        shell: pwsh
+        run: ./eng/Test-LegacyReferenceCorpus.ps1
 
-      - name: Protocol differential gate
-        run: >
-          dotnet test tests/Deep.Protocol.Tests/Deep.Protocol.Tests.csproj
-          --configuration Release
-          --no-build
-          --filter "FullyQualifiedName~SodiumDifferentialTests|FullyQualifiedName~CrossLanguageDifferentialTests"
+      - name: Exact-three actual assembly/resource/public API graph
+        shell: pwsh
+        run: ./eng/Test-ProductionProtocolGraph.ps1 -Configuration Release
 
-      - name: Protocol fuzz-smoke gate
-        run: >
-          dotnet test tests/Deep.Protocol.Tests/Deep.Protocol.Tests.csproj
-          --configuration Release
-          --no-build
-          --filter "FullyQualifiedName~ProtocolFuzzSmokeTests|FullyQualifiedName~ProtocolParserCodecFuzzTests"
+      - name: DNP1 exact314 package evidence completeness (intentional RED until 219/219)
+        shell: pwsh
+        run: |
+          $mappings = @(
+            'artifacts/dnp1-vector-fragments/authority-recovery.json',
+            'artifacts/dnp1-vector-fragments/drm3-recovery.json',
+            'artifacts/dnp1-vector-fragments/identity.json',
+            'artifacts/dnp1-vector-fragments/recovery-exact193.json',
+            'artifacts/dnp1-vector-fragments/wire.json',
+            'artifacts/dnp1-vector-fragments/drm19-replay.json',
+            'artifacts/dnp1-vector-fragments/drm19-recovery-container.json',
+            'artifacts/dnp1-vector-fragments/devops-package.json',
+            'artifacts/dnp1-vector-fragments/genesis-full-dag.json'
+          )
+          ./eng/Test-Dnp1EvidenceOwnership.ps1 `
+            -MappingPaths $mappings `
+            -RequirePackageComplete
+
+      - name: DNP1 executable package vectors
+        if: ${{ hashFiles('tests/Deep.Protocol.GoldenVectors/Vectors/dnp1-classical-v1.executable.json') != '' }}
+        shell: pwsh
+        run: ./eng/Test-Dnp1ExecutableVectors.ps1 -NoBuild
 
       - name: Test
         run: >

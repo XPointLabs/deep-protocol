@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <PackageId>Deep.Protocol.Native</PackageId>
+    <IsPackable>false</IsPackable>
     <Description>Consumer-unreferenced Deep-native protocol dark path.</Description>
   </PropertyGroup>
 

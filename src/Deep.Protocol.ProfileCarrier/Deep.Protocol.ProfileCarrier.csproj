@@ -23,7 +23,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Deep.Protocol" Version="$(DeepProtocolPackageVersion)" />
+    <ProjectReference Include="..\Deep.Protocol\Deep.Protocol.csproj"
+                      Condition="'$(UsePackagedDeepProtocol)' != 'true'" />
+    <PackageReference Include="Deep.Protocol"
+                      Version="$(DeepProtocolPackageVersion)"
+                      Condition="'$(UsePackagedDeepProtocol)' == 'true'" />
     <PackageReference Include="libsodium" Version="[1.0.22]" />
     <PackageReference Include="Sodium.Core" Version="[1.4.1]" />
   </ItemGroup>

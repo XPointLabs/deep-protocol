@@ -24,10 +24,10 @@
       "body": "{\"schemaVersion\":1,\"contractId\":\"Deep.Protocol/P10B-managed-ingress-h2-v1\",\"minimumVersion\":1,\"maximumVersion\":1,\"requestMediaType\":\"application/vnd.xpoint.deep.ingress-opaque-v1\",\"responseMediaType\":\"application/vnd.xpoint.deep.ingress-opaque-v1\",\"errorMediaType\":\"application/vnd.xpoint.deep.ingress-error-v1\",\"minimumFrameBytes\":64,\"maximumFrameBytes\":1572864,\"maximumHeaderListBytes\":8192,\"maximumHeaderFields\":32,\"ready\":true,\"retryAfterSeconds\":0,\"httpVersions\":[\"2\"],\"criticalFeatures\":[\"opaque-frame-v1\"],\"optionalFeatures\":[]}"
     },
     {
-      "id": "deep-extension/managed-ingress/v1/max-three-hop-producer",
-      "kind": "deep-extension-managed-ingress-producer-profile-v1",
-      "body": "DPB1-max=1064960;hops=3;endpoint=/api/ingress/internal/opaque-v1;xchacha20;worst-case-json-escape-bound",
-      "timestampMs": 1420529
+      "id": "deep-extension/managed-ingress/v1/max-native-opaque-transit",
+      "kind": "deep-extension-managed-ingress-native-opaque-transit-v1",
+      "body": "native-opaque-transit;no-inner-codec;exact-outer-maximum",
+      "timestampMs": 1572864
     }
   ]
 }

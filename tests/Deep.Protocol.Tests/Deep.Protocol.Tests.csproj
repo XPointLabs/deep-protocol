@@ -16,9 +16,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Deep.Protocol.Abstractions\Deep.Protocol.Abstractions.csproj" />
-    <ProjectReference Include="..\..\src\Deep.Protocol.Protobuf\Deep.Protocol.Protobuf.csproj" />
-    <ProjectReference Include="..\..\src\Deep.Protocol\Deep.Protocol.csproj" />
+    <ProjectReference Include="..\..\src\Deep.Protocol\Deep.Protocol.csproj"
+                      AdditionalProperties="RecoveryTestSeam=true" />
     <ProjectReference Include="..\Deep.Protocol.GoldenVectors\Deep.Protocol.GoldenVectors.csproj" />
   </ItemGroup>
 

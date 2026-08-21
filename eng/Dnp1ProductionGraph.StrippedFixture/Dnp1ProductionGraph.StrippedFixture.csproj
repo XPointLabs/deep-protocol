@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName Condition="'$(WitnessAssemblyName)' == ''">Dnp1ProductionGraph.StrippedFixture</AssemblyName>
+    <AssemblyName Condition="'$(WitnessAssemblyName)' != ''">$(WitnessAssemblyName)</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+</Project>

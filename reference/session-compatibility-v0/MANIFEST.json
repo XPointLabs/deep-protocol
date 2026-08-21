@@ -1,0 +1,390 @@
+{
+    "schema":  "deep-offline-reference-corpus.v1",
+    "mode":  "immutable-offline-reference-only",
+    "sourceCommit":  "586054ae9787a0df620c1da30b588edb89e7f7da",
+    "pathSemantics":  "former-repository-relative-path",
+    "canonicalization":  "utf8-preserve-bom-lf",
+    "hashAlgorithm":  "SHA-256",
+    "entries":  [
+                    {
+                        "path":  "docs/adr/0001-p03a-compatibility-metadata-envelope.md",
+                        "bytes":  6487,
+                        "sha256":  "6f15ad68b89dc17ddcafa9a039f0b74076ef6abb60d0b637052d24f87f249496"
+                    },
+                    {
+                        "path":  "docs/adr/0003-p03c-nearby-rendezvous-handshake.md",
+                        "bytes":  5903,
+                        "sha256":  "75af8862bed84ffb3cf242dee81dd13b3fd2e3f845f04f8cceb51bb25fcb0ecf"
+                    },
+                    {
+                        "path":  "docs/adr/0005-p18a-lora-fragment-contract.md",
+                        "bytes":  11962,
+                        "sha256":  "c8d5a0a68a8b7f5957f1e6a49dc6c07dee5fa7ccd924be1270df55832707445b"
+                    },
+                    {
+                        "path":  "docs/adr/0006-p03d-nearby-secure-channel-contract.md",
+                        "bytes":  7912,
+                        "sha256":  "ee2fefffae1759285d92d72140ad5ecbe673d6736959ebc0378d47ee585e3951"
+                    },
+                    {
+                        "path":  "docs/adr/0010-p10b-managed-ingress-h2-transit.md",
+                        "bytes":  4052,
+                        "sha256":  "1faeea9a62085ae77d3fee45bf81329e6a35a398b8030e7c31e09ae239210e7d"
+                    },
+                    {
+                        "path":  "docs/compatibility-matrix.md",
+                        "bytes":  10433,
+                        "sha256":  "0fb6e04294b1683f73b2cc063c59f39f4b2a66c52d1592ef20f051debb598b29"
+                    },
+                    {
+                        "path":  "docs/deep-extension-lora-fragments-v1.md",
+                        "bytes":  7069,
+                        "sha256":  "219bc977b0f7c4bafb7c838d4cb7e42b7e1712d57e864840b0f4b8e6ce5fb782"
+                    },
+                    {
+                        "path":  "docs/deep-extension-managed-ingress-h2-v1.md",
+                        "bytes":  4104,
+                        "sha256":  "82f90a3e54de25da3c096076fce5436a50e93ce832224c92442935f862ddb827"
+                    },
+                    {
+                        "path":  "docs/deep-extension-opaque-bundle-v1.md",
+                        "bytes":  6467,
+                        "sha256":  "c7c9645da7308bddf3e019ec03ae75b8c71628b493b346e970dfcab07410c15a"
+                    },
+                    {
+                        "path":  "docs/protocol-surface.md",
+                        "bytes":  22650,
+                        "sha256":  "79b084570363045bace863fc9980c9451b25e5cb9277a46677361ec64f902b50"
+                    },
+                    {
+                        "path":  "docs/protocol-verification-report.md",
+                        "bytes":  5416,
+                        "sha256":  "2ce22b58e590de265356a398dd4fe943056ed5e99c227ac3ebd180895cf39e12"
+                    },
+                    {
+                        "path":  "docs/SESSION_PORTING.md",
+                        "bytes":  2201,
+                        "sha256":  "5af10bff2c32e875b4270bbd4724a6d117ec2580ac2f19d9413b233da7bbd6dd"
+                    },
+                    {
+                        "path":  "docs/unsupported-or-unspecified.md",
+                        "bytes":  20200,
+                        "sha256":  "8f562963446e8bf16ce8b448e090d23e7828727200ab8c40ae4e8ed3deabf0ee"
+                    },
+                    {
+                        "path":  "eng/Test-NuGetExactDependencyNormalization.ps1",
+                        "bytes":  21650,
+                        "sha256":  "1b399b1c82fcbb3e33fb3ca27f408e28c525b074c257a1bd1c74b43deacb86c9"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol.Abstractions/Crypto/ISessionProtocolCrypto.cs",
+                        "bytes":  1922,
+                        "sha256":  "4e3e5919bcba0a354781bf033284a1139672c60142397a826c8b614368f46c62"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol.Abstractions/Deep.Protocol.Abstractions.csproj",
+                        "bytes":  278,
+                        "sha256":  "d482cb19639712e7f721889fc815c8fcc25d8c3768bbf7aec73c8355193ade6b"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol.Abstractions/OnionRequests/OnionRequestModels.cs",
+                        "bytes":  1744,
+                        "sha256":  "6905815a29b30bf15d16fe219cec762e736c53bf98ea9896e81185543ed30986"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol.Abstractions/packages.lock.json",
+                        "bytes":  61,
+                        "sha256":  "a29c6aa8cfb81874ff8bb78dc369d7416f28c9b8cc47e99592bfc019b20c41eb"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol.Abstractions/ProtocolConstants.cs",
+                        "bytes":  1865,
+                        "sha256":  "0e80e7ec9eb3e1347ec4745817253712021db7ab89aaef1b26eb8946c0715534"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol.Abstractions/ProtocolModels.cs",
+                        "bytes":  3394,
+                        "sha256":  "f1e34a9fa9e33d9c47b292079628e5ee11a586e3bebdba198cd1995b737ebae8"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol.Abstractions/SessionId.cs",
+                        "bytes":  1769,
+                        "sha256":  "e01760d015e8bc7d096033c8d9766987ce8a4465282a63b751e7d0e8e4ba0851"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol.Abstractions/State/SessionStateModels.cs",
+                        "bytes":  3448,
+                        "sha256":  "273b7367e4d43ecdced64fe7769432f9a4b1fff85caa4e159e2db0cba797f8a3"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol.Protobuf/Deep.Protocol.Protobuf.csproj",
+                        "bytes":  642,
+                        "sha256":  "0e48741211e820b0967761690afa0cf8e9ab6dcf334d84c3d339ae79aa8fda9a"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol.Protobuf/packages.lock.json",
+                        "bytes":  542,
+                        "sha256":  "939531b0aee1552f3602c757e80c95e6ffefe63f878a76b09548e0f566b4061b"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol.Protobuf/Protos/SessionProtos.proto",
+                        "bytes":  14086,
+                        "sha256":  "7f7364463d79b1d21a0861085082b2a11ef5e88fc75c896eb6bd2773e407b900"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol.Protobuf/Protos/WebSocketResources.proto",
+                        "bytes":  1211,
+                        "sha256":  "2ad31abe7de4cbe3302f8aab6014919248f9f95b9e11dd93ccbd5c0478955362"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol/ByteHelpers.cs",
+                        "bytes":  1537,
+                        "sha256":  "845047ac02d2e5cf6aa6807b4f863f5780de211696e582672b9202a5c5fd546f"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol/Crypto/SodiumOnionRequestCrypto.cs",
+                        "bytes":  6258,
+                        "sha256":  "d745f514dccacdea736f3303304ee4f1d89c2b34e0d9a76b973595c2dfedacbf"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol/Crypto/SodiumSessionProtocolCrypto.cs",
+                        "bytes":  10877,
+                        "sha256":  "afcb2d4245112a2469228fd846aa98f44d30883610f5d61078f03ca11a9e14c7"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol/DeepExtension/CompatibilityEnvelopes/CompatibilityEnvelopeModels.cs",
+                        "bytes":  4435,
+                        "sha256":  "66e2d0d276f5352b77508e8c5c2d92310f2c08f59c2d8dc2c4552ae2524d4380"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol/DeepExtension/CompatibilityEnvelopes/CompatibilityMetadataEnvelopeCodec.cs",
+                        "bytes":  17330,
+                        "sha256":  "18b7fd45bd9a6402d73502296a9cdc19c81a3822b41fea0eead5120711c9e55f"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol/DeepExtension/LoRaFragments/LoRaFragmentCodec.cs",
+                        "bytes":  11727,
+                        "sha256":  "a27b6b48404ea736bbf519ee3d7683b53f4443a4519007b9625c173d084e5724"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol/DeepExtension/LoRaFragments/LoRaFragmentModels.cs",
+                        "bytes":  19235,
+                        "sha256":  "3e084401cd0b8a530ffe17fa722c1efe40bad12c52a2634753df03e24c70aca5"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol/DeepExtension/LoRaFragments/LoRaFragmentPlanner.cs",
+                        "bytes":  8828,
+                        "sha256":  "35cbb5343c63a66846e72e04fc0df9992ed62f572f21e7dd740bbe22b499b331"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol/DeepExtension/LoRaFragments/LoRaFragmentReassembler.cs",
+                        "bytes":  42705,
+                        "sha256":  "9d599af1a818463a1079ba9cb2a6200644227715572800c5c8dbd8fd27133cf1"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol/DeepExtension/NearbyHandshakes/NearbyHandshakeCodec.cs",
+                        "bytes":  8178,
+                        "sha256":  "b6bc5bb9722112f8768f2552eab50046f43dc6a61acafd403ce09772f0a043ae"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol/DeepExtension/NearbyHandshakes/NearbyHandshakeLifecycle.cs",
+                        "bytes":  2941,
+                        "sha256":  "3642bf9f73a2658acfa8c545aee26f3cec397ba0813f595568700ac474fba646"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol/DeepExtension/NearbyHandshakes/NearbyHandshakeModels.cs",
+                        "bytes":  5653,
+                        "sha256":  "f638a3c9bb27ba9fb83e3e227f355a5c7bb9d40f632cc2bcbf17aed2536051bd"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol/DeepExtension/NearbyHandshakes/NearbyHandshakeProtocol.cs",
+                        "bytes":  10064,
+                        "sha256":  "a0f85a9729454518080e6429de1645507c72e73ee8f213b5178a675c6492e64b"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol/DeepExtension/NearbySecureChannels/NearbySecureChannelContracts.cs",
+                        "bytes":  56901,
+                        "sha256":  "7f6351fb4e23af4f48b36aa364147a11048f4ab2bf43c32b8346eec377b3acb2"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol/DeepExtension/OpaqueBundles/OpaqueBundleCodec.cs",
+                        "bytes":  20039,
+                        "sha256":  "faca645a050fd5eed67cf83d33d7f1bb170b69916e13636bc7c81dc1a850a616"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol/DeepExtension/OpaqueBundles/OpaqueBundleModels.cs",
+                        "bytes":  6684,
+                        "sha256":  "640d733b08a4b8a656b2ba9f1e8097996182955a6599817aaae3fc6f7a935dbd"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol/GroupUpdateParser.cs",
+                        "bytes":  3424,
+                        "sha256":  "05e047d178adfb3ea33975b4c85101bebbe174ce54b635132e73abd0b91b1e6e"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol/Internal/MissingCryptoAdapters.cs",
+                        "bytes":  2980,
+                        "sha256":  "c04e4a0bf06ed88f6288ab164d62ecc245a55733ac2d143eccd8d729e2e9f7ef"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol/OnionRequestCodec.cs",
+                        "bytes":  1720,
+                        "sha256":  "1e3563159765f9866c897d06e4a872e5cf6156937cbbd69b562d04d320bc2a9a"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol/ProProofService.cs",
+                        "bytes":  2121,
+                        "sha256":  "f293c737b2096b4e2a9e6a478ece465abc602bad381fe67d824b400609fb78b7"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol/SessionProtocolCodec.cs",
+                        "bytes":  23772,
+                        "sha256":  "f404183b7f8882057f7b249912fdc03dd8c3cb42f22a898a26c8dd3dab70e629"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol/SharedConfigNamespaceStateMachine.cs",
+                        "bytes":  1781,
+                        "sha256":  "44b208abdfba1d1db268402a053deea88fee2f9fb10b46e339d799305b70c665"
+                    },
+                    {
+                        "path":  "src/Deep.Protocol/SharedConfigParser.cs",
+                        "bytes":  814,
+                        "sha256":  "4bcd551529c6876d9316f8ba153b8033d2778daa5e790d536287f58e1f66e694"
+                    },
+                    {
+                        "path":  "tests/Deep.Protocol.GoldenVectors/Vectors/compatibility-envelope-v1.json",
+                        "bytes":  1716,
+                        "sha256":  "fd05c9c63ceee13607f484af5759fbfaf7a438e3aacaa01ade369fa393a882de"
+                    },
+                    {
+                        "path":  "tests/Deep.Protocol.GoldenVectors/Vectors/lora-fragment-v1.json",
+                        "bytes":  6444,
+                        "sha256":  "eb2a80263b8f06d5d3e25ab999cb7272c4de7f2c3e13b82382523ec3d73b3763"
+                    },
+                    {
+                        "path":  "tests/Deep.Protocol.GoldenVectors/Vectors/nearby-handshake-v1.json",
+                        "bytes":  716,
+                        "sha256":  "104b0de3b029b6e738be48ee81a1bd236a8a8307aa94083f959410e575c6fcad"
+                    },
+                    {
+                        "path":  "tests/Deep.Protocol.GoldenVectors/Vectors/opaque-bundle-v1.json",
+                        "bytes":  755,
+                        "sha256":  "347960dcc38a0e22a4b484268151c2afb4db28e9a26a9be88a43a7250e70bb52"
+                    },
+                    {
+                        "path":  "tests/Deep.Protocol.GoldenVectors/Vectors/session-protocol.json",
+                        "bytes":  3723,
+                        "sha256":  "a75a082c22c9d0db0a9cdab606feb1cad06dbb0dbd6f0f88bb69c5d3336b4d6a"
+                    },
+                    {
+                        "path":  "tests/Deep.Protocol.Tests/CrossLanguageDifferentialTests.cs",
+                        "bytes":  7940,
+                        "sha256":  "a791173f86710a3706e11be5d9dbaa279450691a9abb79edc1771f9aea2fc3d9"
+                    },
+                    {
+                        "path":  "tests/Deep.Protocol.Tests/DeepExtension/CompatibilityMetadataEnvelopeMalformedAndFuzzTests.cs",
+                        "bytes":  16958,
+                        "sha256":  "f92eaa5c1a9a16a816960bf0470b3a47ecad2cf2eac3a82e8e261cee539164bc"
+                    },
+                    {
+                        "path":  "tests/Deep.Protocol.Tests/DeepExtension/CompatibilityMetadataEnvelopeTests.cs",
+                        "bytes":  10918,
+                        "sha256":  "fd12b31d7c69fe9227ea2812460e1966528b1b54197812211ed4437047d35b50"
+                    },
+                    {
+                        "path":  "tests/Deep.Protocol.Tests/DeepExtension/LoRaFragmentCodecAndPlannerTests.cs",
+                        "bytes":  17083,
+                        "sha256":  "ac5b3593d6c3a8298901f6478593aca3354c1301b254cedc594bd72c7de1885c"
+                    },
+                    {
+                        "path":  "tests/Deep.Protocol.Tests/DeepExtension/LoRaFragmentContractRedTests.cs",
+                        "bytes":  2073,
+                        "sha256":  "8e431bb3275e88f4c1398ba50a000cd0f36a314cf5b88ed7022d86468195bf17"
+                    },
+                    {
+                        "path":  "tests/Deep.Protocol.Tests/DeepExtension/LoRaFragmentMalformedAndFuzzTests.cs",
+                        "bytes":  11199,
+                        "sha256":  "89a73fb4a6bb87b5cd65d1b0f253709f6e69b630aebf77c712e067b7bb06d76e"
+                    },
+                    {
+                        "path":  "tests/Deep.Protocol.Tests/DeepExtension/LoRaFragmentReassemblerTests.cs",
+                        "bytes":  69353,
+                        "sha256":  "6e5a323a2242a45dede476cdf7f1239a5d23a587c42211edfa727bd7b6e15c52"
+                    },
+                    {
+                        "path":  "tests/Deep.Protocol.Tests/DeepExtension/NearbyHandshakeContractTests.cs",
+                        "bytes":  14901,
+                        "sha256":  "b2ca78d40dd15230658b1ec96d1d50eab0729abb5605bffc3edd73c10ee29c51"
+                    },
+                    {
+                        "path":  "tests/Deep.Protocol.Tests/DeepExtension/NearbyHandshakeMalformedAndFuzzTests.cs",
+                        "bytes":  3050,
+                        "sha256":  "7d498739fff30a2e8ab97640a7148b6219f4fb1f22f5b62c32d4861d99459da8"
+                    },
+                    {
+                        "path":  "tests/Deep.Protocol.Tests/DeepExtension/NearbySecureChannelContractTests.cs",
+                        "bytes":  81015,
+                        "sha256":  "44cdc4816c5981b7a8f595695dfd2e8733a423a25492f4e6e9263beaa6a6df44"
+                    },
+                    {
+                        "path":  "tests/Deep.Protocol.Tests/DeepExtension/OpaqueBundleCodecTests.cs",
+                        "bytes":  14664,
+                        "sha256":  "c918b6850c2d788f8aa8050ad470f6cce4f9a55a3f9364b5383ba1519de626f3"
+                    },
+                    {
+                        "path":  "tests/Deep.Protocol.Tests/DeepExtension/OpaqueBundleMalformedAndFuzzTests.cs",
+                        "bytes":  8352,
+                        "sha256":  "c98715a64b11d63c941fa34d29d2936ec5a8ba468e948304b77c10a49dd63331"
+                    },
+                    {
+                        "path":  "tests/Deep.Protocol.Tests/Fakes/DeterministicTestCompatibilityEnvelopeCrypto.cs",
+                        "bytes":  5215,
+                        "sha256":  "279629fb6655e60cd3d29a5912ce817ff9ed4c3f3cdb72e46501bc9c174531a3"
+                    },
+                    {
+                        "path":  "tests/Deep.Protocol.Tests/Fakes/FakeSessionProtocolCrypto.cs",
+                        "bytes":  4564,
+                        "sha256":  "11dbcd24c29851f257b1bc587999e347a1b2c12a4679a4803a95dcf6e381c593"
+                    },
+                    {
+                        "path":  "tests/Deep.Protocol.Tests/GoldenVectorTests.cs",
+                        "bytes":  3090,
+                        "sha256":  "cfccc2ae3f84f01c0b1a7edfd3637670807df772089025627b103bf7e816369d"
+                    },
+                    {
+                        "path":  "tests/Deep.Protocol.Tests/OnionRequestCodecTests.cs",
+                        "bytes":  5721,
+                        "sha256":  "31fec2a2a0cc5fb266ffa1b1ce269c74f0bfb40d7b9d8df983b2b8356f30e449"
+                    },
+                    {
+                        "path":  "tests/Deep.Protocol.Tests/ProtocolFuzzSmokeTests.cs",
+                        "bytes":  985,
+                        "sha256":  "598e5a28473fd5ddd7c1920eb88d6b81ccd52a8c0b69e6dcd4b0938c008fca6f"
+                    },
+                    {
+                        "path":  "tests/Deep.Protocol.Tests/ProtocolParserCodecFuzzTests.cs",
+                        "bytes":  2319,
+                        "sha256":  "ff6de696c1eed3c9a9c06b8545045751ee384b531ef55a7752880fe520678d72"
+                    },
+                    {
+                        "path":  "tests/Deep.Protocol.Tests/SessionProtocolCodecTests.cs",
+                        "bytes":  7911,
+                        "sha256":  "c68b6c6a04b258dad1d3e6a0f0753a6146c2e2aea8995634d9c0ffd84f00f7ff"
+                    },
+                    {
+                        "path":  "tests/Deep.Protocol.Tests/SodiumDifferentialTests.cs",
+                        "bytes":  6472,
+                        "sha256":  "4868984ac5710224970471267ed3160470ffa09a53713ad3b9999bd9113c079a"
+                    },
+                    {
+                        "path":  "tests/Deep.Protocol.Tests/SodiumSessionProtocolCryptoTests.cs",
+                        "bytes":  5219,
+                        "sha256":  "08f2be491841ae3b1804bc456b64e5574718334a85bfa6a4b2c420b77c52f7b4"
+                    },
+                    {
+                        "path":  "tests/Deep.Protocol.Tests/StateAndGroupTests.cs",
+                        "bytes":  7533,
+                        "sha256":  "9a25675539257c22a58ff79e98f5abc26b63cd2d87d2b00ac355b611ff3626a6"
+                    }
+                ]
+}

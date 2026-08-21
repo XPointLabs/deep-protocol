@@ -1,16 +1,12 @@
 ﻿<Solution>
   <Folder Name="/src/">
-    <Project Path="src/Deep.Protocol.Abstractions/Deep.Protocol.Abstractions.csproj" />
     <Project Path="src/Deep.Protocol.MembershipRoutes/Deep.Protocol.MembershipRoutes.csproj" />
-    <Project Path="src/Deep.Protocol.Native/Deep.Protocol.Native.csproj" />
     <Project Path="src/Deep.Protocol.ProfileCarrier/Deep.Protocol.ProfileCarrier.csproj" />
-    <Project Path="src/Deep.Protocol.Protobuf/Deep.Protocol.Protobuf.csproj" />
     <Project Path="src/Deep.Protocol/Deep.Protocol.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Deep.Protocol.GoldenVectors/Deep.Protocol.GoldenVectors.csproj" />
     <Project Path="tests/Deep.Protocol.MembershipRoutes.Tests/Deep.Protocol.MembershipRoutes.Tests.csproj" />
-    <Project Path="tests/Deep.Protocol.Native.Tests/Deep.Protocol.Native.Tests.csproj" />
     <Project Path="tests/Deep.Protocol.ProfileCarrier.Tests/Deep.Protocol.ProfileCarrier.Tests.csproj" />
     <Project Path="tests/Deep.Protocol.Tests/Deep.Protocol.Tests.csproj" />
   </Folder>

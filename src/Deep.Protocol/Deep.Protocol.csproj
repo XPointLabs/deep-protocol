@@ -7,10 +7,14 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(RecoveryTestSeam)' == 'true'">
+    <DefineConstants>$(DefineConstants);DEEP_PROTOCOL_RECOVERY_TEST_SEAM</DefineConstants>
+    <OutputPath>bin\$(Configuration)\test-seam\</OutputPath>
+    <IntermediateOutputPath>obj\$(Configuration)\$(TargetFramework)\test-seam\</IntermediateOutputPath>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Sodium.Core" Version="1.4.1" />
-    <ProjectReference Include="..\Deep.Protocol.Abstractions\Deep.Protocol.Abstractions.csproj" />
-    <ProjectReference Include="..\Deep.Protocol.Protobuf\Deep.Protocol.Protobuf.csproj" />
   </ItemGroup>
 
   <ItemGroup>

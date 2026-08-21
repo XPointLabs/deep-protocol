@@ -1,0 +1,20 @@
+{
+  "normativeHead": "2562b11cdacdcc6e60cf79bdb6265b4f4687fbbe",
+  "mappings": [
+    {
+      "id": "package-exact-three-session-free",
+      "testFqn": "Deep.Protocol.Tests.DevOpsWitness.Dnp1PackageBlockingWitnessTests.PackageExactThreeSessionFree_InspectsActualPackageZipsAssembliesResourcesAndPublicApi",
+      "fixturePath": "tests/Deep.Protocol.Tests/DevOpsWitness/Dnp1PackageBlockingWitnessTests.cs"
+    },
+    {
+      "id": "grammar-machine-artifact-set-digest",
+      "testFqn": "Deep.Protocol.Tests.DevOpsWitness.Dnp1PackageBlockingWitnessTests.GrammarMachineArtifactSetDigest_RealGeneratorAndCheckerRejectEveryBoundDigestMutation",
+      "fixturePath": "tests/Deep.Protocol.Tests/DevOpsWitness/Dnp1PackageBlockingWitnessTests.cs"
+    },
+    {
+      "id": "grammar-vector-schema-additional-property",
+      "testFqn": "Deep.Protocol.Tests.DevOpsWitness.Dnp1PackageBlockingWitnessTests.GrammarVectorSchemaAdditionalProperty_RealClosedSchemaGateRejectsTopAndCaseProperties",
+      "fixturePath": "tests/Deep.Protocol.Tests/DevOpsWitness/Dnp1PackageBlockingWitnessTests.cs"
+    }
+  ]
+}

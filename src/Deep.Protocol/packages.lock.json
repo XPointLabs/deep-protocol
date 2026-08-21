@@ -11,24 +11,10 @@
           "libsodium": "[1.0.22, 1.0.23)"
         }
       },
-      "Google.Protobuf": {
-        "type": "Transitive",
-        "resolved": "3.32.1",
-        "contentHash": "HbFFRNU46e1E+qhGvwCDAO2EZ80WADqlkNqlOBYvGi7SNxwMPkTrReZgCg9/TrXwLO/n0za+AIiT2IplzqrjZw=="
-      },
       "libsodium": {
         "type": "Transitive",
         "resolved": "1.0.22",
         "contentHash": "KPD9SloJFclrsjnhABu7dzWrcyYkwPbvx5l1gRSPAX/0n+OBtSiVCKtGFv4n+ecWUHU0tCG9LSSwoZZx673zBQ=="
-      },
-      "deep.protocol.abstractions": {
-        "type": "Project"
-      },
-      "deep.protocol.protobuf": {
-        "type": "Project",
-        "dependencies": {
-          "Google.Protobuf": "[3.32.1, )"
-        }
       }
     }
   }

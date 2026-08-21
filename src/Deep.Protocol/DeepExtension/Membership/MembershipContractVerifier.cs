@@ -2,6 +2,89 @@ namespace Deep.Protocol.DeepExtension.Membership;
 
 public static class MembershipContractVerifier
 {
+    internal static VerifiedMembershipCommitment RestoreCurrentMembership(
+        SignedMembershipCommitment signed,
+        MembershipVerificationContext context,
+        VerifiedSignerDelegation verifiedDelegation,
+        ulong expectedSequence,
+        ReadOnlySpan<byte> expectedCanonicalHash,
+        IMembershipSignatureVerifier verifier)
+    {
+        if (signed is null || signed.Statement is null || signed.Signatures is null)
+            throw Error(MembershipContractError.InvalidField, "Signed membership statement is incomplete.");
+        if (expectedCanonicalHash.Length != MembershipLimits.HashLength)
+            throw Error(MembershipContractError.InvalidLength, "The current membership hash length is invalid.");
+        ValidateVerificationContext(context);
+        var statement = MembershipContractCodec.GetMembershipSigningBytes(signed.Statement);
+        var canonicalHash = MembershipContractHash.Sha256(statement);
+        if (signed.Statement.Sequence != expectedSequence ||
+            !canonicalHash.AsSpan().SequenceEqual(expectedCanonicalHash))
+            throw Error(MembershipContractError.AuthorityMismatch,
+                "The membership candidate is not the exact protected current head.");
+        if (!signed.Statement.NetworkId.Span.SequenceEqual(context.Genesis.NetworkId.Span) ||
+            signed.Statement.PolicyVersion != context.Genesis.PolicyVersion)
+            throw Error(MembershipContractError.AuthorityMismatch,
+                "The current membership candidate has different genesis axes.");
+        ValidateSkew(context.AllowedClockSkewSeconds);
+        VerifyTimeAndProtocol(
+            signed.Statement.ValidFromUnixSeconds, signed.Statement.ValidUntilUnixSeconds,
+            signed.Statement.MinimumProtocol, signed.Statement.MaximumProtocol,
+            context.VerificationTimeUnixSeconds, context.AllowedClockSkewSeconds,
+            context.ClientProtocol);
+        BindVerifiedDelegation(context, verifiedDelegation);
+        VerifySignatures(
+            statement,
+            signed.Signatures,
+            MembershipSignatureDomain.Membership,
+            context.ActiveDelegation.OnlineSigners,
+            context.Genesis.Policy.OnlineThreshold,
+            verifier);
+        return new VerifiedMembershipCommitment
+        {
+            Statement = signed.Statement,
+            CanonicalHash = canonicalHash,
+            NextLastKnownGood = context.LastKnownGood
+        };
+    }
+
+    internal static VerifiedMembershipCommitment VerifyMembershipFromVerifiedDelegation(
+        SignedMembershipCommitment signed,
+        MembershipVerificationContext context,
+        VerifiedSignerDelegation verifiedDelegation,
+        IMembershipSignatureVerifier verifier)
+    {
+        if (signed is null || signed.Statement is null || signed.Signatures is null)
+            throw Error(MembershipContractError.InvalidField, "Signed membership statement is incomplete.");
+        ValidateVerificationContext(context);
+        var statement = MembershipContractCodec.GetMembershipSigningBytes(signed.Statement);
+        ValidateSkew(context.AllowedClockSkewSeconds);
+        ValidateSuccessor(
+            signed.Statement.NetworkId, signed.Statement.PolicyVersion,
+            signed.Statement.Sequence, signed.Statement.PreviousHash,
+            context.Genesis, context.LastKnownGood);
+        VerifyTimeAndProtocol(
+            signed.Statement.ValidFromUnixSeconds, signed.Statement.ValidUntilUnixSeconds,
+            signed.Statement.MinimumProtocol, signed.Statement.MaximumProtocol,
+            context.VerificationTimeUnixSeconds, context.AllowedClockSkewSeconds,
+            context.ClientProtocol);
+        BindVerifiedDelegation(context, verifiedDelegation);
+        VerifySignatures(
+            statement,
+            signed.Signatures,
+            MembershipSignatureDomain.Membership,
+            context.ActiveDelegation.OnlineSigners,
+            context.Genesis.Policy.OnlineThreshold,
+            verifier);
+        var canonicalHash = MembershipContractHash.Sha256(statement);
+        return new VerifiedMembershipCommitment
+        {
+            Statement = signed.Statement,
+            CanonicalHash = canonicalHash,
+            NextLastKnownGood = NextLkg(
+                context.LastKnownGood, signed.Statement.Sequence, canonicalHash)
+        };
+    }
+
     public static VerifiedMembershipCommitment VerifyMembership(
         SignedMembershipCommitment signed,
         MembershipVerificationContext context,
@@ -301,6 +384,31 @@ public static class MembershipContractVerifier
         ValidateRevokedDelegationHashes(context.RevokedDelegationHashes);
         if (context.RevokedDelegationHashes.Any(value => value.Span.SequenceEqual(hash)))
             throw Error(MembershipContractError.RevokedDelegation, "Online signer delegation is revoked.");
+    }
+
+    private static void BindVerifiedDelegation(
+        MembershipVerificationContext context,
+        VerifiedSignerDelegation verified)
+    {
+        if (verified is null || !ReferenceEquals(verified.Statement, context.ActiveDelegation))
+            throw Error(MembershipContractError.AuthorityMismatch,
+                "The verified delegation is not the active sealed delegation.");
+        var authority = context.AuthorityLastKnownGood;
+        var next = verified.NextAuthorityLastKnownGood;
+        var canonical = MembershipContractCodec.GetDelegationSigningBytes(verified.Statement);
+        var canonicalHash = MembershipContractHash.Sha256(canonical);
+        if (!canonicalHash.AsSpan().SequenceEqual(verified.CanonicalHash.Span) ||
+            !next.NetworkId.Span.SequenceEqual(authority.NetworkId.Span) ||
+            next.PolicyVersion != authority.PolicyVersion ||
+            next.Sequence != authority.Sequence ||
+            !next.CanonicalHash.Span.SequenceEqual(authority.CanonicalHash.Span) ||
+            !verified.CanonicalHash.Span.SequenceEqual(authority.CanonicalHash.Span))
+            throw Error(MembershipContractError.AuthorityMismatch,
+                "The verified delegation does not match the authority LKG.");
+        ValidateRevokedDelegationHashes(context.RevokedDelegationHashes);
+        if (context.RevokedDelegationHashes.Any(value => value.Span.SequenceEqual(canonicalHash)))
+            throw Error(MembershipContractError.RevokedDelegation,
+                "Online signer delegation is revoked.");
     }
 
     private static void VerifyDelegationAuthority(
