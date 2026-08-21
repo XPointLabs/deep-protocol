@@ -2,6 +2,12 @@
   "version": 1,
   "dependencies": {
     "net10.0": {
+      "coverlet.collector": {
+        "type": "Direct",
+        "requested": "[6.0.4, 6.0.4]",
+        "resolved": "6.0.4",
+        "contentHash": "lkhqpF8Pu2Y7IiN7OntbsTtdbpR1syMsm2F3IgX6ootA4ffRqWL5jF7XipHuZQTdVuWG/gVAAcf8mjk8Tz0xPg=="
+      },
       "Microsoft.NET.Test.Sdk": {
         "type": "Direct",
         "requested": "[17.14.1, 17.14.1]",
@@ -28,34 +34,6 @@
         "requested": "[3.1.4, 3.1.4]",
         "resolved": "3.1.4",
         "contentHash": "5mj99LvCqrq3CNi06xYdyIAXOEh+5b33F2nErCzI5zWiDdLHXiPXEWFSUAF8zlIv0ZWqjZNCwHTQeAPYbF3pCg=="
-      },
-      "Deep.Protocol": {
-        "type": "Transitive",
-        "resolved": "0.4.0-survival.e570512",
-        "contentHash": "7TZ9uLNtVQWEqKhu5R+r23yxGIzNfhtMY0VJ8X7OPTgbsN6FJpf0DZ7/PCgjqTcUecZxBScSJ7yFxfLb+ozJCw==",
-        "dependencies": {
-          "Deep.Protocol.Abstractions": "0.4.0-survival.e570512",
-          "Deep.Protocol.Protobuf": "0.4.0-survival.e570512",
-          "Sodium.Core": "1.4.1"
-        }
-      },
-      "Deep.Protocol.Abstractions": {
-        "type": "Transitive",
-        "resolved": "0.4.0-survival.e570512",
-        "contentHash": "c2rRxx7OgrI2pmfkze2FS3mJd6Rru84X8bwX7/FLJR9YgTO0L+gQlyUuoXpXKOmFQW+Um4fjwE/dp+79sIckow=="
-      },
-      "Deep.Protocol.Protobuf": {
-        "type": "Transitive",
-        "resolved": "0.4.0-survival.e570512",
-        "contentHash": "6ycEE9S9ZRTdKcg4OR88h0WP4Opqx2bzN/p2Sb8xhi6amr7gGOL5ck+oyhFp6N3sTg5gEpE9YNQ9KqSZIclWvQ==",
-        "dependencies": {
-          "Google.Protobuf": "3.32.1"
-        }
-      },
-      "Google.Protobuf": {
-        "type": "Transitive",
-        "resolved": "3.32.1",
-        "contentHash": "HbFFRNU46e1E+qhGvwCDAO2EZ80WADqlkNqlOBYvGi7SNxwMPkTrReZgCg9/TrXwLO/n0za+AIiT2IplzqrjZw=="
       },
       "libsodium": {
         "type": "Transitive",
@@ -134,10 +112,16 @@
           "xunit.extensibility.core": "[2.9.3]"
         }
       },
+      "deep.protocol": {
+        "type": "Project",
+        "dependencies": {
+          "Sodium.Core": "[1.4.1, )"
+        }
+      },
       "deep.protocol.profilecarrier": {
         "type": "Project",
         "dependencies": {
-          "Deep.Protocol": "[0.4.0-survival.e570512, 0.4.0-survival.e570512]",
+          "Deep.Protocol": "[1.0.0, )",
           "Sodium.Core": "[1.4.1, 1.4.1]",
           "libsodium": "[1.0.22, 1.0.22]"
         }
