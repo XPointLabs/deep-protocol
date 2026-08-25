@@ -2,17 +2,6 @@
   "version": 1,
   "dependencies": {
     "net10.0": {
-      "Deep.Protocol": {
-        "type": "Direct",
-        "requested": "[0.4.0-survival.e570512, 0.4.0-survival.e570512]",
-        "resolved": "0.4.0-survival.e570512",
-        "contentHash": "7TZ9uLNtVQWEqKhu5R+r23yxGIzNfhtMY0VJ8X7OPTgbsN6FJpf0DZ7/PCgjqTcUecZxBScSJ7yFxfLb+ozJCw==",
-        "dependencies": {
-          "Deep.Protocol.Abstractions": "0.4.0-survival.e570512",
-          "Deep.Protocol.Protobuf": "0.4.0-survival.e570512",
-          "Sodium.Core": "1.4.1"
-        }
-      },
       "libsodium": {
         "type": "Direct",
         "requested": "[1.0.22, 1.0.22]",
@@ -28,23 +17,11 @@
           "libsodium": "[1.0.22, 1.0.23)"
         }
       },
-      "Deep.Protocol.Abstractions": {
-        "type": "Transitive",
-        "resolved": "0.4.0-survival.e570512",
-        "contentHash": "c2rRxx7OgrI2pmfkze2FS3mJd6Rru84X8bwX7/FLJR9YgTO0L+gQlyUuoXpXKOmFQW+Um4fjwE/dp+79sIckow=="
-      },
-      "Deep.Protocol.Protobuf": {
-        "type": "Transitive",
-        "resolved": "0.4.0-survival.e570512",
-        "contentHash": "6ycEE9S9ZRTdKcg4OR88h0WP4Opqx2bzN/p2Sb8xhi6amr7gGOL5ck+oyhFp6N3sTg5gEpE9YNQ9KqSZIclWvQ==",
+      "deep.protocol": {
+        "type": "Project",
         "dependencies": {
-          "Google.Protobuf": "3.32.1"
+          "Sodium.Core": "[1.4.1, )"
         }
-      },
-      "Google.Protobuf": {
-        "type": "Transitive",
-        "resolved": "3.32.1",
-        "contentHash": "HbFFRNU46e1E+qhGvwCDAO2EZ80WADqlkNqlOBYvGi7SNxwMPkTrReZgCg9/TrXwLO/n0za+AIiT2IplzqrjZw=="
       }
     }
   }
