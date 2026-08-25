@@ -1,32 +1,35 @@
-﻿# Deep.Protocol
+# Deep Protocol
 
-Managed C#/.NET 10 port of the shared Session application protocol surface from
-`session-foundation/libsession-util`.
+Production protocol libraries for Deep messaging, membership routes and self-hosted profile
+carriers. The repository targets .NET 10 and is a clean-break implementation: production packages
+contain no compatibility shims, aliases or fallback runtime paths.
 
-This repository preserves protobuf and envelope wire semantics where they are unambiguous and keeps
-libsodium-dependent behavior behind adapter interfaces. Code paths that require exact Session crypto
-do not invent replacement formats.
+## Start here
 
-## Agent Specs
+- [`AGENTS.md`](AGENTS.md) defines the production boundary and required checks.
+- [`docs/protocol-surface.md`](docs/protocol-surface.md) lists the implemented protocol surface.
+- [`docs/unsupported-or-unspecified.md`](docs/unsupported-or-unspecified.md) records surfaces that
+  must not be wired into production.
+- The extension specifications in [`docs/`](docs/) are the repository-level contracts.
+- The superproject's `docs/survival-program/releases/v3.0.0/specs/` contains the frozen DNP1
+  registries, schemas and ownership rules.
 
-- Start with [`AGENTS.md`](AGENTS.md) before changing protocol, protobuf, crypto adapter, vector, or fuzz behavior.
-- Use [`docs/SESSION_PORTING.md`](docs/SESSION_PORTING.md) for Session wire/protobuf/crypto porting rules.
-- Read `docs/unsupported-or-unspecified.md` before wiring any incomplete protocol surface into production.
+## Production projects
 
-## Projects
+- `Deep.Protocol`: canonical codecs and cryptographic protocol behavior.
+- `Deep.Protocol.MembershipRoutes`: signed membership and mailbox route contracts.
+- `Deep.Protocol.ProfileCarrier`: bounded self-hosted profile carrier contracts.
 
-- `Deep.Protocol.Abstractions`: protocol models, state models, crypto/onion adapter interfaces.
-- `Deep.Protocol.Protobuf`: C# classes generated from upstream `SessionProtos.proto` and `WebSocketResources.proto`.
-- `Deep.Protocol`: managed protocol codec, padding, envelope/community parsing, state helpers.
-- `Deep.Protocol.GoldenVectors`: deterministic parity fixtures.
-- `Deep.Protocol.Tests`: unit tests and golden-vector harness.
+`Deep.Protocol.Dark.slnx` and `reference/session-compatibility-v0/` are isolated offline research
+surfaces. They are not production dependencies and must never be packaged or executed by a client,
+service or node.
 
-## Build
+## Verify
 
 ```powershell
 dotnet restore Deep.Protocol.slnx
 dotnet build Deep.Protocol.slnx --no-restore
-dotnet test Deep.Protocol.slnx --no-build --collect:"XPlat Code Coverage" --results-directory artifacts/test-results
+dotnet test Deep.Protocol.slnx --no-build
+./eng/Test-LegacyReferenceCorpus.ps1
+./eng/Test-ProductionProtocolGraph.ps1 -Configuration Debug
 ```
-
-See `docs/unsupported-or-unspecified.md` before wiring this into production crypto bindings.
