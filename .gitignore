@@ -17,6 +17,7 @@ artifacts/dnp1-vector-fragments/*
 !artifacts/dnp1-vector-fragments/devops-package.json
 !artifacts/dnp1-vector-fragments/drm19-recovery-container.json
 !artifacts/dnp1-vector-fragments/genesis-full-dag.json
+!artifacts/dnp1-vector-fragments/package-closure.json
 *.user
 *.suo
 *.log

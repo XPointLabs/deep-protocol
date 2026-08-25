@@ -9,30 +9,18 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+. (Join-Path $PSScriptRoot 'Dnp1NormativeBinding.ps1')
 if ([string]::IsNullOrWhiteSpace($NormativeRoot)) {
     $NormativeRoot = Join-Path (Split-Path $root -Parent) 'docs/survival-program/releases/v3.0.0/specs'
 }
 $NormativeRoot = (Resolve-Path -LiteralPath $NormativeRoot).Path
-$normativeHead = (& git -C $NormativeRoot rev-parse HEAD 2>$null | Out-String).Trim()
-if ($LASTEXITCODE -ne 0 -or $normativeHead -cne $ExpectedNormativeCommit) {
-    throw 'Checked-out normative repository is not the exact approved evidence-ownership commit.'
-}
-$normativeGitRoot = (& git -C $NormativeRoot rev-parse --show-toplevel 2>$null | Out-String).Trim()
+$null = Get-Dnp1ApprovedNormativeBinding -NormativeRoot $NormativeRoot `
+    -ExpectedNormativeCommit $ExpectedNormativeCommit -Names @(
+        'dnp1-classical-v1.vectors.skeleton.json',
+        'dnp1-classical-v1.evidence-ownership.json')
 
 $skeletonPath = Join-Path $NormativeRoot 'dnp1-classical-v1.vectors.skeleton.json'
 $ownershipPath = Join-Path $NormativeRoot 'dnp1-classical-v1.evidence-ownership.json'
-foreach ($path in @($skeletonPath, $ownershipPath)) {
-    $prefix = [IO.Path]::GetFullPath($normativeGitRoot).TrimEnd('\','/') + '\'
-    $full = [IO.Path]::GetFullPath($path)
-    if (-not $full.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) {
-        throw "Normative evidence input is outside its repository: $full"
-    }
-    $relative = $full.Substring($prefix.Length).Replace('\','/')
-    $dirty = (& git -C $normativeGitRoot status --porcelain -- $relative | Out-String).Trim()
-    if (-not [string]::IsNullOrWhiteSpace($dirty)) {
-        throw "Normative evidence input differs from the approved commit: $relative"
-    }
-}
 $skeleton = Get-Content -Raw -LiteralPath $skeletonPath | ConvertFrom-Json
 $ownership = Get-Content -Raw -LiteralPath $ownershipPath | ConvertFrom-Json
 $cases = @($skeleton.cases)

@@ -5,6 +5,18 @@ namespace Deep.Protocol.Tests.DeepNative;
 public sealed class PublicApiNamingTests
 {
     [Fact]
+    public void PackageBlockingCutoverVerifier_UsesFrozenCleanBreakName()
+    {
+        var methods = typeof(Deep.Protocol.DeepNative.RecoveryVerifier).GetMethods(
+            BindingFlags.Public | BindingFlags.Static);
+
+        Assert.Single(methods, method =>
+            method.Name == "VerifyDistributedCutoverManifestAsync");
+        Assert.DoesNotContain(methods, method =>
+            method.Name == "DistributeCutoverManifestAsync");
+    }
+
+    [Fact]
     public void WaveOnePublicSurface_UsesDomainNamesWithoutWorkPackageTokens()
     {
         var assembly = typeof(Deep.Protocol.DeepNative.RecoveryVerifier).Assembly;

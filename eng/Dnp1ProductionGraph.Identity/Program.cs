@@ -354,8 +354,8 @@ internal static class GraphPolicy
         {
             ["Deep.Protocol"] =
             [
-                "Deep.Protocol|5948|3BAAA0C239C7D0014720AE39A86AC175FE867381E46640BFE127ECC0A8914905",
-                "Deep.Protocol|5948|B2B5A483EA89BF54AA6874A650FDC606807F77F51BD194E5EE82A757B46F3C70"
+                "Deep.Protocol|5948|919F300469C2FC4205E049F0C1D3E4C5C266860863281CE8BAED0D560DCFE6C5",
+                "Deep.Protocol|5948|6ADF59A458B980E58DA63E4E471883A099F58BEAF58DE3B742E37967429602C3"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [
@@ -369,8 +369,8 @@ internal static class GraphPolicy
             ],
             ["Deep.Protocol.GoldenVectors"] =
             [
-                "Deep.Protocol.GoldenVectors|110|CB8FBE4A262105B188B279AC1119AF9C090ECAF47D24C109FAB65093B8099D4F",
-                "Deep.Protocol.GoldenVectors|110|97651F729F3FF5706516979CB0199B582AC45F480FDFDE42F0147822730C37BE"
+                "Deep.Protocol.GoldenVectors|111|4828342844FA427EFB0E6C4C953C06831A6073638D11A37CE5200CA52456E518",
+                "Deep.Protocol.GoldenVectors|111|6147F1F8745971A5EF6DD93705C2CCADB373FB03EA61E86678F384A973C1C52F"
             ]
         };
 }

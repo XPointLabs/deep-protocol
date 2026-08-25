@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)] [string] $MappingsPath,
+    [Parameter(Mandatory)] [string[]] $MappingsPath,
     [Parameter(Mandatory)] [string] $ProtocolBaseCommit,
     [Parameter(Mandatory)] [string[]] $ImplementationScope,
     [string] $NormativeRoot = '',
@@ -10,6 +10,7 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+. (Join-Path $PSScriptRoot 'Dnp1NormativeBinding.ps1')
 if ([string]::IsNullOrWhiteSpace($NormativeRoot)) {
     $NormativeRoot = Join-Path (Split-Path $root -Parent) 'docs/survival-program/releases/v3.0.0/specs'
 }
@@ -17,7 +18,9 @@ if ([string]::IsNullOrWhiteSpace($OutputPath)) {
     $OutputPath = Join-Path $root 'tests/Deep.Protocol.GoldenVectors/Vectors/dnp1-classical-v1.executable.json'
 }
 $NormativeRoot = (Resolve-Path -LiteralPath $NormativeRoot).Path
-$MappingsPath = (Resolve-Path -LiteralPath $MappingsPath).Path
+$MappingsPath = @($MappingsPath | ForEach-Object {
+    (Resolve-Path -LiteralPath $_).Path
+})
 if ($ProtocolBaseCommit -notmatch '^[0-9a-f]{40}$') { throw 'Protocol base commit is invalid.' }
 & git -C $root merge-base --is-ancestor $ProtocolBaseCommit HEAD
 if ($LASTEXITCODE -ne 0) { throw 'Protocol base commit is not an ancestor of the checked-out source.' }
@@ -53,25 +56,10 @@ $normativeNames = @(
     'dnp1-classical-v1.evidence-manifest.schema.json',
     'dnp1-classical-v1.evidence-attestation.schema.json',
     'dnp1-classical-v1.evidence-selftest-result.json')
-$normativeGitRoot = (& git -C $NormativeRoot rev-parse --show-toplevel 2>$null | Out-String).Trim()
-if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve the normative repository root.' }
-$normativeFiles = foreach ($name in $normativeNames) {
-    $path = Join-Path $NormativeRoot $name
-    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Normative file missing: $name" }
-    $gitRelative = Get-RelativeWithin $normativeGitRoot $path
-    $tracked = (& git -C $normativeGitRoot ls-files --error-unmatch -- $gitRelative 2>$null | Out-String).Trim()
-    $trackedExit = $LASTEXITCODE
-    $dirty = (& git -C $normativeGitRoot status --porcelain -- $gitRelative | Out-String).Trim()
-    if ($trackedExit -ne 0 -or [string]::IsNullOrWhiteSpace($tracked) -or
-        -not [string]::IsNullOrWhiteSpace($dirty)) {
-        throw "Normative file is untracked or differs from HEAD: $name"
-    }
-    [ordered]@{ path = $name; sha256 = Get-Sha256 $path }
-}
-$normativeCommit = (& git -C $NormativeRoot rev-parse HEAD 2>$null | Out-String).Trim()
-if ($LASTEXITCODE -ne 0 -or $normativeCommit -notmatch '^[0-9a-f]{40}$') {
-    throw 'Cannot resolve the normative repository commit.'
-}
+$normativeBinding = Get-Dnp1ApprovedNormativeBinding -NormativeRoot $NormativeRoot `
+    -Names $normativeNames
+$normativeFiles = @($normativeBinding.Files)
+$normativeCommit = [string]$normativeBinding.Commit
 
 $skeleton = Get-Content -Raw -LiteralPath (
     Join-Path $NormativeRoot 'dnp1-classical-v1.vectors.skeleton.json') | ConvertFrom-Json
@@ -96,8 +84,14 @@ if ($packageRows.Count -ne 219 -or
     @($packageRows | Where-Object executableOwner -ceq 'DevOpsWitness').Count -ne 3) {
     throw 'Normative package evidence is not Protocol216 plus DevOpsWitness3.'
 }
-$draft = Get-Content -Raw -LiteralPath $MappingsPath | ConvertFrom-Json
-$draftMappings = @($draft.mappings)
+$draftMappings = @(foreach ($path in $MappingsPath) {
+    $draft = Get-Content -Raw -LiteralPath $path | ConvertFrom-Json
+    if ($null -ne $draft.PSObject.Properties['normativeHead'] -and
+        [string]$draft.normativeHead -cne $normativeCommit) {
+        throw "Mapping fragment is not bound to the approved normative commit: $path"
+    }
+    @($draft.mappings)
+})
 $draftIds = @($draftMappings | ForEach-Object { [string]$_.id })
 $draftFqns = @($draftMappings | ForEach-Object { [string]$_.testFqn })
 if (($draftIds | Sort-Object -Unique).Count -ne $draftIds.Count -or

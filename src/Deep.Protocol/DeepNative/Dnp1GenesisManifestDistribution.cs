@@ -424,7 +424,7 @@ internal static class GenesisManifestDistributor
 
 public static partial class RecoveryVerifier
 {
-    public static async ValueTask<GenesisDistributedCutoverManifestPlan> DistributeCutoverManifestAsync(
+    public static async ValueTask<GenesisDistributedCutoverManifestPlan> VerifyDistributedCutoverManifestAsync(
         GenesisSignedCutoverManifestPlan signed, GenesisResetReservationProvider reservationProvider,
         GenesisManifestDistributionProvider provider,
         GenesisComponentManifestDistributor components, IProtectedHmacProvider hmacProvider,

@@ -3,8 +3,8 @@
   "mappings": [
     {
       "id": "recovery-genesis-terminal-reject",
-      "testFqn": "Deep.Protocol.Tests.DeepNative.DeploymentGovernanceOriginTests.AccountTerminalFence_RejectsGenesisBranchButAllowsOnlyVerifiedResetOldSide",
-      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1DeploymentGovernanceOriginTests.cs"
+      "testFqn": "Deep.Protocol.Tests.DeepNative.PackageVectorClosureTests.RecoveryGenesisTerminalReject",
+      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1PackageVectorClosureTests.cs"
     },
     {
       "id": "witness-empty-tree-root",
@@ -60,13 +60,6 @@
       "id": "recovery-drm20-gar-atomic-remint",
       "testFqn": "Deep.Protocol.Tests.DeepNative.DeploymentGovernanceOriginTests.AccountReset_GarAtomicallyRetainsEvidenceAndMintsExactPostHmacReceipt",
       "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1DeploymentGovernanceOriginTests.cs"
-    }
-  ],
-  "unmapped": [
-    {
-      "id": "recovery-genesis-full-constructibility-dag",
-      "testFqn": "Deep.Protocol.Tests.DeepNative.GenesisFullDagEvidenceTests.PublicDrm20FirstDeployment_ReachesLocalCommittedWithDurableRereads",
-      "reason": "The public first-deployment integration is constructible through LocalCommitted, but the new mandatory GTI/GRR/GAS/GQP/GAJ/key/protector rereads intentionally execute more provider callbacks than this vector's closed 6/1/4/2 callback budget. It remains a regression test and is not executable package evidence until the vector is isolated at the intended callback boundary."
     }
   ]
 }

@@ -22,12 +22,5 @@
       "testFqn": "Deep.Protocol.Tests.DeepNative.RecoveryColdProtectedPayloadTests.Dtc1OrMixedDtc20_RejectsAfterOneAeadWithExactReplayLatchAndNoMutation",
       "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/RecoveryColdProtectedPayloadTests.cs"
     }
-  ],
-  "unmapped": [
-    {
-      "id": "recovery-drm2-target-subject-cross-kind",
-      "testFqn": "Deep.Protocol.Tests.DeepNative.Drm3ContainerContractTests.DtcTargetSubject_DomainOrPreimageSubstitutionChangesTheExactSubject",
-      "reason": "The former encrypted mapping was overclaimed: its latch returned Stored without counting that durable mutation and it covered only one DPA-to-DPD substitution. DRM20/DTC2 removes the old active-row content-hash cycle, but this direct test still proves only domain/preimage separation with zero agreement callbacks; it does not satisfy the encrypted integration vector's complete callback contract."
-    }
   ]
 }

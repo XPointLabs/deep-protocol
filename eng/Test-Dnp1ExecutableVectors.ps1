@@ -10,6 +10,7 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+. (Join-Path $PSScriptRoot 'Dnp1NormativeBinding.ps1')
 if ([string]::IsNullOrWhiteSpace($NormativeRoot)) {
     $NormativeRoot = Join-Path (Split-Path $root -Parent) 'docs/survival-program/releases/v3.0.0/specs'
 }
@@ -39,15 +40,9 @@ Assert-ExactProperties $manifest @(
     'schemaVersion', 'normativeCommit', 'protocolBaseCommit', 'normativeFiles',
     'implementationScope', 'implementationScopeSha256', 'mappings') 'Executable manifest'
 if ([string]$manifest.schemaVersion -cne '1.0.0') { throw 'Executable vector manifest schema is unsupported.' }
-if ([string]::IsNullOrWhiteSpace([string]$manifest.normativeCommit)) {
+if ([string]$manifest.normativeCommit -cne $script:Dnp1ApprovedNormativeCommit) {
     throw 'Executable vector manifest has no normative commit.'
 }
-$normativeHead = (& git -C $NormativeRoot rev-parse HEAD 2>$null | Out-String).Trim()
-if ($LASTEXITCODE -ne 0 -or $normativeHead -cne [string]$manifest.normativeCommit) {
-    throw 'Checked-out normative repository commit differs from the executable manifest.'
-}
-$normativeGitRoot = (& git -C $NormativeRoot rev-parse --show-toplevel 2>$null | Out-String).Trim()
-if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve the normative repository root.' }
 $protocolBase = [string]$manifest.protocolBaseCommit
 if ($protocolBase -notmatch '^[0-9a-f]{40}$') { throw 'Protocol base commit is invalid.' }
 & git -C $root merge-base --is-ancestor $protocolBase HEAD
@@ -79,6 +74,10 @@ function Assert-Sha256([string] $Value, [string] $Name) {
 
 $normative = @($manifest.normativeFiles)
 if ($normative.Count -lt 10) { throw 'Executable vector manifest omits normative/evidence files.' }
+$bound = Get-Dnp1ApprovedNormativeBinding -NormativeRoot $NormativeRoot `
+    -ExpectedNormativeCommit ([string]$manifest.normativeCommit) `
+    -Names @($normative | ForEach-Object { [string]$_.path })
+$boundByPath = @{}; foreach ($entry in $bound.Files) { $boundByPath[[string]$entry.path] = $entry }
 foreach ($entry in $normative) {
     Assert-ExactProperties $entry @('path', 'sha256') 'Normative binding'
     $relative = [string]$entry.path
@@ -87,16 +86,7 @@ foreach ($entry in $normative) {
         throw "Unsafe normative path: $relative"
     }
     $path = Join-Path $NormativeRoot $relative
-    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Normative file missing: $relative" }
-    $gitRelative = Get-RelativeWithin $normativeGitRoot $path
-    $tracked = (& git -C $normativeGitRoot ls-files --error-unmatch -- $gitRelative 2>$null | Out-String).Trim()
-    $trackedExit = $LASTEXITCODE
-    $dirty = (& git -C $normativeGitRoot status --porcelain -- $gitRelative | Out-String).Trim()
-    if ($trackedExit -ne 0 -or [string]::IsNullOrWhiteSpace($tracked) -or
-        -not [string]::IsNullOrWhiteSpace($dirty)) {
-        throw "Normative file is untracked or differs from the bound commit: $relative"
-    }
-    if ((Get-Sha256 $path) -cne ([string]$entry.sha256).ToUpperInvariant()) {
+    if ([string]$boundByPath[$relative].sha256 -cne ([string]$entry.sha256).ToUpperInvariant()) {
         throw "Normative file digest differs: $relative"
     }
 }

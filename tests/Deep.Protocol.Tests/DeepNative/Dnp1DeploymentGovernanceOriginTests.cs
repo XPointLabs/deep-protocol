@@ -254,7 +254,7 @@ public sealed class DeploymentGovernanceOriginTests
 
         var distributionProvider = new DistributionProvider(fixture.Hmac);
         var components = new ComponentDistributor();
-        var distributed = await RecoveryVerifier.DistributeCutoverManifestAsync(plan,
+        var distributed = await RecoveryVerifier.VerifyDistributedCutoverManifestAsync(plan,
             reservationProvider, distributionProvider, components, fixture.Hmac, 101);
         Assert.True(distributed.NoAuthorityClaim);
         Assert.Equal(4, components.Deliveries);
@@ -262,7 +262,7 @@ public sealed class DeploymentGovernanceOriginTests
         Assert.Equal((byte)2, distributed.DistributedReceipt.Span[381]);
         Assert.Equal((byte)0x0f, distributed.DistributedReceipt.Span[300]);
         var replayComponents = new ComponentDistributor();
-        var replayDistribution = await RecoveryVerifier.DistributeCutoverManifestAsync(plan,
+        var replayDistribution = await RecoveryVerifier.VerifyDistributedCutoverManifestAsync(plan,
             reservationProvider, new DistributedReplayProvider(distributed.DistributedReceipt.ToArray()),
             replayComponents, fixture.Hmac, 101);
         Assert.Equal(0, replayComponents.Deliveries);
@@ -315,7 +315,7 @@ public sealed class DeploymentGovernanceOriginTests
             branch, reservation, reservationProvider, new DcmProvider(fixture.Hmac),
             new OriginSigner(facts.AccountSigner.PrivateKey, facts.ResetSigner.PrivateKey),
             fixture.Hmac, 101);
-        var distributed = await RecoveryVerifier.DistributeCutoverManifestAsync(
+        var distributed = await RecoveryVerifier.VerifyDistributedCutoverManifestAsync(
             signed, reservationProvider, new DistributionProvider(fixture.Hmac),
             new ComponentDistributor(), fixture.Hmac, 101);
         var baseIdentity = RecoveryVerifier.CreateGenesisBaseIdentityContext(
@@ -369,7 +369,7 @@ public sealed class DeploymentGovernanceOriginTests
             branch, reservation, reservationProvider, new DcmProvider(fixture.Hmac),
             new OriginSigner(facts.AccountSigner.PrivateKey, facts.ResetSigner.PrivateKey),
             fixture.Hmac, 101);
-        var distributed = await RecoveryVerifier.DistributeCutoverManifestAsync(
+        var distributed = await RecoveryVerifier.VerifyDistributedCutoverManifestAsync(
             signed, reservationProvider, new DistributionProvider(fixture.Hmac),
             new ComponentDistributor(), fixture.Hmac, 101);
         var baseIdentity = RecoveryVerifier.CreateGenesisBaseIdentityContext(
@@ -430,7 +430,7 @@ public sealed class DeploymentGovernanceOriginTests
             branch, reservation, reservationProvider, new DcmProvider(fixture.Hmac),
             new OriginSigner(facts.AccountSigner.PrivateKey, facts.ResetSigner.PrivateKey),
             fixture.Hmac, 101);
-        var distributed = await RecoveryVerifier.DistributeCutoverManifestAsync(
+        var distributed = await RecoveryVerifier.VerifyDistributedCutoverManifestAsync(
             signed, reservationProvider, new DistributionProvider(fixture.Hmac),
             new ComponentDistributor(), fixture.Hmac, 101);
         var baseIdentity = RecoveryVerifier.CreateGenesisBaseIdentityContext(
@@ -593,7 +593,7 @@ public sealed class DeploymentGovernanceOriginTests
             branch, reservation, reservationProvider, new DcmProvider(fixture.Hmac),
             new OriginSigner(facts.AccountSigner.PrivateKey, facts.ResetSigner.PrivateKey),
             fixture.Hmac, 101);
-        var distributed = await RecoveryVerifier.DistributeCutoverManifestAsync(
+        var distributed = await RecoveryVerifier.VerifyDistributedCutoverManifestAsync(
             signed, reservationProvider, new DistributionProvider(fixture.Hmac),
             new ComponentDistributor(), fixture.Hmac, 101);
         var baseIdentity = RecoveryVerifier.CreateGenesisBaseIdentityContext(
@@ -816,7 +816,7 @@ public sealed class DeploymentGovernanceOriginTests
             branch, reservation, reservationProvider, new DcmProvider(fixture.Hmac),
             new OriginSigner(facts.AccountSigner.PrivateKey, facts.ResetSigner.PrivateKey),
             fixture.Hmac, 101);
-        var distributed = await RecoveryVerifier.DistributeCutoverManifestAsync(
+        var distributed = await RecoveryVerifier.VerifyDistributedCutoverManifestAsync(
             signed, reservationProvider, new DistributionProvider(fixture.Hmac),
             new ComponentDistributor(), fixture.Hmac, 101);
 
@@ -1289,7 +1289,7 @@ public sealed class DeploymentGovernanceOriginTests
             branch, reservation, reservationProvider, new DcmProvider(fixture.Hmac),
             new OriginSigner(facts.AccountSigner.PrivateKey, facts.ResetSigner.PrivateKey),
             fixture.Hmac, 101);
-        var distributed = await RecoveryVerifier.DistributeCutoverManifestAsync(
+        var distributed = await RecoveryVerifier.VerifyDistributedCutoverManifestAsync(
             signed, reservationProvider, new DistributionProvider(fixture.Hmac),
             new ComponentDistributor(), fixture.Hmac, 101);
         var baseIdentity = RecoveryVerifier.CreateGenesisBaseIdentityContext(
@@ -2229,7 +2229,7 @@ public sealed class DeploymentGovernanceOriginTests
             overrideBranchHash: crossedHash);
         var crossedComponents = new ComponentDistributor();
         await Assert.ThrowsAsync<RecordException>(() =>
-            RecoveryVerifier.DistributeCutoverManifestAsync(authored.Plan,
+            RecoveryVerifier.VerifyDistributedCutoverManifestAsync(authored.Plan,
                 authored.ReservationProvider, crossed, crossedComponents,
                 authored.Fixture.Hmac, 101).AsTask());
         Assert.Equal(1, crossed.CommitCalls);
@@ -2239,7 +2239,7 @@ public sealed class DeploymentGovernanceOriginTests
         var preBit = new DistributionProvider(authored.Fixture.Hmac, initialBitmap: 1);
         var missingStoredTuple = new ComponentDistributor(missingRereadKind: ComponentKind.Registry);
         await Assert.ThrowsAsync<RecordException>(() =>
-            RecoveryVerifier.DistributeCutoverManifestAsync(authored.Plan,
+            RecoveryVerifier.VerifyDistributedCutoverManifestAsync(authored.Plan,
                 authored.ReservationProvider, preBit, missingStoredTuple,
                 authored.Fixture.Hmac, 101).AsTask());
         Assert.Equal(1, preBit.CommitCalls);
@@ -2251,7 +2251,7 @@ public sealed class DeploymentGovernanceOriginTests
             nonmonotonicAdvance: true);
         var oneDelivery = new ComponentDistributor();
         await Assert.ThrowsAsync<RecordException>(() =>
-            RecoveryVerifier.DistributeCutoverManifestAsync(authored.Plan,
+            RecoveryVerifier.VerifyDistributedCutoverManifestAsync(authored.Plan,
                 authored.ReservationProvider, nonmonotonic, oneDelivery,
                 authored.Fixture.Hmac, 101).AsTask());
         Assert.Equal(1, nonmonotonic.CommitCalls);

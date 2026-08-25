@@ -57,16 +57,6 @@
       "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1IdentityAuthorityTests.cs"
     },
     {
-      "id": "identity-release-manifest-signer-substitution",
-      "testFqn": "Deep.Protocol.Tests.DeepNative.VectorIdentityCoverageTests.IdentityReleaseManifestSignerSubstitution",
-      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1VectorIdentityCoverageTests.cs"
-    },
-    {
-      "id": "identity-dxp-mutation-expiry-reuse",
-      "testFqn": "Deep.Protocol.Tests.DeepNative.VectorIdentityCoverageTests.IdentityDxpMutationExpiryReuse",
-      "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1VectorIdentityCoverageTests.cs"
-    },
-    {
       "id": "identity-role-key-reuse",
       "testFqn": "Deep.Protocol.Tests.DeepNative.VectorIdentityCoverageTests.IdentityRoleKeyReuse",
       "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1VectorIdentityCoverageTests.cs"
