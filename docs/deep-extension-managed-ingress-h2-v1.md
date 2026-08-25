@@ -5,6 +5,10 @@ Status: P10B local contract; runtime blocked.
 This Deep-only extension defines a bounded outer transport for an opaque, already sealed
 route/onion frame. It is not Session wire behavior and does not modify protobufs.
 
+The canonical Deep-native producer/consumer for that opaque body is specified by
+`deep-extension-privacy-routing-v1.md`. Managed ingress remains transport-only: it does not open
+`DRF1` or interpret `DPR1`.
+
 ## Surface
 
 - contract: `Deep.Protocol/P10B-managed-ingress-h2-v1`;
