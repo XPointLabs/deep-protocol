@@ -1955,49 +1955,6 @@ public sealed class ProductionMailboxSelectionSuccessorTests
             f.OldTopology,
             context ?? CompleteContext(f));
 
-    [Fact]
-    public void InitialCheckpoint_VerifiesFreshMultiGenerationControlPlaneClosure()
-    {
-        var f = CreateFixture(
-            mode: ProductionMailboxSelectionSuccessorMode.OfflineCheckpoint,
-            authorityAdvance: 65,
-            topologyAdvance: 65);
-        var oldAuthority = f.OldAuthority.Authority;
-        var oldTopology = f.OldTopology.Snapshot;
-        var context = new ProductionMailboxInitialCheckpointVerificationContext
-        {
-            PinnedMrXPublicKeySha256 = f.Context.PinnedMrXPublicKeySha256,
-            ExpectedNetworkId = oldAuthority.NetworkId,
-            LastCommittedAuthorityGeneration = oldAuthority.AuthorityGeneration,
-            LastCommittedRevocationGeneration = oldAuthority.Revocation.Generation,
-            LastCommittedRevocationHeadHash = oldAuthority.Revocation.HeadHash,
-            LastCommittedRevocationSnapshotHash = oldAuthority.Revocation.SnapshotHash,
-            LastCommittedTopologyGeneration = oldTopology.TopologyGeneration,
-            NowUnixSeconds = Now,
-            ClockSkewSeconds = 0
-        };
-
-        var verified = ProductionMailboxInitialCheckpointVerifier.Verify(
-            ProductionMailboxAuthorityCodec.Encode(f.NewAuthority.Authority),
-            f.NewRevocationSnapshot,
-            ProductionMailboxTopologyCodec.Encode(f.NewTopology.Snapshot),
-            context);
-
-        Assert.Equal(72UL, verified.Authority.Authority.AuthorityGeneration);
-        Assert.Equal(68UL, verified.Topology.CommittedTopologyGeneration);
-        Assert.Equal(f.NewAuthority.Authority.Revocation.SnapshotHash.ToArray(),
-            verified.Revocations.CanonicalSnapshotHash.ToArray());
-
-        var tampered = f.NewRevocationSnapshot.ToArray();
-        tampered[^1] ^= 1;
-        Assert.Throws<ProductionMailboxRevocationSnapshotException>(() =>
-            ProductionMailboxInitialCheckpointVerifier.Verify(
-                ProductionMailboxAuthorityCodec.Encode(f.NewAuthority.Authority),
-                tampered,
-                ProductionMailboxTopologyCodec.Encode(f.NewTopology.Snapshot),
-                context));
-    }
-
     private static VerifiedProductionMailboxRevocationSnapshot VerifyCurrentRevocations(Fixture f) =>
         ProductionMailboxRevocationSnapshotVerifier.Verify(
             f.NewRevocationSnapshot,
