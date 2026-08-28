@@ -1,5 +1,6 @@
 using Deep.Protocol.DeepExtension.MailboxCapabilities;
 using Deep.Protocol.DeepExtension.MembershipRoutes;
+using Deep.Protocol.DeepExtension.MailboxTopology;
 using Xunit;
 
 namespace Deep.Protocol.MembershipRoutes.Tests;
@@ -80,6 +81,58 @@ public sealed class MailboxReplicaRouteProofTests
             .VerifyStorageReplica(
                 proof with { CanonicalInclusionProof = "json"u8.ToArray() },
                 1050));
+    }
+
+    [Theory]
+    [InlineData(4, true)]
+    [InlineData(ProductionMailboxTopologyConstants.MaximumClockSkewSeconds, true)]
+    [InlineData(ProductionMailboxTopologyConstants.MaximumClockSkewSeconds + 1, false)]
+    public void SkewAwareVerification_AcceptsOnlyTheBoundedFutureWindow(
+        int futureSeconds,
+        bool expected)
+    {
+        const ulong now = 1_000;
+        var descriptor = Descriptor(0x40) with
+        {
+            ValidFromUnixSeconds = now + (uint)futureSeconds,
+            ValidUntilUnixSeconds = now + 1_000
+        };
+        var proof = new MailboxReplicaMembershipProof
+        {
+            ReplicaId = descriptor.RouterId,
+            SigningPublicKey = descriptor.Ed25519PublicKey,
+            Epoch = descriptor.Epoch,
+            MembershipCommitment = MembershipRouteDescriptorCodec.ComputeRoot([descriptor]),
+            CanonicalInclusionProof = MailboxReplicaRouteProofCodec.Encode(
+                descriptor,
+                MembershipRouteDescriptorCodec.BuildProofs([descriptor])[0])
+        };
+        var verifier = new MembershipRoutesMailboxReplicaProofVerifier();
+
+        Assert.False(verifier.VerifyStorageReplica(proof, now));
+        Assert.Equal(expected, verifier.VerifyStorageReplica(
+            proof, now, ProductionMailboxTopologyConstants.MaximumClockSkewSeconds));
+    }
+
+    [Fact]
+    public void SkewAwareVerification_RejectsAnUnboundedSkewPolicy()
+    {
+        var descriptor = Descriptor(0x40);
+        var proof = new MailboxReplicaMembershipProof
+        {
+            ReplicaId = descriptor.RouterId,
+            SigningPublicKey = descriptor.Ed25519PublicKey,
+            Epoch = descriptor.Epoch,
+            MembershipCommitment = MembershipRouteDescriptorCodec.ComputeRoot([descriptor]),
+            CanonicalInclusionProof = MailboxReplicaRouteProofCodec.Encode(
+                descriptor,
+                MembershipRouteDescriptorCodec.BuildProofs([descriptor])[0])
+        };
+
+        Assert.False(new MembershipRoutesMailboxReplicaProofVerifier().VerifyStorageReplica(
+            proof,
+            1_050,
+            ProductionMailboxTopologyConstants.MaximumClockSkewSeconds + 1));
     }
 
     private static MembershipRouteDescriptor Descriptor(int start) =>

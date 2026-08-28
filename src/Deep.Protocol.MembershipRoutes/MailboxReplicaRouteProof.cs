@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using Deep.Protocol.DeepExtension.MailboxCapabilities;
+using Deep.Protocol.DeepExtension.MailboxTopology;
 
 namespace Deep.Protocol.DeepExtension.MembershipRoutes;
 
@@ -95,17 +96,29 @@ public sealed class MembershipRoutesMailboxReplicaProofVerifier
 {
     public bool VerifyStorageReplica(
         MailboxReplicaMembershipProof proof,
-        ulong verificationTimeUnixSeconds)
+        ulong verificationTimeUnixSeconds) =>
+        VerifyStorageReplica(proof, verificationTimeUnixSeconds, 0);
+
+    /// <summary>
+    /// Verifies a storage replica proof while allowing the bounded clock skew already accepted by
+    /// the enclosing production mailbox topology verification context.
+    /// </summary>
+    public bool VerifyStorageReplica(
+        MailboxReplicaMembershipProof proof,
+        ulong verificationTimeUnixSeconds,
+        uint clockSkewSeconds)
     {
-        if (proof is null)
+        if (proof is null ||
+            clockSkewSeconds > ProductionMailboxTopologyConstants.MaximumClockSkewSeconds)
             return false;
         try
         {
             var decoded = MailboxReplicaRouteProofCodec.Decode(
                 proof.CanonicalInclusionProof.Span);
             return decoded.Descriptor.Epoch == proof.Epoch &&
-                   decoded.Descriptor.ValidFromUnixSeconds <= verificationTimeUnixSeconds &&
-                   verificationTimeUnixSeconds <= decoded.Descriptor.ValidUntilUnixSeconds &&
+                   IsWithinWindow(decoded.Descriptor.ValidFromUnixSeconds,
+                       decoded.Descriptor.ValidUntilUnixSeconds,
+                       verificationTimeUnixSeconds, clockSkewSeconds) &&
                    decoded.Descriptor.Roles.HasFlag(MembershipRouteRole.Storage) &&
                    decoded.Descriptor.Capabilities.HasFlag(MembershipRouteCapability.Storage) &&
                    decoded.Descriptor.RouterId.Span.SequenceEqual(proof.ReplicaId.Span) &&
@@ -120,4 +133,14 @@ public sealed class MembershipRoutesMailboxReplicaProofVerifier
             return false;
         }
     }
+
+    private static bool IsWithinWindow(
+        ulong validFromUnixSeconds,
+        ulong validUntilUnixSeconds,
+        ulong verificationTimeUnixSeconds,
+        uint clockSkewSeconds) =>
+        (verificationTimeUnixSeconds >= validFromUnixSeconds ||
+         validFromUnixSeconds - verificationTimeUnixSeconds <= clockSkewSeconds) &&
+        (verificationTimeUnixSeconds <= validUntilUnixSeconds ||
+         verificationTimeUnixSeconds - validUntilUnixSeconds <= clockSkewSeconds);
 }

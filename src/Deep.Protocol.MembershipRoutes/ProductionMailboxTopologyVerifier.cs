@@ -341,7 +341,7 @@ public static class ProductionMailboxSelectionVerifier
             catch (MailboxPeerReplicationException ex) { throw ProductionMailboxTopologyVerifier.Error(ProductionMailboxTopologyError.InvalidMembershipProof, ex.Message); }
             if (mip.Epoch != epoch.Epoch || !mip.ReplicaId.Span.SequenceEqual(proof.Replicas[i].ReplicaId.Span) ||
                 !mip.MembershipCommitment.Span.SequenceEqual(epoch.MembershipCommitment.Span) ||
-                !membershipVerifier.VerifyStorageReplica(mip, nowUnixSeconds))
+                !membershipVerifier.VerifyStorageReplica(mip, nowUnixSeconds, clockSkewSeconds))
                 throw ProductionMailboxTopologyVerifier.Error(ProductionMailboxTopologyError.InvalidMembershipProof, "MIP1 does not prove the selected storage replica.");
             var node = epoch.Nodes.Single(n => n.NodeId.Span.SequenceEqual(mip.ReplicaId.Span));
             resolved[i] = new VerifiedProductionMailboxSelectedReplica

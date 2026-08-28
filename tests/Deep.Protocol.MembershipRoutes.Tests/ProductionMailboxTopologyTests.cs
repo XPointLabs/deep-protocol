@@ -141,6 +141,53 @@ public sealed class ProductionMailboxTopologyTests
             });
     }
 
+    [Theory]
+    [InlineData(4, true)]
+    [InlineData(ProductionMailboxTopologyConstants.MaximumClockSkewSeconds, true)]
+    [InlineData(ProductionMailboxTopologyConstants.MaximumClockSkewSeconds + 1, false)]
+    public void Pms1_PropagatesBoundedClockSkewToNestedMip1(
+        int mipFutureSeconds,
+        bool expected)
+    {
+        var f = CreateFixture(currentRouteValidFromUnixSeconds: Now + (uint)mipFutureSeconds);
+        var verifiedTopology = ProductionMailboxTopologyVerifier.Verify(
+            ProductionMailboxTopologyCodec.Encode(f.Topology),
+            f.Authority, f.Context, f.SignatureVerifier);
+        var selection = SignSelection(f, verifiedTopology);
+
+        void Verify() => ProductionMailboxSelectionVerifier.Verify(
+            ProductionMailboxTopologyCodec.EncodeSelection(selection),
+            f.Authority, verifiedTopology, f.PlacementId, Now,
+            ProductionMailboxTopologyConstants.MaximumClockSkewSeconds,
+            f.SignatureVerifier);
+
+        if (expected)
+            Verify();
+        else
+            AssertError(ProductionMailboxTopologyError.InvalidMembershipProof, Verify);
+    }
+
+    [Fact]
+    public void Pms1_StructuralTopologyContainment_RemainsStrictWhenClockSkewIsAllowed()
+    {
+        var f = CreateFixture();
+        var verifiedTopology = ProductionMailboxTopologyVerifier.Verify(
+            ProductionMailboxTopologyCodec.Encode(f.Topology),
+            f.Authority, f.Context, f.SignatureVerifier);
+        var selection = SignSelection(f, verifiedTopology);
+        var escapingSelection = ReSignSelection(selection with
+        {
+            ExpiresAtUnixSeconds = f.Topology.ExpiresAtUnixSeconds + 1
+        }, f.IssuerPrivateKey);
+
+        AssertError(ProductionMailboxTopologyError.InvalidValidityWindow, () =>
+            ProductionMailboxSelectionVerifier.Verify(
+                ProductionMailboxTopologyCodec.EncodeSelection(escapingSelection),
+                f.Authority, verifiedTopology, f.PlacementId, Now,
+                ProductionMailboxTopologyConstants.MaximumClockSkewSeconds,
+                f.SignatureVerifier));
+    }
+
     [Fact]
     public void OfficialTopology_RejectsPrivateIp_ButExplicitUserManagedPolicyAllowsIt()
     {
@@ -441,11 +488,15 @@ public sealed class ProductionMailboxTopologyTests
     private static void AssertError(ProductionMailboxTopologyError error, Action action) =>
         Assert.Equal(error, Assert.Throws<ProductionMailboxTopologyException>(action).Error);
 
-    private static Fixture CreateFixture(bool userManaged = false)
+    private static Fixture CreateFixture(
+        bool userManaged = false,
+        ulong? currentRouteValidFromUnixSeconds = null)
     {
         var issuer = PublicKeyAuth.GenerateKeyPair(Bytes(30, 32));
         var mrX = PublicKeyAuth.GenerateKeyPair(Bytes(60, 32));
-        var currentDescriptors = Descriptors(9, Now - 100, Now + 1_000);
+        var currentDescriptors = Descriptors(9,
+            currentRouteValidFromUnixSeconds ?? Now - 100,
+            Now + 1_000);
         var nextDescriptors = Descriptors(10, Now + 100, Now + 2_000);
         var currentRoot = MembershipRouteDescriptorCodec.ComputeRoot(currentDescriptors);
         var nextRoot = MembershipRouteDescriptorCodec.ComputeRoot(nextDescriptors);
