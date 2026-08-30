@@ -25,4 +25,9 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Identity\deep-recovery-v1.vector.json"
+                      LogicalName="Deep.Protocol.Tests.Identity.deep-recovery-v1.vector.json" />
+  </ItemGroup>
+
 </Project>

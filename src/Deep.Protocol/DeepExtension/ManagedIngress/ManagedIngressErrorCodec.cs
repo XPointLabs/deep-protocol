@@ -4,7 +4,7 @@ namespace Deep.Protocol.DeepExtension.ManagedIngress;
 
 public static class ManagedIngressErrorCodec
 {
-    private static ReadOnlySpan<byte> Magic => "DIE1"u8;
+    private static ReadOnlySpan<byte> Magic => ProtocolMagicBytes.DIE1;
     private const byte Version = 1;
     private const byte MinimumReaderVersion = 1;
 

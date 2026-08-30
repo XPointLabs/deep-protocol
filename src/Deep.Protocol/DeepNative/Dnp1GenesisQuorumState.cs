@@ -411,7 +411,7 @@ internal static class GenesisQuorumStateVerifier
             var dcqRef = Reference(ArtifactType.Dcq1, dcq);
 
             var unsigned = new byte[GenesisProtectedRecords.GqsLength - 32];
-            "GQS1"u8.CopyTo(unsigned);
+            ProtocolMagicBytes.GQS1.CopyTo(unsigned);
             unsigned[4] = 1;
             pendingBytes.AsSpan(8, 243).CopyTo(unsigned.AsSpan(8));
             for (var index = 0; index < 3; index++)
@@ -486,7 +486,7 @@ internal static class GenesisQuorumStateVerifier
                 "DCQ1 witness-set root");
             if (Scalars.UInt64(dcq.FieldSpan(8)) != release.LatestWitnessEpoch)
                 Invalid("Genesis DCQ1 witness epoch is stale.");
-            Window(dcq.FieldSpan(11), dcq.FieldSpan(12), nowUnixSeconds, "DCQ1");
+            Window(dcq.FieldSpan(11), dcq.FieldSpan(12), nowUnixSeconds, ProtocolMagic.DCQ1);
             return VerifyReceipts(
                 dcq, release, pendingBytes.AsSpan(251, 96), nowUnixSeconds,
                 verifySignatures);
@@ -618,7 +618,7 @@ internal static class GenesisQuorumStateVerifier
             receipt.FieldSpan(23), WitnessTreeVerifier.EmptyRoot(
                 release.LatestWitnessEpoch, witnessId,
                 release.LatestDelegation.Delegation.MaximumTreeSize));
-        Window(receipt.FieldSpan(24), receipt.FieldSpan(25), now, "DCN1");
+        Window(receipt.FieldSpan(24), receipt.FieldSpan(25), now, ProtocolMagic.DCN1);
         if (verifySignature)
             VerifySignature(receipt.FieldSpan(27), CanonicalGrammar.GetSigningBytes(
                 receipt, "Deep/Cutover/V1/witness-receipt"), descriptor!.Ed25519PublicKey.Span);

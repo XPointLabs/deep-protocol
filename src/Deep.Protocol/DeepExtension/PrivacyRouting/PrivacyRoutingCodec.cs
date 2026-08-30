@@ -156,8 +156,8 @@ public static class PrivacyRoutingRequestBuilder
 
 public static class PrivacyRoutingRequestCodec
 {
-    private static readonly byte[] RelayMagic = "DRL1"u8.ToArray();
-    private static readonly byte[] ExitMagic = "DRE1"u8.ToArray();
+    private static readonly byte[] RelayMagic = ProtocolMagicBytes.DRL1.ToArray();
+    private static readonly byte[] ExitMagic = ProtocolMagicBytes.DRE1.ToArray();
     private const int RelayFixedBytes = 80;
     private const int ExitFixedBytes = 144;
 
@@ -300,7 +300,7 @@ public static class PrivacyRoutingRequestCodec
 
 public static class PrivacyRoutingResponseCodec
 {
-    private static readonly byte[] Magic = "DRS1"u8.ToArray();
+    private static readonly byte[] Magic = ProtocolMagicBytes.DRS1.ToArray();
     private const int FixedBytes = 80;
 
     public static byte[] Seal(
@@ -392,7 +392,7 @@ internal static class PrivacyRoutingWire
     private const byte Suite = 1;
     private const int EnvelopeFixedBytes = 68;
     private const int MacBytes = 16;
-    private static readonly byte[] EnvelopeMagic = "DRF1"u8.ToArray();
+    private static readonly byte[] EnvelopeMagic = ProtocolMagicBytes.DRF1.ToArray();
 
     internal static byte[] SealEnvelope(
         ReadOnlySpan<byte> plaintext,

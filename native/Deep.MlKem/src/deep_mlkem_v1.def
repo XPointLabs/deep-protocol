@@ -1,0 +1,12 @@
+LIBRARY deep_mlkem
+EXPORTS
+    deep_mlkem_v1_keygen_random_size
+    deep_mlkem_v1_decapsulation_key_size
+    deep_mlkem_v1_encapsulation_key_size
+    deep_mlkem_v1_encapsulation_random_size
+    deep_mlkem_v1_ciphertext_size
+    deep_mlkem_v1_shared_secret_size
+    deep_mlkem_v1_keypair_from_random
+    deep_mlkem_v1_encapsulate
+    deep_mlkem_v1_decapsulate
+    deep_mlkem_v1_zero

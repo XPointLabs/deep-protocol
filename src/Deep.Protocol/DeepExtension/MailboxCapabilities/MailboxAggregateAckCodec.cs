@@ -6,7 +6,7 @@ namespace Deep.Protocol.DeepExtension.MailboxCapabilities;
 public static class MailboxAggregateAckCodec
 {
     private const byte Version = 1;
-    private static ReadOnlySpan<byte> Magic => "MAR1"u8;
+    private static ReadOnlySpan<byte> Magic => ProtocolMagicBytes.MAR1;
 
     public static byte[] Encode(MailboxAggregateAckResponse response)
         => EncodeCore(response, useMqr3: false);

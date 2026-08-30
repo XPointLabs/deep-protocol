@@ -1,6 +1,0 @@
-<Solution>
-  <Folder Name="/dark/">
-    <Project Path="src/Deep.Protocol.Native/Deep.Protocol.Native.csproj" />
-    <Project Path="tests/Deep.Protocol.Native.Tests/Deep.Protocol.Native.Tests.csproj" />
-  </Folder>
-</Solution>

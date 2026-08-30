@@ -6,17 +6,17 @@ namespace Deep.Protocol.DeepExtension.Membership;
 public static class MembershipContractCodec
 {
     private const byte Version = 1;
-    private static ReadOnlySpan<byte> GenesisMagic => "MNG1"u8;
-    private static ReadOnlySpan<byte> DelegationMagic => "MDG1"u8;
-    private static ReadOnlySpan<byte> RevocationMagic => "MRV1"u8;
-    private static ReadOnlySpan<byte> BridgeMagic => "MBS1"u8;
-    private static ReadOnlySpan<byte> MembershipMagic => "MMC1"u8;
-    private static ReadOnlySpan<byte> ForkMagic => "MFW1"u8;
-    private static ReadOnlySpan<byte> InclusionProofMagic => "MIP1"u8;
-    private static ReadOnlySpan<byte> SignedMembershipMagic => "MSM1"u8;
-    private static ReadOnlySpan<byte> SignedBridgeMagic => "MSB1"u8;
-    private static ReadOnlySpan<byte> SignedDelegationMagic => "MSD1"u8;
-    private static ReadOnlySpan<byte> SignedRevocationMagic => "MSR1"u8;
+    private static ReadOnlySpan<byte> GenesisMagic => ProtocolMagicBytes.MNG1;
+    private static ReadOnlySpan<byte> DelegationMagic => ProtocolMagicBytes.MDG1;
+    private static ReadOnlySpan<byte> RevocationMagic => ProtocolMagicBytes.MRV1;
+    private static ReadOnlySpan<byte> BridgeMagic => ProtocolMagicBytes.MBS1;
+    private static ReadOnlySpan<byte> MembershipMagic => ProtocolMagicBytes.MMC1;
+    private static ReadOnlySpan<byte> ForkMagic => ProtocolMagicBytes.MFW1;
+    private static ReadOnlySpan<byte> InclusionProofMagic => ProtocolMagicBytes.MIP1;
+    private static ReadOnlySpan<byte> SignedMembershipMagic => ProtocolMagicBytes.MSM1;
+    private static ReadOnlySpan<byte> SignedBridgeMagic => ProtocolMagicBytes.MSB1;
+    private static ReadOnlySpan<byte> SignedDelegationMagic => ProtocolMagicBytes.MSD1;
+    private static ReadOnlySpan<byte> SignedRevocationMagic => ProtocolMagicBytes.MSR1;
 
     public static byte[] EncodeGenesis(NetworkGenesis genesis)
     {

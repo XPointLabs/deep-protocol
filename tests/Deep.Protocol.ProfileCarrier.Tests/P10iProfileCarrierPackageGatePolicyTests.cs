@@ -137,6 +137,7 @@ public sealed class P10iProfileCarrierPackageGatePolicyTests
             UseShellExecute = false,
             CreateNoWindow = true
         };
+        start.Environment["PSModulePath"] = WindowsPowerShellModulePath();
         start.ArgumentList.Add("-NoProfile");
         start.ArgumentList.Add("-NonInteractive");
         start.ArgumentList.Add("-ExecutionPolicy");
@@ -157,6 +158,12 @@ public sealed class P10iProfileCarrierPackageGatePolicyTests
             process.ExitCode,
             standardOutput + Environment.NewLine + standardError);
     }
+
+    private static string WindowsPowerShellModulePath() => string.Join(
+        Path.PathSeparator,
+        (Environment.GetEnvironmentVariable("PSModulePath") ?? string.Empty)
+            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
+            .Where(static path => path.Contains("WindowsPowerShell", StringComparison.OrdinalIgnoreCase)));
 
     private static string Git(params string[] arguments)
     {

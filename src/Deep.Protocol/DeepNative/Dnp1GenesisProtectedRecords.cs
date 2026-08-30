@@ -25,7 +25,7 @@ internal static class GenesisProtectedRecords
 
     internal static void PreflightGri(ReadOnlySpan<byte> value)
     {
-        Header(value, GriLength, "GRI1"u8);
+        Header(value, GriLength, ProtocolMagicBytes.GRI1);
         Nonzero(value.Slice(8, 32), "GRI1 logical-scope hash");
         Nonzero(value.Slice(40, 32), "GRI1 intent hash");
         Nonzero(value.Slice(72, 32), "GRI1 operation ID");
@@ -33,12 +33,12 @@ internal static class GenesisProtectedRecords
         PositiveU64(value.Slice(136, 8), "GRI1 source revision");
         PositiveU64(value.Slice(144, 8), "GRI1 retention horizon");
         if (value[152] != 0) Invalid("GRI1 is permanently fork-latched.");
-        ProtectedTail(value, GriKeyOffset, "GRI1");
+        ProtectedTail(value, GriKeyOffset, ProtocolMagic.GRI1);
     }
 
     internal static void PreflightGrr(ReadOnlySpan<byte> value)
     {
-        Header(value, GrrLength, "GRR1"u8);
+        Header(value, GrrLength, ProtocolMagicBytes.GRR1);
         var mode = value[8];
         if (mode is not (1 or 2)) Invalid("GRR1 reservation mode is invalid.");
         Nonzero(value.Slice(9, 16), "GRR1 network");
@@ -63,24 +63,24 @@ internal static class GenesisProtectedRecords
                  CanonicalGrammar.IsZero(value.Slice(211, 32)) ||
                  CanonicalGrammar.FixedEquals(value.Slice(211, 32), value.Slice(275, 32)))
             Invalid("Account-reset GRR1 predecessor state is invalid.");
-        ProtectedTail(value, GrrKeyOffset, "GRR1");
+        ProtectedTail(value, GrrKeyOffset, ProtocolMagic.GRR1);
     }
 
     internal static void PreflightGti(ReadOnlySpan<byte> value)
     {
-        Header(value, GtiLength, "GTI1"u8);
-        Scope122(value.Slice(8, 122), "GTI1");
+        Header(value, GtiLength, ProtocolMagicBytes.GTI1);
+        Scope122(value.Slice(8, 122), ProtocolMagic.GTI1);
         Nonzero(value.Slice(130, 32), "GTI1 transaction ID");
         PositiveU64(value.Slice(162, 8), "GTI1 source revision");
         PositiveU64(value.Slice(170, 8), "GTI1 retention horizon");
         if (value[178] != 0) Invalid("GTI1 is permanently fork-latched.");
-        ProtectedTail(value, GtiKeyOffset, "GTI1");
+        ProtectedTail(value, GtiKeyOffset, ProtocolMagic.GTI1);
     }
 
     internal static void PreflightGas(ReadOnlySpan<byte> value)
     {
-        Header(value, GasLength, "GAS1"u8);
-        CommonAuthorScope(value, 8, "GAS1");
+        Header(value, GasLength, ProtocolMagicBytes.GAS1);
+        CommonAuthorScope(value, 8, ProtocolMagic.GAS1);
         if (BinaryPrimitives.ReadUInt16BigEndian(value.Slice(130, 2)) != 7)
             Invalid("GAS1 must contain exactly seven artifacts.");
         Nonzero(value.Slice(132, 32), "GAS1 inventory hash");
@@ -91,13 +91,13 @@ internal static class GenesisProtectedRecords
         PositiveU64(value.Slice(204, 8), "GAS1 store revision");
         PositiveU64(value.Slice(212, 8), "GAS1 retention horizon");
         if (value[220] != 1) Invalid("GAS1 state is not Durable.");
-        ProtectedTail(value, GasKeyOffset, "GAS1");
+        ProtectedTail(value, GasKeyOffset, ProtocolMagic.GAS1);
     }
 
     internal static void PreflightGqp(ReadOnlySpan<byte> value)
     {
-        Header(value, GqpLength, "GQP1"u8);
-        CommonQuorum(value, "GQP1");
+        Header(value, GqpLength, ProtocolMagicBytes.GQP1);
+        CommonQuorum(value, ProtocolMagic.GQP1);
         var ids = value.Slice(251, 96);
         StrictRows(ids, 32, "GQP1 witness IDs");
         Nonzero(value.Slice(347, 32), "GQP1 operation hash");
@@ -105,13 +105,13 @@ internal static class GenesisProtectedRecords
         PositiveU64(value.Slice(387, 8), "GQP1 retention horizon");
         if (value[395] != 1 || value[396] != 0)
             Invalid("GQP1 Pending state or fork latch is invalid.");
-        ProtectedTail(value, GqpKeyOffset, "GQP1");
+        ProtectedTail(value, GqpKeyOffset, ProtocolMagic.GQP1);
     }
 
     internal static void PreflightGqs(ReadOnlySpan<byte> value)
     {
-        Header(value, GqsLength, "GQS1"u8);
-        CommonQuorum(value, "GQS1");
+        Header(value, GqsLength, ProtocolMagicBytes.GQS1);
+        CommonQuorum(value, ProtocolMagic.GQS1);
         Span<byte> ids = stackalloc byte[96];
         for (var index = 0; index < 3; index++)
         {
@@ -124,13 +124,13 @@ internal static class GenesisProtectedRecords
         PositiveU64(value.Slice(499, 8), "GQS1 source revision");
         PositiveU64(value.Slice(507, 8), "GQS1 retention horizon");
         if (value[515] != 0) Invalid("GQS1 is permanently fork-latched.");
-        ProtectedTail(value, GqsKeyOffset, "GQS1");
+        ProtectedTail(value, GqsKeyOffset, ProtocolMagic.GQS1);
     }
 
     internal static void PreflightGaj(ReadOnlySpan<byte> value, bool requireUnlatched = true)
     {
-        Header(value, GajLength, "GAJ1"u8);
-        CommonAuthorScope(value, 8, "GAJ1");
+        Header(value, GajLength, ProtocolMagicBytes.GAJ1);
+        CommonAuthorScope(value, 8, ProtocolMagic.GAJ1);
         Nonzero(value.Slice(130, 32), "GAJ1 operation ID");
         Nonzero(value.Slice(162, 32), "GAJ1 reservation hash");
         var phase = value[194];
@@ -165,12 +165,12 @@ internal static class GenesisProtectedRecords
                      !CanonicalGrammar.FixedEquals(value.Slice(673, 32), value.Slice(743, 32)))
                 Invalid("LocalCommitted GAJ1 local source differs from candidate.");
         }
-        ProtectedTail(value, GajKeyOffset, "GAJ1");
+        ProtectedTail(value, GajKeyOffset, ProtocolMagic.GAJ1);
     }
 
     internal static void PreflightGfl(ReadOnlySpan<byte> value)
     {
-        Header(value, GflLength, "GFL1"u8);
+        Header(value, GflLength, ProtocolMagicBytes.GFL1);
         var transcript = value.Slice(8, 1056);
         if (transcript[122] is < 1 or > 3)
             Invalid("GFL1 mismatch reason is invalid.");
@@ -179,7 +179,7 @@ internal static class GenesisProtectedRecords
         Nonzero(value.Slice(1064, 32), "GFL1 evidence hash");
         PositiveU64(value.Slice(1096, 8), "GFL1 latch revision");
         PositiveU64(value.Slice(1104, 8), "GFL1 observed time");
-        ProtectedTail(value, GflKeyOffset, "GFL1");
+        ProtectedTail(value, GflKeyOffset, ProtocolMagic.GFL1);
     }
 
     internal static async ValueTask<byte[]> AuthorAsync(
@@ -595,7 +595,7 @@ public sealed class GenesisTransactionReservationRequest
     {
         // Exercise the same exact field validation without introducing a second grammar.
         var probe = new byte[GenesisProtectedRecords.GtiLength];
-        "GTI1"u8.CopyTo(probe); probe[4] = 1;
+        ProtocolMagicBytes.GTI1.CopyTo(probe); probe[4] = 1;
         exactScope122.CopyTo(probe.AsSpan(8));
         probe.AsSpan(130, 32).Fill(1);
         BinaryPrimitives.WriteUInt64BigEndian(probe.AsSpan(162, 8), 1);

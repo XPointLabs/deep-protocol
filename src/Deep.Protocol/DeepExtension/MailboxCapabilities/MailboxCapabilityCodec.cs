@@ -4,8 +4,8 @@ namespace Deep.Protocol.DeepExtension.MailboxCapabilities;
 
 public static class MailboxCapabilityCodec
 {
-    private static ReadOnlySpan<byte> Magic => "MCP1"u8;
-    private static ReadOnlySpan<byte> AdmissionMagic => "MFA1"u8;
+    private static ReadOnlySpan<byte> Magic => ProtocolMagicBytes.MCP1;
+    private static ReadOnlySpan<byte> AdmissionMagic => ProtocolMagicBytes.MFA1;
     private const byte Version = 1;
 
     public static byte[] Encode(MailboxCapabilityPresentation presentation)

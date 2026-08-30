@@ -216,7 +216,7 @@ internal static class GenesisAuthorJournalVerifier
             Invalid("The Created journal inputs combine different sealed axes.");
 
         var prefix = new byte[807];
-        "GAJ1"u8.CopyTo(prefix); prefix[4] = 1;
+        ProtocolMagicBytes.GAJ1.CopyTo(prefix); prefix[4] = 1;
         identity.BaseIdentity.Network.CopyTo(prefix.AsSpan(8));
         identity.BaseIdentity.ResetId.CopyTo(prefix.AsSpan(24));
         BinaryPrimitives.WriteUInt16BigEndian(prefix.AsSpan(56, 2),

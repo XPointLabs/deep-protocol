@@ -150,7 +150,7 @@ public static class ProductionMailboxLiveTransitionAuthoring
         ValidateBoundedWindow(window.CheckpointIssuedAtUnixSeconds,
             window.CheckpointExpiresAtUnixSeconds, intent.LiveNotBeforeUnixSeconds,
             intent.LiveExpiresAtUnixSeconds, window.NowUnixSeconds,
-            window.ClockSkewSeconds, "RCH1");
+            window.ClockSkewSeconds, ProtocolMagic.RCH1);
         var oldRolBytes = currentRoute.CanonicalCurrentRouteOriginLkg();
         var salt = RandomNumberGenerator.GetBytes(32);
         try
@@ -549,7 +549,7 @@ public static class ProductionMailboxLiveTransitionAuthoring
             throw new FormatException("Live transition sealed route/control/selection tuple is inconsistent.");
         ValidateBoundedWindow(window.RouteNotBeforeUnixSeconds, window.RouteExpiresAtUnixSeconds,
             intent.LiveNotBeforeUnixSeconds, intent.LiveExpiresAtUnixSeconds,
-            window.NowUnixSeconds, window.ClockSkewSeconds, "RTC1");
+            window.NowUnixSeconds, window.ClockSkewSeconds, ProtocolMagic.RTC1);
         ValidateBoundedWindow(window.AuthorizationIssuedAtUnixSeconds,
             window.AuthorizationExpiresAtUnixSeconds, intent.LiveNotBeforeUnixSeconds,
             intent.LiveExpiresAtUnixSeconds, window.NowUnixSeconds,

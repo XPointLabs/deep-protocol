@@ -20,9 +20,9 @@ contain no compatibility shims, aliases or fallback runtime paths.
 - `Deep.Protocol.MembershipRoutes`: signed membership and mailbox route contracts.
 - `Deep.Protocol.ProfileCarrier`: bounded self-hosted profile carrier contracts.
 
-`Deep.Protocol.Dark.slnx` and `reference/session-compatibility-v0/` are isolated offline research
-surfaces. They are not production dependencies and must never be packaged or executed by a client,
-service or node.
+The former `Deep.Protocol.Native` dark identity path has been clean-break promoted into
+`Deep.Protocol.Identity` and removed. `reference/session-compatibility-v0/` remains immutable offline
+evidence and must never be packaged or executed by a client, service or node.
 
 ## Verify
 

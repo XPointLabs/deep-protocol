@@ -286,7 +286,7 @@ internal static class AccountResetOriginVerifier
         }
         foreach (var canonical in identity.Authority.OrderedTransitionCanonicals)
         {
-            if (canonical.Length != 368 || !canonical.Span[..4].SequenceEqual("KRT1"u8)) continue;
+            if (canonical.Length != 368 || !canonical.Span[..4].SequenceEqual(ProtocolMagicBytes.KRT1)) continue;
             var transition = CanonicalGrammar.DecodeOwned(canonical.Span, RecordDefinitions.Krt1);
             if (transition.FieldSpan(2)[0] != (byte)KeyScope.ResetControl ||
                 Scalars.UInt64(transition.FieldSpan(5)) != generation) continue;

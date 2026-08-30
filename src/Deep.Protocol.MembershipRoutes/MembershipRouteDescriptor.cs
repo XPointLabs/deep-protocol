@@ -72,7 +72,7 @@ public static class MembershipRouteDescriptorCodec
     public const int MaximumProofDepth = 12;
     private const byte Version = 1;
 
-    private static ReadOnlySpan<byte> Magic => "MRL1"u8;
+    private static ReadOnlySpan<byte> Magic => ProtocolMagicBytes.MRL1;
     private static ReadOnlySpan<byte> LeafDomain => "deep.route-leaf/v1"u8;
     private static ReadOnlySpan<byte> NodeDomain => "deep.route-node/v1"u8;
     private static ReadOnlySpan<byte> EmptyDomain => "deep.route-empty/v1"u8;

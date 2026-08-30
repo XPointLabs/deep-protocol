@@ -1,0 +1,215 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://deep.example/schema/deep-protocol-v1.registry.schema.json",
+  "title": "Deep protocol V1 identifier registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "schemaVersion", "registryGeneration", "registryId", "lifecycleDefinitions", "sources", "productionInventory", "imports", "suiteScopes", "suites", "magic", "carriers", "deploymentProfiles", "callNames", "interfaces", "retiredAliases"],
+  "properties": {
+    "$schema": { "const": "./deep-protocol-v1.registry.schema.json" },
+    "schemaVersion": { "const": "1.0.0" },
+    "registryGeneration": { "const": 1 },
+    "registryId": { "const": "deep-protocol-v1" },
+    "lifecycleDefinitions": { "type": "array", "minItems": 8, "maxItems": 8, "items": { "$ref": "#/$defs/lifecycleDefinition" } },
+    "sources": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/source" } },
+    "productionInventory": { "$ref": "#/$defs/productionInventory" },
+    "imports": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "$ref": "#/$defs/import" } },
+    "suiteScopes": {
+      "type": "array", "minItems": 3, "maxItems": 3, "items": { "$ref": "#/$defs/suiteScope" },
+      "allOf": [
+        { "contains": { "type": "object", "required": ["name", "widthBits"], "properties": { "name": { "const": "dnp1-header-u16" }, "widthBits": { "const": 16 } } } },
+        { "contains": { "type": "object", "required": ["name", "widthBits"], "properties": { "name": { "const": "pairwise-messaging-u16" }, "widthBits": { "const": 16 } } } },
+        { "contains": { "type": "object", "required": ["name", "widthBits"], "properties": { "name": { "const": "xpoint-onion-u8" }, "widthBits": { "const": 8 } } } }
+      ]
+    },
+    "suites": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/suite" } },
+    "magic": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/magic" } },
+    "carriers": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/numericIdentifier" } },
+    "deploymentProfiles": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/numericIdentifier" } },
+    "callNames": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/callName" } },
+    "interfaces": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/interface" } },
+    "retiredAliases": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/retiredAlias" } }
+  },
+  "$defs": {
+    "lifecycle": { "enum": ["FROZEN_TARGET_NOT_ACTIVE", "CURRENT_PRE_CUTOVER", "TARGET_UNFROZEN", "TARGET_RENAME_REQUIRED", "DECISION_REQUIRED", "RESERVED", "RETIRED_REJECT", "RELEASE_ACTIVE"] },
+    "symbol": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$", "maxLength": 128 },
+    "sourceId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,63}$" },
+    "sourceAnchor": {
+      "type": "object", "additionalProperties": false,
+      "required": ["anchorSourceId", "section", "startLine", "endLine", "normalizedSha256", "ownerSourceId", "scope", "id", "name", "lifecycle", "evidenceTokens"],
+      "properties": {
+        "anchorSourceId": { "$ref": "#/$defs/sourceId" },
+        "section": { "type": "string", "pattern": "^#{1,6} ", "minLength": 3, "maxLength": 160 },
+        "startLine": { "type": "integer", "minimum": 1 },
+        "endLine": { "type": "integer", "minimum": 1 },
+        "normalizedSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "ownerSourceId": { "$ref": "#/$defs/sourceId" },
+        "scope": { "type": "string", "pattern": "^[a-z0-9:-]+$", "minLength": 3, "maxLength": 96 },
+        "id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "lifecycle": { "$ref": "#/$defs/lifecycle" },
+        "evidenceTokens": { "type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 160 } }
+      }
+    },
+    "lifecycleDefinition": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "canReleaseEncode", "sourceId"],
+      "properties": { "name": { "$ref": "#/$defs/lifecycle" }, "canReleaseEncode": { "type": "boolean" }, "sourceId": { "$ref": "#/$defs/sourceId" } }
+    },
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "kind", "path", "normalizedSha256"],
+      "properties": {
+        "id": { "$ref": "#/$defs/sourceId" },
+        "kind": { "enum": ["normative-document", "approved-git-blob", "production-source-scan"] },
+        "path": { "type": "string", "pattern": "^[A-Za-z0-9._/-]+$", "minLength": 3, "maxLength": 240 },
+        "normalizedSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "productionInventory": {
+      "type": "object", "additionalProperties": false,
+      "required": ["assemblies", "excludedLiterals", "knownCrossNamespaceCollisions"],
+      "properties": {
+        "assemblies": {
+          "type": "array", "minItems": 3, "maxItems": 3, "uniqueItems": true,
+          "items": { "enum": ["Deep.Protocol", "Deep.Protocol.MembershipRoutes", "Deep.Protocol.ProfileCarrier"] }
+        },
+        "excludedLiterals": { "type": "array", "items": { "$ref": "#/$defs/excludedLiteral" } },
+        "knownCrossNamespaceCollisions": { "type": "array", "items": { "$ref": "#/$defs/knownCollision" } }
+      }
+    },
+    "excludedLiteral": {
+      "type": "object", "additionalProperties": false,
+      "required": ["value", "reason"],
+      "properties": {
+        "value": { "type": "string", "pattern": "^[A-Z0-9]{4}$" },
+        "reason": { "type": "string", "minLength": 12, "maxLength": 160 }
+      }
+    },
+    "knownCollision": {
+      "type": "object", "additionalProperties": false,
+      "required": ["value", "runtimePrefix", "replacement"],
+      "properties": {
+        "value": { "type": "string", "pattern": "^[A-Z0-9]{4}$" },
+        "runtimePrefix": { "type": "string", "pattern": "^src/[A-Za-z0-9._/-]+/$", "maxLength": 240 },
+        "replacement": { "type": "string", "pattern": "^[A-Z0-9]{4}$" }
+      }
+    },
+    "blob": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "gitBlob", "sha256"],
+      "properties": {
+        "path": { "type": "string", "pattern": "^[A-Za-z0-9._-]+$" },
+        "gitBlob": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "import": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "sourceId", "mode", "approvedCommit", "registry", "schema"],
+      "properties": {
+        "id": { "const": "dnp1-classical-v1" },
+        "sourceId": { "const": "dnp1-frozen" },
+        "mode": { "const": "exact-approved-git-blob" },
+        "approvedCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "registry": { "$ref": "#/$defs/blob" },
+        "schema": { "$ref": "#/$defs/blob" }
+      }
+    },
+    "suiteScope": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "widthBits", "sourceId"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]+$" },
+        "widthBits": { "enum": [8, 16] },
+        "sourceId": { "$ref": "#/$defs/sourceId" }
+      }
+    },
+    "suite": {
+      "type": "object", "additionalProperties": false,
+      "required": ["scope", "id", "symbol", "canonicalName", "lifecycle", "sourceId"],
+      "properties": {
+        "scope": { "enum": ["dnp1-header-u16", "pairwise-messaging-u16", "xpoint-onion-u8"] },
+        "id": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "symbol": { "$ref": "#/$defs/symbol" },
+        "canonicalName": { "type": "string", "pattern": "^[A-Za-z0-9-]+$", "minLength": 3, "maxLength": 96 },
+        "lifecycle": { "$ref": "#/$defs/lifecycle" },
+        "sourceId": { "$ref": "#/$defs/sourceId" },
+        "importPointer": { "type": "string", "pattern": "^/[A-Za-z0-9/_-]+$" },
+        "sourceAnchor": { "$ref": "#/$defs/sourceAnchor" }
+      },
+      "allOf": [
+        { "if": { "properties": { "scope": { "const": "xpoint-onion-u8" } }, "required": ["scope"] }, "then": { "properties": { "id": { "maximum": 255 } } } },
+        { "if": { "required": ["importPointer"] }, "then": { "properties": { "sourceId": { "const": "dnp1-frozen" } } } },
+        { "if": { "properties": { "sourceId": { "const": "dnp1-frozen" } }, "required": ["sourceId"] }, "else": { "required": ["sourceAnchor"] } }
+      ]
+    },
+    "magic": {
+      "type": "object", "additionalProperties": false,
+      "required": ["value", "symbol", "meaning", "lifecycle", "sourceId"],
+      "properties": {
+        "value": { "type": "string", "pattern": "^[A-Z0-9]{4}$" },
+        "symbol": { "$ref": "#/$defs/symbol" },
+        "meaning": { "type": "string", "minLength": 8, "maxLength": 160 },
+        "lifecycle": { "$ref": "#/$defs/lifecycle" },
+        "targetLifecycle": { "$ref": "#/$defs/lifecycle" },
+        "sourceId": { "$ref": "#/$defs/sourceId" },
+        "sourceAnchor": { "$ref": "#/$defs/sourceAnchor" }
+      },
+      "allOf": [
+        {
+          "if": { "required": ["targetLifecycle"] },
+          "then": { "properties": { "lifecycle": { "const": "CURRENT_PRE_CUTOVER" }, "targetLifecycle": { "const": "RETIRED_REJECT" } } }
+        },
+        { "if": { "properties": { "sourceId": { "const": "production-wire-source" } }, "required": ["sourceId"] }, "else": { "required": ["sourceAnchor"] } }
+      ]
+    },
+    "numericIdentifier": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "symbol", "canonicalName", "lifecycle", "sourceId", "sourceAnchor"],
+      "properties": {
+        "id": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "symbol": { "$ref": "#/$defs/symbol" },
+        "canonicalName": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9-]+$", "maxLength": 96 },
+        "lifecycle": { "$ref": "#/$defs/lifecycle" },
+        "sourceId": { "$ref": "#/$defs/sourceId" },
+        "sourceAnchor": { "$ref": "#/$defs/sourceAnchor" }
+      }
+    },
+    "callName": {
+      "type": "object", "additionalProperties": false,
+      "required": ["axis", "symbol", "canonicalName", "lifecycle", "sourceId", "sourceAnchor"],
+      "properties": {
+        "axis": { "enum": ["privacy-profile", "media-carrier", "network-condition"] },
+        "symbol": { "$ref": "#/$defs/symbol" },
+        "canonicalName": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9]+$" },
+        "lifecycle": { "$ref": "#/$defs/lifecycle" },
+        "sourceId": { "$ref": "#/$defs/sourceId" },
+        "sourceAnchor": { "$ref": "#/$defs/sourceAnchor" }
+      }
+    },
+    "interface": {
+      "type": "object", "additionalProperties": false,
+      "required": ["symbol", "canonicalName", "owner", "lifecycle", "sourceId", "sourceAnchor"],
+      "properties": {
+        "symbol": { "$ref": "#/$defs/symbol" },
+        "canonicalName": { "type": "string", "pattern": "^I[A-Z][A-Za-z0-9]+$" },
+        "owner": { "enum": ["deep-client-shared"] },
+        "lifecycle": { "$ref": "#/$defs/lifecycle" },
+        "sourceId": { "$ref": "#/$defs/sourceId" },
+        "sourceAnchor": { "$ref": "#/$defs/sourceAnchor" }
+      }
+    },
+    "retiredAlias": {
+      "type": "object", "additionalProperties": false,
+      "required": ["namespace", "alias", "replacement", "sourceId", "sourceAnchor"],
+      "properties": {
+        "namespace": { "enum": ["carrier", "call", "interface"] },
+        "alias": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9-]+$", "maxLength": 96 },
+        "replacement": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9-]+$", "maxLength": 96 },
+        "sourceId": { "$ref": "#/$defs/sourceId" },
+        "sourceAnchor": { "$ref": "#/$defs/sourceAnchor" }
+      }
+    }
+  }
+}

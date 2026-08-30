@@ -7,7 +7,7 @@ namespace Deep.Protocol.DeepExtension.MailboxTopology;
 /// <summary>Strict PSS1 codec. Public signing helpers return transcripts only.</summary>
 public static class ProductionMailboxSelectionSuccessorCodec
 {
-    private static ReadOnlySpan<byte> Magic => "PSS1"u8;
+    private static ReadOnlySpan<byte> Magic => ProtocolMagicBytes.PSS1;
     private static ReadOnlySpan<byte> OldIssuerDomain =>
         "Deep/production-mailbox/selection-successor/old-issuer/v1"u8;
     private static ReadOnlySpan<byte> NewIssuerDomain =>
@@ -297,7 +297,7 @@ public static class ProductionMailboxSelectionSuccessorCodec
 /// <summary>Strict clean-break PSS2 codec. Signing transcripts remain internal to sealed flows.</summary>
 public static class ProductionMailboxSelectionSuccessorV2Codec
 {
-    private static ReadOnlySpan<byte> Magic => "PSS2"u8;
+    private static ReadOnlySpan<byte> Magic => ProtocolMagicBytes.PSS2;
     private static ReadOnlySpan<byte> OldIssuerDomain =>
         "Deep/production-mailbox/selection-successor/v2/old"u8;
     private static ReadOnlySpan<byte> CurrentIssuerDomain =>
@@ -356,7 +356,7 @@ public static class ProductionMailboxSelectionSuccessorV2Codec
         var pss1 = new byte[checked(frozen.Length - ProductionMailboxSelectionSuccessorV2Constants.RouteBlockLength)];
         frozen.AsSpan(0, ProductionMailboxSelectionSuccessorV2Constants.RouteBlockOffset)
             .CopyTo(pss1.AsSpan());
-        "PSS1"u8.CopyTo(pss1);
+        ProtocolMagicBytes.PSS1.CopyTo(pss1);
         pss1[4] = ProductionMailboxSelectionSuccessorConstants.Version;
         frozen.AsSpan(ProductionMailboxSelectionSuccessorV2Constants.FixedCoreLength)
             .CopyTo(pss1.AsSpan(ProductionMailboxSelectionSuccessorConstants.FixedCoreLength));

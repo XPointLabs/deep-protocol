@@ -182,6 +182,16 @@ public sealed class Dnp1PackageBlockingWitnessTests
             RedirectStandardError = true,
             CreateNoWindow = true
         };
+        if (fileName.Equals("powershell.exe", StringComparison.OrdinalIgnoreCase))
+        {
+            start.Environment["PSModulePath"] = string.Join(
+                Path.PathSeparator,
+                (Environment.GetEnvironmentVariable("PSModulePath") ?? string.Empty)
+                    .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
+                    .Where(static path => path.Contains(
+                        "WindowsPowerShell",
+                        StringComparison.OrdinalIgnoreCase)));
+        }
         foreach (var argument in arguments) start.ArgumentList.Add(argument);
         using var process = Process.Start(start) ?? throw new InvalidOperationException($"Could not start {fileName}.");
         var stdout = process.StandardOutput.ReadToEndAsync();

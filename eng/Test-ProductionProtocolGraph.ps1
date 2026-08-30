@@ -18,9 +18,23 @@ if (@($sourceProjects).Count -ne 3 -or
 if ($solution -match 'Native|Abstractions|Protobuf|reference/session-compatibility') {
     throw 'Production solution includes a dark or quarantined project.'
 }
-[xml]$nativeProject = Get-Content -Raw (Join-Path $root 'src/Deep.Protocol.Native/Deep.Protocol.Native.csproj')
-if ([string]$nativeProject.Project.PropertyGroup.IsPackable -cne 'false') {
-    throw 'Deep.Protocol.Native is not explicitly unpackaged.'
+foreach ($removedDarkPath in @(
+    'Deep.Protocol.Dark.slnx',
+    'src/Deep.Protocol.Native/Deep.Protocol.Native.csproj',
+    'src/Deep.Protocol.Native/DeepRecoveryV1.cs',
+    'tests/Deep.Protocol.Native.Tests/Deep.Protocol.Native.Tests.csproj',
+    'tests/Deep.Protocol.Native.Tests/DeepRecoveryV1Tests.cs')) {
+    if (Test-Path -LiteralPath (Join-Path $root $removedDarkPath)) {
+        throw "Clean-break dark identity path still exists: $removedDarkPath"
+    }
+}
+$projectFiles = Get-ChildItem -LiteralPath $root -Recurse -Filter '*.csproj' -File |
+    Where-Object { $_.FullName -notmatch '[\\/](bin|obj)[\\/]' }
+foreach ($projectFile in $projectFiles) {
+    if ((Get-Content -Raw -LiteralPath $projectFile.FullName).IndexOf(
+        'Deep.Protocol.Native', [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+        throw "A project still references the removed dark identity package: $($projectFile.FullName)"
+    }
 }
 
 [xml]$protocolProject = Get-Content -Raw (Join-Path $root 'src/Deep.Protocol/Deep.Protocol.csproj')
@@ -43,12 +57,23 @@ $productionFiles = @(
         $_.Extension -in @('.cs', '.csproj', '.md') -and
         $_.FullName -notmatch '[\\/](bin|obj)[\\/]'
     })
+$resolvedRegistry = Get-Content -Raw (Join-Path $root 'registry/deep-protocol-v1.resolved.json') |
+    ConvertFrom-Json
+$retiredRegistryTokens = @($resolvedRegistry.retiredValues.value)
 foreach ($file in $productionFiles) {
     $text = Get-Content -Raw -LiteralPath $file.FullName -ErrorAction SilentlyContinue
     if ($null -eq $text) { continue }
     foreach ($token in $forbidden) {
         if ($text.IndexOf($token, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
             throw "Production source contains quarantined token '$token': $($file.FullName)"
+        }
+    }
+    if ($file.FullName -notmatch '[\\/]Generated[\\/]') {
+        foreach ($token in $retiredRegistryTokens) {
+            $pattern = '(?<![A-Za-z0-9_-])' + [regex]::Escape([string]$token) + '(?![A-Za-z0-9_-])'
+            if ([regex]::IsMatch($text, $pattern, [Text.RegularExpressions.RegexOptions]::CultureInvariant)) {
+                throw "Production source contains retired registry token '$token': $($file.FullName)"
+            }
         }
     }
 }
@@ -80,6 +105,17 @@ $assemblies = @{
 }
 foreach ($path in $assemblies.Values) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Built assembly missing: $path" }
+}
+$protocolAssemblyText = [Text.Encoding]::UTF8.GetString(
+    [IO.File]::ReadAllBytes($assemblies['protocol-assembly']))
+foreach ($requiredIdentityToken in @(
+    'Deep.Protocol.Identity',
+    'DeepRecoveryV1',
+    'DeepRecoveryAccountCapabilities',
+    'Deep.Protocol.Identity.Resources.Bip39.english.txt')) {
+    if ($protocolAssemblyText.IndexOf($requiredIdentityToken, [StringComparison]::Ordinal) -lt 0) {
+        throw "Production protocol assembly lacks identity token/resource '$requiredIdentityToken'."
+    }
 }
 $outputDirectories = @(
     (Join-Path $root "src/Deep.Protocol/bin/$Configuration/net10.0"),

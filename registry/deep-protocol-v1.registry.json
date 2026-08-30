@@ -1,0 +1,3944 @@
+{
+  "$schema": "./deep-protocol-v1.registry.schema.json",
+  "schemaVersion": "1.0.0",
+  "registryGeneration": 1,
+  "registryId": "deep-protocol-v1",
+  "lifecycleDefinitions": [
+    {
+      "name": "FROZEN_TARGET_NOT_ACTIVE",
+      "canReleaseEncode": false,
+      "sourceId": "protocol-registry-v1"
+    },
+    {
+      "name": "CURRENT_PRE_CUTOVER",
+      "canReleaseEncode": false,
+      "sourceId": "protocol-registry-v1"
+    },
+    {
+      "name": "TARGET_UNFROZEN",
+      "canReleaseEncode": false,
+      "sourceId": "protocol-registry-v1"
+    },
+    {
+      "name": "TARGET_RENAME_REQUIRED",
+      "canReleaseEncode": false,
+      "sourceId": "protocol-registry-v1"
+    },
+    {
+      "name": "DECISION_REQUIRED",
+      "canReleaseEncode": false,
+      "sourceId": "protocol-registry-v1"
+    },
+    {
+      "name": "RESERVED",
+      "canReleaseEncode": false,
+      "sourceId": "protocol-registry-v1"
+    },
+    {
+      "name": "RETIRED_REJECT",
+      "canReleaseEncode": false,
+      "sourceId": "protocol-registry-v1"
+    },
+    {
+      "name": "RELEASE_ACTIVE",
+      "canReleaseEncode": true,
+      "sourceId": "protocol-registry-v1"
+    }
+  ],
+  "sources": [
+    {
+      "id": "protocol-registry-v1",
+      "kind": "normative-document",
+      "path": "docs/architecture/PROTOCOL-REGISTRY-V1.md",
+      "normalizedSha256": "1fb4d93df6dddd7ddc5d880e5ee9e08cb824c4c672d723808f8adde7d3e80b2e"
+    },
+    {
+      "id": "dnp1-frozen",
+      "kind": "approved-git-blob",
+      "path": "docs/survival-program/releases/v3.0.0/specs/dnp1-classical-v1.registry.json",
+      "normalizedSha256": "abbfdbe76d768ac4b132403d54943dbbf4781bd6865377519e13796b5b5c8b18"
+    },
+    {
+      "id": "deep-crypto-v1",
+      "kind": "normative-document",
+      "path": "docs/survival-program/releases/v3.0.0/specs/DEEP-CRYPTO-V1-DRAFT.md",
+      "normalizedSha256": "6a55aa12c221124535c712a1969873dda093de3a3be144b9ce42e4fc01d158de"
+    },
+    {
+      "id": "privacy-routing-v1",
+      "kind": "normative-document",
+      "path": "deep-protocol/docs/deep-extension-privacy-routing-v1.md",
+      "normalizedSha256": "54d69190ae6cb5679ce0d7b7ea8105c249ab23c1389d89d4bed0ccad96a2b700"
+    },
+    {
+      "id": "contact-group-v1",
+      "kind": "normative-document",
+      "path": "docs/architecture/CONTACT-AND-GROUP-PROTOCOL-V1.md",
+      "normalizedSha256": "3da99a8f3923bf218e0e8b5df83f4ddda9a9c676f732b9137a4ef5f46b9fc81b"
+    },
+    {
+      "id": "account-directory-v1",
+      "kind": "normative-document",
+      "path": "docs/architecture/ACCOUNT-DIRECTORY-TRANSPARENCY-V1.md",
+      "normalizedSha256": "be0536af1e685a325f4cf43477c9a41250001d7a8fc0a691c681da63f21750bc"
+    },
+    {
+      "id": "xpoint-network-v1",
+      "kind": "normative-document",
+      "path": "docs/architecture/XPOINT-NETWORK-V1.md",
+      "normalizedSha256": "f21daa3818dbc97fbeadb3e0dde52e14c0a0330c337b3aa7986950d954a5f279"
+    },
+    {
+      "id": "contact-resolver-v1",
+      "kind": "normative-document",
+      "path": "docs/architecture/CONTACT-RESOLVER-V1.md",
+      "normalizedSha256": "fe9e3042d0c442da6eb3c3c1a09f079c9179a5431ee699b15b665d15f11ff45c"
+    },
+    {
+      "id": "carriers-v1",
+      "kind": "normative-document",
+      "path": "docs/architecture/CIRCUMVENTION-CARRIERS-V1.md",
+      "normalizedSha256": "b6bdbd880400719a7b81511c71fb044628ce1ab80b92f683cecfc14a0266adfe"
+    },
+    {
+      "id": "deployment-profiles-v1",
+      "kind": "normative-document",
+      "path": "docs/architecture/DEPLOYMENT-PROFILES.md",
+      "normalizedSha256": "238d93e376811c1a44437cf925800fb34f6bf47b0ef9edbb78cfdc2f2c4f3e32"
+    },
+    {
+      "id": "call-session-v1",
+      "kind": "normative-document",
+      "path": "docs/architecture/CALL-SESSION-V1.md",
+      "normalizedSha256": "15594ea80f29e60ce83f7207309ccfdb6dbf2161326efb9fe0f7631a3f4029b8"
+    },
+    {
+      "id": "transport-neutral-v1",
+      "kind": "normative-document",
+      "path": "docs/architecture/TRANSPORT-NEUTRAL-MESSAGING.md",
+      "normalizedSha256": "fe2d782f2aad3dce67ca4aa93cf52ac3f481bf017d47479007ecc16cf86948ee"
+    },
+    {
+      "id": "production-wire-source",
+      "kind": "production-source-scan",
+      "path": "deep-protocol/src",
+      "normalizedSha256": "3d5d9c8f849e018cf96f58177c2d4015e3245a3df3632aedea7730a803ca8a40"
+    }
+  ],
+  "productionInventory": {
+    "assemblies": [
+      "Deep.Protocol",
+      "Deep.Protocol.MembershipRoutes",
+      "Deep.Protocol.ProfileCarrier"
+    ],
+    "excludedLiterals": [
+      {
+        "value": "POST",
+        "reason": "HTTP method token, not a wire record magic"
+      }
+    ],
+    "knownCrossNamespaceCollisions": [
+      {
+        "value": "DPR1",
+        "runtimePrefix": "src/Deep.Protocol/DeepExtension/PrivacyRouting/",
+        "replacement": "XPR1"
+      },
+      {
+        "value": "DRS1",
+        "runtimePrefix": "src/Deep.Protocol/DeepExtension/PrivacyRouting/",
+        "replacement": "XRS1"
+      }
+    ]
+  },
+  "imports": [
+    {
+      "id": "dnp1-classical-v1",
+      "sourceId": "dnp1-frozen",
+      "mode": "exact-approved-git-blob",
+      "approvedCommit": "2562b11cdacdcc6e60cf79bdb6265b4f4687fbbe",
+      "registry": {
+        "path": "dnp1-classical-v1.registry.json",
+        "gitBlob": "ad58325e1cb8150bc0168f498f9036e7868759e8",
+        "sha256": "abbfdbe76d768ac4b132403d54943dbbf4781bd6865377519e13796b5b5c8b18"
+      },
+      "schema": {
+        "path": "dnp1-classical-v1.registry.schema.json",
+        "gitBlob": "e07ebedb408a16903e897377c8dac1b507c5a456",
+        "sha256": "30696449fec7a73219c04e92cf7412d3c9c12fb1bf33222ccfed554e7063ada6"
+      }
+    }
+  ],
+  "suiteScopes": [
+    {
+      "name": "dnp1-header-u16",
+      "widthBits": 16,
+      "sourceId": "dnp1-frozen"
+    },
+    {
+      "name": "pairwise-messaging-u16",
+      "widthBits": 16,
+      "sourceId": "deep-crypto-v1"
+    },
+    {
+      "name": "xpoint-onion-u8",
+      "widthBits": 8,
+      "sourceId": "privacy-routing-v1"
+    }
+  ],
+  "suites": [
+    {
+      "scope": "dnp1-header-u16",
+      "id": 0,
+      "symbol": "DnpUnsignedCommittedV1",
+      "canonicalName": "DnpUnsignedCommittedV1",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+      "sourceId": "dnp1-frozen",
+      "importPointer": "/recordClasses/publicCommittedUnsigned/headerSuite"
+    },
+    {
+      "scope": "dnp1-header-u16",
+      "id": 1,
+      "symbol": "IdentityAuthV1Ed25519",
+      "canonicalName": "IdentityAuthV1Ed25519",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+      "sourceId": "dnp1-frozen",
+      "importPointer": "/suite/id"
+    },
+    {
+      "scope": "dnp1-header-u16",
+      "id": 257,
+      "symbol": "RetiredDarkPathCryptoDraft0101",
+      "canonicalName": "retired-dark-path-crypto-draft-0101",
+      "lifecycle": "RETIRED_REJECT",
+      "sourceId": "protocol-registry-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 4.1 DNP1 identity/protected-state suites (`u16be`)",
+        "startLine": 105,
+        "endLine": 105,
+        "normalizedSha256": "c528a031e2a416e22e62ac5e6894c18547cbef40311bc16ee529ec53fa30624c",
+        "ownerSourceId": "protocol-registry-v1",
+        "scope": "suite:dnp1-header-u16",
+        "id": "dnp1-header-u16:0x0101",
+        "name": "retired-dark-path-crypto-draft-0101",
+        "lifecycle": "RETIRED_REJECT",
+        "evidenceTokens": [
+          "0x0101",
+          "retired dark-path crypto draft",
+          "RETIRED_REJECT"
+        ]
+      }
+    },
+    {
+      "scope": "dnp1-header-u16",
+      "id": 258,
+      "symbol": "RetiredDarkPathCryptoDraft0102",
+      "canonicalName": "retired-dark-path-crypto-draft-0102",
+      "lifecycle": "RETIRED_REJECT",
+      "sourceId": "protocol-registry-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 4.1 DNP1 identity/protected-state suites (`u16be`)",
+        "startLine": 106,
+        "endLine": 106,
+        "normalizedSha256": "824b48c696c906f4eb9f6ac9286e4f78fffb18a974087ad89e10dd593f30cb03",
+        "ownerSourceId": "protocol-registry-v1",
+        "scope": "suite:dnp1-header-u16",
+        "id": "dnp1-header-u16:0x0102",
+        "name": "retired-dark-path-crypto-draft-0102",
+        "lifecycle": "RETIRED_REJECT",
+        "evidenceTokens": [
+          "0x0102",
+          "retired dark-path crypto draft",
+          "RETIRED_REJECT"
+        ]
+      }
+    },
+    {
+      "scope": "dnp1-header-u16",
+      "id": 32769,
+      "symbol": "ProtectedStateHmacSha256V1",
+      "canonicalName": "ProtectedStateHmacSha256V1",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+      "sourceId": "dnp1-frozen",
+      "importPointer": "/recordClasses/protectedHmac/headerSuite"
+    },
+    {
+      "scope": "dnp1-header-u16",
+      "id": 32770,
+      "symbol": "ProtectedStateAeadV1",
+      "canonicalName": "ProtectedStateAeadV1",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+      "sourceId": "dnp1-frozen",
+      "importPointer": "/recordClasses/protectedAead/headerSuite"
+    },
+    {
+      "scope": "pairwise-messaging-u16",
+      "id": 513,
+      "symbol": "Dhm2X25519MlKem768TripleXChaCha20",
+      "canonicalName": "DHM2-X25519-MLKEM768-TRIPLE-XCHACHA20",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "deep-crypto-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 4.2 Pairwise messaging/application suite (`u16be`)",
+        "startLine": 115,
+        "endLine": 115,
+        "normalizedSha256": "494450dbac22b4cd2c077198e0e3cb67950d189638c0f86f4aa3ac77d325342e",
+        "ownerSourceId": "deep-crypto-v1",
+        "scope": "suite:pairwise-messaging-u16",
+        "id": "pairwise-messaging-u16:0x0201",
+        "name": "DHM2-X25519-MLKEM768-TRIPLE-XCHACHA20",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "DHM2-X25519-MLKEM768-TRIPLE-XCHACHA20",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "scope": "pairwise-messaging-u16",
+      "id": 514,
+      "symbol": "Dhm2FutureHybridAuthentication",
+      "canonicalName": "DHM2-FutureHybridAuthentication",
+      "lifecycle": "RESERVED",
+      "sourceId": "protocol-registry-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 4.2 Pairwise messaging/application suite (`u16be`)",
+        "startLine": 116,
+        "endLine": 116,
+        "normalizedSha256": "0ec78fef4e210a7c4cb37d37cc3cc194f9146e20762ed24ee214247a6d346207",
+        "ownerSourceId": "protocol-registry-v1",
+        "scope": "suite:pairwise-messaging-u16",
+        "id": "pairwise-messaging-u16:0x0202",
+        "name": "DHM2-FutureHybridAuthentication",
+        "lifecycle": "RESERVED",
+        "evidenceTokens": [
+          "DHM2-FutureHybridAuthentication",
+          "RESERVED"
+        ]
+      }
+    },
+    {
+      "scope": "xpoint-onion-u8",
+      "id": 1,
+      "symbol": "XPointFrameX25519XChaCha20V1",
+      "canonicalName": "XPointFrameX25519XChaCha20V1",
+      "lifecycle": "TARGET_RENAME_REQUIRED",
+      "sourceId": "privacy-routing-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 4.3 XPoint onion suite (`u8`)",
+        "startLine": 127,
+        "endLine": 127,
+        "normalizedSha256": "7e5de9edb4a1fe096fd14587b13713b215e533312592b53b2fa2e4e640dd0b1c",
+        "ownerSourceId": "privacy-routing-v1",
+        "scope": "suite:xpoint-onion-u8",
+        "id": "xpoint-onion-u8:0x0001",
+        "name": "XPointFrameX25519XChaCha20V1",
+        "lifecycle": "TARGET_RENAME_REQUIRED",
+        "evidenceTokens": [
+          "XPointFrameX25519XChaCha20V1",
+          "TARGET_RENAME_REQUIRED"
+        ]
+      }
+    }
+  ],
+  "magic": [
+    {
+      "value": "XRF1",
+      "symbol": "XRF1",
+      "meaning": "authenticated encrypted privacy-routing frame",
+      "lifecycle": "TARGET_RENAME_REQUIRED",
+      "sourceId": "privacy-routing-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.2 Privacy-routing records",
+        "startLine": 247,
+        "endLine": 247,
+        "normalizedSha256": "bbe04ffaccef3349bcce6508862ece54f97a600c53310ece75d2f552b3864b83",
+        "ownerSourceId": "privacy-routing-v1",
+        "scope": "magic",
+        "id": "XRF1",
+        "name": "XRF1",
+        "lifecycle": "TARGET_RENAME_REQUIRED",
+        "evidenceTokens": [
+          "XRF1",
+          "TARGET_RENAME_REQUIRED"
+        ]
+      }
+    },
+    {
+      "value": "XRL1",
+      "symbol": "XRL1",
+      "meaning": "privacy-routing relay plaintext",
+      "lifecycle": "TARGET_RENAME_REQUIRED",
+      "sourceId": "privacy-routing-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.2 Privacy-routing records",
+        "startLine": 248,
+        "endLine": 248,
+        "normalizedSha256": "676c8eacf2e2ae32faeff37316a896ef5aebf6383d88dea2edb011632ac5f61e",
+        "ownerSourceId": "privacy-routing-v1",
+        "scope": "magic",
+        "id": "XRL1",
+        "name": "XRL1",
+        "lifecycle": "TARGET_RENAME_REQUIRED",
+        "evidenceTokens": [
+          "XRL1",
+          "TARGET_RENAME_REQUIRED"
+        ]
+      }
+    },
+    {
+      "value": "XRE1",
+      "symbol": "XRE1",
+      "meaning": "privacy-routing exit plaintext",
+      "lifecycle": "TARGET_RENAME_REQUIRED",
+      "sourceId": "privacy-routing-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.2 Privacy-routing records",
+        "startLine": 249,
+        "endLine": 249,
+        "normalizedSha256": "6e15422482e24e68e3aecb6aa38d3e6bb7af76671db92539d2bdd42a8fa56c68",
+        "ownerSourceId": "privacy-routing-v1",
+        "scope": "magic",
+        "id": "XRE1",
+        "name": "XRE1",
+        "lifecycle": "TARGET_RENAME_REQUIRED",
+        "evidenceTokens": [
+          "XRE1",
+          "TARGET_RENAME_REQUIRED"
+        ]
+      }
+    },
+    {
+      "value": "XPR1",
+      "symbol": "XPR1",
+      "meaning": "privacy-routing terminal result",
+      "lifecycle": "TARGET_RENAME_REQUIRED",
+      "sourceId": "privacy-routing-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.2 Privacy-routing records",
+        "startLine": 250,
+        "endLine": 250,
+        "normalizedSha256": "de689225c6e158810ab7cc144c90e3615af716963db107eab35ee6a221f76172",
+        "ownerSourceId": "privacy-routing-v1",
+        "scope": "magic",
+        "id": "XPR1",
+        "name": "XPR1",
+        "lifecycle": "TARGET_RENAME_REQUIRED",
+        "evidenceTokens": [
+          "XPR1",
+          "TARGET_RENAME_REQUIRED"
+        ]
+      }
+    },
+    {
+      "value": "XRS1",
+      "symbol": "XRS1",
+      "meaning": "sealed privacy-routing response plaintext",
+      "lifecycle": "TARGET_RENAME_REQUIRED",
+      "sourceId": "privacy-routing-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.2 Privacy-routing records",
+        "startLine": 251,
+        "endLine": 251,
+        "normalizedSha256": "327b76943b5d85bc1565c2e88aec1f39233aca694b793ff19ffdcd97507b2c9a",
+        "ownerSourceId": "privacy-routing-v1",
+        "scope": "magic",
+        "id": "XRS1",
+        "name": "XRS1",
+        "lifecycle": "TARGET_RENAME_REQUIRED",
+        "evidenceTokens": [
+          "XRS1",
+          "TARGET_RENAME_REQUIRED"
+        ]
+      }
+    },
+    {
+      "value": "DPK2",
+      "symbol": "DPK2",
+      "meaning": "signed per-device hybrid prekey bundle",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "deep-crypto-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.3 Pairwise/application/contact/group records",
+        "startLine": 264,
+        "endLine": 264,
+        "normalizedSha256": "217c9a1554737f49434b1e7cf893d9c83a573bbcfb29014c0827d1215989fc85",
+        "ownerSourceId": "deep-crypto-v1",
+        "scope": "magic",
+        "id": "DPK2",
+        "name": "DPK2",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "DPK2",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "DPH2",
+      "symbol": "DPH2",
+      "meaning": "hybrid asynchronous initial message header",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "deep-crypto-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.3 Pairwise/application/contact/group records",
+        "startLine": 265,
+        "endLine": 265,
+        "normalizedSha256": "72726e2d72f748458909128244fbc9ac9f57753b2b2c24043093bdff5ad4906b",
+        "ownerSourceId": "deep-crypto-v1",
+        "scope": "magic",
+        "id": "DPH2",
+        "name": "DPH2",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "DPH2",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "DPE2",
+      "symbol": "DPE2",
+      "meaning": "established triple-ratchet device envelope",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "deep-crypto-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.3 Pairwise/application/contact/group records",
+        "startLine": 266,
+        "endLine": 266,
+        "normalizedSha256": "ef4adb7e0618532c7efc1c413b03a15a9ff4e0551239727ebd236620243bb307",
+        "ownerSourceId": "deep-crypto-v1",
+        "scope": "magic",
+        "id": "DPE2",
+        "name": "DPE2",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "DPE2",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "DMD1",
+      "symbol": "DMD1",
+      "meaning": "account-authorized messaging device directory",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-group-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.3 Pairwise/application/contact/group records",
+        "startLine": 267,
+        "endLine": 267,
+        "normalizedSha256": "542c61b63390eb6d3e755e99c178cbe161fd62f9107907e820431eb5e9cb72f7",
+        "ownerSourceId": "contact-group-v1",
+        "scope": "magic",
+        "id": "DMD1",
+        "name": "DMD1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "DMD1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "DID1",
+      "symbol": "DID1",
+      "meaning": "permanent transport-neutral Deep identifier",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-group-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.3 Pairwise/application/contact/group records",
+        "startLine": 268,
+        "endLine": 268,
+        "normalizedSha256": "7ad9558afeec6f84b1aa4c5654dfc3413525e47a0131d7421a2f6444f8ca91aa",
+        "ownerSourceId": "contact-group-v1",
+        "scope": "magic",
+        "id": "DID1",
+        "name": "DID1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "DID1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "DAB1",
+      "symbol": "DAB1",
+      "meaning": "permanent address to account binding lineage",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-group-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.3 Pairwise/application/contact/group records",
+        "startLine": 269,
+        "endLine": 269,
+        "normalizedSha256": "d7c2a4a0f5007087444b320463eb8abed7f5e977489435289324b1dee93e5dc5",
+        "ownerSourceId": "contact-group-v1",
+        "scope": "magic",
+        "id": "DAB1",
+        "name": "DAB1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "DAB1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "DCA1",
+      "symbol": "DCA1",
+      "meaning": "contact bundle publication authorization",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-group-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.3 Pairwise/application/contact/group records",
+        "startLine": 270,
+        "endLine": 270,
+        "normalizedSha256": "e8063f1a3c952d764a9dc83cb4a7ef2634e5209de621f6e1d0168bd69b69a7ff",
+        "ownerSourceId": "contact-group-v1",
+        "scope": "magic",
+        "id": "DCA1",
+        "name": "DCA1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "DCA1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "DCB1",
+      "symbol": "DCB1",
+      "meaning": "signed contact bundle",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-group-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.3 Pairwise/application/contact/group records",
+        "startLine": 271,
+        "endLine": 271,
+        "normalizedSha256": "9fdc5b1cff86fa9723ec32c29741de2dc179dbee65b58440e5fcb773dba3a901",
+        "ownerSourceId": "contact-group-v1",
+        "scope": "magic",
+        "id": "DCB1",
+        "name": "DCB1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "DCB1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "DCR1",
+      "symbol": "DCR1",
+      "meaning": "contact resolver verification closure",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-resolver-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.3 Pairwise/application/contact/group records",
+        "startLine": 272,
+        "endLine": 272,
+        "normalizedSha256": "75b091fd4444641a3e73af5b7e49b3d478a369bf506c087d7344107bba48e4df",
+        "ownerSourceId": "contact-resolver-v1",
+        "scope": "magic",
+        "id": "DCR1",
+        "name": "DCR1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "DCR1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "DIA1",
+      "symbol": "DIA1",
+      "meaning": "expiring one-time invitation locator",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-group-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.3 Pairwise/application/contact/group records",
+        "startLine": 273,
+        "endLine": 273,
+        "normalizedSha256": "1efca2eff1d1ac8badf1838b4c556e6e9db39b23fe0bfc98eb93a87a0afe7633",
+        "ownerSourceId": "contact-group-v1",
+        "scope": "magic",
+        "id": "DIA1",
+        "name": "DIA1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "DIA1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "DAO1",
+      "symbol": "DAO1",
+      "meaning": "metadata-sealed asynchronous deposit object",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-group-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.3 Pairwise/application/contact/group records",
+        "startLine": 274,
+        "endLine": 274,
+        "normalizedSha256": "3abdb89499717661dc9dc1fe709f293f358484598b285a414cc231585a3cf8e7",
+        "ownerSourceId": "contact-group-v1",
+        "scope": "magic",
+        "id": "DAO1",
+        "name": "DAO1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "DAO1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "DMC2",
+      "symbol": "DMC2",
+      "meaning": "canonical pairwise application event",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-group-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.3 Pairwise/application/contact/group records",
+        "startLine": 275,
+        "endLine": 275,
+        "normalizedSha256": "89d114940f81a4f917d4d87a37c1b9c67f42a8bf198bc085dcc68fe7cc0bc118",
+        "ownerSourceId": "contact-group-v1",
+        "scope": "magic",
+        "id": "DMC2",
+        "name": "DMC2",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "DMC2",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "DGP1",
+      "symbol": "DGP1",
+      "meaning": "signed group membership proposal",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-group-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.3 Pairwise/application/contact/group records",
+        "startLine": 276,
+        "endLine": 276,
+        "normalizedSha256": "a8c7ce4640a7f8fa9d9099eaa49926c040db56c046428a2741f4bca7d5ed340a",
+        "ownerSourceId": "contact-group-v1",
+        "scope": "magic",
+        "id": "DGP1",
+        "name": "DGP1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "DGP1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "DGC1",
+      "symbol": "DGC1",
+      "meaning": "owner-sequenced group commit",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-group-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.3 Pairwise/application/contact/group records",
+        "startLine": 277,
+        "endLine": 277,
+        "normalizedSha256": "3b065830a458e1acaf76785d6392f1713453d0ffbec787dbef220676426ac08a",
+        "ownerSourceId": "contact-group-v1",
+        "scope": "magic",
+        "id": "DGC1",
+        "name": "DGC1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "DGC1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "DGM1",
+      "symbol": "DGM1",
+      "meaning": "group application event",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-group-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.3 Pairwise/application/contact/group records",
+        "startLine": 278,
+        "endLine": 278,
+        "normalizedSha256": "b26df3b63da0fa6eefbd9027a4152b84f3a559cf3c4a60e34b560310962cc1f0",
+        "ownerSourceId": "contact-group-v1",
+        "scope": "magic",
+        "id": "DGM1",
+        "name": "DGM1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "DGM1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "DAM1",
+      "symbol": "DAM1",
+      "meaning": "encrypted attachment manifest",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-group-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.3 Pairwise/application/contact/group records",
+        "startLine": 279,
+        "endLine": 279,
+        "normalizedSha256": "6b91478dd3cd45b10fb5f1f9587437eba2d497dc6d187c8261c1d5987056f08f",
+        "ownerSourceId": "contact-group-v1",
+        "scope": "magic",
+        "id": "DAM1",
+        "name": "DAM1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "DAM1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "DGT1",
+      "symbol": "DGT1",
+      "meaning": "emergency group sequencer transfer",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-group-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.3 Pairwise/application/contact/group records",
+        "startLine": 280,
+        "endLine": 280,
+        "normalizedSha256": "7c213e2b5ad34a2a66f0cb89448952287478379f1f5db8a0b2c3ba9f83854e13",
+        "ownerSourceId": "contact-group-v1",
+        "scope": "magic",
+        "id": "DGT1",
+        "name": "DGT1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "DGT1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "GCP1",
+      "symbol": "GCP1",
+      "meaning": "hash-closed group commit support package",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-group-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.3 Pairwise/application/contact/group records",
+        "startLine": 281,
+        "endLine": 281,
+        "normalizedSha256": "459a37cbe68625ab0783e0f8d6b0561b9b3dab121b664c4336eacb628a34387a",
+        "ownerSourceId": "contact-group-v1",
+        "scope": "magic",
+        "id": "GCP1",
+        "name": "GCP1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "GCP1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "GIV1",
+      "symbol": "GIV1",
+      "meaning": "pending group invitation",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-group-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.3 Pairwise/application/contact/group records",
+        "startLine": 282,
+        "endLine": 282,
+        "normalizedSha256": "4d2a771401ca5dd3a16731602424866bb0923f05f7839bfb0b8ba395d232ea38",
+        "ownerSourceId": "contact-group-v1",
+        "scope": "magic",
+        "id": "GIV1",
+        "name": "GIV1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "GIV1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "GIA1",
+      "symbol": "GIA1",
+      "meaning": "group invitation acceptance",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-group-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.3 Pairwise/application/contact/group records",
+        "startLine": 283,
+        "endLine": 283,
+        "normalizedSha256": "bfa7141dd7a15b25edf0dfb84b907ac6465502a47b49833be3bcc91de6830c18",
+        "ownerSourceId": "contact-group-v1",
+        "scope": "magic",
+        "id": "GIA1",
+        "name": "GIA1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "GIA1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "GCF1",
+      "symbol": "GCF1",
+      "meaning": "group control package chunk frame",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-group-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.3 Pairwise/application/contact/group records",
+        "startLine": 284,
+        "endLine": 284,
+        "normalizedSha256": "ec0213d4a66b281b8a70ee1872b997b8a504b992c1ea81a789563deaa90f60e0",
+        "ownerSourceId": "contact-group-v1",
+        "scope": "magic",
+        "id": "GCF1",
+        "name": "GCF1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "GCF1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "GSR1",
+      "symbol": "GSR1",
+      "meaning": "offline group-control rendezvous",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-group-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.3 Pairwise/application/contact/group records",
+        "startLine": 285,
+        "endLine": 285,
+        "normalizedSha256": "e3860b5c30ea95635e401eea7eb36c047a458154ba842f3237a4d0c18437b4c7",
+        "ownerSourceId": "contact-group-v1",
+        "scope": "magic",
+        "id": "GSR1",
+        "name": "GSR1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "GSR1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "GSW1",
+      "symbol": "GSW1",
+      "meaning": "group-control chunk CAS write",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-group-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.3 Pairwise/application/contact/group records",
+        "startLine": 286,
+        "endLine": 286,
+        "normalizedSha256": "6415cbe6bab87c4c94ca47ddc033a10b947b53d053c42fd9af185ef6ed7bf99f",
+        "ownerSourceId": "contact-group-v1",
+        "scope": "magic",
+        "id": "GSW1",
+        "name": "GSW1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "GSW1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "GSQ1",
+      "symbol": "GSQ1",
+      "meaning": "bounded group-control catch-up query",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-group-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.3 Pairwise/application/contact/group records",
+        "startLine": 287,
+        "endLine": 287,
+        "normalizedSha256": "26f757be99275fb376935915e7dc69f8fcf7d601b11a9e8aff0f2f004dbadb14",
+        "ownerSourceId": "contact-group-v1",
+        "scope": "magic",
+        "id": "GSQ1",
+        "name": "GSQ1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "GSQ1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "GSS1",
+      "symbol": "GSS1",
+      "meaning": "closed group-control operation result",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-group-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.3 Pairwise/application/contact/group records",
+        "startLine": 288,
+        "endLine": 288,
+        "normalizedSha256": "31da705c3e4d1a5bc88d4c7305cd8b1c3c2823a89b3fce4702f988c1039cf72d",
+        "ownerSourceId": "contact-group-v1",
+        "scope": "magic",
+        "id": "GSS1",
+        "name": "GSS1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "GSS1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "ADC1",
+      "symbol": "ADC1",
+      "meaning": "account directory checkpoint",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "account-directory-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.4 Account-directory transparency records",
+        "startLine": 305,
+        "endLine": 305,
+        "normalizedSha256": "5ea11877c3b1a3dcce6dd21f046366e59db7d9a1eef09fc1d036f71047b44d9a",
+        "ownerSourceId": "account-directory-v1",
+        "scope": "magic",
+        "id": "ADC1",
+        "name": "ADC1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "ADC1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "ADH1",
+      "symbol": "ADH1",
+      "meaning": "account directory transparency head",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "account-directory-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.4 Account-directory transparency records",
+        "startLine": 306,
+        "endLine": 306,
+        "normalizedSha256": "ef876b070a388a654388d25f8d2130c54306c934c07cd39a6315e165d5db2202",
+        "ownerSourceId": "account-directory-v1",
+        "scope": "magic",
+        "id": "ADH1",
+        "name": "ADH1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "ADH1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "ADP1",
+      "symbol": "ADP1",
+      "meaning": "account directory proof closure",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "account-directory-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.4 Account-directory transparency records",
+        "startLine": 307,
+        "endLine": 307,
+        "normalizedSha256": "bc818e33c1b1a7bcd7bf97b8568ff22d1a9ad7056f6e9cac83359486fe3b148f",
+        "ownerSourceId": "account-directory-v1",
+        "scope": "magic",
+        "id": "ADP1",
+        "name": "ADP1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "ADP1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "ADL1",
+      "symbol": "ADL1",
+      "meaning": "opaque account lookup capability",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "account-directory-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.4 Account-directory transparency records",
+        "startLine": 308,
+        "endLine": 308,
+        "normalizedSha256": "102640adab8fd19ef66bcdbe6dd52cea90badee7303b29839a94447e64a2e7ec",
+        "ownerSourceId": "account-directory-v1",
+        "scope": "magic",
+        "id": "ADL1",
+        "name": "ADL1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "ADL1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "ADF1",
+      "symbol": "ADF1",
+      "meaning": "account directory forward checkpoint",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "account-directory-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.4 Account-directory transparency records",
+        "startLine": 309,
+        "endLine": 309,
+        "normalizedSha256": "75d46b001c2607904f267c3252b2d36685a1bedaa37eaf19ddd9913eaed8319c",
+        "ownerSourceId": "account-directory-v1",
+        "scope": "magic",
+        "id": "ADF1",
+        "name": "ADF1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "ADF1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "AFP1",
+      "symbol": "AFP1",
+      "meaning": "account forward proof package",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "account-directory-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.4 Account-directory transparency records",
+        "startLine": 310,
+        "endLine": 310,
+        "normalizedSha256": "1319bee4a9bed2d7357c9aee74f3daaaaee138de71f7058e9db09889bef022c2",
+        "ownerSourceId": "account-directory-v1",
+        "scope": "magic",
+        "id": "AFP1",
+        "name": "AFP1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "AFP1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "DTS1",
+      "symbol": "DTS1",
+      "meaning": "authenticated time source policy",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "account-directory-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.4 Account-directory transparency records",
+        "startLine": 311,
+        "endLine": 311,
+        "normalizedSha256": "42562be57c2e6bf0a3d35a4e5b5942f78c1ff48f5fbff3285ca1268b32ad756b",
+        "ownerSourceId": "account-directory-v1",
+        "scope": "magic",
+        "id": "DTS1",
+        "name": "DTS1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "DTS1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "DTT1",
+      "symbol": "DTT1",
+      "meaning": "live authenticated time attestation",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "account-directory-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.4 Account-directory transparency records",
+        "startLine": 312,
+        "endLine": 312,
+        "normalizedSha256": "bcc5cf6050eec203377903f2d6a789cec6c6c39be6888e82457ea7d78b1c9719",
+        "ownerSourceId": "account-directory-v1",
+        "scope": "magic",
+        "id": "DTT1",
+        "name": "DTT1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "DTT1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XNA1",
+      "symbol": "XNA1",
+      "meaning": "network root authority lineage",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "xpoint-network-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.5 XPoint network and contact reachability records",
+        "startLine": 325,
+        "endLine": 325,
+        "normalizedSha256": "265a448b6465a2dc76f2e24efad792cea5672f479c1a485b64eb0bde2a882c43",
+        "ownerSourceId": "xpoint-network-v1",
+        "scope": "magic",
+        "id": "XNA1",
+        "name": "XNA1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XNA1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XVP1",
+      "symbol": "XVP1",
+      "meaning": "closed network policy",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "xpoint-network-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.5 XPoint network and contact reachability records",
+        "startLine": 326,
+        "endLine": 326,
+        "normalizedSha256": "30470e0a1d3a7e383810840280ce18e720fed35d5e0ac8bb0a81bb082390c1a3",
+        "ownerSourceId": "xpoint-network-v1",
+        "scope": "magic",
+        "id": "XVP1",
+        "name": "XVP1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XVP1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XND1",
+      "symbol": "XND1",
+      "meaning": "signed node descriptor",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "xpoint-network-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.5 XPoint network and contact reachability records",
+        "startLine": 327,
+        "endLine": 327,
+        "normalizedSha256": "81b60a44f1af2c5d35b7425929c6135d06b66f026d13c4ebefaa653972b3c552",
+        "ownerSourceId": "xpoint-network-v1",
+        "scope": "magic",
+        "id": "XND1",
+        "name": "XND1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XND1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XNV1",
+      "symbol": "XNV1",
+      "meaning": "threshold-signed global network view",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "xpoint-network-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.5 XPoint network and contact reachability records",
+        "startLine": 328,
+        "endLine": 328,
+        "normalizedSha256": "421eca8f6ac41c386b4f38eb74d4fe58f956615148c00d0c4e0c6aeb6dde61df",
+        "ownerSourceId": "xpoint-network-v1",
+        "scope": "magic",
+        "id": "XNV1",
+        "name": "XNV1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XNV1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XNH1",
+      "symbol": "XNH1",
+      "meaning": "network view transparency head",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "xpoint-network-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.5 XPoint network and contact reachability records",
+        "startLine": 329,
+        "endLine": 329,
+        "normalizedSha256": "7a09b8abfb2f6716ac4ff41b75c8ad485257fd6f064fb8157c62e7744af8a0da",
+        "ownerSourceId": "xpoint-network-v1",
+        "scope": "magic",
+        "id": "XNH1",
+        "name": "XNH1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XNH1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XNP1",
+      "symbol": "XNP1",
+      "meaning": "network view proof",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "xpoint-network-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.5 XPoint network and contact reachability records",
+        "startLine": 330,
+        "endLine": 330,
+        "normalizedSha256": "4a750432fbdc4a92015c836196b9479da908a34554574428e2cdecb65a7ca880",
+        "ownerSourceId": "xpoint-network-v1",
+        "scope": "magic",
+        "id": "XNP1",
+        "name": "XNP1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XNP1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XNF1",
+      "symbol": "XNF1",
+      "meaning": "network view forward checkpoint",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "xpoint-network-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.5 XPoint network and contact reachability records",
+        "startLine": 331,
+        "endLine": 331,
+        "normalizedSha256": "71611091964c9df3934aa4affb8792a55465e297b452c5d3d614df035317c908",
+        "ownerSourceId": "xpoint-network-v1",
+        "scope": "magic",
+        "id": "XNF1",
+        "name": "XNF1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XNF1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "NFP1",
+      "symbol": "NFP1",
+      "meaning": "network forward proof package",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "xpoint-network-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.5 XPoint network and contact reachability records",
+        "startLine": 332,
+        "endLine": 332,
+        "normalizedSha256": "417c6c3928a31814422371e570ba375c63a2812a98e02638d3a0b256dcf6d5ff",
+        "ownerSourceId": "xpoint-network-v1",
+        "scope": "magic",
+        "id": "NFP1",
+        "name": "NFP1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "NFP1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XIR1",
+      "symbol": "XIR1",
+      "meaning": "long-lived invite rendezvous",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-resolver-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.5 XPoint network and contact reachability records",
+        "startLine": 333,
+        "endLine": 333,
+        "normalizedSha256": "2057093fef5c2b707417dd41036e58486216a7a342781bce941b2d31887c1ab6",
+        "ownerSourceId": "contact-resolver-v1",
+        "scope": "magic",
+        "id": "XIR1",
+        "name": "XIR1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XIR1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XRR1",
+      "symbol": "XRR1",
+      "meaning": "established-contact deposit reachability",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "xpoint-network-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.5 XPoint network and contact reachability records",
+        "startLine": 334,
+        "endLine": 334,
+        "normalizedSha256": "50f71d0d2fb1a8a1d4221d125f8a65395bf4afcae2be5197880cd93940626f27",
+        "ownerSourceId": "xpoint-network-v1",
+        "scope": "magic",
+        "id": "XRR1",
+        "name": "XRR1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XRR1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XUR1",
+      "symbol": "XUR1",
+      "meaning": "established-contact update rendezvous",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-resolver-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.5 XPoint network and contact reachability records",
+        "startLine": 335,
+        "endLine": 335,
+        "normalizedSha256": "d828bfea7819cfbf2f279df9665cc594417e77c1bc077d639d3ad4c485f58842",
+        "ownerSourceId": "contact-resolver-v1",
+        "scope": "magic",
+        "id": "XUR1",
+        "name": "XUR1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XUR1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XCP1",
+      "symbol": "XCP1",
+      "meaning": "local protected client path plan",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "xpoint-network-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.5 XPoint network and contact reachability records",
+        "startLine": 336,
+        "endLine": 336,
+        "normalizedSha256": "b11ad910b40b6985ceee54638827decd8e3d32fe2aaa66b5b9ca6d686306bf26",
+        "ownerSourceId": "xpoint-network-v1",
+        "scope": "magic",
+        "id": "XCP1",
+        "name": "XCP1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XCP1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XCD1",
+      "symbol": "XCD1",
+      "meaning": "signed call relay target authority",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "xpoint-network-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.5 XPoint network and contact reachability records",
+        "startLine": 337,
+        "endLine": 337,
+        "normalizedSha256": "1c5eb0b1a216b5a0a9716ef1a0470fac5db946097745251a0dd5caf4637dc51d",
+        "ownerSourceId": "xpoint-network-v1",
+        "scope": "magic",
+        "id": "XCD1",
+        "name": "XCD1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XCD1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XRA1",
+      "symbol": "XRA1",
+      "meaning": "recipient reachability authorization",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "xpoint-network-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.5 XPoint network and contact reachability records",
+        "startLine": 338,
+        "endLine": 338,
+        "normalizedSha256": "6119d33c3a375df75c21b83099a76c0b93032553323b23dfa6fa123757609cab",
+        "ownerSourceId": "xpoint-network-v1",
+        "scope": "magic",
+        "id": "XRA1",
+        "name": "XRA1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XRA1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XRC1",
+      "symbol": "XRC1",
+      "meaning": "short-lived live route closure",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "xpoint-network-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.5 XPoint network and contact reachability records",
+        "startLine": 339,
+        "endLine": 339,
+        "normalizedSha256": "74d6e1ad9cfff390024abc35b2693ef4acef93497b5d786e9c5065099941c6bf",
+        "ownerSourceId": "xpoint-network-v1",
+        "scope": "magic",
+        "id": "XRC1",
+        "name": "XRC1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XRC1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XSS1",
+      "symbol": "XSS1",
+      "meaning": "retained route successor closure",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "xpoint-network-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.5 XPoint network and contact reachability records",
+        "startLine": 340,
+        "endLine": 340,
+        "normalizedSha256": "63085293361551fe971b9c54c92650348b2610faf2b6c01ee619303cea420256",
+        "ownerSourceId": "xpoint-network-v1",
+        "scope": "magic",
+        "id": "XSS1",
+        "name": "XSS1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XSS1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "PMA2",
+      "symbol": "PMA2",
+      "meaning": "clean-break threshold mailbox authority",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "xpoint-network-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.9 Mailbox/continuity records",
+        "startLine": 423,
+        "endLine": 423,
+        "normalizedSha256": "0dee8551de414ad4103c1ca78f0f7c5a274606b7d174280a0f33454d827059f4",
+        "ownerSourceId": "xpoint-network-v1",
+        "scope": "magic",
+        "id": "PMA2",
+        "name": "PMA2",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "PMA2",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "PMT2",
+      "symbol": "PMT2",
+      "meaning": "network-view-bound mailbox topology",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "xpoint-network-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.9 Mailbox/continuity records",
+        "startLine": 423,
+        "endLine": 423,
+        "normalizedSha256": "0dee8551de414ad4103c1ca78f0f7c5a274606b7d174280a0f33454d827059f4",
+        "ownerSourceId": "xpoint-network-v1",
+        "scope": "magic",
+        "id": "PMT2",
+        "name": "PMT2",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "PMT2",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "PMS2",
+      "symbol": "PMS2",
+      "meaning": "deterministic blinded mailbox selection",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "xpoint-network-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.9 Mailbox/continuity records",
+        "startLine": 423,
+        "endLine": 423,
+        "normalizedSha256": "0dee8551de414ad4103c1ca78f0f7c5a274606b7d174280a0f33454d827059f4",
+        "ownerSourceId": "xpoint-network-v1",
+        "scope": "magic",
+        "id": "PMS2",
+        "name": "PMS2",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "PMS2",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XPU1",
+      "symbol": "XPU1",
+      "meaning": "contact closure publication request",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-resolver-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.6 Contact resolver and prekey service records",
+        "startLine": 362,
+        "endLine": 362,
+        "normalizedSha256": "053c9512628c6ef2adfa6f3b65144c09cbe9d86241b4f37cf3eec22fbc3ee61e",
+        "ownerSourceId": "contact-resolver-v1",
+        "scope": "magic",
+        "id": "XPU1",
+        "name": "XPU1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XPU1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XPO1",
+      "symbol": "XPO1",
+      "meaning": "contact publication outcome",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-resolver-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.6 Contact resolver and prekey service records",
+        "startLine": 363,
+        "endLine": 363,
+        "normalizedSha256": "7195377ddf7bfb337a6992d9a0720ad056e84613e420fb15c07fbd3e75c5a457",
+        "ownerSourceId": "contact-resolver-v1",
+        "scope": "magic",
+        "id": "XPO1",
+        "name": "XPO1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XPO1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XPA1",
+      "symbol": "XPA1",
+      "meaning": "contact publication authorization",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-resolver-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.6 Contact resolver and prekey service records",
+        "startLine": 364,
+        "endLine": 364,
+        "normalizedSha256": "ab6476f2098358e2b5e2e731e0ac0c1a0da48735bd587051631b724f4675135d",
+        "ownerSourceId": "contact-resolver-v1",
+        "scope": "magic",
+        "id": "XPA1",
+        "name": "XPA1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XPA1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XIQ1",
+      "symbol": "XIQ1",
+      "meaning": "contact resolve or invite claim request",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-resolver-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.6 Contact resolver and prekey service records",
+        "startLine": 365,
+        "endLine": 365,
+        "normalizedSha256": "87edddb3a171958d95a10a8dd5ae06305d36d49eb3aa5aeb980ddacd204c4a4f",
+        "ownerSourceId": "contact-resolver-v1",
+        "scope": "magic",
+        "id": "XIQ1",
+        "name": "XIQ1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XIQ1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XIS1",
+      "symbol": "XIS1",
+      "meaning": "closed invite resolve result",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-resolver-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.6 Contact resolver and prekey service records",
+        "startLine": 366,
+        "endLine": 366,
+        "normalizedSha256": "14d1e83488d1fe5bedb9bbedf375dec4503a59162b3080ab873363a1e315f6fc",
+        "ownerSourceId": "contact-resolver-v1",
+        "scope": "magic",
+        "id": "XIS1",
+        "name": "XIS1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XIS1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XPS1",
+      "symbol": "XPS1",
+      "meaning": "signed device prekey service descriptor",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-resolver-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.6 Contact resolver and prekey service records",
+        "startLine": 367,
+        "endLine": 367,
+        "normalizedSha256": "d338570d20fe2d4a6fc24780ba64f646b26f922c6db30b0f32ca13818340f169",
+        "ownerSourceId": "contact-resolver-v1",
+        "scope": "magic",
+        "id": "XPS1",
+        "name": "XPS1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XPS1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XPK1",
+      "symbol": "XPK1",
+      "meaning": "atomic prekey claim request",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-resolver-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.6 Contact resolver and prekey service records",
+        "startLine": 368,
+        "endLine": 368,
+        "normalizedSha256": "51c5abd1eea940ac39130bd319f965ca87edb03c0f4bc2abd012965259b731f9",
+        "ownerSourceId": "contact-resolver-v1",
+        "scope": "magic",
+        "id": "XPK1",
+        "name": "XPK1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XPK1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XPC1",
+      "symbol": "XPC1",
+      "meaning": "witnessed prekey claim result",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-resolver-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.6 Contact resolver and prekey service records",
+        "startLine": 369,
+        "endLine": 369,
+        "normalizedSha256": "65e4dc35f4635af005fe55120f5d91b05a0057310574b5985220999cef1aa9a7",
+        "ownerSourceId": "contact-resolver-v1",
+        "scope": "magic",
+        "id": "XPC1",
+        "name": "XPC1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XPC1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XUW1",
+      "symbol": "XUW1",
+      "meaning": "encrypted contact successor publication",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-resolver-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.6 Contact resolver and prekey service records",
+        "startLine": 370,
+        "endLine": 370,
+        "normalizedSha256": "4839a29e75d3790c0e6f85da8e0d39d092804dd554bd571860c89ec7c9c3edb1",
+        "ownerSourceId": "contact-resolver-v1",
+        "scope": "magic",
+        "id": "XUW1",
+        "name": "XUW1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XUW1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XUQ1",
+      "symbol": "XUQ1",
+      "meaning": "contact successor query",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-resolver-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.6 Contact resolver and prekey service records",
+        "startLine": 371,
+        "endLine": 371,
+        "normalizedSha256": "892439ac1b0efcaacf7c72245b4ca6d0ac403861c6cff34605aed452a8518346",
+        "ownerSourceId": "contact-resolver-v1",
+        "scope": "magic",
+        "id": "XUQ1",
+        "name": "XUQ1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XUQ1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XUS1",
+      "symbol": "XUS1",
+      "meaning": "closed contact update result",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "contact-resolver-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.6 Contact resolver and prekey service records",
+        "startLine": 372,
+        "endLine": 372,
+        "normalizedSha256": "3e633f15250363dea3ec7a4c77e9ac0edef2e3d91ec2b8608a5562729291604c",
+        "ownerSourceId": "contact-resolver-v1",
+        "scope": "magic",
+        "id": "XUS1",
+        "name": "XUS1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XUS1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XCB1",
+      "symbol": "XCB1",
+      "meaning": "signed carrier endpoint binding",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "carriers-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.7 Carrier records",
+        "startLine": 385,
+        "endLine": 385,
+        "normalizedSha256": "d6661a9c8178c40f682ac661bab77233ea88280c29b3afe80511160e5fd41e19",
+        "ownerSourceId": "carriers-v1",
+        "scope": "magic",
+        "id": "XCB1",
+        "name": "XCB1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XCB1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XCC1",
+      "symbol": "XCC1",
+      "meaning": "signed carrier policy",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "carriers-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.7 Carrier records",
+        "startLine": 386,
+        "endLine": 386,
+        "normalizedSha256": "b509e92708cb862f0bfb13ed168ac539031179749785d5a0fdfd5223c6f3cf69",
+        "ownerSourceId": "carriers-v1",
+        "scope": "magic",
+        "id": "XCC1",
+        "name": "XCC1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XCC1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XBB1",
+      "symbol": "XBB1",
+      "meaning": "cohort-specific bridge bundle",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "carriers-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.7 Carrier records",
+        "startLine": 387,
+        "endLine": 387,
+        "normalizedSha256": "ad0fc6650762b57877ecb9aa6bcc885c5cd7815b2d0883842416699c8e418bce",
+        "ownerSourceId": "carriers-v1",
+        "scope": "magic",
+        "id": "XBB1",
+        "name": "XBB1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XBB1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XBA1",
+      "symbol": "XBA1",
+      "meaning": "bounded bridge access token",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "carriers-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.7 Carrier records",
+        "startLine": 388,
+        "endLine": 388,
+        "normalizedSha256": "1519061f55ef699d2026672f18bae01dfcb91a78b388c2bd4dd3c13222ca2cac",
+        "ownerSourceId": "carriers-v1",
+        "scope": "magic",
+        "id": "XBA1",
+        "name": "XBA1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XBA1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XOD1",
+      "symbol": "XOD1",
+      "meaning": "OHTTP resource descriptor",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "carriers-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.7 Carrier records",
+        "startLine": 389,
+        "endLine": 389,
+        "normalizedSha256": "cbfe8761543d068f1fddd2885a4d2ed43a97b01944af151f1a57e0c9fe60825d",
+        "ownerSourceId": "carriers-v1",
+        "scope": "magic",
+        "id": "XOD1",
+        "name": "XOD1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XOD1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XOQ1",
+      "symbol": "XOQ1",
+      "meaning": "decrypted OHTTP application request",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "carriers-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.7 Carrier records",
+        "startLine": 390,
+        "endLine": 390,
+        "normalizedSha256": "39abe506cefeab8c7f54ba5999b5a6b80bb148c1969b96f5f5285635eed8656a",
+        "ownerSourceId": "carriers-v1",
+        "scope": "magic",
+        "id": "XOQ1",
+        "name": "XOQ1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XOQ1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XOR1",
+      "symbol": "XOR1",
+      "meaning": "decrypted OHTTP application result",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "carriers-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.7 Carrier records",
+        "startLine": 391,
+        "endLine": 391,
+        "normalizedSha256": "760b6f88f8a4e8bb88833caceb55b16a4dc5a21457244f974699b04217dcfa14",
+        "ownerSourceId": "carriers-v1",
+        "scope": "magic",
+        "id": "XOR1",
+        "name": "XOR1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XOR1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XHC1",
+      "symbol": "XHC1",
+      "meaning": "HTTPS stream client hello",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "carriers-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.7 Carrier records",
+        "startLine": 392,
+        "endLine": 392,
+        "normalizedSha256": "ef91c09dc31c3cea86f58247995fbc12b6105dffc4dc0d849974656182de9aad",
+        "ownerSourceId": "carriers-v1",
+        "scope": "magic",
+        "id": "XHC1",
+        "name": "XHC1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XHC1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "XHA1",
+      "symbol": "XHA1",
+      "meaning": "HTTPS stream gateway acceptance",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "carriers-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.7 Carrier records",
+        "startLine": 393,
+        "endLine": 393,
+        "normalizedSha256": "8991d284c76894818cb644b419cdc75a8544fcbbad95ea6e0ff6fdb1e7daa005",
+        "ownerSourceId": "carriers-v1",
+        "scope": "magic",
+        "id": "XHA1",
+        "name": "XHA1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "XHA1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "MPC1",
+      "symbol": "MPC1",
+      "meaning": "MASQUE gateway challenge",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "carriers-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.7 Carrier records",
+        "startLine": 394,
+        "endLine": 394,
+        "normalizedSha256": "86692d8b84e6e2129c40c5b88ad052e5c36b1f80aa3e012e415220e250ba79e5",
+        "ownerSourceId": "carriers-v1",
+        "scope": "magic",
+        "id": "MPC1",
+        "name": "MPC1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "MPC1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "MPA1",
+      "symbol": "MPA1",
+      "meaning": "call relay target authentication",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "carriers-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.7 Carrier records",
+        "startLine": 395,
+        "endLine": 395,
+        "normalizedSha256": "e0a59333d86781ce87e02d7858dd5a1bcf44004f5cfc6683ebf904f3537ec7d1",
+        "ownerSourceId": "carriers-v1",
+        "scope": "magic",
+        "id": "MPA1",
+        "name": "MPA1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "MPA1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "CAC1",
+      "symbol": "CAC1",
+      "meaning": "multi-device answer winner CAS",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "call-session-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.8 Call records",
+        "startLine": 406,
+        "endLine": 406,
+        "normalizedSha256": "6d8cd779917ea46eef5002b3760b295923bcd9ef74919306cd16984227d25490",
+        "ownerSourceId": "call-session-v1",
+        "scope": "magic",
+        "id": "CAC1",
+        "name": "CAC1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "CAC1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "CAO1",
+      "symbol": "CAO1",
+      "meaning": "closed call answer CAS outcome",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "call-session-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.8 Call records",
+        "startLine": 407,
+        "endLine": 407,
+        "normalizedSha256": "7d827f52c250e587ed0e897eea008cf4d0cf82ec41592ac8c6c4d4d6ced3ff58",
+        "ownerSourceId": "call-session-v1",
+        "scope": "magic",
+        "id": "CAO1",
+        "name": "CAO1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "CAO1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "CMD1",
+      "symbol": "CMD1",
+      "meaning": "closed WebRTC media description",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "call-session-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.8 Call records",
+        "startLine": 408,
+        "endLine": 408,
+        "normalizedSha256": "ab551e025eb04bf082258fbead7da2c3606a48e63944c3ecd8acf872cdc6883f",
+        "ownerSourceId": "call-session-v1",
+        "scope": "magic",
+        "id": "CMD1",
+        "name": "CMD1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "CMD1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "CAR1",
+      "symbol": "CAR1",
+      "meaning": "call relay allocation request",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "call-session-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.8 Call records",
+        "startLine": 409,
+        "endLine": 409,
+        "normalizedSha256": "66c8b8eabeb47d1516d84041d79c5cec03de329f8746465f7c455257004d1872",
+        "ownerSourceId": "call-session-v1",
+        "scope": "magic",
+        "id": "CAR1",
+        "name": "CAR1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "CAR1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "CAA1",
+      "symbol": "CAA1",
+      "meaning": "public call relay allocation response",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "call-session-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.8 Call records",
+        "startLine": 410,
+        "endLine": 410,
+        "normalizedSha256": "b2f49093698e4ca44c80024d23f7a6ac006cb64ffc38310f70d675c52569f714",
+        "ownerSourceId": "call-session-v1",
+        "scope": "magic",
+        "id": "CAA1",
+        "name": "CAA1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "CAA1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "CAL1",
+      "symbol": "CAL1",
+      "meaning": "owner-sealed call relay allocation result",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "call-session-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.8 Call records",
+        "startLine": 411,
+        "endLine": 411,
+        "normalizedSha256": "b8798fa134f470c972a3736cb08cc26826198d4a5c8eeb3191ae82cb5386de17",
+        "ownerSourceId": "call-session-v1",
+        "scope": "magic",
+        "id": "CAL1",
+        "name": "CAL1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "CAL1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "value": "DGI1",
+      "symbol": "DGI1",
+      "meaning": "current production wire allocation DGI1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "DGO1",
+      "symbol": "DGO1",
+      "meaning": "current production wire allocation DGO1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "DIE1",
+      "symbol": "DIE1",
+      "meaning": "current production wire allocation DIE1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "DPF1",
+      "symbol": "DPF1",
+      "meaning": "current production wire allocation DPF1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "DRMV",
+      "symbol": "DRMV",
+      "meaning": "current production wire allocation DRMV",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "DTC2",
+      "symbol": "DTC2",
+      "meaning": "current production wire allocation DTC2",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "DWH1",
+      "symbol": "DWH1",
+      "meaning": "current production wire allocation DWH1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "GAJ1",
+      "symbol": "GAJ1",
+      "meaning": "current production wire allocation GAJ1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "GAR1",
+      "symbol": "GAR1",
+      "meaning": "current production wire allocation GAR1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "GAS1",
+      "symbol": "GAS1",
+      "meaning": "current production wire allocation GAS1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "GDI1",
+      "symbol": "GDI1",
+      "meaning": "current production wire allocation GDI1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "GFL1",
+      "symbol": "GFL1",
+      "meaning": "current production wire allocation GFL1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "GMD1",
+      "symbol": "GMD1",
+      "meaning": "current production wire allocation GMD1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "GQP1",
+      "symbol": "GQP1",
+      "meaning": "current production wire allocation GQP1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "GQS1",
+      "symbol": "GQS1",
+      "meaning": "current production wire allocation GQS1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "GRA1",
+      "symbol": "GRA1",
+      "meaning": "current production wire allocation GRA1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "GRI1",
+      "symbol": "GRI1",
+      "meaning": "current production wire allocation GRI1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "GRR1",
+      "symbol": "GRR1",
+      "meaning": "current production wire allocation GRR1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "GTI1",
+      "symbol": "GTI1",
+      "meaning": "current production wire allocation GTI1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "MAK1",
+      "symbol": "MAK1",
+      "meaning": "current production wire allocation MAK1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "MAR1",
+      "symbol": "MAR1",
+      "meaning": "current production wire allocation MAR1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "MAU2",
+      "symbol": "MAU2",
+      "meaning": "current production wire allocation MAU2",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "MBA2",
+      "symbol": "MBA2",
+      "meaning": "current production wire allocation MBA2",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "MBE1",
+      "symbol": "MBE1",
+      "meaning": "current production wire allocation MBE1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "MBR2",
+      "symbol": "MBR2",
+      "meaning": "current production wire allocation MBR2",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "MBS1",
+      "symbol": "MBS1",
+      "meaning": "current production wire allocation MBS1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "MCG2",
+      "symbol": "MCG2",
+      "meaning": "current production wire allocation MCG2",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "MCP1",
+      "symbol": "MCP1",
+      "meaning": "current production wire allocation MCP1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "MCP2",
+      "symbol": "MCP2",
+      "meaning": "current production wire allocation MCP2",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "MEO1",
+      "symbol": "MEO1",
+      "meaning": "current production wire allocation MEO1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "MFA1",
+      "symbol": "MFA1",
+      "meaning": "current production wire allocation MFA1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "MFW1",
+      "symbol": "MFW1",
+      "meaning": "current production wire allocation MFW1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "MIP1",
+      "symbol": "MIP1",
+      "meaning": "current production wire allocation MIP1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "MQR1",
+      "symbol": "MQR1",
+      "meaning": "current production wire allocation MQR1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "MQR2",
+      "symbol": "MQR2",
+      "meaning": "current production wire allocation MQR2",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "MQR3",
+      "symbol": "MQR3",
+      "meaning": "current production wire allocation MQR3",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "MRC1",
+      "symbol": "MRC1",
+      "meaning": "current production wire allocation MRC1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "MRL1",
+      "symbol": "MRL1",
+      "meaning": "current production wire allocation MRL1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "MRP1",
+      "symbol": "MRP1",
+      "meaning": "current production wire allocation MRP1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "MRR1",
+      "symbol": "MRR1",
+      "meaning": "current production wire allocation MRR1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "MRT1",
+      "symbol": "MRT1",
+      "meaning": "current production wire allocation MRT1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "MSB1",
+      "symbol": "MSB1",
+      "meaning": "current production wire allocation MSB1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "MSD1",
+      "symbol": "MSD1",
+      "meaning": "current production wire allocation MSD1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "MSR1",
+      "symbol": "MSR1",
+      "meaning": "current production wire allocation MSR1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "MST1",
+      "symbol": "MST1",
+      "meaning": "current production wire allocation MST1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "OCR1",
+      "symbol": "OCR1",
+      "meaning": "current production wire allocation OCR1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "PHP1",
+      "symbol": "PHP1",
+      "meaning": "current production wire allocation PHP1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "PMB1",
+      "symbol": "PMB1",
+      "meaning": "current production wire allocation PMB1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "PMCQ",
+      "symbol": "PMCQ",
+      "meaning": "current production wire allocation PMCQ",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "PMCR",
+      "symbol": "PMCR",
+      "meaning": "current production wire allocation PMCR",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "PMFA",
+      "symbol": "PMFA",
+      "meaning": "current production wire allocation PMFA",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "PMS1",
+      "symbol": "PMS1",
+      "meaning": "current production wire allocation PMS1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "PMT1",
+      "symbol": "PMT1",
+      "meaning": "current production wire allocation PMT1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "POC1",
+      "symbol": "POC1",
+      "meaning": "current production wire allocation POC1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "PRC1",
+      "symbol": "PRC1",
+      "meaning": "current production wire allocation PRC1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "PRQ1",
+      "symbol": "PRQ1",
+      "meaning": "current production wire allocation PRQ1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "RAH1",
+      "symbol": "RAH1",
+      "meaning": "current production wire allocation RAH1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "RCH1",
+      "symbol": "RCH1",
+      "meaning": "current production wire allocation RCH1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "RFC1",
+      "symbol": "RFC1",
+      "meaning": "current production wire allocation RFC1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "RHB1",
+      "symbol": "RHB1",
+      "meaning": "current production wire allocation RHB1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "RIP1",
+      "symbol": "RIP1",
+      "meaning": "current production wire allocation RIP1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "ROL1",
+      "symbol": "ROL1",
+      "meaning": "current production wire allocation ROL1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "RPF1",
+      "symbol": "RPF1",
+      "meaning": "current production wire allocation RPF1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "RSM2",
+      "symbol": "RSM2",
+      "meaning": "current production wire allocation RSM2",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "SHR1",
+      "symbol": "SHR1",
+      "meaning": "current production wire allocation SHR1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "WHL1",
+      "symbol": "WHL1",
+      "meaning": "current production wire allocation WHL1",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "sourceId": "production-wire-source"
+    },
+    {
+      "value": "DRF1",
+      "symbol": "DRF1",
+      "meaning": "pre-cutover privacy routing frame",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "targetLifecycle": "RETIRED_REJECT",
+      "sourceId": "privacy-routing-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "privacy-routing-v1",
+        "section": "# Deep extension privacy routing V1",
+        "startLine": 3,
+        "endLine": 7,
+        "normalizedSha256": "f54d673fd4881ae1c87e0c27e3eb568e972165013785c2208c064977389331eb",
+        "ownerSourceId": "privacy-routing-v1",
+        "scope": "magic",
+        "id": "DRF1",
+        "name": "DRF1",
+        "lifecycle": "CURRENT_PRE_CUTOVER",
+        "evidenceTokens": [
+          "DRF1",
+          "pre-cutover"
+        ]
+      }
+    },
+    {
+      "value": "DRL1",
+      "symbol": "DRL1",
+      "meaning": "pre-cutover privacy routing relay plaintext",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "targetLifecycle": "RETIRED_REJECT",
+      "sourceId": "privacy-routing-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "privacy-routing-v1",
+        "section": "# Deep extension privacy routing V1",
+        "startLine": 3,
+        "endLine": 7,
+        "normalizedSha256": "f54d673fd4881ae1c87e0c27e3eb568e972165013785c2208c064977389331eb",
+        "ownerSourceId": "privacy-routing-v1",
+        "scope": "magic",
+        "id": "DRL1",
+        "name": "DRL1",
+        "lifecycle": "CURRENT_PRE_CUTOVER",
+        "evidenceTokens": [
+          "DRL1",
+          "pre-cutover"
+        ]
+      }
+    },
+    {
+      "value": "DRE1",
+      "symbol": "DRE1",
+      "meaning": "pre-cutover privacy routing exit plaintext",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "targetLifecycle": "RETIRED_REJECT",
+      "sourceId": "privacy-routing-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "privacy-routing-v1",
+        "section": "# Deep extension privacy routing V1",
+        "startLine": 3,
+        "endLine": 7,
+        "normalizedSha256": "f54d673fd4881ae1c87e0c27e3eb568e972165013785c2208c064977389331eb",
+        "ownerSourceId": "privacy-routing-v1",
+        "scope": "magic",
+        "id": "DRE1",
+        "name": "DRE1",
+        "lifecycle": "CURRENT_PRE_CUTOVER",
+        "evidenceTokens": [
+          "DRE1",
+          "pre-cutover"
+        ]
+      }
+    },
+    {
+      "value": "DPAC",
+      "symbol": "DPAC",
+      "meaning": "retired account certificate magic",
+      "lifecycle": "RETIRED_REJECT",
+      "sourceId": "protocol-registry-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.3 Pairwise/application/contact/group records",
+        "startLine": 290,
+        "endLine": 290,
+        "normalizedSha256": "44db224826fa328ae4062e6c59b6eab4c9f9c4ca78f45d235302feaf13e19abf",
+        "ownerSourceId": "protocol-registry-v1",
+        "scope": "magic",
+        "id": "DPAC",
+        "name": "DPAC",
+        "lifecycle": "RETIRED_REJECT",
+        "evidenceTokens": [
+          "DPAC"
+        ]
+      }
+    },
+    {
+      "value": "DPDC",
+      "symbol": "DPDC",
+      "meaning": "retired device certificate magic",
+      "lifecycle": "RETIRED_REJECT",
+      "sourceId": "protocol-registry-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.3 Pairwise/application/contact/group records",
+        "startLine": 290,
+        "endLine": 290,
+        "normalizedSha256": "44db224826fa328ae4062e6c59b6eab4c9f9c4ca78f45d235302feaf13e19abf",
+        "ownerSourceId": "protocol-registry-v1",
+        "scope": "magic",
+        "id": "DPDC",
+        "name": "DPDC",
+        "lifecycle": "RETIRED_REJECT",
+        "evidenceTokens": [
+          "DPDC"
+        ]
+      }
+    },
+    {
+      "value": "DPKB",
+      "symbol": "DPKB",
+      "meaning": "retired prekey bundle magic",
+      "lifecycle": "RETIRED_REJECT",
+      "sourceId": "protocol-registry-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.3 Pairwise/application/contact/group records",
+        "startLine": 290,
+        "endLine": 290,
+        "normalizedSha256": "44db224826fa328ae4062e6c59b6eab4c9f9c4ca78f45d235302feaf13e19abf",
+        "ownerSourceId": "protocol-registry-v1",
+        "scope": "magic",
+        "id": "DPKB",
+        "name": "DPKB",
+        "lifecycle": "RETIRED_REJECT",
+        "evidenceTokens": [
+          "DPKB"
+        ]
+      }
+    },
+    {
+      "value": "DPHI",
+      "symbol": "DPHI",
+      "meaning": "retired prekey header magic",
+      "lifecycle": "RETIRED_REJECT",
+      "sourceId": "protocol-registry-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.3 Pairwise/application/contact/group records",
+        "startLine": 290,
+        "endLine": 290,
+        "normalizedSha256": "44db224826fa328ae4062e6c59b6eab4c9f9c4ca78f45d235302feaf13e19abf",
+        "ownerSourceId": "protocol-registry-v1",
+        "scope": "magic",
+        "id": "DPHI",
+        "name": "DPHI",
+        "lifecycle": "RETIRED_REJECT",
+        "evidenceTokens": [
+          "DPHI"
+        ]
+      }
+    },
+    {
+      "value": "DPE1",
+      "symbol": "DPE1",
+      "meaning": "retired device envelope magic",
+      "lifecycle": "RETIRED_REJECT",
+      "sourceId": "protocol-registry-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.3 Pairwise/application/contact/group records",
+        "startLine": 290,
+        "endLine": 290,
+        "normalizedSha256": "44db224826fa328ae4062e6c59b6eab4c9f9c4ca78f45d235302feaf13e19abf",
+        "ownerSourceId": "protocol-registry-v1",
+        "scope": "magic",
+        "id": "DPE1",
+        "name": "DPE1",
+        "lifecycle": "RETIRED_REJECT",
+        "evidenceTokens": [
+          "DPE1"
+        ]
+      }
+    },
+    {
+      "value": "DMC1",
+      "symbol": "DMC1",
+      "meaning": "retired message content magic",
+      "lifecycle": "RETIRED_REJECT",
+      "sourceId": "protocol-registry-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.3 Pairwise/application/contact/group records",
+        "startLine": 290,
+        "endLine": 290,
+        "normalizedSha256": "44db224826fa328ae4062e6c59b6eab4c9f9c4ca78f45d235302feaf13e19abf",
+        "ownerSourceId": "protocol-registry-v1",
+        "scope": "magic",
+        "id": "DMC1",
+        "name": "DMC1",
+        "lifecycle": "RETIRED_REJECT",
+        "evidenceTokens": [
+          "DMC1"
+        ]
+      }
+    },
+    {
+      "value": "PRA1",
+      "symbol": "PRA1",
+      "meaning": "pre-cutover route advertisement magic",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "targetLifecycle": "RETIRED_REJECT",
+      "sourceId": "protocol-registry-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.9 Mailbox/continuity records",
+        "startLine": 421,
+        "endLine": 421,
+        "normalizedSha256": "4b991256478c2a8a54af78f04db8f0d93269c4a067febd4192548701d24ecd56",
+        "ownerSourceId": "protocol-registry-v1",
+        "scope": "magic",
+        "id": "PRA1",
+        "name": "PRA1",
+        "lifecycle": "CURRENT_PRE_CUTOVER",
+        "evidenceTokens": [
+          "PRA1"
+        ]
+      }
+    },
+    {
+      "value": "PSS1",
+      "symbol": "PSS1",
+      "meaning": "pre-cutover route successor magic",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "targetLifecycle": "RETIRED_REJECT",
+      "sourceId": "protocol-registry-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.9 Mailbox/continuity records",
+        "startLine": 421,
+        "endLine": 421,
+        "normalizedSha256": "4b991256478c2a8a54af78f04db8f0d93269c4a067febd4192548701d24ecd56",
+        "ownerSourceId": "protocol-registry-v1",
+        "scope": "magic",
+        "id": "PSS1",
+        "name": "PSS1",
+        "lifecycle": "CURRENT_PRE_CUTOVER",
+        "evidenceTokens": [
+          "PSS1"
+        ]
+      }
+    },
+    {
+      "value": "RCD1",
+      "symbol": "RCD1",
+      "meaning": "pre-cutover route continuity descriptor",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "targetLifecycle": "RETIRED_REJECT",
+      "sourceId": "protocol-registry-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.9 Mailbox/continuity records",
+        "startLine": 422,
+        "endLine": 422,
+        "normalizedSha256": "6f1ef66f0d4d47123415697aac9cf81b7ed395d8b386eab7ca245dc80ffdc1cc",
+        "ownerSourceId": "protocol-registry-v1",
+        "scope": "magic",
+        "id": "RCD1",
+        "name": "RCD1",
+        "lifecycle": "CURRENT_PRE_CUTOVER",
+        "evidenceTokens": [
+          "RCD1",
+          "CURRENT_PRE_CUTOVER"
+        ]
+      }
+    },
+    {
+      "value": "RDA1",
+      "symbol": "RDA1",
+      "meaning": "pre-cutover delegated route authorization",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "targetLifecycle": "RETIRED_REJECT",
+      "sourceId": "protocol-registry-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.9 Mailbox/continuity records",
+        "startLine": 422,
+        "endLine": 422,
+        "normalizedSha256": "6f1ef66f0d4d47123415697aac9cf81b7ed395d8b386eab7ca245dc80ffdc1cc",
+        "ownerSourceId": "protocol-registry-v1",
+        "scope": "magic",
+        "id": "RDA1",
+        "name": "RDA1",
+        "lifecycle": "CURRENT_PRE_CUTOVER",
+        "evidenceTokens": [
+          "RDA1",
+          "CURRENT_PRE_CUTOVER"
+        ]
+      }
+    },
+    {
+      "value": "RCR1",
+      "symbol": "RCR1",
+      "meaning": "pre-cutover route certificate record",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "targetLifecycle": "RETIRED_REJECT",
+      "sourceId": "protocol-registry-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.9 Mailbox/continuity records",
+        "startLine": 422,
+        "endLine": 422,
+        "normalizedSha256": "6f1ef66f0d4d47123415697aac9cf81b7ed395d8b386eab7ca245dc80ffdc1cc",
+        "ownerSourceId": "protocol-registry-v1",
+        "scope": "magic",
+        "id": "RCR1",
+        "name": "RCR1",
+        "lifecycle": "CURRENT_PRE_CUTOVER",
+        "evidenceTokens": [
+          "RCR1",
+          "CURRENT_PRE_CUTOVER"
+        ]
+      }
+    },
+    {
+      "value": "RHC1",
+      "symbol": "RHC1",
+      "meaning": "pre-cutover route handoff certificate",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "targetLifecycle": "RETIRED_REJECT",
+      "sourceId": "protocol-registry-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.9 Mailbox/continuity records",
+        "startLine": 422,
+        "endLine": 422,
+        "normalizedSha256": "6f1ef66f0d4d47123415697aac9cf81b7ed395d8b386eab7ca245dc80ffdc1cc",
+        "ownerSourceId": "protocol-registry-v1",
+        "scope": "magic",
+        "id": "RHC1",
+        "name": "RHC1",
+        "lifecycle": "CURRENT_PRE_CUTOVER",
+        "evidenceTokens": [
+          "RHC1",
+          "CURRENT_PRE_CUTOVER"
+        ]
+      }
+    },
+    {
+      "value": "RTC1",
+      "symbol": "RTC1",
+      "meaning": "pre-cutover route transition certificate",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "targetLifecycle": "RETIRED_REJECT",
+      "sourceId": "protocol-registry-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.9 Mailbox/continuity records",
+        "startLine": 422,
+        "endLine": 422,
+        "normalizedSha256": "6f1ef66f0d4d47123415697aac9cf81b7ed395d8b386eab7ca245dc80ffdc1cc",
+        "ownerSourceId": "protocol-registry-v1",
+        "scope": "magic",
+        "id": "RTC1",
+        "name": "RTC1",
+        "lifecycle": "CURRENT_PRE_CUTOVER",
+        "evidenceTokens": [
+          "RTC1",
+          "CURRENT_PRE_CUTOVER"
+        ]
+      }
+    },
+    {
+      "value": "RCA1",
+      "symbol": "RCA1",
+      "meaning": "pre-cutover route continuity authorization",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "targetLifecycle": "RETIRED_REJECT",
+      "sourceId": "protocol-registry-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.9 Mailbox/continuity records",
+        "startLine": 422,
+        "endLine": 422,
+        "normalizedSha256": "6f1ef66f0d4d47123415697aac9cf81b7ed395d8b386eab7ca245dc80ffdc1cc",
+        "ownerSourceId": "protocol-registry-v1",
+        "scope": "magic",
+        "id": "RCA1",
+        "name": "RCA1",
+        "lifecycle": "CURRENT_PRE_CUTOVER",
+        "evidenceTokens": [
+          "RCA1",
+          "CURRENT_PRE_CUTOVER"
+        ]
+      }
+    },
+    {
+      "value": "PRA2",
+      "symbol": "PRA2",
+      "meaning": "pre-cutover continuity advertisement v2",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "targetLifecycle": "RETIRED_REJECT",
+      "sourceId": "protocol-registry-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.9 Mailbox/continuity records",
+        "startLine": 422,
+        "endLine": 422,
+        "normalizedSha256": "6f1ef66f0d4d47123415697aac9cf81b7ed395d8b386eab7ca245dc80ffdc1cc",
+        "ownerSourceId": "protocol-registry-v1",
+        "scope": "magic",
+        "id": "PRA2",
+        "name": "PRA2",
+        "lifecycle": "CURRENT_PRE_CUTOVER",
+        "evidenceTokens": [
+          "PRA2",
+          "CURRENT_PRE_CUTOVER"
+        ]
+      }
+    },
+    {
+      "value": "PSS2",
+      "symbol": "PSS2",
+      "meaning": "pre-cutover continuity successor v2",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "targetLifecycle": "RETIRED_REJECT",
+      "sourceId": "protocol-registry-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.9 Mailbox/continuity records",
+        "startLine": 422,
+        "endLine": 422,
+        "normalizedSha256": "6f1ef66f0d4d47123415697aac9cf81b7ed395d8b386eab7ca245dc80ffdc1cc",
+        "ownerSourceId": "protocol-registry-v1",
+        "scope": "magic",
+        "id": "PSS2",
+        "name": "PSS2",
+        "lifecycle": "CURRENT_PRE_CUTOVER",
+        "evidenceTokens": [
+          "PSS2",
+          "CURRENT_PRE_CUTOVER"
+        ]
+      }
+    }
+  ],
+  "carriers": [
+    {
+      "id": 1,
+      "symbol": "RealityXHttpV1",
+      "canonicalName": "reality-xhttp-v1",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "carriers-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.1 Carrier IDs (`u16be`)",
+        "startLine": 141,
+        "endLine": 141,
+        "normalizedSha256": "a3074cd42c12bd69bb6bce8adec8f9e3f03f5e910e166172920143127661d165",
+        "ownerSourceId": "carriers-v1",
+        "scope": "carrier",
+        "id": "0x0001",
+        "name": "reality-xhttp-v1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "reality-xhttp-v1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "symbol": "HttpsStreamV1",
+      "canonicalName": "https-stream-v1",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "carriers-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.1 Carrier IDs (`u16be`)",
+        "startLine": 142,
+        "endLine": 142,
+        "normalizedSha256": "601383ca1438304a02b2c0e23c12816d1b0653fdfdae07402e58c96e9cd4bdc8",
+        "ownerSourceId": "carriers-v1",
+        "scope": "carrier",
+        "id": "0x0002",
+        "name": "https-stream-v1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "https-stream-v1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "symbol": "MasqueH3V1",
+      "canonicalName": "masque-h3-v1",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "carriers-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.1 Carrier IDs (`u16be`)",
+        "startLine": 143,
+        "endLine": 143,
+        "normalizedSha256": "44ed56a983bdcc35fb9926df6f04fdcde35419e8ed1db1d69725271cb083e0cc",
+        "ownerSourceId": "carriers-v1",
+        "scope": "carrier",
+        "id": "0x0003",
+        "name": "masque-h3-v1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "masque-h3-v1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "id": 4,
+      "symbol": "MaskedTcpCapsuleV1",
+      "canonicalName": "masked-tcp-capsule-v1",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "carriers-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.1 Carrier IDs (`u16be`)",
+        "startLine": 144,
+        "endLine": 144,
+        "normalizedSha256": "af6c239c4dad81d8dc8675b95d1a9ee36104091283184263b598a19038307aea",
+        "ownerSourceId": "carriers-v1",
+        "scope": "carrier",
+        "id": "0x0004",
+        "name": "masked-tcp-capsule-v1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "masked-tcp-capsule-v1",
+          "TARGET_UNFROZEN"
+        ]
+      }
+    },
+    {
+      "id": 256,
+      "symbol": "DirectTlsAdminV1",
+      "canonicalName": "direct-tls-admin-v1",
+      "lifecycle": "RESERVED",
+      "sourceId": "protocol-registry-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.1 Carrier IDs (`u16be`)",
+        "startLine": 145,
+        "endLine": 145,
+        "normalizedSha256": "59c7bef04a9393e49beaf8266b18dbbc11b12ef8325e77ca89d90842cb48c1e3",
+        "ownerSourceId": "protocol-registry-v1",
+        "scope": "carrier",
+        "id": "0x0100",
+        "name": "direct-tls-admin-v1",
+        "lifecycle": "RESERVED",
+        "evidenceTokens": [
+          "direct-tls-admin-v1",
+          "RESERVED"
+        ]
+      }
+    }
+  ],
+  "deploymentProfiles": [
+    {
+      "id": 1,
+      "symbol": "OfficialXPoint3",
+      "canonicalName": "OfficialXPoint3",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "deployment-profiles-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.1 Carrier IDs (`u16be`)",
+        "startLine": 145,
+        "endLine": 145,
+        "normalizedSha256": "59c7bef04a9393e49beaf8266b18dbbc11b12ef8325e77ca89d90842cb48c1e3",
+        "ownerSourceId": "deployment-profiles-v1",
+        "scope": "deployment-profile",
+        "id": "0x0001",
+        "name": "OfficialXPoint3",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "OfficialXPoint3"
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "symbol": "UserManaged",
+      "canonicalName": "UserManaged",
+      "lifecycle": "RESERVED",
+      "sourceId": "deployment-profiles-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.2 Deployment profile IDs (`u16be`)",
+        "startLine": 157,
+        "endLine": 157,
+        "normalizedSha256": "53da2fea1cfb67eecd67a854eb2b59b09f2024dff08b491ff65088651ecd0b2d",
+        "ownerSourceId": "deployment-profiles-v1",
+        "scope": "deployment-profile",
+        "id": "0x0002",
+        "name": "UserManaged",
+        "lifecycle": "RESERVED",
+        "evidenceTokens": [
+          "UserManaged"
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "symbol": "DirectP2P",
+      "canonicalName": "DirectP2P",
+      "lifecycle": "RESERVED",
+      "sourceId": "deployment-profiles-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.2 Deployment profile IDs (`u16be`)",
+        "startLine": 158,
+        "endLine": 158,
+        "normalizedSha256": "c27f62e8c32ab066a1ed6748b022c2743e4caf7236c501423c8282671432e981",
+        "ownerSourceId": "deployment-profiles-v1",
+        "scope": "deployment-profile",
+        "id": "0x0003",
+        "name": "DirectP2P",
+        "lifecycle": "RESERVED",
+        "evidenceTokens": [
+          "DirectP2P"
+        ]
+      }
+    },
+    {
+      "id": 4,
+      "symbol": "StoreCarryForwardMesh",
+      "canonicalName": "StoreCarryForwardMesh",
+      "lifecycle": "RESERVED",
+      "sourceId": "deployment-profiles-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.2 Deployment profile IDs (`u16be`)",
+        "startLine": 159,
+        "endLine": 159,
+        "normalizedSha256": "1ddb0d5bc0378aa7a2fba769ff66f262ca07672add1c4cbd4287d4218b5faa3a",
+        "ownerSourceId": "deployment-profiles-v1",
+        "scope": "deployment-profile",
+        "id": "0x0004",
+        "name": "StoreCarryForwardMesh",
+        "lifecycle": "RESERVED",
+        "evidenceTokens": [
+          "StoreCarryForwardMesh"
+        ]
+      }
+    }
+  ],
+  "callNames": [
+    {
+      "axis": "privacy-profile",
+      "symbol": "RelayOnly",
+      "canonicalName": "RelayOnly",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "call-session-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.3 Call names",
+        "startLine": 172,
+        "endLine": 172,
+        "normalizedSha256": "e609570bbfef94081fe371cbe1d13d11d410be391faa7980d442eec497c49e12",
+        "ownerSourceId": "call-session-v1",
+        "scope": "call:privacy-profile",
+        "id": "privacy-profile:RelayOnly",
+        "name": "RelayOnly",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "RelayOnly"
+        ]
+      }
+    },
+    {
+      "axis": "privacy-profile",
+      "symbol": "DirectPeer",
+      "canonicalName": "DirectPeer",
+      "lifecycle": "RESERVED",
+      "sourceId": "call-session-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.3 Call names",
+        "startLine": 173,
+        "endLine": 173,
+        "normalizedSha256": "5aa31f5e5a82b1734856796f055172923803a85bc73a8ef29d4046bfbd6607ed",
+        "ownerSourceId": "call-session-v1",
+        "scope": "call:privacy-profile",
+        "id": "privacy-profile:DirectPeer",
+        "name": "DirectPeer",
+        "lifecycle": "RESERVED",
+        "evidenceTokens": [
+          "DirectPeer"
+        ]
+      }
+    },
+    {
+      "axis": "media-carrier",
+      "symbol": "MasqueUdp",
+      "canonicalName": "MasqueUdp",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "call-session-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.3 Call names",
+        "startLine": 174,
+        "endLine": 174,
+        "normalizedSha256": "6a6347e6d55abc2daa1dac9d248254307f13c9c78c254ecd976ed655532434c9",
+        "ownerSourceId": "call-session-v1",
+        "scope": "call:media-carrier",
+        "id": "media-carrier:MasqueUdp",
+        "name": "MasqueUdp",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "MasqueUdp"
+        ]
+      }
+    },
+    {
+      "axis": "media-carrier",
+      "symbol": "MaskedTcpCapsule",
+      "canonicalName": "MaskedTcpCapsule",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "call-session-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.3 Call names",
+        "startLine": 175,
+        "endLine": 175,
+        "normalizedSha256": "38877470ad38125ced04a6e96cbf0451fee87b406310660c8d693796403c35d9",
+        "ownerSourceId": "call-session-v1",
+        "scope": "call:media-carrier",
+        "id": "media-carrier:MaskedTcpCapsule",
+        "name": "MaskedTcpCapsule",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "MaskedTcpCapsule"
+        ]
+      }
+    },
+    {
+      "axis": "network-condition",
+      "symbol": "Normal",
+      "canonicalName": "Normal",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "protocol-registry-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.3 Call names",
+        "startLine": 176,
+        "endLine": 176,
+        "normalizedSha256": "960b23987be4e98e52dd6175b9cadbbc6fb39b8639ec19d18c4c84081f39fb8f",
+        "ownerSourceId": "protocol-registry-v1",
+        "scope": "call:network-condition",
+        "id": "network-condition:Normal",
+        "name": "Normal",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "Normal"
+        ]
+      }
+    },
+    {
+      "axis": "network-condition",
+      "symbol": "Restricted",
+      "canonicalName": "Restricted",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "protocol-registry-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.3 Call names",
+        "startLine": 177,
+        "endLine": 177,
+        "normalizedSha256": "6681cdea9216a527b6d9cab58ac2f8709e5ab384f53495bf5d75c80fa8a53a11",
+        "ownerSourceId": "protocol-registry-v1",
+        "scope": "call:network-condition",
+        "id": "network-condition:Restricted",
+        "name": "Restricted",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "Restricted"
+        ]
+      }
+    }
+  ],
+  "interfaces": [
+    {
+      "symbol": "IMessageDeliveryTransport",
+      "canonicalName": "IMessageDeliveryTransport",
+      "owner": "deep-client-shared",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "transport-neutral-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.4 Canonical public interface names",
+        "startLine": 190,
+        "endLine": 190,
+        "normalizedSha256": "4e4fb1546544def75e499b326d13bd8e4380b217ea7420ceee33211e039be023",
+        "ownerSourceId": "transport-neutral-v1",
+        "scope": "interface",
+        "id": "IMessageDeliveryTransport",
+        "name": "IMessageDeliveryTransport",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "IMessageDeliveryTransport"
+        ]
+      }
+    },
+    {
+      "symbol": "ITransportBindingProvider",
+      "canonicalName": "ITransportBindingProvider",
+      "owner": "deep-client-shared",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "transport-neutral-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.4 Canonical public interface names",
+        "startLine": 191,
+        "endLine": 191,
+        "normalizedSha256": "6c6c1dd53281e4347fdc5671b122ba563957b5a441060f414e0a3172553691e2",
+        "ownerSourceId": "transport-neutral-v1",
+        "scope": "interface",
+        "id": "ITransportBindingProvider",
+        "name": "ITransportBindingProvider",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "ITransportBindingProvider"
+        ]
+      }
+    },
+    {
+      "symbol": "IAttachmentBlobTransport",
+      "canonicalName": "IAttachmentBlobTransport",
+      "owner": "deep-client-shared",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "transport-neutral-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.4 Canonical public interface names",
+        "startLine": 192,
+        "endLine": 192,
+        "normalizedSha256": "b4daf7d55379b80c5f3e76aebc2a5aa7321ee4839730a73e00a62f0a0e0cd4a9",
+        "ownerSourceId": "transport-neutral-v1",
+        "scope": "interface",
+        "id": "IAttachmentBlobTransport",
+        "name": "IAttachmentBlobTransport",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "IAttachmentBlobTransport"
+        ]
+      }
+    },
+    {
+      "symbol": "ICallMediaPathProvider",
+      "canonicalName": "ICallMediaPathProvider",
+      "owner": "deep-client-shared",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "transport-neutral-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.4 Canonical public interface names",
+        "startLine": 193,
+        "endLine": 193,
+        "normalizedSha256": "350a461d3b01bc7d07b06bd68cafb70ac9191eaebdfafc02336b65de011e5202",
+        "ownerSourceId": "transport-neutral-v1",
+        "scope": "interface",
+        "id": "ICallMediaPathProvider",
+        "name": "ICallMediaPathProvider",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "ICallMediaPathProvider"
+        ]
+      }
+    },
+    {
+      "symbol": "IPushHintTransport",
+      "canonicalName": "IPushHintTransport",
+      "owner": "deep-client-shared",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "transport-neutral-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.4 Canonical public interface names",
+        "startLine": 194,
+        "endLine": 194,
+        "normalizedSha256": "14a9839a3b2eaf5ffe02eaaefe78fcabc9b5136a30bcee107459acb63b3230bb",
+        "ownerSourceId": "transport-neutral-v1",
+        "scope": "interface",
+        "id": "IPushHintTransport",
+        "name": "IPushHintTransport",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "IPushHintTransport"
+        ]
+      }
+    },
+    {
+      "symbol": "ITransportPathObserver",
+      "canonicalName": "ITransportPathObserver",
+      "owner": "deep-client-shared",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "protocol-registry-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.4 Canonical public interface names",
+        "startLine": 195,
+        "endLine": 195,
+        "normalizedSha256": "2b294541602d471834e1e9a3f53e5b7c3fce10712becdfbb40cf78eb69bd0a30",
+        "ownerSourceId": "protocol-registry-v1",
+        "scope": "interface",
+        "id": "ITransportPathObserver",
+        "name": "ITransportPathObserver",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "ITransportPathObserver"
+        ]
+      }
+    },
+    {
+      "symbol": "ICircumventionCarrier",
+      "canonicalName": "ICircumventionCarrier",
+      "owner": "deep-client-shared",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "protocol-registry-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.4 Canonical public interface names",
+        "startLine": 196,
+        "endLine": 196,
+        "normalizedSha256": "15fe8ecb1f7c829540278a71ab99e04630d68c3f2c038cc4cc0f5311d339c868",
+        "ownerSourceId": "protocol-registry-v1",
+        "scope": "interface",
+        "id": "ICircumventionCarrier",
+        "name": "ICircumventionCarrier",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": [
+          "ICircumventionCarrier"
+        ]
+      }
+    }
+  ],
+  "retiredAliases": [
+    {
+      "namespace": "carrier",
+      "alias": "webtunnel-h2-v1",
+      "replacement": "https-stream-v1",
+      "sourceId": "carriers-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.1 Carrier IDs (`u16be`)",
+        "startLine": 142,
+        "endLine": 142,
+        "normalizedSha256": "601383ca1438304a02b2c0e23c12816d1b0653fdfdae07402e58c96e9cd4bdc8",
+        "ownerSourceId": "carriers-v1",
+        "scope": "alias:carrier",
+        "id": "carrier:webtunnel-h2-v1",
+        "name": "webtunnel-h2-v1",
+        "lifecycle": "RETIRED_REJECT",
+        "evidenceTokens": [
+          "webtunnel-h2-v1"
+        ]
+      }
+    },
+    {
+      "namespace": "call",
+      "alias": "RelayPrivacy",
+      "replacement": "RelayOnly",
+      "sourceId": "call-session-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.3 Call names",
+        "startLine": 179,
+        "endLine": 182,
+        "normalizedSha256": "cf07cb514a64795766aa3ff0c538307d52cb99f91dd44eda3dc82cb96b549137",
+        "ownerSourceId": "call-session-v1",
+        "scope": "alias:call",
+        "id": "call:RelayPrivacy",
+        "name": "RelayPrivacy",
+        "lifecycle": "RETIRED_REJECT",
+        "evidenceTokens": [
+          "RelayPrivacy",
+          "CURRENT_PRE_CUTOVER"
+        ]
+      }
+    },
+    {
+      "namespace": "call",
+      "alias": "DirectFast",
+      "replacement": "DirectPeer",
+      "sourceId": "call-session-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.3 Call names",
+        "startLine": 179,
+        "endLine": 182,
+        "normalizedSha256": "cf07cb514a64795766aa3ff0c538307d52cb99f91dd44eda3dc82cb96b549137",
+        "ownerSourceId": "call-session-v1",
+        "scope": "alias:call",
+        "id": "call:DirectFast",
+        "name": "DirectFast",
+        "lifecycle": "RETIRED_REJECT",
+        "evidenceTokens": [
+          "DirectFast",
+          "CURRENT_PRE_CUTOVER"
+        ]
+      }
+    },
+    {
+      "namespace": "call",
+      "alias": "DirectIce",
+      "replacement": "DirectPeer",
+      "sourceId": "call-session-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.3 Call names",
+        "startLine": 179,
+        "endLine": 182,
+        "normalizedSha256": "cf07cb514a64795766aa3ff0c538307d52cb99f91dd44eda3dc82cb96b549137",
+        "ownerSourceId": "call-session-v1",
+        "scope": "alias:call",
+        "id": "call:DirectIce",
+        "name": "DirectIce",
+        "lifecycle": "RETIRED_REJECT",
+        "evidenceTokens": [
+          "DirectIce",
+          "CURRENT_PRE_CUTOVER"
+        ]
+      }
+    },
+    {
+      "namespace": "call",
+      "alias": "RestrictedNetwork",
+      "replacement": "Restricted",
+      "sourceId": "call-session-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.3 Call names",
+        "startLine": 179,
+        "endLine": 182,
+        "normalizedSha256": "cf07cb514a64795766aa3ff0c538307d52cb99f91dd44eda3dc82cb96b549137",
+        "ownerSourceId": "call-session-v1",
+        "scope": "alias:call",
+        "id": "call:RestrictedNetwork",
+        "name": "RestrictedNetwork",
+        "lifecycle": "RETIRED_REJECT",
+        "evidenceTokens": [
+          "RestrictedNetwork",
+          "CURRENT_PRE_CUTOVER"
+        ]
+      }
+    },
+    {
+      "namespace": "call",
+      "alias": "MaskedRelay",
+      "replacement": "MaskedTcpCapsule",
+      "sourceId": "call-session-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.3 Call names",
+        "startLine": 179,
+        "endLine": 182,
+        "normalizedSha256": "cf07cb514a64795766aa3ff0c538307d52cb99f91dd44eda3dc82cb96b549137",
+        "ownerSourceId": "call-session-v1",
+        "scope": "alias:call",
+        "id": "call:MaskedRelay",
+        "name": "MaskedRelay",
+        "lifecycle": "RETIRED_REJECT",
+        "evidenceTokens": [
+          "MaskedRelay",
+          "CURRENT_PRE_CUTOVER"
+        ]
+      }
+    },
+    {
+      "namespace": "interface",
+      "alias": "IAsyncMessageTransport",
+      "replacement": "IMessageDeliveryTransport",
+      "sourceId": "transport-neutral-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.4 Canonical public interface names",
+        "startLine": 198,
+        "endLine": 201,
+        "normalizedSha256": "0efa39d09037c24c67f02045c4a6c3127b281b576af8c506e3ee620b3c78e934",
+        "ownerSourceId": "transport-neutral-v1",
+        "scope": "alias:interface",
+        "id": "interface:IAsyncMessageTransport",
+        "name": "IAsyncMessageTransport",
+        "lifecycle": "RETIRED_REJECT",
+        "evidenceTokens": [
+          "IAsyncMessageTransport"
+        ]
+      }
+    },
+    {
+      "namespace": "interface",
+      "alias": "IBlobTransport",
+      "replacement": "IAttachmentBlobTransport",
+      "sourceId": "transport-neutral-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.4 Canonical public interface names",
+        "startLine": 198,
+        "endLine": 201,
+        "normalizedSha256": "0efa39d09037c24c67f02045c4a6c3127b281b576af8c506e3ee620b3c78e934",
+        "ownerSourceId": "transport-neutral-v1",
+        "scope": "alias:interface",
+        "id": "interface:IBlobTransport",
+        "name": "IBlobTransport",
+        "lifecycle": "RETIRED_REJECT",
+        "evidenceTokens": [
+          "IBlobTransport"
+        ]
+      }
+    },
+    {
+      "namespace": "interface",
+      "alias": "ICallSignalingTransport",
+      "replacement": "IMessageDeliveryTransport",
+      "sourceId": "transport-neutral-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.4 Canonical public interface names",
+        "startLine": 198,
+        "endLine": 201,
+        "normalizedSha256": "0efa39d09037c24c67f02045c4a6c3127b281b576af8c506e3ee620b3c78e934",
+        "ownerSourceId": "transport-neutral-v1",
+        "scope": "alias:interface",
+        "id": "interface:ICallSignalingTransport",
+        "name": "ICallSignalingTransport",
+        "lifecycle": "RETIRED_REJECT",
+        "evidenceTokens": [
+          "ICallSignalingTransport"
+        ]
+      }
+    },
+    {
+      "namespace": "interface",
+      "alias": "IRealtimeDatagramTransport",
+      "replacement": "ICallMediaPathProvider",
+      "sourceId": "transport-neutral-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.4 Canonical public interface names",
+        "startLine": 198,
+        "endLine": 201,
+        "normalizedSha256": "0efa39d09037c24c67f02045c4a6c3127b281b576af8c506e3ee620b3c78e934",
+        "ownerSourceId": "transport-neutral-v1",
+        "scope": "alias:interface",
+        "id": "interface:IRealtimeDatagramTransport",
+        "name": "IRealtimeDatagramTransport",
+        "lifecycle": "RETIRED_REJECT",
+        "evidenceTokens": [
+          "IRealtimeDatagramTransport"
+        ]
+      }
+    },
+    {
+      "namespace": "interface",
+      "alias": "IReachabilityResolver",
+      "replacement": "ITransportBindingProvider",
+      "sourceId": "transport-neutral-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 5.4 Canonical public interface names",
+        "startLine": 198,
+        "endLine": 201,
+        "normalizedSha256": "0efa39d09037c24c67f02045c4a6c3127b281b576af8c506e3ee620b3c78e934",
+        "ownerSourceId": "transport-neutral-v1",
+        "scope": "alias:interface",
+        "id": "interface:IReachabilityResolver",
+        "name": "IReachabilityResolver",
+        "lifecycle": "RETIRED_REJECT",
+        "evidenceTokens": [
+          "IReachabilityResolver"
+        ]
+      }
+    }
+  ]
+}

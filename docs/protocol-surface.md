@@ -11,6 +11,12 @@ The production package closure is exactly `Deep.Protocol`,
 managed-ingress primitives. Its only direct NuGet dependency is
 `Sodium.Core`. It has no project dependency on a legacy protocol assembly.
 
+`Deep.Protocol.Identity` contains production `DeepRecoveryV1`: exact 24-word
+English BIP-39 verification/generation, the frozen PBKDF2/HKDF derivation, a
+generation-one floor, permanent Deep ID address material and sealed,
+role-specific Ed25519 account-authority capabilities. It exports no entropy,
+role seed, PQ-signing or Ed25519/X25519-conversion surface and derives no device key.
+
 `Deep.Protocol.MembershipRoutes` currently depends on `Deep.Protocol` and owns
 the reviewed D--G route-continuity evidence. DR-0004 makes those bytes
 pre-cutover/release-rejected; only their tested continuity/CAS properties are
@@ -22,8 +28,8 @@ target production surface.
 
 ## Explicit exclusions
 
-- `Deep.Protocol.Native*` is a separate source/test dark path and is absent
-  from the production solution and package/consumer graph.
+- `Deep.Protocol.Native*` and its dark solution no longer exist. Production and
+  lock/package gates reject any reintroduced project edge, source token or build artifact.
 - Session, protobuf, P03A compatibility, DPB/DPE, Nearby and LoRa material is
   retained only in `reference/session-compatibility-v0` as immutable offline
   evidence. It is not compiled, embedded, packed or loaded at runtime.

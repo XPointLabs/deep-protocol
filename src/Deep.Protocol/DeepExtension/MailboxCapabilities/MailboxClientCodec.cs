@@ -4,11 +4,11 @@ namespace Deep.Protocol.DeepExtension.MailboxCapabilities;
 
 public static class MailboxClientCodec
 {
-    private static ReadOnlySpan<byte> EnvelopeMagic => "MEO1"u8;
-    private static ReadOnlySpan<byte> StoreMagic => "MST1"u8;
-    private static ReadOnlySpan<byte> RetrieveMagic => "MRT1"u8;
-    private static ReadOnlySpan<byte> PageMagic => "MRP1"u8;
-    private static ReadOnlySpan<byte> AckMagic => "MAK1"u8;
+    private static ReadOnlySpan<byte> EnvelopeMagic => ProtocolMagicBytes.MEO1;
+    private static ReadOnlySpan<byte> StoreMagic => ProtocolMagicBytes.MST1;
+    private static ReadOnlySpan<byte> RetrieveMagic => ProtocolMagicBytes.MRT1;
+    private static ReadOnlySpan<byte> PageMagic => ProtocolMagicBytes.MRP1;
+    private static ReadOnlySpan<byte> AckMagic => ProtocolMagicBytes.MAK1;
     private const byte Version = 1;
     private const int StoreHeaderLength = 48;
     private const int RetrieveHeaderLength = 120;

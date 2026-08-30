@@ -73,7 +73,7 @@ internal static class GenesisRecoveryManifestAuthor
             length > RecoveryManifestParser.MaximumPlaintextLength)
             Invalid("The genesis DRM20 exceeds its exact bounded profile.");
         var drm = new byte[length];
-        "DRMV"u8.CopyTo(drm); drm[4] = 20; drm[5] = 1;
+        ProtocolMagicBytes.DRMV.CopyTo(drm); drm[4] = 20; drm[5] = 1;
         BinaryPrimitives.WriteUInt16BigEndian(drm.AsSpan(6, 2), checked((ushort)rowBytes.Length));
         BinaryPrimitives.WriteUInt16BigEndian(drm.AsSpan(8, 2), 274);
         projection.CopyTo(drm, 10);
@@ -127,7 +127,7 @@ internal static class GenesisRecoveryManifestAuthor
         CancellationToken cancellationToken)
     {
         var unsigned = new byte[RecoveryManifestParser.RfcFixedLength - 32];
-        "RFC1"u8.CopyTo(unsigned); unsigned[4] = 1;
+        ProtocolMagicBytes.RFC1.CopyTo(unsigned); unsigned[4] = 1;
         common.Span.CopyTo(unsigned.AsSpan(6));
         // Count zero is valid only when every row predecessor is zero. The final DRM parser
         // proves that invariant before this plan can escape.
@@ -144,7 +144,7 @@ internal static class GenesisRecoveryManifestAuthor
         CancellationToken cancellationToken)
     {
         var unsigned = new byte[RecoveryManifestParser.RahFixedLength - 32];
-        "RAH1"u8.CopyTo(unsigned); unsigned[4] = 1;
+        ProtocolMagicBytes.RAH1.CopyTo(unsigned); unsigned[4] = 1;
         common.Span.CopyTo(unsigned.AsSpan(6));
         // present=0 and the complete 195-byte historical tuple remain zero.
         keyId.Span.CopyTo(unsigned.AsSpan(362));
@@ -165,7 +165,7 @@ internal static class GenesisRecoveryManifestAuthor
         var length = checked(RecoveryManifestParser.DwhFixedLength +
             count * RecoveryManifestParser.DwhEntryLength);
         var unsigned = new byte[length - 32];
-        "DWH1"u8.CopyTo(unsigned); unsigned[4] = 1;
+        ProtocolMagicBytes.DWH1.CopyTo(unsigned); unsigned[4] = 1;
         common.Span.CopyTo(unsigned.AsSpan(6));
         BinaryPrimitives.WriteUInt16BigEndian(unsigned.AsSpan(166, 2), count);
         whl.Slice(158, count * RecoveryManifestParser.DwhEntryLength)
@@ -208,7 +208,7 @@ internal static class GenesisRecoveryManifestAuthor
         OwnedRecoveryManifest manifest)
     {
         var rsm = new byte[RecoveryShadow.Length];
-        "RSM2"u8.CopyTo(rsm); rsm[4] = 1;
+        ProtocolMagicBytes.RSM2.CopyTo(rsm); rsm[4] = 1;
         identity.BaseIdentity.Network.CopyTo(rsm.AsSpan(6));
         BinaryPrimitives.WriteUInt16BigEndian(rsm.AsSpan(22,2),(ushort)intent.ComponentKind);
         intent.ComponentSubject.Span.CopyTo(rsm.AsSpan(24));

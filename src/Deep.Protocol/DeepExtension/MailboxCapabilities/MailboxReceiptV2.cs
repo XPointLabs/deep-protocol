@@ -74,8 +74,8 @@ public sealed record VerifiedMailboxDurableQuorumV2(
 
 public static class MailboxReceiptV2Codec
 {
-    private static ReadOnlySpan<byte> ReplicaMagic => "MRR2"u8;
-    private static ReadOnlySpan<byte> QuorumMagic => "MQR2"u8;
+    private static ReadOnlySpan<byte> ReplicaMagic => ProtocolMagicBytes.MRR2;
+    private static ReadOnlySpan<byte> QuorumMagic => ProtocolMagicBytes.MQR2;
     private const byte Version = 2;
 
     public static byte[] GetReplicaSigningBytes(MailboxReplicaReceiptV2 receipt)

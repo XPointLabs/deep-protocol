@@ -22,7 +22,7 @@ public sealed class WitnessHeadHistoryLkgInput
 
     internal static void Preflight(ReadOnlySpan<byte> canonical)
     {
-        if (canonical.Length < 222 || !canonical[..4].SequenceEqual("WHL1"u8) ||
+        if (canonical.Length < 222 || !canonical[..4].SequenceEqual(ProtocolMagicBytes.WHL1) ||
             canonical[4] != 1 || canonical[5] != 0)
             Invalid(RecordError.InvalidField, "The WHL1 fixed header is invalid.");
         var count = BinaryPrimitives.ReadUInt16BigEndian(canonical[156..158]);

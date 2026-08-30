@@ -9,12 +9,12 @@ namespace Deep.Protocol.DeepExtension.MailboxTopology;
 /// </summary>
 public static class ProductionMailboxRouteContinuityCodec
 {
-    private static ReadOnlySpan<byte> DelegationMagic => "RCD1"u8;
-    private static ReadOnlySpan<byte> AcceptanceMagic => "RDA1"u8;
-    private static ReadOnlySpan<byte> RevocationMagic => "RCR1"u8;
-    private static ReadOnlySpan<byte> CheckpointMagic => "RCH1"u8;
-    private static ReadOnlySpan<byte> RouteOriginMagic => "ROL1"u8;
-    private static ReadOnlySpan<byte> HistoryCheckpointMagic => "RHC1"u8;
+    private static ReadOnlySpan<byte> DelegationMagic => ProtocolMagicBytes.RCD1;
+    private static ReadOnlySpan<byte> AcceptanceMagic => ProtocolMagicBytes.RDA1;
+    private static ReadOnlySpan<byte> RevocationMagic => ProtocolMagicBytes.RCR1;
+    private static ReadOnlySpan<byte> CheckpointMagic => ProtocolMagicBytes.RCH1;
+    private static ReadOnlySpan<byte> RouteOriginMagic => ProtocolMagicBytes.ROL1;
+    private static ReadOnlySpan<byte> HistoryCheckpointMagic => ProtocolMagicBytes.RHC1;
     private static ReadOnlySpan<byte> DelegationDomain =>
         "Deep/production-mailbox/route-continuity-delegation/v1"u8;
     private static ReadOnlySpan<byte> AcceptanceDomain =>
@@ -42,8 +42,8 @@ public static class ProductionMailboxRouteContinuityCodec
 
     public static ProductionMailboxRouteContinuityDelegation DecodeDelegation(ReadOnlySpan<byte> encoded)
     {
-        var frozen = Snapshot(encoded, ProductionMailboxRouteContinuityConstants.CanonicalDelegationLength, "RCD1");
-        Header(frozen, DelegationMagic, ProductionMailboxRouteContinuityConstants.Version, "RCD1");
+        var frozen = Snapshot(encoded, ProductionMailboxRouteContinuityConstants.CanonicalDelegationLength, ProtocolMagic.RCD1);
+        Header(frozen, DelegationMagic, ProductionMailboxRouteContinuityConstants.Version, ProtocolMagic.RCD1);
         var reader = new Reader(frozen, 8);
         var value = new ProductionMailboxRouteContinuityDelegation
         {
@@ -74,9 +74,9 @@ public static class ProductionMailboxRouteContinuityCodec
             ExpiresAtUnixSeconds = reader.UInt64(),
             OwnerSignature = reader.Bytes(64)
         };
-        reader.End("RCD1");
+        reader.End(ProtocolMagic.RCD1);
         Validate(value, requireSignature: true);
-        Canonical(frozen, EncodeCore(value, includeSignature: true), "RCD1");
+        Canonical(frozen, EncodeCore(value, includeSignature: true), ProtocolMagic.RCD1);
         return value;
     }
 
@@ -92,8 +92,8 @@ public static class ProductionMailboxRouteContinuityCodec
         ReadOnlySpan<byte> encoded)
     {
         var frozen = Snapshot(encoded,
-            ProductionMailboxRouteContinuityConstants.CanonicalDelegationAcceptanceLength, "RDA1");
-        Header(frozen, AcceptanceMagic, ProductionMailboxRouteContinuityConstants.Version, "RDA1");
+            ProductionMailboxRouteContinuityConstants.CanonicalDelegationAcceptanceLength, ProtocolMagic.RDA1);
+        Header(frozen, AcceptanceMagic, ProductionMailboxRouteContinuityConstants.Version, ProtocolMagic.RDA1);
         var reader = new Reader(frozen, 8);
         var value = new ProductionMailboxRouteDelegationAcceptance
         {
@@ -111,9 +111,9 @@ public static class ProductionMailboxRouteContinuityCodec
             AcceptedAtUnixSeconds = reader.UInt64(),
             AnchorIssuerSignature = reader.Bytes(64)
         };
-        reader.End("RDA1");
+        reader.End(ProtocolMagic.RDA1);
         Validate(value, requireSignature: true);
-        Canonical(frozen, EncodeCore(value, includeSignature: true), "RDA1");
+        Canonical(frozen, EncodeCore(value, includeSignature: true), ProtocolMagic.RDA1);
         return value;
     }
 
@@ -127,8 +127,8 @@ public static class ProductionMailboxRouteContinuityCodec
 
     public static ProductionMailboxRouteContinuityRevocation DecodeRevocation(ReadOnlySpan<byte> encoded)
     {
-        var frozen = Snapshot(encoded, ProductionMailboxRouteContinuityConstants.CanonicalRevocationLength, "RCR1");
-        Header(frozen, RevocationMagic, ProductionMailboxRouteContinuityConstants.Version, "RCR1");
+        var frozen = Snapshot(encoded, ProductionMailboxRouteContinuityConstants.CanonicalRevocationLength, ProtocolMagic.RCR1);
+        Header(frozen, RevocationMagic, ProductionMailboxRouteContinuityConstants.Version, ProtocolMagic.RCR1);
         var reader = new Reader(frozen, 8);
         var value = new ProductionMailboxRouteContinuityRevocation
         {
@@ -142,9 +142,9 @@ public static class ProductionMailboxRouteContinuityCodec
             Reason = (ProductionMailboxRouteContinuityRevocationReason)reader.Byte(),
             OwnerSignature = reader.Skip(7).Bytes(64)
         };
-        reader.End("RCR1");
+        reader.End(ProtocolMagic.RCR1);
         Validate(value, requireSignature: true);
-        Canonical(frozen, EncodeCore(value, includeSignature: true), "RCR1");
+        Canonical(frozen, EncodeCore(value, includeSignature: true), ProtocolMagic.RCR1);
         return value;
     }
 
@@ -160,8 +160,8 @@ public static class ProductionMailboxRouteContinuityCodec
         ReadOnlySpan<byte> encoded)
     {
         var frozen = Snapshot(encoded,
-            ProductionMailboxRouteContinuityConstants.CanonicalRevocationCheckpointLength, "RCH1");
-        Header(frozen, CheckpointMagic, ProductionMailboxRouteContinuityConstants.Version, "RCH1");
+            ProductionMailboxRouteContinuityConstants.CanonicalRevocationCheckpointLength, ProtocolMagic.RCH1);
+        Header(frozen, CheckpointMagic, ProductionMailboxRouteContinuityConstants.Version, ProtocolMagic.RCH1);
         var reader = new Reader(frozen, 8);
         var value = new ProductionMailboxRouteRevocationCheckpoint
         {
@@ -179,9 +179,9 @@ public static class ProductionMailboxRouteContinuityCodec
             ExpiresAtUnixSeconds = reader.UInt64(),
             CurrentIssuerSignature = reader.Bytes(64)
         };
-        reader.End("RCH1");
+        reader.End(ProtocolMagic.RCH1);
         Validate(value, requireSignature: true);
-        Canonical(frozen, EncodeCore(value, includeSignature: true), "RCH1");
+        Canonical(frozen, EncodeCore(value, includeSignature: true), ProtocolMagic.RCH1);
         return value;
     }
 
@@ -227,14 +227,14 @@ public static class ProductionMailboxRouteContinuityCodec
         writer.Bytes(frozen.OwnerRevocationHeadHash.Span);
         writer.UInt64(frozen.RouteVerifiedAtUnixSeconds);
         writer.UInt64(frozen.LocalCommitGeneration);
-        return writer.Finish("ROL1");
+        return writer.Finish(ProtocolMagic.ROL1);
     }
 
     internal static ProductionMailboxRouteOriginLkg DecodeRouteOriginLkg(ReadOnlySpan<byte> encoded)
     {
         var frozen = Snapshot(encoded, ProductionMailboxRouteContinuityConstants.CanonicalRouteOriginLkgLength,
-            "ROL1");
-        Header(frozen, RouteOriginMagic, ProductionMailboxRouteContinuityConstants.Version, "ROL1");
+            ProtocolMagic.ROL1);
+        Header(frozen, RouteOriginMagic, ProductionMailboxRouteContinuityConstants.Version, ProtocolMagic.ROL1);
         var reader = new Reader(frozen, 8);
         var value = new ProductionMailboxRouteOriginLkg
         {
@@ -250,9 +250,9 @@ public static class ProductionMailboxRouteContinuityCodec
             RouteVerifiedAtUnixSeconds = reader.UInt64(),
             LocalCommitGeneration = reader.UInt64()
         };
-        reader.End("ROL1");
+        reader.End(ProtocolMagic.ROL1);
         Validate(value);
-        Canonical(frozen, EncodeRouteOriginLkg(value), "ROL1");
+        Canonical(frozen, EncodeRouteOriginLkg(value), ProtocolMagic.ROL1);
         return value;
     }
 
@@ -290,15 +290,15 @@ public static class ProductionMailboxRouteContinuityCodec
         writer.UInt64(frozen.CumulativeCanonicalPayloadBytes);
         writer.Bytes(frozen.HistoryTranscriptHead.Span);
         writer.Bytes(frozen.LastCommittedBatchHash.Span);
-        return writer.Finish("RHC1");
+        return writer.Finish(ProtocolMagic.RHC1);
     }
 
     internal static ProductionMailboxRouteHistoryCheckpoint DecodeRouteHistoryCheckpoint(
         ReadOnlySpan<byte> encoded)
     {
         var frozen = Snapshot(encoded,
-            ProductionMailboxRouteContinuityConstants.CanonicalRouteHistoryCheckpointLength, "RHC1");
-        Header(frozen, HistoryCheckpointMagic, ProductionMailboxRouteContinuityConstants.Version, "RHC1");
+            ProductionMailboxRouteContinuityConstants.CanonicalRouteHistoryCheckpointLength, ProtocolMagic.RHC1);
+        Header(frozen, HistoryCheckpointMagic, ProductionMailboxRouteContinuityConstants.Version, ProtocolMagic.RHC1);
         var reader = new Reader(frozen, 8);
         var value = new ProductionMailboxRouteHistoryCheckpoint
         {
@@ -326,9 +326,9 @@ public static class ProductionMailboxRouteContinuityCodec
             HistoryTranscriptHead = reader.Bytes(32),
             LastCommittedBatchHash = reader.Bytes(32)
         };
-        reader.End("RHC1");
+        reader.End(ProtocolMagic.RHC1);
         Validate(value);
-        Canonical(frozen, EncodeRouteHistoryCheckpoint(value), "RHC1");
+        Canonical(frozen, EncodeRouteHistoryCheckpoint(value), ProtocolMagic.RHC1);
         return value;
     }
 
@@ -454,7 +454,7 @@ public static class ProductionMailboxRouteContinuityCodec
         writer.UInt64(value.NotBeforeUnixSeconds);
         writer.UInt64(value.ExpiresAtUnixSeconds);
         if (includeSignature) writer.Bytes(value.OwnerSignature.Span);
-        return writer.Finish("RCD1");
+        return writer.Finish(ProtocolMagic.RCD1);
     }
 
     private static byte[] EncodeCore(
@@ -476,7 +476,7 @@ public static class ProductionMailboxRouteContinuityCodec
         writer.UInt64(value.RouteVerifiedAtUnixSeconds);
         writer.UInt64(value.AcceptedAtUnixSeconds);
         if (includeSignature) writer.Bytes(value.AnchorIssuerSignature.Span);
-        return writer.Finish("RDA1");
+        return writer.Finish(ProtocolMagic.RDA1);
     }
 
     private static byte[] EncodeCore(
@@ -494,7 +494,7 @@ public static class ProductionMailboxRouteContinuityCodec
         writer.UInt64(value.RevokedAtUnixSeconds);
         writer.Byte((byte)value.Reason).Zero(7);
         if (includeSignature) writer.Bytes(value.OwnerSignature.Span);
-        return writer.Finish("RCR1");
+        return writer.Finish(ProtocolMagic.RCR1);
     }
 
     private static byte[] EncodeCore(
@@ -516,7 +516,7 @@ public static class ProductionMailboxRouteContinuityCodec
         writer.UInt64(value.IssuedAtUnixSeconds);
         writer.UInt64(value.ExpiresAtUnixSeconds);
         if (includeSignature) writer.Bytes(value.CurrentIssuerSignature.Span);
-        return writer.Finish("RCH1");
+        return writer.Finish(ProtocolMagic.RCH1);
     }
 
     private static void Validate(ProductionMailboxRouteContinuityDelegation value, bool requireSignature)
@@ -632,7 +632,7 @@ public static class ProductionMailboxRouteContinuityCodec
         Nonzero(value.TransitionSalt, 32, "transition salt");
         Nonzero(value.ContinuityTransitionCommitment, 32, "continuity commitment");
         Window(value.IssuedAtUnixSeconds, value.ExpiresAtUnixSeconds,
-            ProductionMailboxRouteContinuityConstants.MaximumCheckpointLifetimeSeconds, "RCH1");
+            ProductionMailboxRouteContinuityConstants.MaximumCheckpointLifetimeSeconds, ProtocolMagic.RCH1);
         Signature(value.CurrentIssuerSignature, requireSignature, "current issuer signature");
     }
 

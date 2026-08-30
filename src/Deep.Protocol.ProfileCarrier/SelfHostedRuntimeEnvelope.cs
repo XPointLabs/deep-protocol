@@ -460,7 +460,7 @@ public sealed class SodiumEd25519SelfHostedRuntimeSignatureVerifier :
 
 public static class SelfHostedRuntimeEnvelopeCodec
 {
-    private static ReadOnlySpan<byte> Magic => "SHR1"u8;
+    private static ReadOnlySpan<byte> Magic => ProtocolMagicBytes.SHR1;
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
 
     public static byte[] Encode(SelfHostedRuntimeEnvelope envelope)

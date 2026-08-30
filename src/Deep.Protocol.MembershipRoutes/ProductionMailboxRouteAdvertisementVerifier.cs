@@ -34,7 +34,7 @@ public static class ProductionMailboxRouteCertificateVerifier
             throw Error(ProductionMailboxRouteAdvertisementError.AuthorityMismatch,
                 "PRC1 authority generation mismatch.");
         VerifyWindow(certificate.IssuedAtUnixSeconds, certificate.ExpiresAtUnixSeconds,
-            nowUnixSeconds, clockSkewSeconds, "PRC1");
+            nowUnixSeconds, clockSkewSeconds, ProtocolMagic.PRC1);
         if (certificate.IssuedAtUnixSeconds < authority.CurrentEpoch.NotBeforeUnixSeconds ||
             certificate.ExpiresAtUnixSeconds > authority.CurrentEpoch.NotAfterUnixSeconds ||
             certificate.IssuedAtUnixSeconds < authority.MrXApproval.RolloutNotBeforeUnixSeconds ||
@@ -130,7 +130,7 @@ public static class ProductionMailboxRouteAdvertisementVerifier
             verifiedAuthority, context.NowUnixSeconds, context.ClockSkewSeconds, signatureVerifier);
         ProductionMailboxRouteCertificateVerifier.VerifyWindow(
             advertisement.PublishedAtUnixSeconds, advertisement.ExpiresAtUnixSeconds,
-            context.NowUnixSeconds, context.ClockSkewSeconds, "PRA1");
+            context.NowUnixSeconds, context.ClockSkewSeconds, ProtocolMagic.PRA1);
         var routeDomainHash = ProductionMailboxRouteAdvertisementCodec.ComputeRouteDomainHash(
             advertisement.Certificate);
         ProductionMailboxRouteCertificateVerifier.Equal(

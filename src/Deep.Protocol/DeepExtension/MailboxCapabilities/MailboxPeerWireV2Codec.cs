@@ -6,7 +6,7 @@ namespace Deep.Protocol.DeepExtension.MailboxCapabilities;
 public static class MailboxPeerWireV2Codec
 {
     private const byte Version = 2;
-    private static ReadOnlySpan<byte> Magic => "PRQ2"u8;
+    private static ReadOnlySpan<byte> Magic => ProtocolMagicBytes.PRQ2;
 
     public static byte[] Encode(MailboxPeerWireRequestV2 request)
     {
@@ -752,7 +752,7 @@ public static class MailboxPeerWireV2Codec
     private static void PreflightEnvelope(ReadOnlySpan<byte> encoded)
     {
         if (encoded.Length < MailboxClientLimits.EncryptedEnvelopeHeaderLength ||
-            !encoded[..4].SequenceEqual("MEO1"u8) ||
+            !encoded[..4].SequenceEqual(ProtocolMagicBytes.MEO1) ||
             encoded[4] != 1 ||
             encoded.Slice(5, 3).IndexOfAnyExcept((byte)0) >= 0 ||
             encoded.Slice(148, 4).IndexOfAnyExcept((byte)0) >= 0)
@@ -793,7 +793,7 @@ public static class MailboxPeerWireV2Codec
             encoded.Length >
                 MailboxPeerReplicationLimits.MembershipProofFixedLength +
                 MailboxPeerReplicationLimits.MaximumInclusionProofLength ||
-            !encoded[..4].SequenceEqual("MIP1"u8) ||
+            !encoded[..4].SequenceEqual(ProtocolMagicBytes.MIP1) ||
             encoded[4] != 1 ||
             encoded.Slice(5, 3).IndexOfAnyExcept((byte)0) >= 0 ||
             encoded.Slice(114, 6).IndexOfAnyExcept((byte)0) >= 0)

@@ -34,7 +34,7 @@ public sealed record VerifiedMailboxDurableQuorumV3(
 
 public static class MailboxReceiptV3Codec
 {
-    private static ReadOnlySpan<byte> QuorumMagic => "MQR3"u8;
+    private static ReadOnlySpan<byte> QuorumMagic => ProtocolMagicBytes.MQR3;
     private const byte Version = 3;
 
     public static byte[] GetQuorumSigningBytes(MailboxDurableQuorumReceiptV3 receipt)

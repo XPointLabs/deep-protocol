@@ -243,7 +243,7 @@ public static class ProductionMailboxRouteContinuityVerifier
             throw Error(ProductionMailboxRouteContinuityError.InvalidField,
                 "RCD1 owner signature is invalid.");
         VerifyLive(delegation.NotBeforeUnixSeconds, delegation.ExpiresAtUnixSeconds,
-            context.NowUnixSeconds, context.ClockSkewSeconds, "RCD1");
+            context.NowUnixSeconds, context.ClockSkewSeconds, ProtocolMagic.RCD1);
         var frozenAcceptance = acceptanceBytes.ToArray();
         var acceptance = ProductionMailboxRouteContinuityCodec.DecodeDelegationAcceptance(
             frozenAcceptance);
@@ -376,7 +376,7 @@ public static class ProductionMailboxRouteContinuityVerifier
             throw Error(ProductionMailboxRouteContinuityError.InvalidField,
                 "Only exact durable Active 0/zero state may yield an activation checkpoint.");
         VerifyLive(checkpoint.IssuedAtUnixSeconds, checkpoint.ExpiresAtUnixSeconds,
-            nowUnixSeconds, clockSkewSeconds, "RCH1");
+            nowUnixSeconds, clockSkewSeconds, ProtocolMagic.RCH1);
         if (checkpoint.IssuedAtUnixSeconds < authority.MrXApproval.RolloutNotBeforeUnixSeconds ||
             checkpoint.ExpiresAtUnixSeconds > authority.MrXApproval.RolloutNotAfterUnixSeconds ||
             checkpoint.IssuedAtUnixSeconds < revocation.IssuedAtUnixSeconds ||

@@ -153,19 +153,19 @@ public sealed class NormalRecoveryStoreInput
         ReadOnlySpan<byte> exactDtc2,
         ReadOnlySpan<byte> exactDwh1)
     {
-        Preflight(exactRfc1, "RFC1"u8, RecoveryManifestParser.RfcFixedLength,
+        Preflight(exactRfc1, ProtocolMagicBytes.RFC1, RecoveryManifestParser.RfcFixedLength,
             RecoveryManifestParser.RfcEntryLength, RecoveryManifestParser.MaximumFrontierCount);
-        Preflight(exactRah1, "RAH1"u8, RecoveryManifestParser.RahFixedLength, 0, 0);
+        Preflight(exactRah1, ProtocolMagicBytes.RAH1, RecoveryManifestParser.RahFixedLength, 0, 0);
         PreflightDtc2(exactDtc2);
-        Preflight(exactDwh1, "DWH1"u8, RecoveryManifestParser.DwhFixedLength,
+        Preflight(exactDwh1, ProtocolMagicBytes.DWH1, RecoveryManifestParser.DwhFixedLength,
             RecoveryManifestParser.DwhEntryLength, 64);
         _rfc = exactRfc1.ToArray(); _rah = exactRah1.ToArray();
         _dtc = exactDtc2.ToArray(); _dwh = exactDwh1.ToArray();
-        Preflight(_rfc, "RFC1"u8, RecoveryManifestParser.RfcFixedLength,
+        Preflight(_rfc, ProtocolMagicBytes.RFC1, RecoveryManifestParser.RfcFixedLength,
             RecoveryManifestParser.RfcEntryLength, RecoveryManifestParser.MaximumFrontierCount);
-        Preflight(_rah, "RAH1"u8, RecoveryManifestParser.RahFixedLength, 0, 0);
+        Preflight(_rah, ProtocolMagicBytes.RAH1, RecoveryManifestParser.RahFixedLength, 0, 0);
         PreflightDtc2(_dtc);
-        Preflight(_dwh, "DWH1"u8, RecoveryManifestParser.DwhFixedLength,
+        Preflight(_dwh, ProtocolMagicBytes.DWH1, RecoveryManifestParser.DwhFixedLength,
             RecoveryManifestParser.DwhEntryLength, 64);
     }
 
@@ -190,7 +190,7 @@ public sealed class NormalRecoveryStoreInput
     private static void PreflightDtc2(ReadOnlySpan<byte> value)
     {
         if (value.Length < RecoveryManifestParser.DtcFixedLength ||
-            !value[..4].SequenceEqual("DTC2"u8) || value[4] != 2 || value[5] != 0)
+            !value[..4].SequenceEqual(ProtocolMagicBytes.DTC2) || value[4] != 2 || value[5] != 0)
             Invalid("A current recovery DTC2 header is invalid.");
         var targetCount = BinaryPrimitives.ReadUInt16BigEndian(value[166..168]);
         var historyCount = BinaryPrimitives.ReadUInt16BigEndian(value[168..170]);

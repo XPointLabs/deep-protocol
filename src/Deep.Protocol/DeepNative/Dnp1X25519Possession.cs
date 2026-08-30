@@ -160,7 +160,7 @@ internal static class X25519PossessionVerifier
         ulong now,
         bool requireLiveNow)
     {
-        if (!transcript[..4].SequenceEqual("DXP1"u8) || transcript[4] != 1 ||
+        if (!transcript[..4].SequenceEqual(ProtocolMagicBytes.DXP1) || transcript[4] != 1 ||
             ParseRole(transcript[5]) != expectedRole || transcript[6] != 0 || transcript[7] != 0)
             Invalid("The DXP1 fixed header is invalid.");
         if (CanonicalGrammar.IsZero(transcript.Slice(8, 16)) ||

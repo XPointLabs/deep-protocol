@@ -22,7 +22,7 @@ internal static class MailboxMembershipCarrier
         if (encoded.Length is < FixedOuterLength + MinimumRip2Length or
             > FixedOuterLength + MaximumRip2Length)
             Invalid("The native mailbox MIP1 length is invalid.");
-        if (!encoded[..4].SequenceEqual("MIP1"u8) || encoded[4] != 1 ||
+        if (!encoded[..4].SequenceEqual(ProtocolMagicBytes.MIP1) || encoded[4] != 1 ||
             encoded.Slice(5, 3).IndexOfAnyExcept((byte)0) >= 0 ||
             encoded.Slice(114, 6).IndexOfAnyExcept((byte)0) >= 0)
             Invalid("The native mailbox MIP1 header is invalid.");
@@ -31,7 +31,7 @@ internal static class MailboxMembershipCarrier
             encoded.Length != FixedOuterLength + innerLength)
             Invalid("The native mailbox MIP1 inner length is invalid.");
         var inner = encoded[FixedOuterLength..];
-        if (!inner[..4].SequenceEqual("RIP2"u8))
+        if (!inner[..4].SequenceEqual(ProtocolMagicBytes.RIP2))
             Invalid("Only RIP2 is accepted by the native mailbox MIP1 boundary.");
         CanonicalGrammar.Preflight(inner, RecordDefinitions.Rip2);
     }

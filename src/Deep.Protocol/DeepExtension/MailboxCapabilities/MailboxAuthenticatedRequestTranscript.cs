@@ -145,7 +145,7 @@ public static class MailboxAuthenticatedRequestTranscript
         if (maximumItems is 0 or > MailboxClientLimits.MaximumPageItems)
             throw Error("Retrieve maximum-items is outside strict bounds.");
         var canonical = new byte[RetrieveHeaderLength + continuationToken.Length];
-        "MBR2"u8.CopyTo(canonical);
+        ProtocolMagicBytes.MBR2.CopyTo(canonical);
         canonical[4] = 2;
         BinaryPrimitives.WriteUInt64BigEndian(canonical.AsSpan(8), epoch);
         operationId.CopyTo(canonical.AsSpan(16));
@@ -185,7 +185,7 @@ public static class MailboxAuthenticatedRequestTranscript
             AckHeaderLength +
             continuationToken.Length +
             acknowledgements.Count * AckEntryLength];
-        "MBA2"u8.CopyTo(canonical);
+        ProtocolMagicBytes.MBA2.CopyTo(canonical);
         canonical[4] = 2;
         BinaryPrimitives.WriteUInt64BigEndian(canonical.AsSpan(8), epoch);
         operationId.CopyTo(canonical.AsSpan(16));
@@ -237,7 +237,7 @@ public static class MailboxAuthenticatedRequestTranscript
         ReadOnlySpan<byte> canonical)
     {
         if (canonical.Length < RetrieveHeaderLength ||
-            !canonical[..4].SequenceEqual("MBR2"u8) ||
+            !canonical[..4].SequenceEqual(ProtocolMagicBytes.MBR2) ||
             canonical[4] != 2 ||
             canonical.Slice(5, 3).IndexOfAnyExcept((byte)0) >= 0 ||
             canonical.Slice(108, 4).IndexOfAnyExcept((byte)0) >= 0)
@@ -262,7 +262,7 @@ public static class MailboxAuthenticatedRequestTranscript
         ReadOnlySpan<byte> canonical)
     {
         if (canonical.Length < AckHeaderLength + AckEntryLength ||
-            !canonical[..4].SequenceEqual("MBA2"u8) ||
+            !canonical[..4].SequenceEqual(ProtocolMagicBytes.MBA2) ||
             canonical[4] != 2 ||
             canonical.Slice(5, 3).IndexOfAnyExcept((byte)0) >= 0 ||
             canonical[96] > 1 ||
@@ -332,7 +332,7 @@ public static class MailboxAuthenticatedRequestTranscript
     {
         if (canonical.Length < MailboxClientLimits.EncryptedEnvelopeHeaderLength ||
             canonical.Length > MailboxClientLimits.MaximumEncryptedEnvelopeLength ||
-            !canonical[..4].SequenceEqual("MEO1"u8) ||
+            !canonical[..4].SequenceEqual(ProtocolMagicBytes.MEO1) ||
             canonical[4] != 1 ||
             canonical.Slice(5, 3).IndexOfAnyExcept((byte)0) >= 0 ||
             canonical.Slice(148, 4).IndexOfAnyExcept((byte)0) >= 0)

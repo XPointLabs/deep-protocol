@@ -287,7 +287,7 @@ public static class ProductionMailboxRouteIssuerAuthoring
             cancellationToken.ThrowIfCancellationRequested();
             var written = await acceptanceSigner(request, signature, cancellationToken)
                 .ConfigureAwait(false);
-            EnsureSignatureLength(written, "RDA1");
+            EnsureSignatureLength(written, ProtocolMagic.RDA1);
             var signedAcceptance = unsignedAcceptance with
             {
                 AnchorIssuerSignature = signature.ToArray()
@@ -909,7 +909,7 @@ public static class ProductionMailboxRouteIssuerAuthoring
             cancellationToken.ThrowIfCancellationRequested();
             var checkpointWritten = await checkpointSigner(
                 checkpointRequest, checkpointSignature, cancellationToken).ConfigureAwait(false);
-            EnsureSignatureLength(checkpointWritten, "RCH1");
+            EnsureSignatureLength(checkpointWritten, ProtocolMagic.RCH1);
             var checkpointArtifact = unsignedCheckpoint with
             {
                 CurrentIssuerSignature = checkpointSignature.ToArray()
@@ -960,7 +960,7 @@ public static class ProductionMailboxRouteIssuerAuthoring
                 cancellationToken.ThrowIfCancellationRequested();
                 var activationWritten = await activationSigner(
                     activationRequest, activationSignature, cancellationToken).ConfigureAwait(false);
-                EnsureSignatureLength(activationWritten, "RCA1");
+                EnsureSignatureLength(activationWritten, ProtocolMagic.RCA1);
                 var activationArtifact = unsignedActivation with
                 {
                     CurrentIssuerSignature = activationSignature.ToArray()
@@ -1391,9 +1391,9 @@ public static class ProductionMailboxRouteIssuerAuthoring
     {
         BindOldTopology(oldAuthority, oldTopology);
         var authorityAdvance = ForwardAdvance(oldAuthority.AuthorityGeneration,
-            currentAuthority.AuthorityGeneration, "PMA1");
+            currentAuthority.AuthorityGeneration, ProtocolMagic.PMA1);
         var topologyAdvance = ForwardAdvance(oldTopology.TopologyGeneration,
-            currentTopology.TopologyGeneration, "PMT1");
+            currentTopology.TopologyGeneration, ProtocolMagic.PMT1);
         if (authorityAdvance == 1 && topologyAdvance == 1)
             throw SelectionError(ProductionMailboxSelectionSuccessorError.InvalidTransitionMode,
                 "An exact +1 authority/topology transition must use DirectPromotion.");

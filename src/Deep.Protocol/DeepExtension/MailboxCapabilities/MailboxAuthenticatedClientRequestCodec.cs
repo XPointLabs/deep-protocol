@@ -19,7 +19,7 @@ public static class MailboxAuthenticatedClientRequestCodec
 {
     private const byte Version = 2;
     public const int HeaderLength = 16;
-    private static ReadOnlySpan<byte> Magic => "MAU2"u8;
+    private static ReadOnlySpan<byte> Magic => ProtocolMagicBytes.MAU2;
 
     public static byte[] Encode(MailboxAuthenticatedClientRequest request)
     {

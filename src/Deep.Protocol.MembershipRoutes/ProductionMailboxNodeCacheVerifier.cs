@@ -452,15 +452,15 @@ public static class ProductionMailboxNodeCacheVerifier
             if (bytes.Length is <= 0 || bytes.Length > maximum)
                 throw new FormatException($"PMC2 {name} length is outside its strict bound.");
         }
-        Bounded(value.CanonicalAuthority, ProductionMailboxAuthorityConstants.MaximumArtifactBytes, "PMA1");
-        Bounded(value.CanonicalRevocations, ProductionMailboxRevocationSnapshotConstants.MaximumArtifactBytes, "PMR1");
-        Bounded(value.CanonicalTopology, ProductionMailboxTopologyConstants.MaximumTopologyArtifactBytes, "PMT1");
+        Bounded(value.CanonicalAuthority, ProductionMailboxAuthorityConstants.MaximumArtifactBytes, ProtocolMagic.PMA1);
+        Bounded(value.CanonicalRevocations, ProductionMailboxRevocationSnapshotConstants.MaximumArtifactBytes, ProtocolMagic.PMR1);
+        Bounded(value.CanonicalTopology, ProductionMailboxTopologyConstants.MaximumTopologyArtifactBytes, ProtocolMagic.PMT1);
         Bounded(value.CanonicalCurrentSelection, ProductionMailboxTopologyConstants.MaximumSelectionArtifactBytes,
             "current PMS1");
         Bounded(value.CanonicalNextSelection, ProductionMailboxTopologyConstants.MaximumSelectionArtifactBytes,
             "next PMS1");
         Bounded(value.CanonicalSelectionSuccessorV2,
-            ProductionMailboxSelectionSuccessorV2Constants.MaximumArtifactBytes, "PSS2");
+            ProductionMailboxSelectionSuccessorV2Constants.MaximumArtifactBytes, ProtocolMagic.PSS2);
         PreflightPmr(value.CanonicalRevocations.Span);
         PreflightPmt(value.CanonicalTopology.Span);
         PreflightPms(value.CanonicalCurrentSelection.Span, "current PMS1");
@@ -516,7 +516,7 @@ public static class ProductionMailboxNodeCacheVerifier
     {
         const int countOffset = 152;
         if (encoded.Length < ProductionMailboxRevocationSnapshotConstants.FixedArtifactBytesWithoutSerials ||
-            !encoded[..4].SequenceEqual("PMR1"u8) ||
+            !encoded[..4].SequenceEqual(ProtocolMagicBytes.PMR1) ||
             encoded[4] != ProductionMailboxRevocationSnapshotConstants.Version ||
             encoded.Slice(5, 3).IndexOfAnyExcept((byte)0) >= 0)
             throw new FormatException("PMC2 PMR1 framing is invalid.");
@@ -530,7 +530,7 @@ public static class ProductionMailboxNodeCacheVerifier
 
     private static void PreflightPmt(ReadOnlySpan<byte> encoded)
     {
-        if (encoded.Length < 780 || !encoded[..4].SequenceEqual("PMT1"u8) || encoded[4] != 1 ||
+        if (encoded.Length < 780 || !encoded[..4].SequenceEqual(ProtocolMagicBytes.PMT1) || encoded[4] != 1 ||
             encoded.Slice(5, 3).IndexOfAnyExcept((byte)0) >= 0)
             throw new FormatException("PMC2 PMT1 framing is invalid.");
         var offset = 120;
@@ -566,7 +566,7 @@ public static class ProductionMailboxNodeCacheVerifier
     private static void PreflightPms(ReadOnlySpan<byte> encoded, string name)
     {
         const int headerLength = 272;
-        if (encoded.Length < headerLength + 2 * 36 + 64 || !encoded[..4].SequenceEqual("PMS1"u8) ||
+        if (encoded.Length < headerLength + 2 * 36 + 64 || !encoded[..4].SequenceEqual(ProtocolMagicBytes.PMS1) ||
             encoded[4] != 1 || encoded.Slice(5, 3).IndexOfAnyExcept((byte)0) >= 0 ||
             encoded[268] != ProductionMailboxTopologyConstants.ReplicaCount ||
             encoded.Slice(269, 3).IndexOfAnyExcept((byte)0) >= 0)
@@ -592,7 +592,7 @@ public static class ProductionMailboxNodeCacheVerifier
         const int lengthsOffset = 408;
         if (encoded.Length < ProductionMailboxSelectionSuccessorV2Constants.FixedCoreLength +
                 ProductionMailboxSelectionSuccessorV2Constants.SignatureBytes ||
-            !encoded[..4].SequenceEqual("PSS2"u8) ||
+            !encoded[..4].SequenceEqual(ProtocolMagicBytes.PSS2) ||
             encoded[4] != ProductionMailboxSelectionSuccessorV2Constants.Version ||
             encoded[5] is not (byte)ProductionMailboxSelectionSuccessorMode.DirectPromotion and
                 not (byte)ProductionMailboxSelectionSuccessorMode.OfflineCheckpoint ||

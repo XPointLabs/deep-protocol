@@ -319,7 +319,7 @@ public static partial class RecoveryVerifier
             facts.Length * RecoveryManifestParser.DrtEntryLength +
             histories.Length * RecoveryManifestParser.DrtHistoryEntryLength);
         var unsigned = new byte[unsignedLength];
-        "DTC2"u8.CopyTo(unsigned); unsigned[4] = 2;
+        ProtocolMagicBytes.DTC2.CopyTo(unsigned); unsigned[4] = 2;
         baseIdentity.Network.CopyTo(unsigned.AsSpan(6));
         baseIdentity.ResetId.CopyTo(unsigned.AsSpan(22));
         BinaryPrimitives.WriteUInt16BigEndian(unsigned.AsSpan(54, 2),
@@ -509,7 +509,7 @@ public static partial class RecoveryVerifier
         }
         foreach (var canonical in identity.Authority.OrderedTransitionCanonicals)
         {
-            if (!canonical.Span[..4].SequenceEqual("KRT1"u8)) continue;
+            if (!canonical.Span[..4].SequenceEqual(ProtocolMagicBytes.KRT1)) continue;
             var rotation = CanonicalGrammar.DecodeOwned(canonical.Span, RecordDefinitions.Krt1);
             if (rotation.FieldSpan(2)[0] != (byte)KeyScope.AccountRevocation ||
                 Scalars.UInt64(rotation.FieldSpan(5)) != generation) continue;

@@ -1272,8 +1272,8 @@ public static class ProductionMailboxRouteHistoryAuthoring
             if (bytes.Length is <= 0 || bytes.Length > maximum)
                 throw new FormatException($"RHB1 {name} length is outside its bound.");
         }
-        Bounded(value.CanonicalAuthority, ProductionMailboxAuthorityConstants.MaximumArtifactBytes, "PMA1");
-        Bounded(value.CanonicalRevocations, ProductionMailboxRevocationSnapshotConstants.MaximumArtifactBytes, "PMR1");
+        Bounded(value.CanonicalAuthority, ProductionMailboxAuthorityConstants.MaximumArtifactBytes, ProtocolMagic.PMA1);
+        Bounded(value.CanonicalRevocations, ProductionMailboxRevocationSnapshotConstants.MaximumArtifactBytes, ProtocolMagic.PMR1);
         if (value.CanonicalRouteCertificate.Length != ProductionMailboxRouteAdvertisementConstants.CanonicalCertificateLength)
             throw new FormatException("RHB1 PRC1 length is invalid.");
         if (value.AuthorizationKind == ProductionMailboxRouteAuthorizationKind.OwnerPRA2)

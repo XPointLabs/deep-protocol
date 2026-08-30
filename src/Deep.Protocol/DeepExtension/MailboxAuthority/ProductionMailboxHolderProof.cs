@@ -71,7 +71,7 @@ public static class ProductionMailboxHolderProof
 {
     public const int CanonicalPayloadLength = 400;
     private static ReadOnlySpan<byte> Domain => "Deep/production-mailbox/holder-proof/v1"u8;
-    private static ReadOnlySpan<byte> Magic => "PHP1"u8;
+    private static ReadOnlySpan<byte> Magic => ProtocolMagicBytes.PHP1;
 
     public static byte[] GetSigningBytes(ProductionMailboxHolderProofInput input)
     {

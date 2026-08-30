@@ -7,7 +7,7 @@ namespace Deep.Protocol.DeepExtension.MailboxAuthority;
 /// <summary>Strict fixed-order PMR1 binary codec. There are no optional or extension fields.</summary>
 public static class ProductionMailboxRevocationSnapshotCodec
 {
-    private static ReadOnlySpan<byte> Magic => "PMR1"u8;
+    private static ReadOnlySpan<byte> Magic => ProtocolMagicBytes.PMR1;
 
     public static byte[] GetSigningBytes(ProductionMailboxRevocationSnapshot snapshot)
     {

@@ -183,7 +183,7 @@ public static class ProductionMailboxSelectionSuccessorVerifier
     {
         var frozenEncoded = FreezeBounded(encoded);
         var frozenTopology = FreezeArtifact(canonicalNewTopology, 1,
-            ProductionMailboxTopologyConstants.MaximumTopologyArtifactBytes, "PMT1");
+            ProductionMailboxTopologyConstants.MaximumTopologyArtifactBytes, ProtocolMagic.PMT1);
         return VerifyOfflineCheckpointComponents(frozenEncoded, oldAuthority, oldTopology,
             frozenTopology, context, authoritySignatureVerifier,
             topologySignatureVerifier, successorSignatureVerifier).Successor;
@@ -461,7 +461,7 @@ public static class ProductionMailboxSelectionSuccessorVerifier
         var v2 = isV2 ? ProductionMailboxSelectionSuccessorV2Codec.Decode(frozenBytes) : null;
         var proof = v2?.Selection ?? ProductionMailboxSelectionSuccessorCodec.Decode(frozenBytes);
         VerifyWindow(proof.IssuedAtUnixSeconds, proof.ExpiresAtUnixSeconds,
-            frozenContext.NowUnixSeconds, frozenContext.ClockSkewSeconds, "PSS1");
+            frozenContext.NowUnixSeconds, frozenContext.ClockSkewSeconds, ProtocolMagic.PSS1);
 
         var oldAuthorityValue = oldAuthority.Authority;
         var newAuthorityValue = newAuthority.Authority;
@@ -888,7 +888,7 @@ public static class ProductionMailboxSelectionSuccessorVerifier
         ProductionMailboxOfflineCheckpointCommitAnchor anchor)
     {
         using var stream = new MemoryStream();
-        stream.Write("POC1"u8);
+        stream.Write(ProtocolMagicBytes.POC1);
         stream.WriteByte(1);
         WriteFramed(stream, successor);
         WriteFramed(stream, authority);
@@ -960,10 +960,10 @@ public static class ProductionMailboxSelectionSuccessorVerifier
     {
         var authorityAdvance = ForwardAdvance(oldAuthority.AuthorityGeneration,
             newAuthority.AuthorityGeneration,
-            ProductionMailboxSelectionSuccessorError.AuthorityNotSuccessor, "PMA1");
+            ProductionMailboxSelectionSuccessorError.AuthorityNotSuccessor, ProtocolMagic.PMA1);
         var topologyAdvance = ForwardAdvance(oldTopology.TopologyGeneration,
             newTopology.TopologyGeneration,
-            ProductionMailboxSelectionSuccessorError.TopologyNotSuccessor, "PMT1");
+            ProductionMailboxSelectionSuccessorError.TopologyNotSuccessor, ProtocolMagic.PMT1);
         if (authorityAdvance == 1 && topologyAdvance == 1)
             throw Error(ProductionMailboxSelectionSuccessorError.InvalidTransitionMode,
                 "A one-generation transition must use direct-promotion mode.");
@@ -1341,7 +1341,7 @@ public static class ProductionMailboxSelectionSuccessorVerifier
             throw Error(ProductionMailboxSelectionSuccessorError.AuthorityNotSuccessor,
                 "RTC1 PMA1 generation mismatch.");
         ProductionMailboxRouteAuthorizationVerifier.VerifyLive(rtcValue.NotBeforeUnixSeconds,
-            rtcValue.ExpiresAtUnixSeconds, now, skew, "RTC1");
+            rtcValue.ExpiresAtUnixSeconds, now, skew, ProtocolMagic.RTC1);
 
         byte[] authorizationHash;
         ulong authorizationNotBefore;
@@ -1487,27 +1487,27 @@ public static class ProductionMailboxSelectionSuccessorVerifier
         ProductionMailboxTopologySnapshot topology)
     {
         RequireContained(transition.NotBeforeUnixSeconds, transition.ExpiresAtUnixSeconds,
-            authorizationNotBefore, authorizationExpires, "RTC1", "route authorization");
+            authorizationNotBefore, authorizationExpires, ProtocolMagic.RTC1, "route authorization");
         RequireContained(selection.IssuedAtUnixSeconds, selection.ExpiresAtUnixSeconds,
-            transition.NotBeforeUnixSeconds, transition.ExpiresAtUnixSeconds, "PSS2", "RTC1");
+            transition.NotBeforeUnixSeconds, transition.ExpiresAtUnixSeconds, ProtocolMagic.PSS2, ProtocolMagic.RTC1);
         RequireContained(selection.IssuedAtUnixSeconds, selection.ExpiresAtUnixSeconds,
-            authorizationNotBefore, authorizationExpires, "PSS2", "route authorization");
+            authorizationNotBefore, authorizationExpires, ProtocolMagic.PSS2, "route authorization");
         RequireContained(selection.IssuedAtUnixSeconds, selection.ExpiresAtUnixSeconds,
             authority.CurrentEpoch.NotBeforeUnixSeconds, authority.CurrentEpoch.NotAfterUnixSeconds,
-            "PSS2", "PMA1 current epoch");
+            ProtocolMagic.PSS2, "PMA1 current epoch");
         RequireContained(selection.IssuedAtUnixSeconds, selection.ExpiresAtUnixSeconds,
             authority.MrXApproval.RolloutNotBeforeUnixSeconds,
-            authority.MrXApproval.RolloutNotAfterUnixSeconds, "PSS2", "PMA1 rollout");
+            authority.MrXApproval.RolloutNotAfterUnixSeconds, ProtocolMagic.PSS2, "PMA1 rollout");
         RequireContained(selection.IssuedAtUnixSeconds, selection.ExpiresAtUnixSeconds,
             authority.Revocation.IssuedAtUnixSeconds, authority.Revocation.ExpiresAtUnixSeconds,
-            "PSS2", "PMA1 revocation window");
+            ProtocolMagic.PSS2, "PMA1 revocation window");
         RequireContained(selection.IssuedAtUnixSeconds, selection.ExpiresAtUnixSeconds,
-            revocations.IssuedAtUnixSeconds, revocations.ExpiresAtUnixSeconds, "PSS2", "PMR1");
+            revocations.IssuedAtUnixSeconds, revocations.ExpiresAtUnixSeconds, ProtocolMagic.PSS2, ProtocolMagic.PMR1);
         RequireContained(selection.IssuedAtUnixSeconds, selection.ExpiresAtUnixSeconds,
-            topology.IssuedAtUnixSeconds, topology.ExpiresAtUnixSeconds, "PSS2", "PMT1");
+            topology.IssuedAtUnixSeconds, topology.ExpiresAtUnixSeconds, ProtocolMagic.PSS2, ProtocolMagic.PMT1);
         RequireContained(selection.IssuedAtUnixSeconds, selection.ExpiresAtUnixSeconds,
             topology.CurrentEpoch.NotBeforeUnixSeconds, topology.CurrentEpoch.NotAfterUnixSeconds,
-            "PSS2", "PMT1 current epoch");
+            ProtocolMagic.PSS2, "PMT1 current epoch");
     }
 
     private static void RequireContained(

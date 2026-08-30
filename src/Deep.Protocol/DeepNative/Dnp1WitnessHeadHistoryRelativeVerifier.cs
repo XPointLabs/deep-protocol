@@ -43,7 +43,7 @@ internal static class WitnessHeadHistoryRelativeVerifier
         if (dwh.Length < RecoveryManifestParser.DwhFixedLength ||
             dwh.Length > RecoveryManifestParser.DwhFixedLength +
                 64 * RecoveryManifestParser.DwhEntryLength ||
-            !dwh.AsSpan(0, 4).SequenceEqual("DWH1"u8) ||
+            !dwh.AsSpan(0, 4).SequenceEqual(ProtocolMagicBytes.DWH1) ||
             dwh[4] != 1 || dwh[5] != 0)
             Invalid("The relative DWH1 header or length is invalid.");
         var count = BinaryPrimitives.ReadUInt16BigEndian(dwh.AsSpan(166, 2));

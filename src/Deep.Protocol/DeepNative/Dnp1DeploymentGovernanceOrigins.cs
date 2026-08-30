@@ -221,7 +221,7 @@ internal static class DeploymentGovernanceRecords
 
     internal static void PreflightDgo(ReadOnlySpan<byte> value)
     {
-        Header(value, DgoLength, "DGO1"u8);
+        Header(value, DgoLength, ProtocolMagicBytes.DGO1);
         Nonzero(value.Slice(8, 16), "DGO1 network");
         Positive(value.Slice(32, 32), "DGO1 environment reset ID");
         PositiveU64(value.Slice(64, 8), "DGO1 activation time");
@@ -241,7 +241,7 @@ internal static class DeploymentGovernanceRecords
 
     internal static void PreflightDgi(ReadOnlySpan<byte> value, ulong transactionTimeUnixSeconds)
     {
-        Header(value, DgiLength, "DGI1"u8);
+        Header(value, DgiLength, ProtocolMagicBytes.DGI1);
         Reference(value.Slice(8, 38), ArtifactType.Rrm1, 332, "DGI1 RRM");
         Positive(value.Slice(46, 32), "DGI1 DGO hash");
         PositiveU64(value.Slice(78, 8), "DGI1 source revision");
@@ -254,51 +254,51 @@ internal static class DeploymentGovernanceRecords
 
     internal static void PreflightGar(ReadOnlySpan<byte> value, ulong transactionTimeUnixSeconds)
     {
-        Header(value, GarLength, "GAR1"u8);
+        Header(value, GarLength, ProtocolMagicBytes.GAR1);
         Positive(value.Slice(8, 588), "GAR1 verified reset transcript");
         var originHash = HashU16("Deep/Cutover/V10/account-reset-origin", value.Slice(8, 588));
         if (!CanonicalGrammar.FixedEquals(value.Slice(596, 32), originHash))
             Invalid("GAR1 account-reset origin hash is invalid.");
         Positive(value.Slice(628, 32), "GAR1 operation ID");
         PositiveU64(value.Slice(660, 8), "GAR1 source revision");
-        Retained(value, 668, 676, 677, transactionTimeUnixSeconds, "GAR1");
+        Retained(value, 668, 676, 677, transactionTimeUnixSeconds, ProtocolMagic.GAR1);
         Positive(value.Slice(GarKeyOffset, 32), "GAR1 protected key ID");
     }
 
     internal static void PreflightGdi(ReadOnlySpan<byte> value, ulong transactionTimeUnixSeconds)
     {
-        Header(value, GdiLength, "GDI1"u8);
-        var branch = Branch(value[8], value.Slice(9, 32), "GDI1");
+        Header(value, GdiLength, ProtocolMagicBytes.GDI1);
+        var branch = Branch(value[8], value.Slice(9, 32), ProtocolMagic.GDI1);
         var reservation = value.Slice(41, 32);
         if (branch == 2 ? !CanonicalGrammar.IsZero(reservation) : CanonicalGrammar.IsZero(reservation))
             Invalid("GDI1 reservation shape is invalid for its branch.");
 
         var dcm = CanonicalGrammar.DecodeOwned(value.Slice(73, 812), RecordDefinitions.Dcm1);
-        PhaseSignatures(value[965], dcm.FieldSpan(18), dcm.FieldSpan(19), "GDI1");
+        PhaseSignatures(value[965], dcm.FieldSpan(18), dcm.FieldSpan(19), ProtocolMagic.GDI1);
         Positive(value.Slice(885, 32), "GDI1 governance hash");
         Positive(value.Slice(917, 32), "GDI1 operation ID");
         PositiveU64(value.Slice(949, 8), "GDI1 source revision");
-        RetainedPhase(value, 957, 965, 966, transactionTimeUnixSeconds, "GDI1");
+        RetainedPhase(value, 957, 965, 966, transactionTimeUnixSeconds, ProtocolMagic.GDI1);
         Positive(value.Slice(GdiKeyOffset, 32), "GDI1 protected key ID");
     }
 
     internal static void PreflightGra(ReadOnlySpan<byte> value, ulong transactionTimeUnixSeconds)
     {
-        Header(value, GraLength, "GRA1"u8);
+        Header(value, GraLength, ProtocolMagicBytes.GRA1);
         Positive(value.Slice(8, 32), "GRA1 GAR receipt hash");
         Reference(value.Slice(40, 38), ArtifactType.Dcm1, 812, "GRA1 new DCM");
         var dra = CanonicalGrammar.DecodeOwned(value.Slice(78, 788), RecordDefinitions.Dra1);
-        PhaseSignatures(value[914], dra.FieldSpan(19), dra.FieldSpan(20), dra.FieldSpan(21), "GRA1");
+        PhaseSignatures(value[914], dra.FieldSpan(19), dra.FieldSpan(20), dra.FieldSpan(21), ProtocolMagic.GRA1);
         Positive(value.Slice(866, 32), "GRA1 operation ID");
         PositiveU64(value.Slice(898, 8), "GRA1 source revision");
-        RetainedPhase(value, 906, 914, 915, transactionTimeUnixSeconds, "GRA1");
+        RetainedPhase(value, 906, 914, 915, transactionTimeUnixSeconds, ProtocolMagic.GRA1);
         Positive(value.Slice(GraKeyOffset, 32), "GRA1 protected key ID");
     }
 
     internal static void PreflightGmd(ReadOnlySpan<byte> value, ulong transactionTimeUnixSeconds)
     {
-        Header(value, GmdLength, "GMD1"u8);
-        var branch = Branch(value[8], value.Slice(9, 32), "GMD1");
+        Header(value, GmdLength, ProtocolMagicBytes.GMD1);
+        var branch = Branch(value[8], value.Slice(9, 32), ProtocolMagic.GMD1);
         Positive(value.Slice(41, 32), "GMD1 author-set hash");
         PositiveU64(value.Slice(73, 8), "GMD1 account generation");
         Positive(value.Slice(81, 32), "GMD1 account hash");

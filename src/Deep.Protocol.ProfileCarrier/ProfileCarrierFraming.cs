@@ -4,7 +4,7 @@ namespace Deep.Protocol.DeepExtension.SelfHostedProfiles;
 
 internal static class ProfileCarrierFraming
 {
-    private static ReadOnlySpan<byte> Magic => "DPF1"u8;
+    private static ReadOnlySpan<byte> Magic => ProtocolMagicBytes.DPF1;
     private const byte Version = 1;
 
     public static byte[] Encode(IReadOnlyList<ProfileComponent> components)

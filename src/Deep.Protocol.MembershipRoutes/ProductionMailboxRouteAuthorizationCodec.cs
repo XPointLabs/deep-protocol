@@ -9,9 +9,9 @@ namespace Deep.Protocol.DeepExtension.MailboxTopology;
 /// </summary>
 public static class ProductionMailboxRouteAuthorizationCodec
 {
-    private static ReadOnlySpan<byte> TransitionMagic => "RTC1"u8;
-    private static ReadOnlySpan<byte> ActivationMagic => "RCA1"u8;
-    private static ReadOnlySpan<byte> AdvertisementMagic => "PRA2"u8;
+    private static ReadOnlySpan<byte> TransitionMagic => ProtocolMagicBytes.RTC1;
+    private static ReadOnlySpan<byte> ActivationMagic => ProtocolMagicBytes.RCA1;
+    private static ReadOnlySpan<byte> AdvertisementMagic => ProtocolMagicBytes.PRA2;
     private static ReadOnlySpan<byte> TransitionHashDomain =>
         "Deep/production-mailbox/route-transition-context/v1"u8;
     private static ReadOnlySpan<byte> ActivationSigningDomain =>
@@ -30,8 +30,8 @@ public static class ProductionMailboxRouteAuthorizationCodec
     public static ProductionMailboxRouteTransitionContext DecodeTransitionContext(ReadOnlySpan<byte> encoded)
     {
         var frozen = Snapshot(encoded,
-            ProductionMailboxRouteAuthorizationConstants.CanonicalTransitionContextLength, "RTC1");
-        Header(frozen, TransitionMagic, ProductionMailboxRouteAuthorizationConstants.Version, "RTC1");
+            ProductionMailboxRouteAuthorizationConstants.CanonicalTransitionContextLength, ProtocolMagic.RTC1);
+        Header(frozen, TransitionMagic, ProductionMailboxRouteAuthorizationConstants.Version, ProtocolMagic.RTC1);
         var reader = new Reader(frozen, 5);
         var value = new ProductionMailboxRouteTransitionContext
         {
@@ -58,9 +58,9 @@ public static class ProductionMailboxRouteAuthorizationCodec
             ExpiresAtUnixSeconds = reader.UInt64()
         };
         reader.Skip(8);
-        reader.End("RTC1");
+        reader.End(ProtocolMagic.RTC1);
         Validate(value);
-        Canonical(frozen, EncodeCore(value), "RTC1");
+        Canonical(frozen, EncodeCore(value), ProtocolMagic.RTC1);
         return value;
     }
 
@@ -76,8 +76,8 @@ public static class ProductionMailboxRouteAuthorizationCodec
         ReadOnlySpan<byte> encoded)
     {
         var frozen = Snapshot(encoded,
-            ProductionMailboxRouteAuthorizationConstants.CanonicalContinuityActivationLength, "RCA1");
-        Header(frozen, ActivationMagic, ProductionMailboxRouteAuthorizationConstants.Version, "RCA1");
+            ProductionMailboxRouteAuthorizationConstants.CanonicalContinuityActivationLength, ProtocolMagic.RCA1);
+        Header(frozen, ActivationMagic, ProductionMailboxRouteAuthorizationConstants.Version, ProtocolMagic.RCA1);
         var reader = new Reader(frozen, 8);
         var value = new ProductionMailboxRouteContinuityActivation
         {
@@ -102,9 +102,9 @@ public static class ProductionMailboxRouteAuthorizationCodec
             ExpiresAtUnixSeconds = reader.UInt64(),
             CurrentIssuerSignature = reader.Bytes(64)
         };
-        reader.End("RCA1");
+        reader.End(ProtocolMagic.RCA1);
         Validate(value, requireSignature: true);
-        Canonical(frozen, EncodeCore(value, includeSignature: true), "RCA1");
+        Canonical(frozen, EncodeCore(value, includeSignature: true), ProtocolMagic.RCA1);
         return value;
     }
 
@@ -119,9 +119,9 @@ public static class ProductionMailboxRouteAuthorizationCodec
     public static ProductionMailboxRouteAdvertisementV2 DecodeAdvertisementV2(ReadOnlySpan<byte> encoded)
     {
         var frozen = Snapshot(encoded,
-            ProductionMailboxRouteAuthorizationConstants.CanonicalAdvertisementV2Length, "PRA2");
+            ProductionMailboxRouteAuthorizationConstants.CanonicalAdvertisementV2Length, ProtocolMagic.PRA2);
         Header(frozen, AdvertisementMagic, ProductionMailboxRouteAuthorizationConstants.AdvertisementVersion,
-            "PRA2");
+            ProtocolMagic.PRA2);
         ProductionMailboxRouteCertificate certificate;
         try
         {
@@ -146,9 +146,9 @@ public static class ProductionMailboxRouteAuthorizationCodec
             ExpiresAtUnixSeconds = reader.UInt64(),
             OwnerSignature = reader.Bytes(64)
         };
-        reader.End("PRA2");
+        reader.End(ProtocolMagic.PRA2);
         Validate(value, requireSignature: true);
-        Canonical(frozen, EncodeCore(value, includeSignature: true), "PRA2");
+        Canonical(frozen, EncodeCore(value, includeSignature: true), ProtocolMagic.PRA2);
         return value;
     }
 
@@ -205,7 +205,7 @@ public static class ProductionMailboxRouteAuthorizationCodec
         writer.UInt64(value.NotBeforeUnixSeconds);
         writer.UInt64(value.ExpiresAtUnixSeconds);
         writer.Zero(8);
-        return writer.Finish("RTC1");
+        return writer.Finish(ProtocolMagic.RTC1);
     }
 
     private static byte[] EncodeCore(
@@ -235,7 +235,7 @@ public static class ProductionMailboxRouteAuthorizationCodec
         writer.UInt64(value.IssuedAtUnixSeconds);
         writer.UInt64(value.ExpiresAtUnixSeconds);
         if (includeSignature) writer.Bytes(value.CurrentIssuerSignature.Span);
-        return writer.Finish("RCA1");
+        return writer.Finish(ProtocolMagic.RCA1);
     }
 
     private static byte[] EncodeCore(ProductionMailboxRouteAdvertisementV2 value, bool includeSignature)
@@ -252,7 +252,7 @@ public static class ProductionMailboxRouteAuthorizationCodec
         writer.UInt64(value.PublishedAtUnixSeconds);
         writer.UInt64(value.ExpiresAtUnixSeconds);
         if (includeSignature) writer.Bytes(value.OwnerSignature.Span);
-        return writer.Finish("PRA2");
+        return writer.Finish(ProtocolMagic.PRA2);
     }
 
     private static void Validate(ProductionMailboxRouteTransitionContext value)
@@ -269,7 +269,7 @@ public static class ProductionMailboxRouteAuthorizationCodec
         Predecessor(value.PredecessorAuthorizationKind,
             value.PredecessorCanonicalRouteAuthorizationHash,
             value.PredecessorRouteAuthorizationSequence,
-            value.NewRouteAuthorizationSequence, "RTC1");
+            value.NewRouteAuthorizationSequence, ProtocolMagic.RTC1);
         Nonzero(value.FreshCanonicalRouteCertificateHash, 32, "fresh PRC1 hash");
         Fixed(value.TransitionSalt, 32, "transition salt");
         Fixed(value.ContinuityTransitionCommitment, 32, "continuity commitment");
@@ -290,7 +290,7 @@ public static class ProductionMailboxRouteAuthorizationCodec
         Nonzero(value.SealedOldRouteOriginLkgHash, 32, "sealed old ROL1 hash");
         Counter(value.OldRouteVerifiedAtUnixSeconds, "old RouteVerifiedAt");
         Counter(value.OldLocalRouteCommitGeneration, "old local route commit generation");
-        Window(value.NotBeforeUnixSeconds, value.ExpiresAtUnixSeconds, "RTC1");
+        Window(value.NotBeforeUnixSeconds, value.ExpiresAtUnixSeconds, ProtocolMagic.RTC1);
     }
 
     private static void Validate(ProductionMailboxRouteContinuityActivation value, bool requireSignature)
@@ -312,8 +312,8 @@ public static class ProductionMailboxRouteAuthorizationCodec
         Predecessor(value.PredecessorAuthorizationKind,
             value.PredecessorCanonicalRouteAuthorizationHash,
             value.PredecessorRouteAuthorizationSequence,
-            value.ActivationSequence, "RCA1");
-        Window(value.IssuedAtUnixSeconds, value.ExpiresAtUnixSeconds, "RCA1");
+            value.ActivationSequence, ProtocolMagic.RCA1);
+        Window(value.IssuedAtUnixSeconds, value.ExpiresAtUnixSeconds, ProtocolMagic.RCA1);
         Signature(value.CurrentIssuerSignature, requireSignature, "current issuer signature");
     }
 
@@ -337,8 +337,8 @@ public static class ProductionMailboxRouteAuthorizationCodec
         Predecessor(value.PredecessorAuthorizationKind,
             value.PredecessorCanonicalRouteAuthorizationHash,
             value.PredecessorRouteAuthorizationSequence,
-            value.Sequence, "PRA2");
-        Window(value.PublishedAtUnixSeconds, value.ExpiresAtUnixSeconds, "PRA2");
+            value.Sequence, ProtocolMagic.PRA2);
+        Window(value.PublishedAtUnixSeconds, value.ExpiresAtUnixSeconds, ProtocolMagic.PRA2);
         if (value.PublishedAtUnixSeconds < value.Certificate.IssuedAtUnixSeconds ||
             value.ExpiresAtUnixSeconds > value.Certificate.ExpiresAtUnixSeconds)
             throw Error(ProductionMailboxRouteAuthorizationError.InvalidValidityWindow,
@@ -394,7 +394,7 @@ public static class ProductionMailboxRouteAuthorizationCodec
         if (input[4] != version)
             throw Error(ProductionMailboxRouteAuthorizationError.UnsupportedVersion,
                 $"{name} version is unsupported.");
-        if (name != "RTC1" && input.AsSpan(5, 3).IndexOfAnyExcept((byte)0) >= 0)
+        if (name != ProtocolMagic.RTC1 && input.AsSpan(5, 3).IndexOfAnyExcept((byte)0) >= 0)
             throw Error(ProductionMailboxRouteAuthorizationError.ReservedFieldNotZero,
                 $"{name} header reserved bytes must be zero.");
     }

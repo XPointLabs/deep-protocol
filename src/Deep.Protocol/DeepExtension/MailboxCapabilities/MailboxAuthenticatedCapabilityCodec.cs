@@ -8,8 +8,8 @@ public static class MailboxAuthenticatedCapabilityCodec
     private const byte Version = 2;
     private const int GrantUnsignedLength = 208;
     private const int PresentationUnsignedLength = 344;
-    private static ReadOnlySpan<byte> GrantMagic => "MCG2"u8;
-    private static ReadOnlySpan<byte> PresentationMagic => "MCP2"u8;
+    private static ReadOnlySpan<byte> GrantMagic => ProtocolMagicBytes.MCG2;
+    private static ReadOnlySpan<byte> PresentationMagic => ProtocolMagicBytes.MCP2;
 
     public static byte[] EncodeGrant(MailboxAuthenticatedGrant grant)
     {

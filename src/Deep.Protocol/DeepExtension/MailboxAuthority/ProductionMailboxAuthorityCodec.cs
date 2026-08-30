@@ -13,8 +13,8 @@ namespace Deep.Protocol.DeepExtension.MailboxAuthority;
 /// </summary>
 public static class ProductionMailboxAuthorityCodec
 {
-    private static ReadOnlySpan<byte> Magic => "PMA1"u8;
-    private static ReadOnlySpan<byte> RevocationBindingMagic => "PMB1"u8;
+    private static ReadOnlySpan<byte> Magic => ProtocolMagicBytes.PMA1;
+    private static ReadOnlySpan<byte> RevocationBindingMagic => ProtocolMagicBytes.PMB1;
 
     public static byte[] GetPayloadBytes(ProductionMailboxAuthority authority)
     {

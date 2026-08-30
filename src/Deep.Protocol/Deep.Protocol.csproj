@@ -18,6 +18,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Identity\Resources\Bip39\english.txt"
+                      LogicalName="Deep.Protocol.Identity.Resources.Bip39.english.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="Deep.Protocol.MembershipRoutes" />
     <InternalsVisibleTo Include="Deep.Protocol.MembershipRoutes.Tests" />
     <InternalsVisibleTo Include="Deep.Protocol.Tests" />

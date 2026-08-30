@@ -48,6 +48,8 @@ if (assemblyPaths.Length != 0)
 var goldenAssembly = options.GetValueOrDefault("golden-assembly");
 if (!string.IsNullOrWhiteSpace(goldenAssembly)) ValidateAssembly("golden-vector-resources", File.ReadAllBytes(goldenAssembly));
 if (specs is null && assemblyPaths.Length == 0) throw new InvalidOperationException("A package or assembly validation mode is required.");
+if (GraphPolicy.SnapshotFailures.Count != 0)
+    throw new InvalidOperationException(string.Join(Environment.NewLine, GraphPolicy.SnapshotFailures));
 
 Console.WriteLine(specs is null
     ? "PASS exact-three actual assembly/resource/public-API graph"
@@ -75,6 +77,12 @@ static void ValidatePackage(string path, PackageSpec spec)
 
     var forbiddenEntry = archive.Entries.FirstOrDefault(entry => ContainsForbidden(entry.FullName));
     if (forbiddenEntry is not null) throw new InvalidOperationException($"{spec.Id}: forbidden ZIP entry {forbiddenEntry.FullName}.");
+    foreach (var entry in archive.Entries)
+    {
+        ValidateNoRetiredTokens(spec.Id, $"package entry name {entry.FullName}", Encoding.UTF8.GetBytes(entry.FullName));
+        if (!entry.FullName.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+            ValidateNoRetiredTokens(spec.Id, $"package entry {entry.FullName}", Read(entry, 64 * 1024 * 1024));
+    }
     var dllEntry = archive.Entries.Single(entry => entry.FullName.Equals($"lib/net10.0/{spec.Id}.dll", StringComparison.Ordinal));
     var dll = Read(dllEntry, 64 * 1024 * 1024);
     ValidateAssembly(spec.Id, dll);
@@ -85,6 +93,7 @@ static void ValidateAssembly(string packageId, byte[] dll)
     using var pe = new PEReader(new MemoryStream(dll, writable: false));
     if (!pe.HasMetadata) throw new InvalidOperationException($"{packageId}: managed metadata missing.");
     var reader = pe.GetMetadataReader();
+    ValidateProtocolRegistrySurface(packageId, dll, pe, reader);
     foreach (var handle in reader.AssemblyReferences)
     {
         var name = reader.GetString(reader.GetAssemblyReference(handle).Name);
@@ -147,7 +156,8 @@ static void ValidateAssembly(string packageId, byte[] dll)
         throw new InvalidOperationException($"{packageId}: positive assembly identity differs (actual {assemblyName}).");
     if (!GraphPolicy.ExpectedSnapshots.TryGetValue(assemblyName, out var expectedSnapshots) ||
         !expectedSnapshots.Contains(snapshot, StringComparer.Ordinal))
-        throw new InvalidOperationException($"{packageId}: positive public-API/resource/assembly snapshot differs ({snapshot}).");
+        GraphPolicy.SnapshotFailures.Add(
+            $"{packageId}: positive public-API/resource/assembly snapshot differs ({snapshot}).");
 }
 
 static string CreateSnapshot(byte[] dll)
@@ -279,6 +289,187 @@ static string TypeReferenceName(MetadataReader reader, TypeReferenceHandle handl
     return string.IsNullOrEmpty(ns) ? name : ns + "." + name;
 }
 
+static void ValidateProtocolRegistrySurface(
+    string packageId, byte[] dll, PEReader pe, MetadataReader reader)
+{
+    ValidateNoRetiredTokens(packageId, "assembly bytes", dll);
+
+    foreach (var value in ReadUserStrings(pe))
+        ValidateRuntimeString(packageId, "#US user string", value);
+
+    foreach (var handle in reader.TypeDefinitions)
+    {
+        var type = reader.GetTypeDefinition(handle);
+        ValidateRuntimeString(packageId, "TypeDef namespace", reader.GetString(type.Namespace));
+        ValidateRuntimeString(packageId, "TypeDef name", reader.GetString(type.Name));
+        foreach (var fieldHandle in type.GetFields())
+        {
+            var field = reader.GetFieldDefinition(fieldHandle);
+            ValidateRuntimeString(packageId, "field name", reader.GetString(field.Name));
+            var constantHandle = field.GetDefaultValue();
+            if (constantHandle.IsNil) continue;
+            var constant = reader.GetConstant(constantHandle);
+            if (constant.TypeCode == ConstantTypeCode.String)
+                ValidateRuntimeString(packageId, "field constant", Encoding.Unicode.GetString(reader.GetBlobBytes(constant.Value)));
+        }
+        foreach (var methodHandle in type.GetMethods())
+            ValidateRuntimeString(packageId, "method name", reader.GetString(reader.GetMethodDefinition(methodHandle).Name));
+        foreach (var propertyHandle in type.GetProperties())
+            ValidateRuntimeString(packageId, "property name", reader.GetString(reader.GetPropertyDefinition(propertyHandle).Name));
+        foreach (var eventHandle in type.GetEvents())
+            ValidateRuntimeString(packageId, "event name", reader.GetString(reader.GetEventDefinition(eventHandle).Name));
+    }
+
+    var resources = pe.PEHeaders.CorHeader?.ResourcesDirectory ?? default;
+    var resourceBytes = resources.Size > 0 ? pe.GetSectionData(resources.RelativeVirtualAddress).GetContent() : default;
+    foreach (var handle in reader.ManifestResources)
+    {
+        var resource = reader.GetManifestResource(handle);
+        var name = reader.GetString(resource.Name);
+        ValidateRuntimeString(packageId, "resource name", name);
+        if (!resource.Implementation.IsNil) continue;
+        var offset = checked((int)resource.Offset);
+        if (resourceBytes.IsDefaultOrEmpty || offset < 0 || offset > resourceBytes.Length - 4)
+            throw new InvalidOperationException($"{packageId}: embedded resource offset is invalid: {name}.");
+        var length = BinaryPrimitives.ReadInt32LittleEndian(resourceBytes.AsSpan(offset, 4));
+        if (length < 0 || length > resourceBytes.Length - offset - 4)
+            throw new InvalidOperationException($"{packageId}: embedded resource length is invalid: {name}.");
+        ValidateNoRetiredTokens(packageId, $"resource {name}", resourceBytes.AsSpan(offset + 4, length));
+    }
+}
+
+static void ValidateRuntimeString(string packageId, string surface, string value)
+{
+    foreach (var retired in DeepProtocolRegistryPolicy.RetiredTokens)
+    {
+        if (ContainsStandalone(value, retired))
+            throw new InvalidOperationException($"{packageId}: retired registry token '{retired}' in {surface}.");
+    }
+    if (value.Length == 4 && value.All(static character => character is >= 'A' and <= 'Z' or >= '0' and <= '9') &&
+        !DeepProtocolRegistryPolicy.AllowedMagic.Contains(value, StringComparer.Ordinal) &&
+        !DeepProtocolRegistryPolicy.NonProtocolFourCharacterLiterals.Contains(value, StringComparer.Ordinal))
+        throw new InvalidOperationException($"{packageId}: unregistered runtime protocol magic '{value}' in {surface}.");
+}
+
+static bool ContainsStandalone(string value, string token)
+{
+    for (var start = 0; ; start++)
+    {
+        start = value.IndexOf(token, start, StringComparison.Ordinal);
+        if (start < 0) return false;
+        var before = start == 0 || !IsRegistryTokenCharacter(value[start - 1]);
+        var end = start + token.Length;
+        var after = end == value.Length || !IsRegistryTokenCharacter(value[end]);
+        if (before && after) return true;
+    }
+}
+
+static bool IsRegistryTokenCharacter(char value) => char.IsLetterOrDigit(value) || value is '_' or '-';
+
+static void ValidateNoRetiredTokens(string packageId, string surface, ReadOnlySpan<byte> bytes)
+{
+    foreach (var retired in DeepProtocolRegistryPolicy.RetiredTokens)
+    {
+        if (ContainsStandaloneBytes(bytes, Encoding.UTF8.GetBytes(retired), utf16: false) ||
+            ContainsStandaloneBytes(bytes, Encoding.Unicode.GetBytes(retired), utf16: true))
+            throw new InvalidOperationException($"{packageId}: retired registry token '{retired}' in {surface}.");
+    }
+}
+
+static bool ContainsStandaloneBytes(ReadOnlySpan<byte> bytes, ReadOnlySpan<byte> token, bool utf16)
+{
+    var offset = 0;
+    while (offset <= bytes.Length - token.Length)
+    {
+        var relative = bytes[offset..].IndexOf(token);
+        if (relative < 0) return false;
+        var start = offset + relative;
+        var end = start + token.Length;
+        var before = utf16 ? IsUtf16Boundary(bytes, start - 2) : IsAsciiBoundary(bytes, start - 1);
+        var after = utf16 ? IsUtf16Boundary(bytes, end) : IsAsciiBoundary(bytes, end);
+        if (before && after) return true;
+        offset = start + (utf16 ? 2 : 1);
+    }
+    return false;
+}
+
+static bool IsAsciiBoundary(ReadOnlySpan<byte> bytes, int index) =>
+    index < 0 || index >= bytes.Length || !IsRegistryTokenCharacter((char)bytes[index]);
+
+static bool IsUtf16Boundary(ReadOnlySpan<byte> bytes, int index)
+{
+    if (index < 0 || index > bytes.Length - 2) return true;
+    return bytes[index + 1] != 0 || !IsRegistryTokenCharacter((char)bytes[index]);
+}
+
+static IEnumerable<string> ReadUserStrings(PEReader pe)
+{
+    var metadata = pe.GetMetadata().GetContent().ToArray();
+    var stream = GetMetadataStream(metadata, "#US");
+    var offset = stream.Length == 0 ? 0 : 1;
+    while (offset < stream.Length)
+    {
+        var length = ReadCompressedUInt(stream, ref offset);
+        if (length == 0)
+        {
+            if (stream.AsSpan(offset).IndexOfAnyExcept((byte)0) < 0) yield break;
+            continue;
+        }
+        if (length > stream.Length - offset)
+            throw new InvalidOperationException("Invalid #US heap entry.");
+        var textLength = length - 1;
+        if ((textLength & 1) != 0) throw new InvalidOperationException("Invalid UTF-16 #US heap entry.");
+        yield return Encoding.Unicode.GetString(stream, offset, textLength);
+        offset += length;
+    }
+}
+
+static byte[] GetMetadataStream(byte[] metadata, string requiredName)
+{
+    if (metadata.Length < 20 || BinaryPrimitives.ReadUInt32LittleEndian(metadata) != 0x424A5342)
+        throw new InvalidOperationException("Invalid CLR metadata root.");
+    var versionLength = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(metadata.AsSpan(12, 4)));
+    var offset = checked(16 + ((versionLength + 3) & ~3));
+    if (offset > metadata.Length - 4) throw new InvalidOperationException("Invalid CLR metadata header.");
+    var streams = BinaryPrimitives.ReadUInt16LittleEndian(metadata.AsSpan(offset + 2, 2));
+    offset += 4;
+    for (var index = 0; index < streams; index++)
+    {
+        if (offset > metadata.Length - 8) throw new InvalidOperationException("Invalid CLR stream header.");
+        var streamOffset = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(metadata.AsSpan(offset, 4)));
+        var streamSize = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(metadata.AsSpan(offset + 4, 4)));
+        offset += 8;
+        var nameStart = offset;
+        while (offset < metadata.Length && metadata[offset] != 0) offset++;
+        if (offset >= metadata.Length) throw new InvalidOperationException("Invalid CLR stream name.");
+        var name = Encoding.ASCII.GetString(metadata, nameStart, offset - nameStart);
+        offset = (offset + 4) & ~3;
+        if (!StringComparer.Ordinal.Equals(name, requiredName)) continue;
+        if (streamOffset < 0 || streamSize < 0 || streamOffset > metadata.Length - streamSize)
+            throw new InvalidOperationException("Invalid CLR stream range.");
+        return metadata.AsSpan(streamOffset, streamSize).ToArray();
+    }
+    return [];
+}
+
+static int ReadCompressedUInt(byte[] bytes, ref int offset)
+{
+    if (offset >= bytes.Length) throw new InvalidOperationException("Truncated compressed integer.");
+    var first = bytes[offset++];
+    if ((first & 0x80) == 0) return first;
+    if ((first & 0xC0) == 0x80)
+    {
+        if (offset >= bytes.Length) throw new InvalidOperationException("Truncated compressed integer.");
+        return ((first & 0x3F) << 8) | bytes[offset++];
+    }
+    if ((first & 0xE0) == 0xC0)
+    {
+        if (offset > bytes.Length - 3) throw new InvalidOperationException("Truncated compressed integer.");
+        return ((first & 0x1F) << 24) | (bytes[offset++] << 16) | (bytes[offset++] << 8) | bytes[offset++];
+    }
+    throw new InvalidOperationException("Invalid compressed integer.");
+}
+
 static void ValidateLock(string path, PackageSpec[] specs)
 {
     var bytes = File.ReadAllBytes(path);
@@ -332,6 +523,8 @@ internal sealed record Dependency(string Id, string Version);
 internal sealed record PackageSpec(string Id, string Version, Dependency[] InternalDependencies);
 internal static class GraphPolicy
 {
+    internal static readonly List<string> SnapshotFailures = [];
+
     internal static readonly string[] Forbidden =
     [
         "Deep.Protocol.Abstractions", "Deep.Protocol.Protobuf", "Google.Protobuf",
@@ -354,18 +547,15 @@ internal static class GraphPolicy
         {
             ["Deep.Protocol"] =
             [
-                "Deep.Protocol|5948|919F300469C2FC4205E049F0C1D3E4C5C266860863281CE8BAED0D560DCFE6C5",
-                "Deep.Protocol|5948|6ADF59A458B980E58DA63E4E471883A099F58BEAF58DE3B742E37967429602C3"
+                "Deep.Protocol|6666|624F34B7C48F0C81A0C7A37B496956A5BF77A4E7AD9198C406089D1631A9DE99"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [
-                "Deep.Protocol.MembershipRoutes|2554|9BE83B63D4B1DE5D130A23759B7E9CC7AF06391ED89133A7021A994F2124A74D",
-                "Deep.Protocol.MembershipRoutes|2554|017F30690640E9CE9E644D4BACD5AF1F222BB409AB6D0149AEFBFA3C1B57627C"
+                "Deep.Protocol.MembershipRoutes|2554|E23BCB496C5BB3C6E9FFF4876BD96E57325B08AF46C7A860C213BA69174378BA"
             ],
             ["Deep.Protocol.ProfileCarrier"] =
             [
-                "Deep.Protocol.ProfileCarrier|352|C3C43EF37BECFDF10F4F5133C3CA45C661FEF20BE82C707979E87E60B12FE999",
-                "Deep.Protocol.ProfileCarrier|352|68EEC87FA129BA770FAECED63A40F9A1903D503685FF30B1B91B7E2BFD45AB41"
+                "Deep.Protocol.ProfileCarrier|352|1CCD469CA874FCF66E086E1BBE759302B205635A2D7E0EBB6EEFF186AAB3D2F2"
             ],
             ["Deep.Protocol.GoldenVectors"] =
             [

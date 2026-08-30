@@ -6,8 +6,8 @@ namespace Deep.Protocol.DeepExtension.MailboxTopology;
 /// <summary>Strict fixed-size PRC1/PRA1 codecs. Signing APIs deliberately return transcripts only.</summary>
 public static class ProductionMailboxRouteAdvertisementCodec
 {
-    private static ReadOnlySpan<byte> CertificateMagic => "PRC1"u8;
-    private static ReadOnlySpan<byte> AdvertisementMagic => "PRA1"u8;
+    private static ReadOnlySpan<byte> CertificateMagic => ProtocolMagicBytes.PRC1;
+    private static ReadOnlySpan<byte> AdvertisementMagic => ProtocolMagicBytes.PRA1;
     private static ReadOnlySpan<byte> CertificateDomain =>
         "Deep/production-mailbox/route-certificate/v1"u8;
     private static ReadOnlySpan<byte> AdvertisementDomain =>
@@ -180,7 +180,7 @@ public static class ProductionMailboxRouteAdvertisementCodec
         FixedNonzero(value.BlindedMailboxId, 32, "blinded mailbox ID");
         FixedNonzero(value.BlindedPlacementId, 32, "blinded placement ID");
         FixedNonzero(value.SelectionInputCommitment, 32, "selection input commitment");
-        ValidateWindow(value.IssuedAtUnixSeconds, value.ExpiresAtUnixSeconds, "PRC1");
+        ValidateWindow(value.IssuedAtUnixSeconds, value.ExpiresAtUnixSeconds, ProtocolMagic.PRC1);
         Fixed(value.IssuerSignature, 64, "issuer signature");
         if (requireSignature && value.IssuerSignature.Span.IndexOfAnyExcept((byte)0) < 0)
             throw Error(ProductionMailboxRouteAdvertisementError.InvalidField,
@@ -195,7 +195,7 @@ public static class ProductionMailboxRouteAdvertisementCodec
         if (value.Sequence == 0)
             throw Error(ProductionMailboxRouteAdvertisementError.InvalidField,
                 "Advertisement sequence must be non-zero.");
-        ValidateWindow(value.PublishedAtUnixSeconds, value.ExpiresAtUnixSeconds, "PRA1");
+        ValidateWindow(value.PublishedAtUnixSeconds, value.ExpiresAtUnixSeconds, ProtocolMagic.PRA1);
         if (value.PublishedAtUnixSeconds < value.Certificate.IssuedAtUnixSeconds ||
             value.ExpiresAtUnixSeconds > value.Certificate.ExpiresAtUnixSeconds)
             throw Error(ProductionMailboxRouteAdvertisementError.InvalidValidityWindow,

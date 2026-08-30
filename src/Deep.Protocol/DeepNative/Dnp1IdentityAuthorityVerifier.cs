@@ -1948,7 +1948,7 @@ public sealed class ReleaseRootRelativeVerifier
         Equal(record.FieldSpan(7), ComputeRootKeyHash(
             current.Manifest.NetworkId.Span,
             current.CurrentEd25519PublicKey.Span), "ReleaseRoot old key hash");
-        var actionTag = record.Definition.Magic == "KRT1" ? 10 : 9;
+        var actionTag = record.Definition.Magic == ProtocolMagic.KRT1 ? 10 : 9;
         if (record.FieldSpan(actionTag)[0] != (byte)expectedAction)
             Invalid("The ReleaseRoot transition action does not match its record type.");
         if (current.Transitions.Count >= 64)

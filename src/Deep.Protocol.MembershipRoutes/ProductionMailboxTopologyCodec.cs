@@ -10,8 +10,8 @@ namespace Deep.Protocol.DeepExtension.MailboxTopology;
 /// <summary>Strict fixed-order PMT1 and PMS1 codecs. No private-key or signing API is exposed.</summary>
 public static class ProductionMailboxTopologyCodec
 {
-    private static ReadOnlySpan<byte> TopologyMagic => "PMT1"u8;
-    private static ReadOnlySpan<byte> SelectionMagic => "PMS1"u8;
+    private static ReadOnlySpan<byte> TopologyMagic => ProtocolMagicBytes.PMT1;
+    private static ReadOnlySpan<byte> SelectionMagic => ProtocolMagicBytes.PMS1;
 
     public static byte[] GetSigningBytes(ProductionMailboxTopologySnapshot value)
     {

@@ -6,8 +6,8 @@ namespace Deep.Protocol.DeepExtension.MailboxCapabilities;
 public static class MailboxPeerReplicationCodec
 {
     private const byte Version = 1;
-    private static ReadOnlySpan<byte> RequestMagic => "PRQ1"u8;
-    private static ReadOnlySpan<byte> ProofMagic => "MIP1"u8;
+    private static ReadOnlySpan<byte> RequestMagic => ProtocolMagicBytes.PRQ1;
+    private static ReadOnlySpan<byte> ProofMagic => ProtocolMagicBytes.MIP1;
 
     public static byte[] Encode(MailboxPeerReplicationRequest request)
     {
@@ -367,7 +367,7 @@ public static class MailboxPeerReplicationCodec
                     < MailboxClientLimits.EncryptedEnvelopeHeaderLength +
                       MailboxClientLimits.MinimumCiphertextLength or
                     > MailboxClientLimits.MaximumEncryptedEnvelopeLength ||
-                !request.Payload.Span[..4].SequenceEqual("MEO1"u8))
+                !request.Payload.Span[..4].SequenceEqual(ProtocolMagicBytes.MEO1))
                 throw Error(MailboxPeerReplicationError.InvalidPayload, "PRQ1 Store requires exact canonical MEO1 bytes.");
         }
         else if (request.Payload.Length != 32 ||
@@ -393,7 +393,7 @@ public static class MailboxPeerReplicationCodec
     private static MailboxEncryptedEnvelope DecodeCanonicalEnvelope(ReadOnlySpan<byte> encoded)
     {
         if (encoded.Length < MailboxClientLimits.EncryptedEnvelopeHeaderLength ||
-            !encoded[..4].SequenceEqual("MEO1"u8) ||
+            !encoded[..4].SequenceEqual(ProtocolMagicBytes.MEO1) ||
             encoded[4] != 1 ||
             encoded.Slice(5, 3).IndexOfAnyExcept((byte)0) >= 0 ||
             encoded.Slice(148, 4).IndexOfAnyExcept((byte)0) >= 0)

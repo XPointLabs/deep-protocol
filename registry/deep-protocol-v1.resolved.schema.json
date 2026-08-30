@@ -1,0 +1,117 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://deep.example/schema/deep-protocol-v1.resolved.schema.json",
+  "title": "Resolved Deep protocol V1 machine manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "schemaVersion", "registryGeneration", "registryId", "sourceRegistrySha256", "dnp1ApprovedCommit", "dnp1RegistrySha256", "records", "suites", "carriers", "deploymentProfiles", "callNames", "publicInterfaces", "retiredValues", "plannedRetirements", "contractBlockers"],
+  "properties": {
+    "$schema": { "const": "./deep-protocol-v1.resolved.schema.json" },
+    "schemaVersion": { "const": "1.0.0" },
+    "registryGeneration": { "type": "integer", "minimum": 1 },
+    "registryId": { "const": "deep-protocol-v1-resolved" },
+    "sourceRegistrySha256": { "$ref": "#/$defs/sha256" },
+    "dnp1ApprovedCommit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "dnp1RegistrySha256": { "$ref": "#/$defs/sha256" },
+    "records": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/record" } },
+    "suites": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/numericAllocation" } },
+    "carriers": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/numericAllocation" } },
+    "deploymentProfiles": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/numericAllocation" } },
+    "callNames": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/namedAllocation" } },
+    "publicInterfaces": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/namedAllocation" } },
+    "retiredValues": { "type": "array", "items": { "$ref": "#/$defs/retiredValue" } },
+    "plannedRetirements": { "type": "array", "items": { "$ref": "#/$defs/plannedRetirement" } },
+    "contractBlockers": { "type": "array", "items": { "$ref": "#/$defs/blocker" } }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "lifecycle": { "enum": ["FROZEN_TARGET_NOT_ACTIVE", "CURRENT_PRE_CUTOVER", "TARGET_UNFROZEN", "TARGET_RENAME_REQUIRED", "DECISION_REQUIRED", "RESERVED", "RETIRED_REJECT", "RELEASE_ACTIVE"] },
+    "sourceAnchor": {
+      "type": "object", "additionalProperties": false,
+      "required": ["anchorSourceId", "section", "startLine", "endLine", "normalizedSha256", "ownerSourceId", "scope", "id", "name", "lifecycle", "evidenceTokens"],
+      "properties": {
+        "anchorSourceId": { "type": "string" }, "section": { "type": "string" },
+        "startLine": { "type": "integer", "minimum": 1 }, "endLine": { "type": "integer", "minimum": 1 },
+        "normalizedSha256": { "$ref": "#/$defs/sha256" }, "ownerSourceId": { "type": "string" },
+        "scope": { "type": "string" }, "id": { "type": "string" }, "name": { "type": "string" },
+        "lifecycle": { "$ref": "#/$defs/lifecycle" },
+        "evidenceTokens": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } }
+      }
+    },
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["magic", "version", "grammar", "suiteNamespace", "allowedSuites", "minBytes", "maxBytes", "visibility", "normativeSource", "ownerPackage", "vectorOwner", "schemaOwner", "lifecycle", "contractState", "implementationPaths", "contractBlocker"],
+      "properties": {
+        "magic": { "type": "string", "pattern": "^[A-Z0-9]{4}$" },
+        "version": { "type": ["integer", "null"], "minimum": 0, "maximum": 65535 },
+        "grammar": { "type": ["string", "null"], "minLength": 3, "maxLength": 240 },
+        "suiteNamespace": { "type": ["string", "null"], "minLength": 3, "maxLength": 96 },
+        "allowedSuites": { "type": "array", "items": { "type": "integer", "minimum": 0, "maximum": 65535 }, "uniqueItems": true },
+        "minBytes": { "type": ["integer", "null"], "minimum": 0, "maximum": 2147483647 },
+        "maxBytes": { "type": ["integer", "null"], "minimum": 0, "maximum": 2147483647 },
+        "visibility": { "enum": ["public", "protected-internal", "local-durable", "transport", "unfrozen"] },
+        "normativeSource": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{1,63}$" },
+        "ownerPackage": { "enum": ["Deep.Protocol", "Deep.Protocol.MembershipRoutes", "Deep.Protocol.ProfileCarrier"] },
+        "vectorOwner": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "schemaOwner": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "lifecycle": { "$ref": "#/$defs/lifecycle" },
+        "contractState": { "enum": ["frozen-exact", "current-source-bound", "allocation-only"] },
+        "implementationPaths": { "type": "array", "items": { "type": "string", "pattern": "^src/[A-Za-z0-9._/-]+[.]cs$" }, "uniqueItems": true },
+        "contractBlocker": { "type": ["string", "null"], "minLength": 12, "maxLength": 320 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "contractState": { "const": "frozen-exact" } }, "required": ["contractState"] },
+          "then": {
+            "properties": {
+              "version": { "type": "integer" },
+              "grammar": { "type": "string" },
+              "suiteNamespace": { "type": "string" },
+              "minBytes": { "type": "integer" },
+              "maxBytes": { "type": "integer" },
+              "contractBlocker": { "type": "null" }
+            }
+          }
+        }
+      ]
+    },
+    "numericAllocation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "canonicalName", "lifecycle"],
+      "properties": {
+        "scope": { "type": "string" }, "id": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "symbol": { "type": "string" }, "canonicalName": { "type": "string" },
+        "lifecycle": { "$ref": "#/$defs/lifecycle" }, "sourceId": { "type": "string" },
+        "importPointer": { "type": "string" }, "sourceAnchor": { "$ref": "#/$defs/sourceAnchor" }
+      }
+    },
+    "namedAllocation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["canonicalName", "lifecycle"],
+      "properties": {
+        "axis": { "type": "string" }, "symbol": { "type": "string" }, "canonicalName": { "type": "string" },
+        "owner": { "type": "string" }, "lifecycle": { "$ref": "#/$defs/lifecycle" },
+        "sourceId": { "type": "string" }, "sourceAnchor": { "$ref": "#/$defs/sourceAnchor" }
+      }
+    },
+    "retiredValue": {
+      "type": "object", "additionalProperties": false,
+      "required": ["namespace", "value", "replacement"],
+      "properties": { "namespace": { "type": "string" }, "value": { "type": "string" }, "replacement": { "type": ["string", "null"] } }
+    },
+    "plannedRetirement": {
+      "type": "object", "additionalProperties": false,
+      "required": ["namespace", "value", "targetLifecycle"],
+      "properties": {
+        "namespace": { "const": "magic" }, "value": { "type": "string", "pattern": "^[A-Z0-9]{4}$" },
+        "targetLifecycle": { "const": "RETIRED_REJECT" }
+      }
+    },
+    "blocker": {
+      "type": "object", "additionalProperties": false,
+      "required": ["magic", "reason"],
+      "properties": { "magic": { "type": "string", "pattern": "^[A-Z0-9]{4}$" }, "reason": { "type": "string", "minLength": 12, "maxLength": 320 } }
+    }
+  }
+}

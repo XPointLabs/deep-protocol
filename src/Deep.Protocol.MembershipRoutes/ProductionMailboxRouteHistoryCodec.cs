@@ -66,7 +66,7 @@ internal readonly record struct ProductionMailboxRouteHistoryPreflightHeader(
 
 internal static class ProductionMailboxRouteHistoryCodec
 {
-    private static ReadOnlySpan<byte> Magic => "RHB1"u8;
+    private static ReadOnlySpan<byte> Magic => ProtocolMagicBytes.RHB1;
 
     internal static byte[] Encode(ProductionMailboxRouteHistoryBatch value)
     {

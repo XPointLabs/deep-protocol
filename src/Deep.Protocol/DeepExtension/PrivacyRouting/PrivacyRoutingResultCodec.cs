@@ -89,7 +89,7 @@ public sealed class PrivacyRoutingTerminalResult
 
 public static class PrivacyRoutingResultCodec
 {
-    private static readonly byte[] Magic = "DPR1"u8.ToArray();
+    private static readonly byte[] Magic = ProtocolMagicBytes.DPR1.ToArray();
     private const int FixedBytes = 20;
 
     public static byte[] Encode(PrivacyRoutingTerminalResult result)

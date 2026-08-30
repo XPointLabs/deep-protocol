@@ -136,7 +136,7 @@ public static class ProductionMailboxRouteAuthorizationVerifier
         Equal(advertisement.PredecessorCanonicalRouteAuthorizationHash.Span, expectedPredecessor,
             "PRA2 predecessor hash mismatch.");
         VerifyLive(advertisement.PublishedAtUnixSeconds, advertisement.ExpiresAtUnixSeconds,
-            context.NowUnixSeconds, context.ClockSkewSeconds, "PRA2");
+            context.NowUnixSeconds, context.ClockSkewSeconds, ProtocolMagic.PRA2);
         VerifyLiveAuthority(authority, context.NowUnixSeconds, context.ClockSkewSeconds);
         var certificateBytes = ProductionMailboxRouteAdvertisementCodec.EncodeCertificate(
             advertisement.Certificate);
@@ -315,9 +315,9 @@ public static class ProductionMailboxRouteAuthorizationVerifier
         Equal(transition.ContinuityTransitionCommitment.Span, expectedCommitment,
             "RTC1 continuity commitment does not bind the exact sealed enrollment.");
         VerifyLive(transition.NotBeforeUnixSeconds, transition.ExpiresAtUnixSeconds,
-            nowUnixSeconds, clockSkewSeconds, "RTC1");
+            nowUnixSeconds, clockSkewSeconds, ProtocolMagic.RTC1);
         VerifyLive(activation.IssuedAtUnixSeconds, activation.ExpiresAtUnixSeconds,
-            nowUnixSeconds, clockSkewSeconds, "RCA1");
+            nowUnixSeconds, clockSkewSeconds, ProtocolMagic.RCA1);
         if (activation.IssuedAtUnixSeconds < acceptance.AcceptedAtUnixSeconds ||
             activation.IssuedAtUnixSeconds < delegation.NotBeforeUnixSeconds ||
             activation.IssuedAtUnixSeconds < checkpoint.IssuedAtUnixSeconds ||

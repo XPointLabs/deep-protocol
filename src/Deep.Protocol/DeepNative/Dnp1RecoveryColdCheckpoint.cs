@@ -376,8 +376,8 @@ internal static class RecoveryExternalCheckpointVerifier
         BindComponentRow(dcs,dcp,dcpRef);
 
         var now=transactionTimeUnixSeconds;
-        Window(dcp.FieldSpan(13),dcp.FieldSpan(14),now,"DCP1");
-        Window(dcs.FieldSpan(12),dcs.FieldSpan(13),now,"DCS1");
+        Window(dcp.FieldSpan(13),dcp.FieldSpan(14),now,ProtocolMagic.DCP1);
+        Window(dcs.FieldSpan(12),dcs.FieldSpan(13),now,ProtocolMagic.DCS1);
         var reset=identity.Authority.GetKeyAuthority(KeyScope.ResetControl);
         if(reset.IsTerminal) Invalid("The recovered reset-control key is terminal.");
         VerifySignature(dcp.FieldSpan(21),CanonicalGrammar.GetSigningBytes(
@@ -391,7 +391,7 @@ internal static class RecoveryExternalCheckpointVerifier
         Equal(dcq.FieldSpan(6),latestDwdRef,"DCQ1 DWD");
         Equal(dcq.FieldSpan(7),latest.Delegation.Record.FieldSpan(15),"DCQ1 set root");
         Equal(dcq.FieldSpan(8),latest.Delegation.Record.FieldSpan(4),"DCQ1 witness epoch");
-        Window(dcq.FieldSpan(11),dcq.FieldSpan(12),now,"DCQ1");
+        Window(dcq.FieldSpan(11),dcq.FieldSpan(12),now,ProtocolMagic.DCQ1);
         VerifyQuorumReceipts(dcq,latest,releaseRoot,authorityHead,now);
 
         if(releaseRoot.FreshLease is null) Invalid("The recovered ReleaseRoot has no fresh DCL1.");
@@ -463,7 +463,7 @@ internal static class RecoveryExternalCheckpointVerifier
             WitnessTreeVerifier.VerifyConsistency(previousSize,receipt.FieldSpan(16),treeSize,
                 receipt.FieldSpan(18),receipt.FieldSpan(23),WitnessTreeVerifier.EmptyRoot(
                 latest.Delegation.WitnessEpoch,witnessId,latest.Delegation.MaximumTreeSize));
-            Window(receipt.FieldSpan(24),receipt.FieldSpan(25),now,"DCN1");
+            Window(receipt.FieldSpan(24),receipt.FieldSpan(25),now,ProtocolMagic.DCN1);
             VerifySignature(receipt.FieldSpan(27),CanonicalGrammar.GetSigningBytes(
                 receipt,"Deep/Cutover/V1/witness-receipt"),descriptor!.Ed25519PublicKey.Span);
             Ref(ArtifactType.Dcn1,receipt.CanonicalSpan).CopyTo(references,index*38);

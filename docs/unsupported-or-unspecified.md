@@ -44,11 +44,15 @@ rechecks.
 Message confidentiality, a ratchet and a production post-quantum provider are
 absent and blocked. Unknown/PQ suites are not accepted by Wave 1 grammar.
 
-## Dark package path
+## Identity boundaries
 
-`Deep.Protocol.Native` remains a consumer-unreferenced, unpackaged source/test
-dark path. It is not the implementation of the production DNP1 classical
-surface and creates no production PQ, ratchet or messaging claim.
+The old `Deep.Protocol.Native` identity package is removed. `DeepRecoveryV1`
+is production code under `Deep.Protocol.Identity`, but consumer activation,
+secure-storage integration and destructive account reset remain later packages.
+The frozen future `account-pq-signing-seed` role has no production capability:
+V1 account authentication is Ed25519-only. Recovery-derived device keys,
+Ed25519/X25519 conversion, non-24-word phrases and generation zero are unsupported
+and fail closed.
 
 ## Host responsibilities
 

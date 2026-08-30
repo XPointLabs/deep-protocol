@@ -221,7 +221,7 @@ internal static class RecoveryManifestParser
                 DtcFixedLength + DwhFixedLength ||
             plaintext.Length > MaximumPlaintextLength)
             Invalid(RecordError.InvalidLength, "The DRM20 plaintext length is invalid.");
-        if (!plaintext[..4].SequenceEqual("DRMV"u8) || plaintext[4] != 20 || plaintext[5] != 1)
+        if (!plaintext[..4].SequenceEqual(ProtocolMagicBytes.DRMV) || plaintext[4] != 20 || plaintext[5] != 1)
             Invalid(RecordError.InvalidHeader, "The DRM20 wire version or component profile is invalid.");
         var count = BinaryPrimitives.ReadUInt16BigEndian(plaintext[6..8]);
         if (count is < 1 or > MaximumArtifactCount || count != expectedArtifactCount ||
@@ -306,7 +306,7 @@ internal static class RecoveryManifestParser
 
     private static int PreflightRfc(ReadOnlySpan<byte> value)
     {
-        if (value.Length < RfcFixedLength || !value[..4].SequenceEqual("RFC1"u8) ||
+        if (value.Length < RfcFixedLength || !value[..4].SequenceEqual(ProtocolMagicBytes.RFC1) ||
             value[4] != 1 || value[5] != 0)
             Invalid(RecordError.InvalidHeader, "The RFC1 header is invalid.");
         CommonContainer(value, dtc: false);
@@ -334,7 +334,7 @@ internal static class RecoveryManifestParser
 
     private static int PreflightRpf(ReadOnlySpan<byte> value)
     {
-        if (value.Length < RpfFixedLength || !value[..4].SequenceEqual("RPF1"u8) ||
+        if (value.Length < RpfFixedLength || !value[..4].SequenceEqual(ProtocolMagicBytes.RPF1) ||
             value[4] != 1 || value[5] != 0)
             Invalid(RecordError.InvalidHeader, "The RPF1 header is invalid.");
         var count = BinaryPrimitives.ReadUInt16BigEndian(value[6..8]);
@@ -363,7 +363,7 @@ internal static class RecoveryManifestParser
 
     private static void PreflightRah(ReadOnlySpan<byte> value)
     {
-        if (value.Length < RahFixedLength || !value[..4].SequenceEqual("RAH1"u8) ||
+        if (value.Length < RahFixedLength || !value[..4].SequenceEqual(ProtocolMagicBytes.RAH1) ||
             value[4] != 1 || value[5] != 0)
             Invalid(RecordError.InvalidHeader, "The RAH1 header is invalid.");
         CommonContainer(value, dtc: false);
@@ -401,7 +401,7 @@ internal static class RecoveryManifestParser
 
     private static (int TargetCount, int HistoryCount) PreflightDtc(ReadOnlySpan<byte> value)
     {
-        if (value.Length < DtcFixedLength || !value[..4].SequenceEqual("DTC2"u8) ||
+        if (value.Length < DtcFixedLength || !value[..4].SequenceEqual(ProtocolMagicBytes.DTC2) ||
             value[4] != 2 || value[5] != 0)
             Invalid(RecordError.InvalidHeader, "The DTC2 header is invalid.");
         CommonContainer(value, dtc: true);
@@ -464,7 +464,7 @@ internal static class RecoveryManifestParser
 
     private static int PreflightDwh(ReadOnlySpan<byte> value)
     {
-        if (value.Length < DwhFixedLength || !value[..4].SequenceEqual("DWH1"u8) ||
+        if (value.Length < DwhFixedLength || !value[..4].SequenceEqual(ProtocolMagicBytes.DWH1) ||
             value[4] != 1 || value[5] != 0)
             Invalid(RecordError.InvalidHeader, "The DWH1 header is invalid.");
         CommonContainer(value, dtc: false);

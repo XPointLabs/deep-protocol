@@ -4,9 +4,9 @@ namespace Deep.Protocol.DeepExtension.MailboxCapabilities;
 
 public static class MailboxReceiptCodec
 {
-    private static ReadOnlySpan<byte> ReplicaMagic => "MRR1"u8;
-    private static ReadOnlySpan<byte> QuorumMagic => "MQR1"u8;
-    private static ReadOnlySpan<byte> ErrorMagic => "MBE1"u8;
+    private static ReadOnlySpan<byte> ReplicaMagic => ProtocolMagicBytes.MRR1;
+    private static ReadOnlySpan<byte> QuorumMagic => ProtocolMagicBytes.MQR1;
+    private static ReadOnlySpan<byte> ErrorMagic => ProtocolMagicBytes.MBE1;
     private const byte Version = 1;
 
     public static byte[] GetReplicaSigningBytes(MailboxReplicaReceipt receipt)

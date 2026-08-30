@@ -11,10 +11,10 @@ namespace Deep.Protocol.DeepExtension.MailboxTopology;
 /// </summary>
 public static class ProductionMailboxOwnerControlTransportCodec
 {
-    private static ReadOnlySpan<byte> OcrMagic => "OCR1"u8;
-    private static ReadOnlySpan<byte> RequestMagic => "PMCQ"u8;
-    private static ReadOnlySpan<byte> ResponseMagic => "PMCR"u8;
-    private static ReadOnlySpan<byte> FinalMagic => "PMFA"u8;
+    private static ReadOnlySpan<byte> OcrMagic => ProtocolMagicBytes.OCR1;
+    private static ReadOnlySpan<byte> RequestMagic => ProtocolMagicBytes.PMCQ;
+    private static ReadOnlySpan<byte> ResponseMagic => ProtocolMagicBytes.PMCR;
+    private static ReadOnlySpan<byte> FinalMagic => ProtocolMagicBytes.PMFA;
     private static ReadOnlySpan<byte> OcrSigningDomain =>
         "Deep/production-mailbox/owner-control-responder-certificate/v1"u8;
     private static ReadOnlySpan<byte> OcrHashDomain =>
@@ -667,7 +667,7 @@ public static class ProductionMailboxOwnerControlTransportCodec
         ReadOnlySpan<byte> encoded)
     {
         FixedFrame(encoded, OcrMagic, ProductionMailboxOwnerControlConstants.ResponderCertificateLength,
-            "OCR1");
+            ProtocolMagic.OCR1);
         var frozen = encoded.ToArray();
         var value = new ProductionMailboxOwnerControlResponderCertificate
         {
@@ -1190,7 +1190,7 @@ public static class ProductionMailboxOwnerControlTransportCodec
 
     private static int PreflightHistoryLength(ReadOnlySpan<byte> header)
     {
-        if (header.Length != 64 || !header[..4].SequenceEqual("RHB1"u8) || header[4] != 1 ||
+        if (header.Length != 64 || !header[..4].SequenceEqual(ProtocolMagicBytes.RHB1) || header[4] != 1 ||
             header.Slice(5, 3).IndexOfAnyExcept((byte)0) >= 0 ||
             header.Slice(60, 4).IndexOfAnyExcept((byte)0) >= 0)
             throw new FormatException("RHB1 leading header is invalid.");
@@ -1230,7 +1230,7 @@ public static class ProductionMailboxOwnerControlTransportCodec
     private static void PreflightPmr(ReadOnlySpan<byte> value)
     {
         if (value.Length < ProductionMailboxRevocationSnapshotConstants.FixedArtifactBytesWithoutSerials ||
-            !value[..4].SequenceEqual("PMR1"u8) || value[4] != 1 || value.Slice(5, 3).IndexOfAnyExcept((byte)0) >= 0)
+            !value[..4].SequenceEqual(ProtocolMagicBytes.PMR1) || value[4] != 1 || value.Slice(5, 3).IndexOfAnyExcept((byte)0) >= 0)
             throw new FormatException("PMFA1 PMR1 framing is invalid.");
         var count = BinaryPrimitives.ReadUInt16LittleEndian(value.Slice(152, 2));
         var expected = checked(ProductionMailboxRevocationSnapshotConstants.FixedArtifactBytesWithoutSerials +
@@ -1241,7 +1241,7 @@ public static class ProductionMailboxOwnerControlTransportCodec
 
     private static void PreflightPmt(ReadOnlySpan<byte> value)
     {
-        if (value.Length < 780 || !value[..4].SequenceEqual("PMT1"u8) || value[4] != 1 ||
+        if (value.Length < 780 || !value[..4].SequenceEqual(ProtocolMagicBytes.PMT1) || value[4] != 1 ||
             value.Slice(5, 3).IndexOfAnyExcept((byte)0) >= 0)
             throw new FormatException("PMFA1 PMT1 framing is invalid.");
         var offset = 120; PmtEpoch(value, ref offset); PmtEpoch(value, ref offset);
@@ -1270,7 +1270,7 @@ public static class ProductionMailboxOwnerControlTransportCodec
     private static void PreflightPms(ReadOnlySpan<byte> value)
     {
         if (value.Length < 272 + ProductionMailboxTopologyConstants.ReplicaCount * 36 + 64 ||
-            !value[..4].SequenceEqual("PMS1"u8) || value[4] != 1 ||
+            !value[..4].SequenceEqual(ProtocolMagicBytes.PMS1) || value[4] != 1 ||
             value.Slice(5, 3).IndexOfAnyExcept((byte)0) >= 0 ||
             value[268] != ProductionMailboxTopologyConstants.ReplicaCount ||
             value.Slice(269, 3).IndexOfAnyExcept((byte)0) >= 0)
@@ -1293,7 +1293,7 @@ public static class ProductionMailboxOwnerControlTransportCodec
     {
         if (value.Length < ProductionMailboxSelectionSuccessorV2Constants.FixedCoreLength +
                 ProductionMailboxSelectionSuccessorV2Constants.SignatureBytes ||
-            !value[..4].SequenceEqual("PSS2"u8) || value[4] != 2 || value[5] != (byte)mode ||
+            !value[..4].SequenceEqual(ProtocolMagicBytes.PSS2) || value[4] != 2 || value[5] != (byte)mode ||
             value.Slice(6, 2).IndexOfAnyExcept((byte)0) >= 0 ||
             value.Slice(414, 2).IndexOfAnyExcept((byte)0) >= 0 ||
             value.Slice(450, 6).IndexOfAnyExcept((byte)0) >= 0 || value[449] != (byte)kind)
@@ -1324,7 +1324,7 @@ public static class ProductionMailboxOwnerControlTransportCodec
     {
         if (encoded.Length != length || !encoded[..4].SequenceEqual(magic) || encoded[4] != 1)
             throw new FormatException($"{name} fixed header is invalid.");
-        if ((name == "OCR1") && encoded.Slice(5, 3).IndexOfAnyExcept((byte)0) >= 0)
+        if ((name == ProtocolMagic.OCR1) && encoded.Slice(5, 3).IndexOfAnyExcept((byte)0) >= 0)
             throw new FormatException("OCR1 reserved bytes must be zero.");
     }
 

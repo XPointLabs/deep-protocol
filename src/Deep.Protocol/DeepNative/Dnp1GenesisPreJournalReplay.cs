@@ -199,7 +199,7 @@ internal static class GenesisPreJournalReplayVerifier
         var artifacts = await GenesisArtifactSetVerifier.RestoreByScopeAsync(
             identity, artifactStore, protectedHmacProvider, cancellationToken)
             .ConfigureAwait(false);
-        RequireRetained(artifacts.Receipt.CanonicalReceipt.Span, 212, nowUnixSeconds, "GAS1");
+        RequireRetained(artifacts.Receipt.CanonicalReceipt.Span, 212, nowUnixSeconds, ProtocolMagic.GAS1);
         var secondHead = await ReadZeroHeadAsync(headProvider, scope, cancellationToken)
             .ConfigureAwait(false);
         RequireMonotonic(firstHead, secondHead);
@@ -233,7 +233,7 @@ internal static class GenesisPreJournalReplayVerifier
                 artifacts, identity, release, quorumProvider, protectedHmacProvider,
                 cancellationToken).ConfigureAwait(false);
             if (pending is not null)
-                RequireRetained(pending.CanonicalPending.Span, 387, nowUnixSeconds, "GQP1");
+                RequireRetained(pending.CanonicalPending.Span, 387, nowUnixSeconds, ProtocolMagic.GQP1);
 
             var finalArtifacts = await GenesisArtifactSetVerifier.RestoreByScopeAsync(
                 identity, artifactStore, protectedHmacProvider, cancellationToken)

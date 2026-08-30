@@ -240,7 +240,7 @@ public sealed class ProductionMailboxRouteContinuityProtectedEnrollmentContext
         Exact(preDelegationRouteOriginLkgHash, 32, "pre ROL1 hash");
         Exact(enrolledRouteOriginLkgHash, 32, "enrolled ROL1 hash");
         Exact(canonicalOwnerControlResponderCertificate,
-            ProductionMailboxOwnerControlConstants.ResponderCertificateLength, "OCR1");
+            ProductionMailboxOwnerControlConstants.ResponderCertificateLength, ProtocolMagic.OCR1);
         Exact(canonicalOwnerControlResponderCertificateHash, 32, "OCR1 hash");
         _networkId = networkId.ToArray(); _owner = mailboxOwnerEd25519PublicKey.ToArray();
         _pinnedMrX = pinnedMrXPublicKeySha256.ToArray(); _mailbox = blindedMailboxId.ToArray();
@@ -294,7 +294,7 @@ public sealed class ProductionMailboxRouteContinuityProtectedEnrollmentContext
         Exact(_anchorAuthorityHash, 32, "anchor PMA1 hash"); Exact(_anchorCertificateHash, 32, "anchor PRC1 hash");
         Exact(_anchorAuthorizationHash, 32, "anchor PRA2 hash"); Exact(_previousDelegationHash, 32, "previous RCD1 hash");
         Exact(_acceptanceHash, 32, "RDA1 hash"); Exact(_preRolHash, 32, "pre ROL1 hash");
-        Exact(_enrolledRolHash, 32, "enrolled ROL1 hash"); Exact(_ocrBytes, 272, "OCR1");
+        Exact(_enrolledRolHash, 32, "enrolled ROL1 hash"); Exact(_ocrBytes, 272, ProtocolMagic.OCR1);
         Exact(_ocrHash, 32, "OCR1 hash");
         if (_networkId.AsSpan().IndexOfAnyExcept((byte)0) < 0 || _owner.AsSpan().IndexOfAnyExcept((byte)0) < 0 ||
             _pinnedMrX.AsSpan().IndexOfAnyExcept((byte)0) < 0 || _mailbox.AsSpan().IndexOfAnyExcept((byte)0) < 0 ||

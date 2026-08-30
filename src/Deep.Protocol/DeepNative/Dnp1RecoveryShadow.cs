@@ -127,7 +127,7 @@ internal static class RecoveryShadow
 
     internal static void Preflight(ReadOnlySpan<byte> value)
     {
-        if (value.Length != Length || !value[..4].SequenceEqual("RSM2"u8) ||
+        if (value.Length != Length || !value[..4].SequenceEqual(ProtocolMagicBytes.RSM2) ||
             value[4] != 1 || value[5] != 0 ||
             CanonicalGrammar.IsZero(value.Slice(6, 16)) ||
             !Enum.IsDefined((ComponentKind)BinaryPrimitives.ReadUInt16BigEndian(value[22..24])) ||

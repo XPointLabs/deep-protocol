@@ -63,7 +63,7 @@ internal static class MembershipCatalogParser
         uint memberCount)
     {
         if (canonical.Length < HeaderLength || canonical.Length > MaximumBytes ||
-            !canonical[..4].SequenceEqual("MRC1"u8) || canonical[4] != 1 || canonical[5] != 0)
+            !canonical[..4].SequenceEqual(ProtocolMagicBytes.MRC1) || canonical[4] != 1 || canonical[5] != 0)
             Invalid(RecordError.InvalidHeader, "The MRC1 header is invalid.");
         var count = BinaryPrimitives.ReadUInt32BigEndian(canonical[6..10]);
         if (count != expectedEntries || count is < 8 or > MaximumEntries ||

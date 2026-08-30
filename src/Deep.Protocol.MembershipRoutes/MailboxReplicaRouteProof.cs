@@ -8,7 +8,7 @@ public static class MailboxReplicaRouteProofCodec
 {
     private const byte Version = 1;
     private const int HeaderLength = 16;
-    private static ReadOnlySpan<byte> Magic => "RIP1"u8;
+    private static ReadOnlySpan<byte> Magic => ProtocolMagicBytes.RIP1;
 
     public static byte[] Encode(
         MembershipRouteDescriptor descriptor,
