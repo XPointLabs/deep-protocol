@@ -14,6 +14,14 @@ separate E2EE envelope over authenticated MAU2 and Deep privacy routing.
 Managed ingress is transport-only and does not interpret or authorize those
 inner bytes.
 
+Direct P2P mesh is a future architecture requirement, not part of the current
+DNP1 production surface. No peer/relay handshake, authenticated neighbor
+discovery, multi-hop routing, store-and-forward, TTL/loop suppression or mesh
+abuse-control grammar is specified here. Nearby and Session reference code do
+not satisfy that requirement. A later ADR must preserve E2EE origin/destination
+authentication across both one-hop and relayed paths without depending on the
+official mailbox/control plane.
+
 ## DNP1 classical baseline
 
 The classical identity, revocation, reset, external-witness, MRL2/DNRC/DPC,

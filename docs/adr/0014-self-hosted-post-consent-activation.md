@@ -109,8 +109,10 @@ a clean pre-commit cancellation.
 
 - User-managed activation derives no authority from Registry, billing,
   official endpoints, PMA1 or Mr. X.
-- Direct P2P is not modeled as self-hosted MAU2 and does not require this
-  envelope.
+- Direct P2P mesh is not modeled as self-hosted MAU2 and does not require this
+  envelope. Its future one-hop/multi-hop peer routing remains a separate
+  architecture and must not acquire an official or user-managed mailbox
+  dependency through SHR1.
 - DPF1 v1 still cannot express delegation rotation beyond its single
   genesis-rooted delegation. No new crypto semantics are invented here.
 - Production remains blocked on protected atomic persistence, consent UI,
