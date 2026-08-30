@@ -40,6 +40,12 @@ material to X25519. `Dispose` deterministically zeroes every owned managed secre
 still avoid logging, telemetry, clipboard persistence, screenshots, crash dumps, and unnecessary
 immutable string copies of recovery data.
 
+`DeepPermanentIdV1` is the protocol-owned canonical address factory/parser. It emits and accepts only
+the exact 90-character lowercase BIP-350 Bech32m form with HRP `deep` over
+`0x01 || addressPublicKey32 || resolverReadCapability16`; checksum, length, version, padding and
+mixed/non-canonical case fail closed. It contains no network, account generation, device, route,
+server, timestamp or expiry.
+
 ## Post-quantum status
 
 This bounded identity package creates no PQ-provider readiness claim. The release-target specification selects hybrid
