@@ -1,8 +1,18 @@
 # Production mailbox route advertisement V1
 
+Status: **pre-cutover evidence; release-rejected by DR-0004**. Target route
+publication is XRA1/XRC1/XRR1/XSS1.
+
 `PRC1` and `PRA1` solve one narrow problem: a mailbox owner can give an authenticated contact a
 stable managed-mailbox deposit route without sharing the owner's private key and without binding
 that route to the currently active holder/device.
+
+They do **not** solve initial contact discovery. The clean-break first-contact
+protocol is `permanent DID1 or one-time DIA1 -> DCR1/DCB1 -> encrypted contact
+rendezvous -> ContactHello/Accept`, specified in the superproject
+`docs/architecture/CONTACT-AND-GROUP-PROTOCOL-V1.md`. Only after that
+authenticated pairwise channel exists do contacts exchange PRA/route-update
+artifacts. A bare account ID plus PRA lookup is forbidden.
 
 They are Deep extension artifacts. They are not Session wire fields, a public directory, a mailbox
 grant, a replica-selection proof, an entitlement, or a payment/token artifact.

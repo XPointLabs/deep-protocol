@@ -1,5 +1,8 @@
 # Production mailbox route continuity V2
 
+Status: **pre-cutover evidence; release-rejected by DR-0004**. Reviewed
+continuity properties are ported to XRA1/XRC1/XSS1, not wire-compatible.
+
 Status: design freeze candidate; no implementation or compatibility promise exists yet.
 
 This clean-break contract advances the owner-authorized mailbox route together with a `PSS2`

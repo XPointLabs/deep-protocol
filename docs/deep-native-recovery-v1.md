@@ -14,13 +14,17 @@ not a Session compatibility surface and it is not yet part of any production pac
 - Twelve-, fifteen-, eighteen-, and twenty-one-word wallet phrases are rejected even if they are
   otherwise valid BIP-39 mnemonics.
 
-The BIP-39 seed is not used directly as an account or device key. HKDF-SHA-512 derives four
-role-separated 32-byte seeds from an exact `networkId16 || accountGenerationBE64` context:
+The BIP-39 seed is not used directly as an account or device key. The final
+clean-break target is defined by the superproject
+`DEEP-CRYPTO-V1-DRAFT.md`; HKDF-SHA-512 derives six role-separated 32-byte
+seeds from an exact `networkId16 || accountGenerationBE64` context:
 
 - account signing;
-- future account PQ signing;
-- recovery authorization;
-- backup wrapping.
+- device-certificate issuer signing;
+- account revocation signing;
+- reset-control signing;
+- backup wrapping;
+- reserved future account PQ signing.
 
 Device keys remain independently generated CSPRNG material. V1 never converts Ed25519 material to
 X25519 and never exports role seeds through the public API. Secret-owning capabilities zero their
@@ -29,10 +33,12 @@ screenshots, crash dumps, and immutable string copies of recovery data.
 
 ## Post-quantum status
 
-The PQ role seed is only reserved domain-separated material. It does not instantiate ML-KEM,
-ML-DSA, a handshake, or a ratchet. No provider is selected, and the project has no PQ dependency.
-All PQ suites remain dark and production-ineligible until the v3 program's provider, independent
-implementation, vector, platform, protocol-state, and external-review gates pass.
+The current `Deep.Protocol.Native` code still has no PQ provider and creates no
+production claim. The release-target specification now selects hybrid
+X25519+ML-KEM-768 and Triple Ratchet semantics, but activation remains blocked
+on provider/license/ABI, independent implementation, vector, platform,
+protocol-state and external-review gates. The reserved account PQ role does
+not imply ML-DSA authentication in suite `0x0201`.
 
 ## Evidence
 

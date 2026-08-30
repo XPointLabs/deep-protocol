@@ -1,5 +1,7 @@
 # Production mailbox revocation snapshot V1
 
+Status: **pre-cutover evidence; release-rejected by DR-0004**.
+
 `production-mailbox-revocation-snapshot.v1` is the public, signed PMR1 artifact that supplies exact
 MCG2 grant-serial revocations for a previously verified PMA1 authority. It is a Deep extension and
 does not modify Session, protobuf, token, or smart-contract schemas.

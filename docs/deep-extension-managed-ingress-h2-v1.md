@@ -14,7 +14,7 @@ bypass; that host composition is outside this wire contract.
 
 The canonical Deep-native producer/consumer for that opaque body is specified by
 `deep-extension-privacy-routing-v1.md`. Managed ingress remains transport-only: it does not open
-`DRF1` or interpret `DPR1`.
+`XRF1` or interpret `XPR1`.
 
 ## Surface
 

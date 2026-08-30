@@ -1,5 +1,7 @@
 # Production mailbox authority V1
 
+Status: **pre-cutover evidence; release-rejected by DR-0004**. Target is PMA2.
+
 `production-mailbox-authority.v1` is a public Deep-extension authority, encoded by
 `ProductionMailboxAuthorityCodec` as canonical `PMA1` binary: four-byte magic, version `1`, and
 three required zero bytes. It is deliberately not Session wire data and does not change any token,

@@ -1,5 +1,8 @@
 # Production Mailbox Topology V1
 
+Status: **pre-cutover evidence; release-rejected by DR-0004**. Target is
+XNV1-bound PMT2/PMS2 with no compatibility reader.
+
 `production-mailbox-topology.v1` (`PMT1`) and `production-mailbox-selection.v1` (`PMS1`) are
 public, deterministic, verify-only artifacts. They turn one already verified PMA1 authority into
 an exact two-replica route without putting a mailbox identifier, private key, signing API, storage

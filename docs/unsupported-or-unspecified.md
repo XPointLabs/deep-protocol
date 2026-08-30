@@ -8,11 +8,17 @@ There is no Session compatibility or database migration path. Session,
 protobuf, P03A, DPB/DPE, Nearby and LoRa code is offline reference evidence,
 not a dormant production feature.
 
-DNP1-native message confidentiality and ratchet remain absent. This does not
-mean the application UI is disabled: current Shared/MAUI messaging uses a
-separate E2EE envelope over authenticated MAU2 and Deep privacy routing.
-Managed ingress is transport-only and does not interpret or authorize those
-inner bytes.
+DNP1-native message confidentiality and ratchet remain absent from production
+code. Their clean-break target is now specified by the superproject crypto and
+contact/group specifications; specification does not constitute runtime
+activation. Current Shared/MAUI messaging uses a separate static-key E2EE
+envelope over authenticated MAU2 and Deep privacy routing and is disposable
+evidence, not a public-release protocol. Managed ingress is transport-only and
+does not interpret or authorize those inner bytes.
+
+Pre-cutover PMA1/PMT1/PMS1 and PRA/PSS/RCD/RCA route-continuity bytes are also
+not the clean-break target. DR-0004 selects PMA2/PMT2/PMS2 and
+XRA1/XRC1/XRR1/XSS1; their machine codecs/vectors and runtime are absent.
 
 Direct P2P mesh is a future architecture requirement, not part of the current
 DNP1 production surface. No peer/relay handshake, authenticated neighbor
@@ -20,7 +26,10 @@ discovery, multi-hop routing, store-and-forward, TTL/loop suppression or mesh
 abuse-control grammar is specified here. Nearby and Session reference code do
 not satisfy that requirement. A later ADR must preserve E2EE origin/destination
 authentication across both one-hop and relayed paths without depending on the
-official mailbox/control plane.
+official mailbox/control plane. Its required transport-neutral boundary and
+deployment guarantees are now specified in the superproject
+`docs/architecture/` documents, while its wire protocol and runtime remain
+deliberately absent.
 
 ## DNP1 classical baseline
 

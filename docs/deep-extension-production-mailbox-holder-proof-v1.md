@@ -1,5 +1,7 @@
 # Production mailbox holder proof V1
 
+Status: **pre-cutover evidence; release-rejected by DR-0004**.
+
 `ProductionMailboxHolderProof` owns the canonical, replay-domain-separated proof-of-possession
 transcript used by anonymous production mailbox issuance. It is protocol code so coordinator and
 clients cannot silently encode different security statements.

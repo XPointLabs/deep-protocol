@@ -1,5 +1,7 @@
 # Production mailbox selection successor V1
 
+Status: **pre-cutover evidence; release-rejected by DR-0004**. Target is PMS2.
+
 `PSS1` advances one exact locally pinned `PMS1` to one live `PMS1` without treating a downloaded
 route as trusted. It has two fail-closed modes:
 

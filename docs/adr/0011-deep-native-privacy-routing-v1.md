@@ -12,7 +12,7 @@ relay and mailbox exit. The exit continues to use the existing two-replica mailb
 quorum path; replication is not an onion hop.
 
 The public boundary remains `POST /api/ingress/v1/frame` from the managed-ingress contract. Its
-body is one binary `DRF1`; no JSON/base64, Session RPC, storage compatibility endpoint or direct
+body is one binary `XRF1`; no JSON/base64, Session RPC, storage compatibility endpoint or direct
 release fallback is added. Relay plaintext resolves only the next router id through authenticated
 membership. Endpoint text is never carried in an onion layer.
 
@@ -22,8 +22,9 @@ CSPRNG attempt and per-hop replay ids, fresh ephemeral layer keys/nonces and a s
 client reply key. Router X25519 keys are independently provisioned; Ed25519 conversion is
 forbidden.
 
-An exit wraps exact mailbox success or a bounded stable failure in `DPR1`, then seals it in the
-client-bound `DRS1` response. HTTP/2 success alone remains transit-only and cannot advance the
+An exit wraps exact mailbox success or a bounded stable failure in `XPR1`, then seals it in the
+client-bound `XRS1` response. These clean-break magic values avoid the globally
+reserved DNP1 `DPR1`/`DRS1` identity/recovery artifacts. HTTP/2 success alone remains transit-only and cannot advance the
 durable outbox.
 
 ## Consequences

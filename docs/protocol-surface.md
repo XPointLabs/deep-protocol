@@ -11,9 +11,11 @@ The production package closure is exactly `Deep.Protocol`,
 managed-ingress primitives. Its only direct NuGet dependency is
 `Sodium.Core`. It has no project dependency on a legacy protocol assembly.
 
-`Deep.Protocol.MembershipRoutes` depends exactly on `Deep.Protocol` and owns
-the reviewed D--G route-continuity surface. D--G bytes, domains and public APIs
-remain unchanged by the Wave 1 quarantine.
+`Deep.Protocol.MembershipRoutes` currently depends on `Deep.Protocol` and owns
+the reviewed D--G route-continuity evidence. DR-0004 makes those bytes
+pre-cutover/release-rejected; only their tested continuity/CAS properties are
+ported to PMA2/PMT2/PMS2 and XRA1/XRC1/XRR1/XSS1. No compatibility reader is a
+target production surface.
 
 `Deep.Protocol.ProfileCarrier` retains its existing carrier surface and exact
 `Deep.Protocol` package dependency.
@@ -26,9 +28,13 @@ remain unchanged by the Wave 1 quarantine.
   retained only in `reference/session-compatibility-v0` as immutable offline
   evidence. It is not compiled, embedded, packed or loaded at runtime.
 - Shared/MAUI legacy Session messaging is not made DNP1-native by renaming old
-  bytes. The active application message path uses its separately reviewed E2EE,
-  MAU2 and Deep privacy-routing contracts; it is outside the DNP1 classical
-  Wave 1 surface. A DNP1-native message/ratchet successor remains absent.
+  bytes. The active application message path uses static-key E2EE, MAU2 and
+  pre-cutover Deep privacy-routing contracts; it is outside the DNP1 classical Wave 1
+  surface and is not releasable. The DNP1-native message/ratchet successor is
+  specified in the superproject architecture/crypto documents but remains
+  absent from production packages and consumers.
+- Target XRF1/XRL1/XRE1/XPR1/XRS1 routing and PMA2/PMT2/PMS2 route authority
+  are specified in the superproject but not implemented in this package.
 
 ## DNP1 classical Wave 1
 
