@@ -1,9 +1,16 @@
 # Deep extension managed ingress HTTP/2 V1
 
-Status: P10B local contract; runtime blocked.
+Status: P10B contract and XNode/HTTP client runtime implemented; masked client
+carrier binding remains blocked.
 
 This Deep-only extension defines a bounded outer transport for an opaque, already sealed
 route/onion frame. It is not Session wire behavior and does not modify protobufs.
+
+The implemented client currently reaches this HTTP/2 surface directly over
+HTTPS. This contract does not itself provide VLESS/Reality masking. Release
+anti-blocking acceptance additionally requires the MAUI client to carry this
+exact exchange through an attested masked transport without direct-HTTPS
+bypass; that host composition is outside this wire contract.
 
 The canonical Deep-native producer/consumer for that opaque body is specified by
 `deep-extension-privacy-routing-v1.md`. Managed ingress remains transport-only: it does not open

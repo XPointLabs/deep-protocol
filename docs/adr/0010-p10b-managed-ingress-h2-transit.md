@@ -1,8 +1,15 @@
 # ADR 0010: P10B managed ingress HTTP/2 opaque transit
 
-Status: proposed contract; runtime blocked. Date: 2026-07-19. Human owner: Mr. X.
+Status: accepted and implemented for direct HTTP/2 transit; masked client
+carrier binding remains blocked. Date: 2026-07-19. Human owner: Mr. X.
 
 Normative contract identifier: `Deep.Protocol/P10B-managed-ingress-h2-v1`.
+
+Implementation status reviewed 2026-08-30: XNode exposes the bounded managed
+ingress and the client sends canonical opaque frames to it. XNode also has a
+VLESS/Reality ingress, but MAUI does not yet route this request through its
+Reality runtime. Therefore this ADR supports the inner transit contract but
+does not establish censorship-resistance end to end.
 
 ## Decision
 

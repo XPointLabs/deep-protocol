@@ -1,6 +1,6 @@
 # Unsupported Or Unspecified - DNP1 Wave 1
 
-Updated: 2026-08-12.
+Updated: 2026-08-30.
 
 ## Clean-break state
 
@@ -8,9 +8,11 @@ There is no Session compatibility or database migration path. Session,
 protobuf, P03A, DPB/DPE, Nearby and LoRa code is offline reference evidence,
 not a dormant production feature.
 
-Shared/MAUI messaging remains disabled until a native message-confidentiality
-and ratchet successor is specified, reviewed and implemented. Managed ingress
-is transport-only and does not interpret or authorize inner bytes.
+DNP1-native message confidentiality and ratchet remain absent. This does not
+mean the application UI is disabled: current Shared/MAUI messaging uses a
+separate E2EE envelope over authenticated MAU2 and Deep privacy routing.
+Managed ingress is transport-only and does not interpret or authorize those
+inner bytes.
 
 ## DNP1 classical baseline
 

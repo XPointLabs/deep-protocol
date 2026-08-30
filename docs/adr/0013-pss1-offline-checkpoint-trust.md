@@ -2,6 +2,12 @@
 
 Status: accepted for protocol implementation; runtime activation remains blocked on host integration.
 
+Host status reviewed 2026-08-30: codec/verifier work exists, but clean-install
+forward bootstrap, exact predecessor-history retrieval, protected
+`BehindBuildFloor` recovery, proactive refresh and 30/180/365-day client E2E
+are not complete. A 365-day protocol bound is not a product availability claim
+until those host gates pass.
+
 ## Context
 
 A client can miss multiple daily PMA1/PMT1 rotations. Requiring every historical PSS1 to remain

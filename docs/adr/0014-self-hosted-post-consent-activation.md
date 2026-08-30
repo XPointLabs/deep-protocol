@@ -2,6 +2,11 @@
 
 Status: Accepted as a dormant protocol capability; runtime activation remains blocked.
 
+Product constraint reviewed 2026-08-30: on-prem is intentionally later than
+the first release, but first-release changes must preserve this separate
+`UserManaged` authority path. Official Registry, PMA1, billing and Mr. X must
+not become dependencies of the generic message/group/outbox contracts.
+
 ## Context
 
 DPF1 already carries and exactly verifies a P04 genesis, its quorum approvals,

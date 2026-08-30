@@ -1,6 +1,6 @@
 # Protocol Surface - DNP1 Wave 1
 
-Updated: 2026-08-12.
+Updated: 2026-08-30.
 
 The production package closure is exactly `Deep.Protocol`,
 `Deep.Protocol.MembershipRoutes`, and `Deep.Protocol.ProfileCarrier`.
@@ -25,8 +25,10 @@ remain unchanged by the Wave 1 quarantine.
 - Session, protobuf, P03A compatibility, DPB/DPE, Nearby and LoRa material is
   retained only in `reference/session-compatibility-v0` as immutable offline
   evidence. It is not compiled, embedded, packed or loaded at runtime.
-- Shared/MAUI legacy messaging is not made native by renaming old bytes. It
-  remains disabled until a separately reviewed native successor exists.
+- Shared/MAUI legacy Session messaging is not made DNP1-native by renaming old
+  bytes. The active application message path uses its separately reviewed E2EE,
+  MAU2 and Deep privacy-routing contracts; it is outside the DNP1 classical
+  Wave 1 surface. A DNP1-native message/ratchet successor remains absent.
 
 ## DNP1 classical Wave 1
 
