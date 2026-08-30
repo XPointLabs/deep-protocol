@@ -1,0 +1,71 @@
+{
+  "schemaVersion": "1.1",
+  "success": true,
+  "productionEligible": false,
+  "productionBlockers": [
+    "upstream_experimental",
+    "private_key_not_zeroizable",
+    "private_coefficient_mutation_accepted"
+  ],
+  "provider": {
+    "package": "BouncyCastle.Cryptography",
+    "packageVersion": "2.7.0",
+    "parameterSet": "ML-KEM-768",
+    "upstreamExperimental": true,
+    "privateKeyImplementsIDisposable": false,
+    "kemObjectsImplementIDisposable": false,
+    "publicZeroizationApiAvailable": true,
+    "publicZeroizationApi": "Org.BouncyCastle.Utilities.Arrays.ZeroMemory(byte[])",
+    "probeClearsOwnedTemporaryBuffers": true
+  },
+  "bounds": {
+    "warmupIterations": 5,
+    "measurementIterations": 30
+  },
+  "runtime": {
+    "framework": ".NET 10.0.9",
+    "processArchitecture": "arm64",
+    "androidApiLevel": 26,
+    "processorCount": 8,
+    "deviceClass": "Samsung Galaxy A5"
+  },
+  "validation": {
+    "publicLengthRejected": true,
+    "publicModulusRejected": true,
+    "privateLengthRejected": true,
+    "privateEmbeddedPublicModulusMutationRejected": true,
+    "privateCoefficientModulusMutationRejected": false
+  },
+  "correctness": true,
+  "keyGeneration": {
+    "medianMicroseconds": 1437.789,
+    "p95Microseconds": 1478.692,
+    "managedAllocatedBytesPerOperation": 18968
+  },
+  "encapsulation": {
+    "medianMicroseconds": 1667.808,
+    "p95Microseconds": 1817.615,
+    "managedAllocatedBytesPerOperation": 19144
+  },
+  "decapsulation": {
+    "medianMicroseconds": 2093.462,
+    "p95Microseconds": 2163.885,
+    "managedAllocatedBytesPerOperation": 24416
+  },
+  "resources": {
+    "workingSetAvailable": true,
+    "workingSetBeforeBytes": 78417920,
+    "workingSetAfterWarmupBytes": 81895424,
+    "workingSetAfterMeasurementsBytes": 83492864,
+    "managedHeapBeforeBytes": 4289136,
+    "managedHeapAfterWarmupBytes": 4460120,
+    "managedHeapAfterMeasurementsBytes": 4460520
+  },
+  "artifact": {
+    "apkBytes": 7049391,
+    "apkSha256": "bd4a8ffdb02a8160109226c496405eaddb089a8e526172f6667e904b253efa31",
+    "linkedProviderAssemblyBytes": 5155728,
+    "compressedProviderAssemblyBytes": 2935083,
+    "aotProviderImageBytes": 406880
+  }
+}
