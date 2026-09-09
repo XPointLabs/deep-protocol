@@ -59,8 +59,13 @@ jobs:
           $passA = Join-Path $env:RUNNER_TEMP 'deep-native-official\braid-pass-a'
           $passB = Join-Path $env:RUNNER_TEMP 'deep-native-official\braid-pass-b'
           foreach ($pass in @($passA, $passB)) {
-            ./eng/Build-DeepMlKemBraid.ps1 -Target windows-x64 -OutputRoot $pass
-            ./eng/Build-DeepMlKemBraid.ps1 -Target windows-arm64 -OutputRoot $pass
+            foreach ($target in @('windows-x64', 'windows-arm64')) {
+              & pwsh -NoLogo -NoProfile -File ./eng/Build-DeepMlKemBraid.ps1 `
+                -Target $target -OutputRoot $pass
+              if ($LASTEXITCODE -ne 0) {
+                throw "Deep Braid $target build failed in isolated producer process."
+              }
+            }
           }
           $targetMap = @{
             'windows-x64' = 'x86_64-pc-windows-msvc'
