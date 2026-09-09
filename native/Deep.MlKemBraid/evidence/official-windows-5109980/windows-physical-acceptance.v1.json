@@ -1,0 +1,40 @@
+{
+  "schema": "deep/windows-mlkem-braid-acceptance/v1",
+  "authority": "Mr. X",
+  "verifiedAtUtc": "2026-09-09T13:43:44.7933395Z",
+  "officialWorkflowRunId": 34356754852,
+  "officialWorkflowRunAttempt": 1,
+  "officialArtifactId": 10106322624,
+  "sourceCommit": "5109980f85cf43eb1ba3dbf146b27e47ddae3c89",
+  "host": {
+    "nativeProcessRid": "win-arm64",
+    "osVersion": "10.0.26200.0",
+    "dotnetSdk": "10.0.301",
+    "x64RuntimeExecution": "Windows ARM64 x64 emulation"
+  },
+  "targets": [
+    {
+      "runtimeIdentifier": "win-arm64",
+      "runtimeSha256": "0f4c70bf9a40373d9c8a4bc1af956a7934ec294f83de3c2169d085ddad424309",
+      "runtimeBytes": 344064,
+      "managedStateMachineTests": 6,
+      "managedWrapperTests": 3,
+      "result": "passed-native"
+    },
+    {
+      "runtimeIdentifier": "win-x64",
+      "runtimeSha256": "902c80f52221ee2a4da340f01ed7f3c40eb6ea51f7d91584031ac5679d829e74",
+      "runtimeBytes": 526336,
+      "managedStateMachineTests": 6,
+      "managedWrapperTests": 3,
+      "result": "passed-under-windows-arm64-x64-emulation"
+    }
+  ],
+  "gates": {
+    "cleanDistinctPathRebuildMatched": "passed",
+    "digestAndProductionApprovalFailClosed": "passed",
+    "standardMlKemInteropBothDirections": "passed",
+    "singleConsumerContention": "passed",
+    "managedBraidStateMachine": "passed"
+  }
+}

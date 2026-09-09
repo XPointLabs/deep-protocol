@@ -12,23 +12,37 @@ internal sealed record DeepMlKemBraidApprovedAsset(
     bool ApprovedForProduction);
 
 /// <summary>
-/// Pinned evidence for the incremental ML-KEM Braid provider. The Windows x64
-/// build is deliberately a candidate, not an approved runtime asset. Moving an
-/// entry to the approved allowlist requires a separately reviewed release
-/// manifest; the runtime never accepts a caller-selected path or digest.
+/// Pinned evidence for the incremental ML-KEM Braid provider. Candidate records
+/// remain fail-closed until official reproducibility and physical runtime
+/// acceptance are complete; the runtime never accepts a caller-selected path
+/// or digest.
 /// </summary>
 internal static class DeepMlKemBraidApprovedAssets
 {
     internal const string ManifestProviderIdentifier =
         "libcrux-ml-kem/0.0.10/deep-mlkem-braid-abi-v1";
 
-    internal static DeepMlKemBraidApprovedAsset WindowsX64Candidate { get; } = new(
+    internal static DeepMlKemBraidApprovedAsset WindowsX64 { get; } = new(
         "win-x64",
         "runtimes/win-x64/native/deep_mlkem_braid.dll",
         526336,
-        "41ba8b15429bfc55b6a66cdadbb1ad3372dfc98a9f2bd1bce75a86d54426cd25",
+        "902c80f52221ee2a4da340f01ed7f3c40eb6ea51f7d91584031ac5679d829e74",
         ManifestProviderIdentifier,
-        ApprovedForProduction: false);
+        ApprovedForProduction: true);
+
+    internal static DeepMlKemBraidApprovedAsset WindowsArm64 { get; } = new(
+        "win-arm64",
+        "runtimes/win-arm64/native/deep_mlkem_braid.dll",
+        344064,
+        "0f4c70bf9a40373d9c8a4bc1af956a7934ec294f83de3c2169d085ddad424309",
+        ManifestProviderIdentifier,
+        ApprovedForProduction: true);
+
+    internal static DeepMlKemBraidApprovedAsset WindowsX64Candidate { get; } =
+        WindowsX64 with { ApprovedForProduction = false };
+
+    internal static DeepMlKemBraidApprovedAsset WindowsArm64Candidate { get; } =
+        WindowsArm64 with { ApprovedForProduction = false };
 
 #if DEEP_MLKEM_ANDROID_PROBE
     internal static DeepMlKemBraidApprovedAsset AndroidArm64ProbeCandidate { get; } = new(
@@ -40,9 +54,34 @@ internal static class DeepMlKemBraidApprovedAssets
         ApprovedForProduction: false);
 #endif
 
-    internal static DeepMlKemBraidApprovedAsset ForCurrentProcess() =>
-        throw new PlatformNotSupportedException(
-            "No release-approved incremental ML-KEM Braid asset exists for the current process RID.");
+    internal static DeepMlKemBraidApprovedAsset ForCurrentProcess()
+    {
+        if (!OperatingSystem.IsWindows())
+            throw new PlatformNotSupportedException(
+                "No release-approved incremental ML-KEM Braid asset exists for this operating system.");
+        return RuntimeInformation.ProcessArchitecture switch
+        {
+            Architecture.X64 => WindowsX64,
+            Architecture.Arm64 => WindowsArm64,
+            _ => throw new PlatformNotSupportedException(
+                "No release-approved incremental ML-KEM Braid asset exists for the current process RID."),
+        };
+    }
+
+#if DEEP_PROTOCOL_RECOVERY_TEST_SEAM
+    internal static DeepMlKemBraidApprovedAsset CandidateForCurrentWindowsProcess()
+    {
+        if (!OperatingSystem.IsWindows())
+            throw new PlatformNotSupportedException("The reviewed Braid candidates are Windows-only.");
+        return RuntimeInformation.ProcessArchitecture switch
+        {
+            Architecture.X64 => WindowsX64Candidate,
+            Architecture.Arm64 => WindowsArm64Candidate,
+            _ => throw new PlatformNotSupportedException(
+                "No reviewed Braid candidate exists for the current Windows process architecture."),
+        };
+    }
+#endif
 }
 
 internal interface IDeepMlKemBraidAbi : IDisposable

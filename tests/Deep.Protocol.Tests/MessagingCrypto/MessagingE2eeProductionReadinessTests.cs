@@ -13,9 +13,16 @@ public sealed class MessagingE2eeProductionReadinessTests
 
         Assert.Equal(0x0201, report.Suite);
         Assert.False(report.CanActivate);
-        Assert.Contains(
-            MessagingE2eeActivationBlocker.ApprovedMlKemAssetUnavailableForRuntime,
-            report.Blockers);
+        var approvedWindowsRuntime = OperatingSystem.IsWindows() &&
+            RuntimeInformation.ProcessArchitecture is Architecture.X64 or Architecture.Arm64;
+        if (approvedWindowsRuntime)
+            Assert.DoesNotContain(
+                MessagingE2eeActivationBlocker.ApprovedMlKemAssetUnavailableForRuntime,
+                report.Blockers);
+        else
+            Assert.Contains(
+                MessagingE2eeActivationBlocker.ApprovedMlKemAssetUnavailableForRuntime,
+                report.Blockers);
         Assert.DoesNotContain(
             MessagingE2eeActivationBlocker.TripleRatchetComponentProviderUnavailable,
             report.Blockers);
@@ -54,8 +61,8 @@ public sealed class MessagingE2eeProductionReadinessTests
     [Fact]
     public void RuntimeRequiresBothWholeKemAndIncrementalBraidApproval()
     {
-        Assert.False(MessagingE2eeProductionReadiness.IsApprovedRuntime(true, Architecture.X64));
-        Assert.False(MessagingE2eeProductionReadiness.IsApprovedRuntime(true, Architecture.Arm64));
+        Assert.True(MessagingE2eeProductionReadiness.IsApprovedRuntime(true, Architecture.X64));
+        Assert.True(MessagingE2eeProductionReadiness.IsApprovedRuntime(true, Architecture.Arm64));
         Assert.False(MessagingE2eeProductionReadiness.IsApprovedRuntime(false, Architecture.X64));
         Assert.False(MessagingE2eeProductionReadiness.IsApprovedRuntime(false, Architecture.Arm64));
         Assert.DoesNotContain(
@@ -66,12 +73,17 @@ public sealed class MessagingE2eeProductionReadinessTests
     }
 
     [Fact]
-    public void WholeKemAssetAloneCannotOpenProductionPrerequisite()
+    public void ApprovedWindowsRuntimeCanOpenOpaquePrerequisiteOnly()
     {
-        var exception = Assert.Throws<MessagingE2eeActivationUnavailableException>(
-            MessagingE2eeProductionReadiness.OpenApprovedMlKemPrerequisite);
-        Assert.Contains(
+        if (!OperatingSystem.IsWindows() ||
+            RuntimeInformation.ProcessArchitecture is not (Architecture.X64 or Architecture.Arm64))
+            return;
+
+        using var lease = MessagingE2eeProductionReadiness.OpenApprovedMlKemPrerequisite();
+        Assert.Equal("mlkem-native/v2.0.0/portable-c/deep-abi-v1", lease.ProviderIdentifier);
+        Assert.False(lease.Report.CanActivate);
+        Assert.DoesNotContain(
             MessagingE2eeActivationBlocker.ApprovedMlKemAssetUnavailableForRuntime,
-            exception.Report.Blockers);
+            lease.Report.Blockers);
     }
 }

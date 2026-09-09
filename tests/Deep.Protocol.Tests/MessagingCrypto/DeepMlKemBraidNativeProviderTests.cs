@@ -55,15 +55,39 @@ public sealed class DeepMlKemBraidNativeProviderTests
             requireProductionApproval: false);
         Assert.Equal(526336, DeepMlKemBraidApprovedAssets.WindowsX64Candidate.Bytes);
         Assert.Equal(
-            "41ba8b15429bfc55b6a66cdadbb1ad3372dfc98a9f2bd1bce75a86d54426cd25",
+            "902c80f52221ee2a4da340f01ed7f3c40eb6ea51f7d91584031ac5679d829e74",
             DeepMlKemBraidApprovedAssets.WindowsX64Candidate.Sha256);
         Assert.False(DeepMlKemBraidApprovedAssets.WindowsX64Candidate.ApprovedForProduction);
+        DeepMlKemBraidNativeProvider.ValidateApprovedAssetIdentity(
+            DeepMlKemBraidApprovedAssets.WindowsArm64Candidate,
+            requireProductionApproval: false);
+        Assert.Equal(344064, DeepMlKemBraidApprovedAssets.WindowsArm64Candidate.Bytes);
+        Assert.Equal(
+            "0f4c70bf9a40373d9c8a4bc1af956a7934ec294f83de3c2169d085ddad424309",
+            DeepMlKemBraidApprovedAssets.WindowsArm64Candidate.Sha256);
+        Assert.False(DeepMlKemBraidApprovedAssets.WindowsArm64Candidate.ApprovedForProduction);
+        DeepMlKemBraidNativeProvider.ValidateApprovedAssetIdentity(
+            DeepMlKemBraidApprovedAssets.WindowsX64,
+            requireProductionApproval: true);
+        DeepMlKemBraidNativeProvider.ValidateApprovedAssetIdentity(
+            DeepMlKemBraidApprovedAssets.WindowsArm64,
+            requireProductionApproval: true);
+        Assert.True(DeepMlKemBraidApprovedAssets.WindowsX64.ApprovedForProduction);
+        Assert.True(DeepMlKemBraidApprovedAssets.WindowsArm64.ApprovedForProduction);
         Assert.Throws<CryptographicException>(() =>
             DeepMlKemBraidNativeProvider.ValidateApprovedAssetIdentity(
                 DeepMlKemBraidApprovedAssets.WindowsX64Candidate,
                 requireProductionApproval: true));
-        Assert.Throws<PlatformNotSupportedException>(
-            DeepMlKemBraidNativeProvider.LoadApprovedForCurrentProcess);
+        if (OperatingSystem.IsWindows() &&
+            RuntimeInformation.ProcessArchitecture is Architecture.X64 or Architecture.Arm64)
+        {
+            Assert.True(DeepMlKemBraidApprovedAssets.ForCurrentProcess().ApprovedForProduction);
+        }
+        else
+        {
+            Assert.Throws<PlatformNotSupportedException>(
+                DeepMlKemBraidApprovedAssets.ForCurrentProcess);
+        }
     }
 
     [Fact]
@@ -365,12 +389,12 @@ public sealed class DeepMlKemBraidNativeProviderTests
         Assert.Equal(MessagingCryptoError.ObjectDisposed, error.Error);
     }
 
-    [Fact(Skip = "Executed by the explicit Windows x64 incremental Braid wrapper evidence harness.")]
-    public void WindowsX64_IncrementalWrapperInteropsWithStandardProviderBothDirections()
+    [Fact(Skip = "Executed by the explicit Windows incremental Braid wrapper evidence harness.")]
+    public void WindowsCurrentArchitecture_IncrementalWrapperInteropsWithStandardProviderBothDirections()
     {
-        RequireWindowsX64AndStageAssets();
+        var candidate = RequireWindowsAndStageAssets();
         using var braid = DeepMlKemBraidNativeProvider.LoadCandidateForTests(
-            DeepMlKemBraidApprovedAssets.WindowsX64Candidate);
+            candidate);
         using var standard = DeepMlKemNativeProvider.LoadApprovedForCurrentProcess();
 
         using var braidKeys = braid.GenerateKeyPairFromRandomForTests(Sequence(64, 0x00));
@@ -435,25 +459,27 @@ public sealed class DeepMlKemBraidNativeProviderTests
         }
     }
 
-    [Fact(Skip = "Executed by the explicit Windows x64 incremental Braid wrapper evidence harness.")]
-    public void WindowsX64_DigestAndProductionApprovalAreFailClosed()
+    [Fact(Skip = "Executed by the explicit Windows incremental Braid wrapper evidence harness.")]
+    public void WindowsCurrentArchitecture_DigestAndProductionApprovalAreFailClosed()
     {
-        RequireWindowsX64AndStageAssets(corruptBraid: true);
+        var candidate = RequireWindowsAndStageAssets(corruptBraid: true);
         Assert.Throws<CryptographicException>(() =>
             DeepMlKemBraidNativeProvider.LoadCandidateForTests(
-                DeepMlKemBraidApprovedAssets.WindowsX64Candidate));
-        RequireWindowsX64AndStageAssets();
+                candidate));
+        candidate = RequireWindowsAndStageAssets();
         Assert.Throws<CryptographicException>(() =>
             DeepMlKemBraidDynamicAbi.LoadApproved(
-                DeepMlKemBraidApprovedAssets.WindowsX64Candidate));
+                candidate));
+        using var approved = DeepMlKemBraidNativeProvider.LoadApprovedForCurrentProcess();
+        Assert.Equal(DeepMlKemBraidNativeProvider.Identifier, approved.ProviderIdentifier);
     }
 
-    [Fact(Skip = "Executed by the explicit Windows x64 incremental Braid wrapper evidence harness.")]
-    public async Task WindowsX64_RealNativeStateIsSingleConsumerUnderContention()
+    [Fact(Skip = "Executed by the explicit Windows incremental Braid wrapper evidence harness.")]
+    public async Task WindowsCurrentArchitecture_RealNativeStateIsSingleConsumerUnderContention()
     {
-        RequireWindowsX64AndStageAssets();
+        var candidate = RequireWindowsAndStageAssets();
         using var provider = DeepMlKemBraidNativeProvider.LoadCandidateForTests(
-            DeepMlKemBraidApprovedAssets.WindowsX64Candidate);
+            candidate);
         using var keys = provider.GenerateKeyPairFromRandomForTests(Sequence(64, 0x20));
         var seed = keys.EncapsulationKeySeed.ToArray();
         var hash = keys.EncapsulationKeyHash.ToArray();
@@ -519,20 +545,31 @@ public sealed class DeepMlKemBraidNativeProviderTests
         finally { Zero(seed, hash); }
     }
 
-    private static void RequireWindowsX64AndStageAssets(bool corruptBraid = false)
+    private static DeepMlKemBraidApprovedAsset RequireWindowsAndStageAssets(
+        bool corruptBraid = false)
     {
         Assert.True(OperatingSystem.IsWindows());
-        Assert.Equal(Architecture.X64, RuntimeInformation.ProcessArchitecture);
+        Assert.True(RuntimeInformation.ProcessArchitecture is Architecture.X64 or Architecture.Arm64);
+        var architecture = RuntimeInformation.ProcessArchitecture;
+        var candidate = DeepMlKemBraidApprovedAssets.CandidateForCurrentWindowsProcess();
+        var target = architecture == Architecture.X64
+            ? "x86_64-pc-windows-msvc"
+            : "aarch64-pc-windows-msvc";
+        var runtime = architecture == Architecture.X64 ? "windows-x64" : "windows-arm64";
+        var standardAsset = architecture == Architecture.X64
+            ? DeepMlKemApprovedAssets.WindowsX64
+            : DeepMlKemApprovedAssets.WindowsArm64;
         Stage(
             FindAsset("DEEP_MLKEM_BRAID_TEST_ASSET", "native", "Deep.MlKemBraid", "target",
-                "x86_64-pc-windows-msvc", "release", "deep_mlkem_braid.dll"),
-            DeepMlKemBraidApprovedAssets.WindowsX64Candidate.RelativePath,
+                target, "release", "deep_mlkem_braid.dll"),
+            candidate.RelativePath,
             corruptBraid);
         Stage(
             FindAsset("DEEP_MLKEM_TEST_ASSET", "native", "Deep.MlKem", "artifacts",
-                "windows-x64", "deep_mlkem.dll"),
-            DeepMlKemApprovedAssets.WindowsX64.RelativePath,
+                runtime, "deep_mlkem.dll"),
+            standardAsset.RelativePath,
             corrupt: false);
+        return candidate;
     }
 
     private static void Stage(string source, string relativePath, bool corrupt)

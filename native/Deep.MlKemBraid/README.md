@@ -1,8 +1,8 @@
-# Deep ML-KEM Braid native spike
+# Deep ML-KEM Braid native provider
 
-This directory is an isolated, non-production Rust `cdylib` feasibility spike.
-It is not referenced by a managed project, package, registry, or production
-build graph.
+This directory contains the pinned Rust `cdylib` producer for the incremental
+ML-KEM Braid ABI. The release-approved Windows x64 and ARM64 binaries are
+packaged by `Deep.Protocol`; Android remains a separate candidate gate.
 
 The C ABI wraps the incremental ML-KEM-768 API from exactly
 `libcrux-ml-kem 0.0.10`. `Cargo.lock` pins the complete crates.io closure. The
@@ -40,10 +40,10 @@ Apache-2.0 and does not claim dual licensing.
 
 ## Build gates
 
-Application/release consumers do not rebuild this candidate locally. The build
+Application/release consumers do not rebuild this provider locally. The build
 commands below are producer-side evidence tools. A production RID may consume
 only a ready official Deep Braid ABI binary with matching signed/attested
-manifest, SBOM, provenance, export surface and reviewed hash. A generic
+official workflow evidence, provenance, export surface and reviewed hash. A generic
 `libcrux-ml-kem` binary is not ABI-compatible with this wrapper.
 
 Run from the repository root:
@@ -73,11 +73,20 @@ handle replay and double-dispose, and emits no key or ciphertext bytes. It is
 copied only to `/data/local/tmp/deep_mlkem_braid_probe_v1`; no APK, production
 package, application data, or production build graph is touched.
 
-## Candidate supply-chain evidence
+## Supply-chain and release evidence
 
-This remains candidate-only evidence. It does not approve this provider for
-production, change a managed runtime provider, or add the native library to a
-production package or registry.
+The original Windows x64 and Android ARM64 candidate evidence remains under the
+`evidence/candidate-*` paths. Android is still candidate-only and is not added
+to a production package.
+
+The approved Windows evidence is under `evidence/official-windows-5109980`.
+Official workflow run 34356754852 attempt 1 built x64 and ARM64 twice in clean,
+isolated target roots with `/Brepro`; the DLL and import-library bytes matched.
+The exact artifact binaries then passed the managed state-machine and wrapper
+probes on a physical Windows ARM64 host, natively for ARM64 and through Windows
+x64 emulation for x64. GitHub artifact attestation was unavailable for the
+private organization plan, so the official workflow record, committed hashes,
+and physical acceptance record form the closed substitute evidence.
 
 The bounded evidence package is:
 
@@ -121,6 +130,6 @@ Run the bounded hostile drift tests separately:
 ./eng/Test-DeepMlKemBraidEvidenceDrift.ps1
 ```
 
-Windows ARM64 is cross-built by the official workflow and remains pending until
-the exact binary has passed the managed production wrapper on a physical ARM64
-Windows host and its reviewed release evidence is committed.
+Windows x64 and ARM64 consumers load only the package-relative binary whose
+length, SHA-256, provider identifier, and production-approval flag match the
+closed managed allowlist. Other operating systems and architectures fail closed.

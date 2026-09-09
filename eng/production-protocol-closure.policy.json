@@ -18,11 +18,19 @@
       "projectReferences": [],
       "packInputs": [
         "build:Deep.Protocol.dll",
-        "build:Deep.Protocol.pdb"
+        "build:Deep.Protocol.pdb",
+        "src/Deep.Protocol/runtimes/win-arm64/native/deep_mlkem.dll",
+        "src/Deep.Protocol/runtimes/win-arm64/native/deep_mlkem_braid.dll",
+        "src/Deep.Protocol/runtimes/win-x64/native/deep_mlkem.dll",
+        "src/Deep.Protocol/runtimes/win-x64/native/deep_mlkem_braid.dll"
       ],
       "packTargets": [
         "lib/net10.0/Deep.Protocol.dll",
-        "lib/net10.0/Deep.Protocol.pdb"
+        "lib/net10.0/Deep.Protocol.pdb",
+        "runtimes/win-arm64/native/deep_mlkem.dll",
+        "runtimes/win-arm64/native/deep_mlkem_braid.dll",
+        "runtimes/win-x64/native/deep_mlkem.dll",
+        "runtimes/win-x64/native/deep_mlkem_braid.dll"
       ]
     },
     {

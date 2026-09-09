@@ -84,6 +84,26 @@ jobs:
             }
           }
 
+      - name: Verify approved x64 Braid managed runtime boundary
+        shell: pwsh
+        run: |
+          $braid = Join-Path $env:RUNNER_TEMP 'deep-native-official\braid-pass-a\x86_64-pc-windows-msvc\release\deep_mlkem_braid.dll'
+          $mlkem = Join-Path $env:RUNNER_TEMP 'deep-native-official\mlkem\windows-x64\deep_mlkem.dll'
+          $env:DEEP_MLKEM_BRAID_TEST_ASSET = $braid
+          $env:DEEP_MLKEM_TEST_ASSET = $mlkem
+          dotnet test tests/Deep.Protocol.Tests/Deep.Protocol.Tests.csproj `
+            --configuration Release --arch x64 -m:1 `
+            --filter 'FullyQualifiedName~ManagedMlKemBraidStateMachineTests'
+          if ($LASTEXITCODE -ne 0) { throw 'The x64 managed Braid state-machine probe failed.' }
+          dotnet build eng/Deep.MlKemBraid.RuntimeWrapperProbe/Deep.MlKemBraid.RuntimeWrapperProbe.csproj `
+            --configuration Release -m:1
+          if ($LASTEXITCODE -ne 0) { throw 'The x64 Braid wrapper probe build failed.' }
+          $probe = 'eng/Deep.MlKemBraid.RuntimeWrapperProbe/bin/Release/net10.0/Deep.MlKemBraid.RuntimeWrapperProbe.dll'
+          dotnet $probe `
+            tests/Deep.Protocol.Tests/bin/Release/net10.0/win-x64/Deep.Protocol.Tests.dll `
+            $mlkem $braid
+          if ($LASTEXITCODE -ne 0) { throw 'The x64 Braid wrapper probe failed.' }
+
       - name: Assemble closed official bundle
         shell: pwsh
         run: |
@@ -105,6 +125,12 @@ jobs:
             $braidTarget = Join-Path $bundle "braid\$target"
             New-Item -ItemType Directory -Path $braidTarget -Force | Out-Null
             $release = Join-Path $outputRoot "braid-pass-a\$($braidMap[$target])\release"
+            $approved = Join-Path $PWD "src\Deep.Protocol\runtimes\$($target.Replace('windows-', 'win-'))\native\deep_mlkem_braid.dll"
+            if ((Get-Item -LiteralPath $approved).Length -ne (Get-Item -LiteralPath (Join-Path $release 'deep_mlkem_braid.dll')).Length -or
+                (Get-FileHash -LiteralPath $approved -Algorithm SHA256).Hash -cne
+                (Get-FileHash -LiteralPath (Join-Path $release 'deep_mlkem_braid.dll') -Algorithm SHA256).Hash) {
+              throw "The reproduced Deep Braid $target runtime differs from the approved packaged asset."
+            }
             Copy-Item -LiteralPath (Join-Path $release 'deep_mlkem_braid.dll') -Destination $braidTarget
             Copy-Item -LiteralPath (Join-Path $release 'deep_mlkem_braid.dll.lib') -Destination $braidTarget
           }

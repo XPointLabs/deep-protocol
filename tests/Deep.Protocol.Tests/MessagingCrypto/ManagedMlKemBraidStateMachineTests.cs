@@ -32,7 +32,7 @@ public sealed class ManagedMlKemBraidStateMachineTests
             ManagedMlKemBraidState.EkReceivedCt1Sampled));
     }
 
-    [WindowsX64CandidateFact]
+    [WindowsBraidCandidateFact]
     public void RealCandidateCompletesTwoEpochsWithRoleReversal()
     {
         using var provider = LoadRealCandidateOrSkip();
@@ -66,7 +66,7 @@ public sealed class ManagedMlKemBraidStateMachineTests
         finally { Zero(first); }
     }
 
-    [WindowsX64CandidateFact]
+    [WindowsBraidCandidateFact]
     public void ValidOutOfOrderCt1AckPathsPreserveSignalSemantics()
     {
         using var provider = LoadRealCandidateOrSkip();
@@ -110,7 +110,7 @@ public sealed class ManagedMlKemBraidStateMachineTests
         }
     }
 
-    [WindowsX64CandidateFact]
+    [WindowsBraidCandidateFact]
     public void WrongEpochKindAndTamperingAreRejectedWithoutMutation()
     {
         using var provider = LoadRealCandidateOrSkip();
@@ -152,7 +152,7 @@ public sealed class ManagedMlKemBraidStateMachineTests
             MessagingCryptoError.TransitionRejected);
     }
 
-    [WindowsX64CandidateFact]
+    [WindowsBraidCandidateFact]
     public void RestartMidEncaps1RecreatesNativeStateAndConverges()
     {
         using var provider = LoadRealCandidateOrSkip();
@@ -191,7 +191,7 @@ public sealed class ManagedMlKemBraidStateMachineTests
         }
     }
 
-    [WindowsX64CandidateFact]
+    [WindowsBraidCandidateFact]
     public void CanonicalStateImportRejectsLengthMaskAndSecretSlotTampering()
     {
         using var provider = LoadRealCandidateOrSkip();
@@ -334,12 +334,17 @@ public sealed class ManagedMlKemBraidStateMachineTests
 
     private static DeepMlKemBraidNativeProvider LoadRealCandidateOrSkip()
     {
+        var candidate = DeepMlKemBraidApprovedAssets.CandidateForCurrentWindowsProcess();
+        var target = RuntimeInformation.ProcessArchitecture == Architecture.X64
+            ? "x86_64-pc-windows-msvc"
+            : "aarch64-pc-windows-msvc";
         var source = FindAsset(
+            "DEEP_MLKEM_BRAID_TEST_ASSET",
             "native", "Deep.MlKemBraid", "target",
-            "x86_64-pc-windows-msvc", "release", "deep_mlkem_braid.dll");
-        Stage(source, DeepMlKemBraidApprovedAssets.WindowsX64Candidate.RelativePath);
+            target, "release", "deep_mlkem_braid.dll");
+        Stage(source, candidate.RelativePath);
         return DeepMlKemBraidNativeProvider.LoadCandidateForTests(
-            DeepMlKemBraidApprovedAssets.WindowsX64Candidate);
+            candidate);
     }
 
     private static void Stage(string source, string relativePath)
@@ -361,8 +366,11 @@ public sealed class ManagedMlKemBraidStateMachineTests
         File.Copy(source, destination, overwrite: true);
     }
 
-    private static string FindAsset(params string[] relativeParts)
+    private static string FindAsset(string environmentName, params string[] relativeParts)
     {
+        var explicitPath = Environment.GetEnvironmentVariable(environmentName);
+        if (!string.IsNullOrWhiteSpace(explicitPath) && File.Exists(explicitPath))
+            return Path.GetFullPath(explicitPath);
         var current = new DirectoryInfo(AppContext.BaseDirectory);
         while (current is not null)
         {
@@ -371,7 +379,7 @@ public sealed class ManagedMlKemBraidStateMachineTests
             current = current.Parent;
         }
         throw new FileNotFoundException(
-            "The reviewed Windows x64 incremental ML-KEM candidate is absent.");
+            "The reviewed Windows incremental ML-KEM candidate is absent.");
     }
 
     private static byte[] Fill(byte value, int length)
@@ -389,27 +397,33 @@ public sealed class ManagedMlKemBraidStateMachineTests
     }
 }
 
-internal sealed class WindowsX64CandidateFactAttribute : FactAttribute
+internal sealed class WindowsBraidCandidateFactAttribute : FactAttribute
 {
-    public WindowsX64CandidateFactAttribute()
+    public WindowsBraidCandidateFactAttribute()
     {
         if (!OperatingSystem.IsWindows() ||
-            RuntimeInformation.ProcessArchitecture != Architecture.X64)
+            RuntimeInformation.ProcessArchitecture is not (Architecture.X64 or Architecture.Arm64))
         {
-            Skip = "Requires a Windows x64 test process for the reviewed incremental ML-KEM candidate.";
+            Skip = "Requires a Windows x64 or ARM64 process for the reviewed Braid candidate.";
             return;
         }
 
+        var explicitPath = Environment.GetEnvironmentVariable("DEEP_MLKEM_BRAID_TEST_ASSET");
+        if (!string.IsNullOrWhiteSpace(explicitPath) && File.Exists(explicitPath)) return;
+
+        var target = RuntimeInformation.ProcessArchitecture == Architecture.X64
+            ? "x86_64-pc-windows-msvc"
+            : "aarch64-pc-windows-msvc";
         var current = new DirectoryInfo(AppContext.BaseDirectory);
         while (current is not null)
         {
             var candidate = Path.Combine(
                 current.FullName,
                 "native", "Deep.MlKemBraid", "target",
-                "x86_64-pc-windows-msvc", "release", "deep_mlkem_braid.dll");
+                target, "release", "deep_mlkem_braid.dll");
             if (File.Exists(candidate)) return;
             current = current.Parent;
         }
-        Skip = "The reviewed Windows x64 incremental ML-KEM candidate is absent.";
+        Skip = "The reviewed Windows incremental ML-KEM candidate is absent.";
     }
 }

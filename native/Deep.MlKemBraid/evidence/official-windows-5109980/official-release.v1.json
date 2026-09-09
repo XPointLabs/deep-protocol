@@ -1,0 +1,30 @@
+{
+  "schema": "deep/mlkem-braid-official-windows-release/v1",
+  "authority": "Mr. X",
+  "sourceCommit": "5109980f85cf43eb1ba3dbf146b27e47ddae3c89",
+  "officialWorkflowRunId": 34356754852,
+  "officialWorkflowRunAttempt": 1,
+  "officialArtifactId": 10106322624,
+  "officialArtifactName": "deep-native-windows-5109980f85cf43eb1ba3dbf146b27e47ddae3c89",
+  "reproducibility": {
+    "strategy": "two clean isolated Cargo target roots in one official GitHub Actions run",
+    "compilerFlags": ["/Brepro"],
+    "runtimeAndImportLibraryBytesMatched": true
+  },
+  "assets": [
+    {
+      "runtimeIdentifier": "win-x64",
+      "bytes": 526336,
+      "sha256": "902c80f52221ee2a4da340f01ed7f3c40eb6ea51f7d91584031ac5679d829e74"
+    },
+    {
+      "runtimeIdentifier": "win-arm64",
+      "bytes": 344064,
+      "sha256": "0f4c70bf9a40373d9c8a4bc1af956a7934ec294f83de3c2169d085ddad424309"
+    }
+  ],
+  "attestation": {
+    "githubArtifactAttestation": "unavailable-private-organization-plan",
+    "substituteEvidence": "official-workflow-attempt-1-plus-sha256sums-plus-physical-runtime-probes"
+  }
+}

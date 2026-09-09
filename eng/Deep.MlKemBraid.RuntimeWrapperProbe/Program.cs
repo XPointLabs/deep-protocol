@@ -2,8 +2,9 @@ using System.Reflection;
 using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 
-if (!OperatingSystem.IsWindows() || RuntimeInformation.ProcessArchitecture != Architecture.X64)
-    throw new PlatformNotSupportedException("This evidence probe requires a Windows x64 process.");
+if (!OperatingSystem.IsWindows() ||
+    RuntimeInformation.ProcessArchitecture is not (Architecture.X64 or Architecture.Arm64))
+    throw new PlatformNotSupportedException("This evidence probe requires a Windows x64 or ARM64 process.");
 if (args.Length != 3)
     throw new ArgumentException(
         "Expected the Deep.Protocol.Tests assembly, standard ML-KEM asset, and incremental Braid asset paths.");
@@ -24,11 +25,12 @@ try
         throwOnError: true)!;
     var instance = Activator.CreateInstance(type)!;
     var methods = type.GetMethods(BindingFlags.Public | BindingFlags.Instance)
-        .Where(static method => method.Name.StartsWith("WindowsX64_", StringComparison.Ordinal))
+        .Where(static method => method.Name.StartsWith(
+            "WindowsCurrentArchitecture_", StringComparison.Ordinal))
         .OrderBy(static method => method.Name, StringComparer.Ordinal)
         .ToArray();
     if (methods.Length != 3)
-        throw new InvalidOperationException("Expected exactly three Windows x64 Braid wrapper tests.");
+        throw new InvalidOperationException("Expected exactly three Windows Braid wrapper tests.");
 
     foreach (var method in methods)
     {

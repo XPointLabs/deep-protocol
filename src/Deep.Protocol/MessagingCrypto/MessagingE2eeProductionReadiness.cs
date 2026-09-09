@@ -178,16 +178,11 @@ public static class MessagingE2eeProductionReadiness
         HasApprovedIncrementalBraidRuntime(isWindows, architecture);
 
     private static bool IsWholeKemApprovedRuntime(bool isWindows, Architecture architecture) =>
-        isWindows && architecture == Architecture.X64;
+        isWindows && architecture is Architecture.X64 or Architecture.Arm64;
 
     // The whole-KEM handshake library and the incremental Braid library are
-    // both required by suite 0x0201. Candidate-only Braid assets must never
-    // clear the shared provider blocker merely because the whole-KEM asset is
-    // approved for the same RID.
+    // both required by suite 0x0201 and are approved only for the two reviewed
+    // Windows runtime identifiers.
     private static bool HasApprovedIncrementalBraidRuntime(bool isWindows, Architecture architecture)
-    {
-        _ = isWindows;
-        _ = architecture;
-        return false;
-    }
+        => isWindows && architecture is Architecture.X64 or Architecture.Arm64;
 }
