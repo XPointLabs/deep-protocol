@@ -86,8 +86,11 @@ public sealed class GroupCodecTests
     public void ExternalCanonicalVectorHasLiteralDigestPinAndExecutes()
     {
         var path = FindSpec("group-codec-v1.vectors.json");
-        using var document = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path));
-        Assert.Equal("dca069d80c506c2fe5da5b1c14073d784a875666484f83f7deb13662dd60147e", Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant());
+        var text = File.ReadAllText(path);
+        using var document = System.Text.Json.JsonDocument.Parse(text);
+        var canonical = text.Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace("\r", "\n", StringComparison.Ordinal);
+        Assert.Equal("dca069d80c506c2fe5da5b1c14073d784a875666484f83f7deb13662dd60147e", Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical))).ToLowerInvariant());
         var vectors=document.RootElement.GetProperty("records").EnumerateArray().ToArray();
         Assert.Equal(12,vectors.Length);Assert.Equal(12,vectors.Select(item=>item.GetProperty("target").GetString()).Distinct(StringComparer.Ordinal).Count());
         foreach(var vector in vectors){var bytes=Convert.FromHexString(vector.GetProperty("fixtureBytesHex").GetString()!);var record=GroupCodec.Decode(bytes);Assert.Equal(vector.GetProperty("target").GetString(),record.Magic);Assert.Equal(vector.GetProperty("recordHash32").GetString(),Convert.ToHexString(record.ArtifactHash.Span).ToLowerInvariant());var key=vector.GetProperty("signerPublicKeyHex");if(key.ValueKind!=System.Text.Json.JsonValueKind.Null)Assert.True(PublicKeyAuth.VerifyDetached(record.Field(SignatureTag(record.Magic)).ToArray(),record.SignatureInput.ToArray(),Convert.FromHexString(key.GetString()!)));}

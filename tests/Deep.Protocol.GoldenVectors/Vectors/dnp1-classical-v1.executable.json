@@ -88,7 +88,7 @@
     "tests/Deep.Protocol.Tests/DeepNative/RecoveryColdProtectedPayloadTests.cs",
     "tests/Deep.Protocol.Tests/DevOpsWitness/Dnp1PackageBlockingWitnessTests.cs"
   ],
-  "implementationScopeSha256": "721427FEB19D2FB2169841C3FC7E4A00D647F624ACB2A370DE828BC715CE1170",
+  "implementationScopeSha256": "202508FF6C54C2ECDC82C48A97620A8F03D5D06DA3704FB7AEC3B76078E6167C",
   "mappings": [
     {
       "id": "api-recovery-freeze-provider-nonce",
@@ -564,7 +564,7 @@
       },
       "testFqn": "Deep.Protocol.Tests.DevOpsWitness.Dnp1PackageBlockingWitnessTests.PackageExactThreeSessionFree_InspectsActualPackageZipsAssembliesResourcesAndPublicApi",
       "fixturePath": "tests/Deep.Protocol.Tests/DevOpsWitness/Dnp1PackageBlockingWitnessTests.cs",
-      "fixtureSha256": "C4B9FCD98C6A357D6F2DFE1A0EE2941FD149FA9BA5C606F2A56848D80EB839D1"
+      "fixtureSha256": "A0F4988776A70C31FB4997DFAF7141CDFD25FE6594D4E030868C253C5F109094"
     },
     {
       "id": "grammar-machine-artifact-set-digest",
@@ -578,7 +578,7 @@
       },
       "testFqn": "Deep.Protocol.Tests.DevOpsWitness.Dnp1PackageBlockingWitnessTests.GrammarMachineArtifactSetDigest_RealGeneratorAndCheckerRejectEveryBoundDigestMutation",
       "fixturePath": "tests/Deep.Protocol.Tests/DevOpsWitness/Dnp1PackageBlockingWitnessTests.cs",
-      "fixtureSha256": "C4B9FCD98C6A357D6F2DFE1A0EE2941FD149FA9BA5C606F2A56848D80EB839D1"
+      "fixtureSha256": "A0F4988776A70C31FB4997DFAF7141CDFD25FE6594D4E030868C253C5F109094"
     },
     {
       "id": "grammar-vector-schema-additional-property",
@@ -592,7 +592,7 @@
       },
       "testFqn": "Deep.Protocol.Tests.DevOpsWitness.Dnp1PackageBlockingWitnessTests.GrammarVectorSchemaAdditionalProperty_RealClosedSchemaGateRejectsTopAndCaseProperties",
       "fixturePath": "tests/Deep.Protocol.Tests/DevOpsWitness/Dnp1PackageBlockingWitnessTests.cs",
-      "fixtureSha256": "C4B9FCD98C6A357D6F2DFE1A0EE2941FD149FA9BA5C606F2A56848D80EB839D1"
+      "fixtureSha256": "A0F4988776A70C31FB4997DFAF7141CDFD25FE6594D4E030868C253C5F109094"
     },
     {
       "id": "recovery-dtc2-protected-fact-no-capability",

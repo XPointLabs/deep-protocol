@@ -23,5 +23,6 @@ artifacts/dnp1-vector-fragments/*
 *.log
 *.tmp
 coverage/
+/normative-source/
 *.user
 *.suo

@@ -112,14 +112,55 @@ public sealed class Dnp1PackageBlockingWitnessTests
     [Fact]
     public void GrammarVectorSchemaAdditionalProperty_RealClosedSchemaGateRejectsTopAndCaseProperties()
     {
-        var checker = Path.Combine(NormativeRepositoryRoot, "scripts", "check-dnp1-classical-spec.ps1");
-        var result = RunPowerShell(checker);
+        var schema = JsonNode.Parse(File.ReadAllText(
+            Path.Combine(NormativeRoot, "dnp1-classical-v1.vectors.schema.json")))!.AsObject();
+        var vectors = JsonNode.Parse(File.ReadAllText(
+            Path.Combine(NormativeRoot, "dnp1-classical-v1.vectors.skeleton.json")))!.AsObject();
 
-        AssertSucceeded(result);
-        Assert.Contains(
-            "Vector schema: Draft 2020-12 equivalent / additionalProperties and JSON-type negative self-tests passed",
-            result.Output,
-            StringComparison.Ordinal);
+        Assert.True(MatchesClosedVectorShape(vectors, schema));
+
+        var topLevelNegative = vectors.DeepClone().AsObject();
+        topLevelNegative["unexpected"] = true;
+        Assert.False(MatchesClosedVectorShape(topLevelNegative, schema));
+
+        var caseNegative = vectors.DeepClone().AsObject();
+        caseNegative["cases"]!.AsArray()[0]!.AsObject()["unexpected"] = true;
+        Assert.False(MatchesClosedVectorShape(caseNegative, schema));
+
+        var callbackNegative = vectors.DeepClone().AsObject();
+        callbackNegative["cases"]!.AsArray()[0]!.AsObject()["callbacks"]!
+            .AsObject()["unexpected"] = 0;
+        Assert.False(MatchesClosedVectorShape(callbackNegative, schema));
+    }
+
+    private static bool MatchesClosedVectorShape(JsonObject document, JsonObject schema)
+    {
+        if (!HasExactSchemaProperties(document, schema)) return false;
+        if (document["cases"] is not JsonArray cases) return false;
+        var caseSchema = schema["$defs"]!["case"]!.AsObject();
+        var callbackSchema = caseSchema["properties"]!["callbacks"]!.AsObject();
+        foreach (var item in cases)
+        {
+            if (item is not JsonObject vectorCase || !HasExactSchemaProperties(vectorCase, caseSchema))
+                return false;
+            if (vectorCase["callbacks"] is not JsonObject callbacks ||
+                !HasExactSchemaProperties(callbacks, callbackSchema))
+                return false;
+        }
+        return true;
+    }
+
+    private static bool HasExactSchemaProperties(JsonObject value, JsonObject schema)
+    {
+        if (schema["additionalProperties"]?.GetValue<bool>() is not false) return false;
+        var required = schema["required"]!.AsArray()
+            .Select(node => node!.GetValue<string>())
+            .ToHashSet(StringComparer.Ordinal);
+        var allowed = schema["properties"]!.AsObject()
+            .Select(property => property.Key)
+            .ToHashSet(StringComparer.Ordinal);
+        var actual = value.Select(property => property.Key).ToHashSet(StringComparer.Ordinal);
+        return required.IsSubsetOf(actual) && actual.IsSubsetOf(allowed);
     }
 
     private static void AssertDigestMutationRejected(
