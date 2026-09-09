@@ -36,6 +36,19 @@ jobs:
         shell: pwsh
         run: ./eng/Test-ProductionProtocolGraph.ps1 -Configuration Release
 
+      - name: Upload protocol graph diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: protocol-graph-diagnostics-${{ github.sha }}
+          path: |
+            src/Deep.Protocol/bin/Release/net10.0/Deep.Protocol.dll
+            src/Deep.Protocol.MembershipRoutes/bin/Release/net10.0/Deep.Protocol.MembershipRoutes.dll
+            src/Deep.Protocol.ProfileCarrier/bin/Release/net10.0/Deep.Protocol.ProfileCarrier.dll
+            tests/Deep.Protocol.GoldenVectors/bin/Release/net10.0/Deep.Protocol.GoldenVectors.dll
+          if-no-files-found: error
+          retention-days: 1
+
       - name: DNP1 exact314 package evidence completeness (intentional RED until 219/219)
         shell: pwsh
         run: |
