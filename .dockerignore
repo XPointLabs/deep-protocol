@@ -1,0 +1,6 @@
+**
+!global.json
+!src/
+!src/**
+**/bin/
+**/obj/

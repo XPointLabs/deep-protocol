@@ -129,7 +129,8 @@ public sealed class P10iProfileCarrierPackageGatePolicyTests
 
     private static GateResult RunGate(params string[] arguments)
     {
-        var start = new ProcessStartInfo("powershell")
+        var start = new ProcessStartInfo(
+            OperatingSystem.IsWindows() ? "powershell.exe" : "pwsh")
         {
             WorkingDirectory = RepositoryRoot(),
             RedirectStandardOutput = true,
