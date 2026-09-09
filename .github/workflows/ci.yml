@@ -57,7 +57,7 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-      - name: DNP1 exact314 package evidence completeness (intentional RED until 219/219)
+      - name: DNP1 exact314 package evidence completeness
         shell: pwsh
         run: |
           $mappings = @(
@@ -69,7 +69,8 @@ jobs:
             'artifacts/dnp1-vector-fragments/drm19-replay.json',
             'artifacts/dnp1-vector-fragments/drm19-recovery-container.json',
             'artifacts/dnp1-vector-fragments/devops-package.json',
-            'artifacts/dnp1-vector-fragments/genesis-full-dag.json'
+            'artifacts/dnp1-vector-fragments/genesis-full-dag.json',
+            'artifacts/dnp1-vector-fragments/package-closure.json'
           )
           ./eng/Test-Dnp1EvidenceOwnership.ps1 `
             -NormativeRoot '${{ github.workspace }}/normative-source/docs/survival-program/releases/v3.0.0/specs' `
