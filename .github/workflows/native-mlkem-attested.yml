@@ -17,7 +17,6 @@ jobs:
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
       DOTNET_NOLOGO: '1'
-      DEEP_OFFICIAL_OUTPUT: ${{ github.workspace }}\deep-native-official
 
     steps:
       - name: Checkout exact source commit
@@ -48,7 +47,7 @@ jobs:
       - name: Build reproducible Deep ML-KEM x64 and ARM64 runtimes
         shell: pwsh
         run: |
-          $output = Join-Path $env:DEEP_OFFICIAL_OUTPUT 'mlkem'
+          $output = Join-Path $env:RUNNER_TEMP 'deep-native-official\mlkem'
           ./eng/Build-DeepMlKem.ps1 `
             -BuildTarget @('windows-x64', 'windows-arm64') `
             -OutputRoot $output
@@ -64,14 +63,15 @@ jobs:
       - name: Assemble closed official bundle
         shell: pwsh
         run: |
-          $bundle = Join-Path $env:DEEP_OFFICIAL_OUTPUT 'bundle'
+          $outputRoot = Join-Path $env:RUNNER_TEMP 'deep-native-official'
+          $bundle = Join-Path $outputRoot 'bundle'
           New-Item -ItemType Directory -Path $bundle -Force | Out-Null
-          Copy-Item -LiteralPath (Join-Path $env:DEEP_OFFICIAL_OUTPUT 'mlkem\build-manifest.v1.json') -Destination $bundle
+          Copy-Item -LiteralPath (Join-Path $outputRoot 'mlkem\build-manifest.v1.json') -Destination $bundle
           foreach ($target in @('windows-x64', 'windows-arm64')) {
             $mlkemTarget = Join-Path $bundle "mlkem\$target"
             New-Item -ItemType Directory -Path $mlkemTarget -Force | Out-Null
-            Copy-Item -LiteralPath (Join-Path $env:DEEP_OFFICIAL_OUTPUT "mlkem\$target\deep_mlkem.dll") -Destination $mlkemTarget
-            Copy-Item -LiteralPath (Join-Path $env:DEEP_OFFICIAL_OUTPUT "mlkem\$target\deep_mlkem.lib") -Destination $mlkemTarget
+            Copy-Item -LiteralPath (Join-Path $outputRoot "mlkem\$target\deep_mlkem.dll") -Destination $mlkemTarget
+            Copy-Item -LiteralPath (Join-Path $outputRoot "mlkem\$target\deep_mlkem.lib") -Destination $mlkemTarget
           }
           $braidMap = @{
             'windows-x64' = 'x86_64-pc-windows-msvc'
@@ -95,12 +95,12 @@ jobs:
       - name: Attest official binaries and manifest
         uses: actions/attest@v4
         with:
-          subject-path: ${{ env.DEEP_OFFICIAL_OUTPUT }}\bundle\**
+          subject-path: ${{ runner.temp }}\deep-native-official\bundle\**
 
       - name: Upload attested official binary bundle
         uses: actions/upload-artifact@v4
         with:
           name: deep-native-windows-${{ github.sha }}
-          path: ${{ env.DEEP_OFFICIAL_OUTPUT }}\bundle
+          path: ${{ runner.temp }}\deep-native-official\bundle
           if-no-files-found: error
           retention-days: 30
