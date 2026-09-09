@@ -38,6 +38,14 @@
                       LogicalName="Deep.Protocol.Identity.Resources.Bip39.english.txt" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="runtimes\win-x64\native\deep_mlkem.dll"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest"
+             Pack="true"
+             PackagePath="runtimes/win-x64/native" />
+  </ItemGroup>
+
   <ItemGroup Condition="'$(RecoveryTestSeam)' == 'true'">
     <InternalsVisibleTo Include="Deep.Protocol.MembershipRoutes.Tests" />
     <InternalsVisibleTo Include="Deep.Protocol.Tests" />

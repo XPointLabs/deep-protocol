@@ -1,0 +1,7 @@
+{
+  "schema": "deep/native-github-attestation-status/v1",
+  "outcome": "failure",
+  "repositoryVisibility": "private",
+  "sourceCommit": "3481ce7fb3b0c80fffbe13d66a4e2ba9acf277ea",
+  "note": "GitHub build provenance attestation was unavailable; SHA256SUMS and the completed official workflow remain mandatory evidence."
+}

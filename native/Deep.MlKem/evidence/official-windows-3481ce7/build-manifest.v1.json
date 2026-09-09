@@ -1,0 +1,291 @@
+{
+  "schemaVersion": 1,
+  "generatedUtc": "2026-09-09T12:31:30.9977484Z",
+  "provider": {
+    "name": "pq-code-package/mlkem-native",
+    "tag": "v2.0.0",
+    "commit": "d1b2fe782888bdb761a50336012923180be7f502",
+    "licenseExpression": "Apache-2.0 OR ISC OR MIT",
+    "provenanceFileSha256": "0cf82b548b1a466b7b7d2a8c684e7b9ac3d4045bd489f33896262e5611844b1a"
+  },
+  "configuration": {
+    "parameterSet": "ML-KEM-768",
+    "backend": "portable-c",
+    "compactPrivateKeyRepresentation": "Deep seed-backed d||z (64 bytes); not FIPS 203 serialized dk",
+    "androidApi": 28,
+    "requiredAndroidNdkRevision": "28.2.13676358",
+    "sourceDateEpoch": 0,
+    "buildParallelism": 1,
+    "runtimeAbi": "Deep-owned C v1 shared library; provider remains internal static",
+    "providerIdentifier": "mlkem-native/v2.0.0/portable-c/deep-abi-v1"
+  },
+  "buildTools": {
+    "visualStudioProduct": "Visual Studio Enterprise 2022",
+    "visualStudioVersion": "17.14.37614.0",
+    "visualStudioPath": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise",
+    "cmake": {
+      "path": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\Common7\\IDE\\CommonExtensions\\Microsoft\\CMake\\CMake\\bin\\cmake.exe",
+      "fileVersion": "3.31.6-msvc6",
+      "sha256": "b540efece9172930877dff0c9fedda7a69b0dd82446e0e8bba13372aac6c8ac8"
+    },
+    "ninja": {
+      "path": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\Common7\\IDE\\CommonExtensions\\Microsoft\\CMake\\Ninja\\ninja.exe",
+      "fileVersion": null,
+      "sha256": "5020138b3757035df9dca9a2243624d5810ffa6ae24444bd95f752cbd1b89123"
+    },
+    "dotnet": {
+      "version": "10.0.301",
+      "executable": {
+        "path": "C:\\Program Files\\dotnet\\dotnet.exe",
+        "fileVersion": "10,0,1126,37416 @Commit: e2f47b0110ed922f21a1522da67279133ce28f32",
+        "sha256": "ab1b71fd3dd71062e074c9fab8312081a81b7f2b3e0327c48c4d249c8d1a3135"
+      },
+      "windowsX64Host": {
+        "path": "C:\\Program Files\\dotnet\\dotnet.exe",
+        "fileVersion": "10,0,1126,37416 @Commit: e2f47b0110ed922f21a1522da67279133ce28f32",
+        "sha256": "ab1b71fd3dd71062e074c9fab8312081a81b7f2b3e0327c48c4d249c8d1a3135"
+      }
+    },
+    "targetToolchains": {
+      "windows-x64": {
+        "architecture": "x64",
+        "vcToolsVersion": "14.44.35207",
+        "windowsSdkVersion": "10.0.26100.0",
+        "windowsSdkDirectory": "C:\\Program Files (x86)\\Windows Kits\\10",
+        "compiler": {
+          "path": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\cl.exe",
+          "fileVersion": "19.44.35228.0",
+          "sha256": "88c8344236a27a6e727e0a8edc49aaa2690bdc7a9464b9d18cc7abe70a9f1c0d"
+        },
+        "linker": {
+          "path": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\link.exe",
+          "fileVersion": "14.44.35228.0",
+          "sha256": "ca11e6c45debd34bf652dfe984c5360a531a005ed78bf72852330c9c2590cf0d"
+        },
+        "librarian": {
+          "path": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\lib.exe",
+          "fileVersion": "14.44.35228.0",
+          "sha256": "3d694c782f93e998fec5db0c2df78153565da23a028ee4618561fa0c33408489"
+        },
+        "symbolInspector": {
+          "path": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\x64\\dumpbin.exe",
+          "fileVersion": "14.44.35228.0",
+          "sha256": "12a1cd87238bd66dfdb788b4fcdcb91ce4b3f81236aab12a7a29e5ae1d85af50"
+        }
+      },
+      "windows-arm64": {
+        "architecture": "arm64",
+        "vcToolsVersion": "14.44.35207",
+        "windowsSdkVersion": "10.0.26100.0",
+        "windowsSdkDirectory": "C:\\Program Files (x86)\\Windows Kits\\10",
+        "compiler": {
+          "path": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\arm64\\cl.exe",
+          "fileVersion": "19.44.35228.0",
+          "sha256": "603e49cb5bb11dc60929d8ebd892a195dd24172744238858fe79ab2a1a6a9e17"
+        },
+        "linker": {
+          "path": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\arm64\\link.exe",
+          "fileVersion": "14.44.35228.0",
+          "sha256": "984ba7990bcecac78fe28a20a748077a1337c3d3cdd7d84e09501ef722b5a619"
+        },
+        "librarian": {
+          "path": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\arm64\\lib.exe",
+          "fileVersion": "14.44.35228.0",
+          "sha256": "8a687fa0af784302109f1a217ef4ce71c16acb36ae2ccc91e186e11bd622b869"
+        },
+        "symbolInspector": {
+          "path": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Tools\\MSVC\\14.44.35207\\bin\\Hostx64\\arm64\\dumpbin.exe",
+          "fileVersion": "14.44.35228.0",
+          "sha256": "06ccefd7211c7a1c13d240efe96ef61448181f2a2c8d85faf6891b7cc7ca09aa"
+        }
+      }
+    }
+  },
+  "deepSources": {
+    "repositoryCommit": "3481ce7fb3b0c80fffbe13d66a4e2ba9acf277ea",
+    "repositoryDirty": false,
+    "headRecheckedBeforeManifest": true,
+    "repositoryStateRecheckedBeforeManifest": true,
+    "exactBuildInputClosureRechecked": true,
+    "managedRestoreLocked": true,
+    "managedArtifactsIsolatedOrCleaned": true,
+    "files": [
+      {
+        "path": "global.json",
+        "sha256": "b9f5d355657a114623d3d4dcea216427a931909c4b7b5ffa8a411f21e4fc330c"
+      },
+      {
+        "path": "eng/Build-DeepMlKem.ps1",
+        "sha256": "fd85b8efad20ce691b71d50e8ea8ca174ab7a3744cebf220963ae4af531d6ec7"
+      },
+      {
+        "path": "eng/Generate-DeepMlKemApprovedAssets.ps1",
+        "sha256": "983c4ca0b1f7a06bdb1ca178590967db8c2b80db1670d34238f5bd77aa4a12df"
+      },
+      {
+        "path": "eng/Deep.MlKem.ManagedProbe/Deep.MlKem.ManagedProbe.csproj",
+        "sha256": "5d2eb2dd923024ba81e444ac8c676f309ee550eacb7348097d70006bf6fc7666"
+      },
+      {
+        "path": "eng/Deep.MlKem.ManagedProbe/packages.lock.json",
+        "sha256": "cd97f644c24bb2cd8c96d92c519036a65133ab22cafc294d07b527626ad20e84"
+      },
+      {
+        "path": "eng/Deep.MlKem.ManagedProbe/Program.cs",
+        "sha256": "7a718ac8d85b7c13d8f597e1140307327ddc87786c5b7b608e05bec3d716750a"
+      },
+      {
+        "path": "eng/Deep.MlKem.RuntimeWrapperProbe/Deep.MlKem.RuntimeWrapperProbe.csproj",
+        "sha256": "3353e075b168ac39b67b1d47d61e6251b751dfa1d1a3d0293486e34e242c599a"
+      },
+      {
+        "path": "eng/Deep.MlKem.RuntimeWrapperProbe/packages.lock.json",
+        "sha256": "cd97f644c24bb2cd8c96d92c519036a65133ab22cafc294d07b527626ad20e84"
+      },
+      {
+        "path": "eng/Deep.MlKem.RuntimeWrapperProbe/Program.cs",
+        "sha256": "d3d5a2617f56154979d58023122c3a47192b06bc6dd6fd1affbde8b98dd805c7"
+      },
+      {
+        "path": "src/Deep.Protocol/Deep.Protocol.csproj",
+        "sha256": "1a87b52bf563e26d2eaf15879f274f2fb2afebb20d281dc6c811cd09602c99bc"
+      },
+      {
+        "path": "src/Deep.Protocol/packages.lock.json",
+        "sha256": "68e5c7752e3408c463eba5b4fb9220e41759549df94dfc1ee441c679b9a160af"
+      },
+      {
+        "path": "src/Deep.Protocol/MessagingCrypto/DeepMlKemApprovedAssets.Generated.cs",
+        "sha256": "015d78da8eeb486c6eb8e2a9e7c007d55609c27790ae17d2ff7ebd205fbe9af4"
+      },
+      {
+        "path": "src/Deep.Protocol/MessagingCrypto/DeepMlKemNativeProvider.cs",
+        "sha256": "c3a08b43c270c6010a863024e047e91edc2904ea659eb6badc1a5cba2a3c3feb"
+      },
+      {
+        "path": "src/Deep.Protocol/MessagingCrypto/HybridPreKeyHandshake.cs",
+        "sha256": "5e9737deaadb4185f56defb2a953c487c96e8ae9b9730499ffdc32fe4be1db62"
+      },
+      {
+        "path": "src/Deep.Protocol/MessagingCrypto/MessagingCryptoPrimitives.cs",
+        "sha256": "ca0470418c977760a8767d11c480861b35f53dca3657e2fb7dd581297e72c8bc"
+      },
+      {
+        "path": "tests/Deep.Protocol.GoldenVectors/Deep.Protocol.GoldenVectors.csproj",
+        "sha256": "c4a77f6cf7d276df7dc209e13456bfbd6496477b4aa1580195a70849699864c2"
+      },
+      {
+        "path": "tests/Deep.Protocol.GoldenVectors/packages.lock.json",
+        "sha256": "cd97f644c24bb2cd8c96d92c519036a65133ab22cafc294d07b527626ad20e84"
+      },
+      {
+        "path": "tests/Deep.Protocol.Tests/Deep.Protocol.Tests.csproj",
+        "sha256": "315cd6ad75d64e4cfea65a231bc502f9c8df884905421f850b9988ec996f5efc"
+      },
+      {
+        "path": "tests/Deep.Protocol.Tests/packages.lock.json",
+        "sha256": "2edc276d0d4608a78d764f35e1ad339494e8a2632517c48c3c85b10a6a0c161f"
+      },
+      {
+        "path": "tests/Deep.Protocol.Tests/MessagingCrypto/DeepMlKemNativeProviderTests.cs",
+        "sha256": "a4f29ca992255e33eab835317ed675099e4fb187c0ea01ecbef3d927681fd330"
+      },
+      {
+        "path": "tests/Deep.Protocol.Tests/MessagingCrypto/MessagingCryptoSurfaceTests.cs",
+        "sha256": "6acd23f49bee3f673dacc4073581f4c6e230cdb01d4ec8969539e9ce047e1744"
+      },
+      {
+        "path": "native/Deep.MlKem/CMakeLists.txt",
+        "sha256": "cf86364ec1fb58285bb3b99b134d668366c350c5c03954a5142a729398b8337c"
+      },
+      {
+        "path": "native/Deep.MlKem/README.md",
+        "sha256": "cf2717659eed9f540134a0cd568bb02c4f937987516621c986702c042a4c1236"
+      },
+      {
+        "path": "native/Deep.MlKem/include/deep_mlkem_v1.h",
+        "sha256": "760f513f7ffb50051d8e5aef6d2079ab50f94c5633cc2a7f1bd74e5c26ad3179"
+      },
+      {
+        "path": "native/Deep.MlKem/src/deep_mlkem_provider_config.h",
+        "sha256": "f36fbf604b5b85a5e88cdbaaa4e7b858b770a8b18bc51a20b78ac3019805e436"
+      },
+      {
+        "path": "native/Deep.MlKem/src/deep_mlkem_v1.c",
+        "sha256": "38420c8889c8a9d67a21e0b12ae76c89c1297d5f0fe689c639faea5965da694c"
+      },
+      {
+        "path": "native/Deep.MlKem/src/deep_mlkem_v1.def",
+        "sha256": "e240768ef3c439103fe18bd010b3b533bb40bba93d866f207844f0ade627adcb"
+      },
+      {
+        "path": "native/Deep.MlKem/tests/deep_mlkem_v1_tests.c",
+        "sha256": "b7689e39785c805ffbc420f7ce6f358115db9ca1c496c7f93e14a28e8be766f3"
+      },
+      {
+        "path": "native/Deep.MlKem/vendor/mlkem-native.provenance.json",
+        "sha256": "0cf82b548b1a466b7b7d2a8c684e7b9ac3d4045bd489f33896262e5611844b1a"
+      }
+    ]
+  },
+  "artifacts": [
+    {
+      "target": "windows-x64",
+      "role": "shared-runtime",
+      "file": "windows-x64/deep_mlkem.dll",
+      "bytes": 131584,
+      "sha256": "462a80feda563b30312e836cad108923eeed0aa16ce1365de7a8506d389af8eb",
+      "nativeTestsExecuted": true,
+      "managedProbeExecuted": true,
+      "productionWrapperProbeExecuted": true,
+      "exactExportSurface": true,
+      "finalRuntimeHardening": true,
+      "cleanDistinctPathRebuildMatched": true
+    },
+    {
+      "target": "windows-x64",
+      "role": "import-library",
+      "file": "windows-x64/deep_mlkem.lib",
+      "bytes": 4380,
+      "sha256": "f565da781f35bd91d7702206917de0dc6196263a2adb964376b8c14e69c86f0b",
+      "nativeTestsExecuted": false,
+      "managedProbeExecuted": false,
+      "productionWrapperProbeExecuted": false,
+      "exactExportSurface": null,
+      "finalRuntimeHardening": null,
+      "cleanDistinctPathRebuildMatched": true
+    },
+    {
+      "target": "windows-arm64",
+      "role": "shared-runtime",
+      "file": "windows-arm64/deep_mlkem.dll",
+      "bytes": 123904,
+      "sha256": "cd27e3c716a1b3cf4123f909e7d03861423becd8799a4abceb37f7f359d092f7",
+      "nativeTestsExecuted": false,
+      "managedProbeExecuted": false,
+      "productionWrapperProbeExecuted": false,
+      "exactExportSurface": true,
+      "finalRuntimeHardening": true,
+      "cleanDistinctPathRebuildMatched": true
+    },
+    {
+      "target": "windows-arm64",
+      "role": "import-library",
+      "file": "windows-arm64/deep_mlkem.lib",
+      "bytes": 4380,
+      "sha256": "d279902639158c389af3884dbf62df8cf76654540aabf6b27902565cd1b62409",
+      "nativeTestsExecuted": false,
+      "managedProbeExecuted": false,
+      "productionWrapperProbeExecuted": false,
+      "exactExportSurface": null,
+      "finalRuntimeHardening": null,
+      "cleanDistinctPathRebuildMatched": true
+    }
+  ],
+  "releaseGates": {
+    "acvp": "pending",
+    "androidArm64Physical": "pending",
+    "windowsArm64Runtime": "build-only; runtime pending",
+    "trustedPackageAppBase": "pending; signed package/install ACL evidence required before activation"
+  }
+}
