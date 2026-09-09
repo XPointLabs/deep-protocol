@@ -647,18 +647,14 @@ if ($vsInstances.Count -eq 0) {
     throw 'Visual Studio 2022 Build Tools with the selected C++ components are absent.'
 }
 $vs = $vsInstances | Sort-Object installationVersion -Descending | Select-Object -First 1
-if ($vs.installationVersion -cne $expectedVsInstallationVersion) {
-    throw "Visual Studio 2022 must be the reviewed version $expectedVsInstallationVersion."
-}
 $script:VsDevCmd = Require-File (Join-Path $vs.installationPath 'Common7\Tools\VsDevCmd.bat')
 $script:CmakePath = Require-File (Join-Path $vs.installationPath 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe')
 $script:CtestPath = Require-File (Join-Path $vs.installationPath 'Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\ctest.exe')
 $script:NinjaPath = Require-File (Join-Path $vs.installationPath 'Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja\ninja.exe')
-if ((Get-FileHash -LiteralPath $script:CmakePath -Algorithm SHA256).Hash.ToLowerInvariant() -cne $expectedCmakeSha256 -or
-    (Get-FileHash -LiteralPath $script:CtestPath -Algorithm SHA256).Hash.ToLowerInvariant() -cne $expectedCtestSha256 -or
-    (Get-FileHash -LiteralPath $script:NinjaPath -Algorithm SHA256).Hash.ToLowerInvariant() -cne $expectedNinjaSha256) {
-    throw 'CMake, CTest or Ninja differs from the reviewed Windows build toolchain.'
-}
+$cmakeHash = (Get-FileHash -LiteralPath $script:CmakePath -Algorithm SHA256).Hash.ToLowerInvariant()
+$ctestHash = (Get-FileHash -LiteralPath $script:CtestPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$ninjaHash = (Get-FileHash -LiteralPath $script:NinjaPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$vsDevCmdHash = (Get-FileHash -LiteralPath $script:VsDevCmd -Algorithm SHA256).Hash.ToLowerInvariant()
 $dotnetHash = (Get-FileHash -LiteralPath $script:DotnetPath -Algorithm SHA256).Hash.ToLowerInvariant()
 $dotnetX64Hash = (Get-FileHash -LiteralPath $script:DotnetX64Path -Algorithm SHA256).Hash.ToLowerInvariant()
 $dotnetHostsApproved = if ($script:DotnetPath -ceq $script:DotnetX64Path) {
@@ -666,10 +662,6 @@ $dotnetHostsApproved = if ($script:DotnetPath -ceq $script:DotnetX64Path) {
 }
 else {
     $dotnetHash -ceq $expectedDotnetSha256 -and $dotnetX64Hash -ceq $expectedDotnetX64Sha256
-}
-if ((Get-FileHash -LiteralPath $script:VsDevCmd -Algorithm SHA256).Hash.ToLowerInvariant() -cne $expectedVsDevCmdSha256 -or
-    -not $dotnetHostsApproved) {
-    throw 'VsDevCmd or .NET host differs from the reviewed Windows build toolchain.'
 }
 
 $script:WindowsSdkRoot = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits\10'
@@ -702,9 +694,6 @@ foreach ($candidate in $sdkVersions) {
 if ([string]::IsNullOrWhiteSpace($script:WindowsSdkVersion)) {
     throw 'A complete Windows SDK for the selected Windows targets is absent.'
 }
-if ($script:WindowsSdkVersion -cne $expectedWindowsSdkVersion) {
-    throw "Windows SDK must be the reviewed version $expectedWindowsSdkVersion."
-}
 
 $script:ResolvedNdkRoot = ''
 $script:AndroidToolchainFile = ''
@@ -731,20 +720,44 @@ if ('windows-arm64' -in $targets) {
 if ('android-arm64' -in $targets) {
     $toolchains['android-arm64'] = Get-AndroidEnvironmentEvidence -NdkRoot $script:ResolvedNdkRoot
 }
+$toolchainMismatches = [Collections.Generic.List[string]]::new()
+if ([string]$vs.installationVersion -cne $expectedVsInstallationVersion) { $toolchainMismatches.Add('visual-studio') }
+if ($cmakeHash -cne $expectedCmakeSha256) { $toolchainMismatches.Add('cmake') }
+if ($ctestHash -cne $expectedCtestSha256) { $toolchainMismatches.Add('ctest') }
+if ($ninjaHash -cne $expectedNinjaSha256) { $toolchainMismatches.Add('ninja') }
+if ($vsDevCmdHash -cne $expectedVsDevCmdSha256) { $toolchainMismatches.Add('vsdevcmd') }
+if (-not $dotnetHostsApproved) { $toolchainMismatches.Add('dotnet-host') }
+if ($script:WindowsSdkVersion -cne $expectedWindowsSdkVersion) { $toolchainMismatches.Add('windows-sdk') }
 foreach ($entry in $toolchains.GetEnumerator() | Where-Object { $_.Key -like 'windows-*' }) {
-    if ($entry.Value.vcToolsVersion -cne $expectedVcToolsVersion -or
-        $entry.Value.windowsSdkVersion -cne $expectedWindowsSdkVersion) {
-        throw "Windows target $($entry.Key) differs from the reviewed MSVC/SDK versions."
+    if ($entry.Value.vcToolsVersion -cne $expectedVcToolsVersion) {
+        $toolchainMismatches.Add("$($entry.Key)-msvc")
+    }
+    if ($entry.Value.windowsSdkVersion -cne $expectedWindowsSdkVersion) {
+        $toolchainMismatches.Add("$($entry.Key)-sdk")
     }
 }
 if ($toolchains.Contains('windows-x64')) {
     $x64 = $toolchains['windows-x64']
-    if ($x64.compiler.sha256 -cne $expectedWindowsX64CompilerSha256 -or
-        $x64.linker.sha256 -cne $expectedWindowsX64LinkerSha256 -or
-        $x64.librarian.sha256 -cne $expectedWindowsX64LibrarianSha256 -or
-        $x64.symbolInspector.sha256 -cne $expectedWindowsX64InspectorSha256) {
-        throw 'Windows x64 compiler, linker, librarian or inspector differs from the reviewed toolchain.'
+    if ($x64.compiler.sha256 -cne $expectedWindowsX64CompilerSha256) { $toolchainMismatches.Add('x64-compiler') }
+    if ($x64.linker.sha256 -cne $expectedWindowsX64LinkerSha256) { $toolchainMismatches.Add('x64-linker') }
+    if ($x64.librarian.sha256 -cne $expectedWindowsX64LibrarianSha256) { $toolchainMismatches.Add('x64-librarian') }
+    if ($x64.symbolInspector.sha256 -cne $expectedWindowsX64InspectorSha256) { $toolchainMismatches.Add('x64-inspector') }
+}
+if ($toolchainMismatches.Count -ne 0) {
+    $actualToolchain = [ordered]@{
+        visualStudioVersion = [string]$vs.installationVersion
+        vcToolsVersions = @($toolchains.GetEnumerator() | Where-Object { $_.Key -like 'windows-*' } | ForEach-Object { $_.Value.vcToolsVersion } | Sort-Object -Unique)
+        windowsSdkVersion = $script:WindowsSdkVersion
+        cmakeSha256 = $cmakeHash
+        ctestSha256 = $ctestHash
+        ninjaSha256 = $ninjaHash
+        vsDevCmdSha256 = $vsDevCmdHash
+        dotnetSha256 = $dotnetHash
+        dotnetX64Sha256 = $dotnetX64Hash
+        windowsX64 = if ($toolchains.Contains('windows-x64')) { $toolchains['windows-x64'] } else { $null }
     }
+    Write-Host ($actualToolchain | ConvertTo-Json -Depth 8 -Compress)
+    throw "Windows toolchain differs from the reviewed identity: $($toolchainMismatches -join ', ')."
 }
 $windowsToolchain = $toolchains.GetEnumerator() | Where-Object { $_.Key -like 'windows-*' } | Select-Object -First 1
 if ($null -ne $windowsToolchain) {
