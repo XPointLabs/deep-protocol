@@ -2,6 +2,7 @@
 param(
     [ValidateSet('windows-x64', 'windows-arm64', 'android-arm64')]
     [string]$Target = 'windows-x64',
+    [string]$OutputRoot = '',
     [string]$NdkRoot = (Join-Path $env:LOCALAPPDATA 'Android\Sdk\ndk\28.2.13676358'),
     [string]$AdbPath = '',
     [string]$DeviceSerial = ''
@@ -13,17 +14,24 @@ $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $nativeRoot = Join-Path $repositoryRoot 'native\Deep.MlKemBraid'
 $manifest = Join-Path $nativeRoot 'Cargo.toml'
+$targetRoot = if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
+    Join-Path $nativeRoot 'target'
+} else {
+    [IO.Path]::GetFullPath($OutputRoot)
+}
+New-Item -ItemType Directory -Path $targetRoot -Force | Out-Null
+$env:CARGO_TARGET_DIR = $targetRoot
 $targetTriple = if ($Target -ceq 'windows-arm64') {
     'aarch64-pc-windows-msvc'
 } else {
     'x86_64-pc-windows-msvc'
 }
 $toolchain = '1.89.0-x86_64-pc-windows-msvc'
-$releaseRoot = Join-Path $nativeRoot "target\$targetTriple\release"
+$releaseRoot = Join-Path $targetRoot "$targetTriple\release"
 $dll = Join-Path $releaseRoot 'deep_mlkem_braid.dll'
 $importLibrary = Join-Path $releaseRoot 'deep_mlkem_braid.dll.lib'
 $probeSource = Join-Path $PSScriptRoot 'Deep.MlKemBraid.NativeProbe\deep_mlkem_braid_probe.c'
-$probeRoot = Join-Path $nativeRoot 'target\native-probe'
+$probeRoot = Join-Path $targetRoot 'native-probe'
 $probe = Join-Path $probeRoot 'deep_mlkem_braid_probe.exe'
 
 function Require-File([string]$Path) {
@@ -108,7 +116,7 @@ if ($Target -ceq 'android-arm64') {
     & $cargo "+$toolchain" build --manifest-path $manifest --target $androidTriple --release --locked
     if ($LASTEXITCODE -ne 0) { throw 'Android ARM64 Rust release build failed.' }
 
-    $androidReleaseRoot = Join-Path $nativeRoot "target\$androidTriple\release"
+    $androidReleaseRoot = Join-Path $targetRoot "$androidTriple\release"
     $sharedObject = Require-File (Join-Path $androidReleaseRoot 'libdeep_mlkem_braid.so')
     $actualExports = @(& $llvmNm -D --defined-only --format=posix $sharedObject |
         ForEach-Object {
@@ -131,7 +139,7 @@ if ($Target -ceq 'android-arm64') {
     }
 
     $androidProbeSource = Require-File (Join-Path $PSScriptRoot 'Deep.MlKemBraid.AndroidProbe\deep_mlkem_braid_android_probe.c')
-    $androidProbeRoot = Join-Path $nativeRoot 'target\android-probe'
+    $androidProbeRoot = Join-Path $targetRoot 'android-probe'
     $androidProbe = Join-Path $androidProbeRoot 'deep_mlkem_braid_android_probe'
     New-Item -ItemType Directory -Path $androidProbeRoot -Force | Out-Null
     & $androidLinker -std=c11 -O2 -Wall -Wextra -Werror -fPIE -pie '-Wl,-z,relro,-z,now' `
@@ -220,7 +228,7 @@ $env:LIB = (@(
     (Join-Path $sdkLib "um\$windowsArchitecture"),
     $env:LIB
 ) -join ';')
-$env:RUSTFLAGS = '-Dwarnings -Ccontrol-flow-guard=yes -Ctarget-feature=+crt-static -Clink-arg=/guard:cf'
+$env:RUSTFLAGS = '-Dwarnings -Ccontrol-flow-guard=yes -Ctarget-feature=+crt-static -Clink-arg=/guard:cf -Clink-arg=/Brepro'
 
 $rustup = Require-File (Join-Path $env:USERPROFILE '.cargo\bin\rustup.exe')
 $installedTargets = @(& $rustup target list --installed --toolchain $toolchain)

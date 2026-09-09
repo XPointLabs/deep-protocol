@@ -54,7 +54,9 @@ Run from the repository root:
 
 The bounded spike builds Windows x64 with Rust 1.89.0, rejects warnings, runs
 the Rust interoperability/adversarial tests, verifies the exact DLL export
-allowlist, builds a separate C consumer, and runs its ABI probe.
+allowlist, builds a separate C consumer, and runs its ABI probe. The official
+workflow builds x64 and ARM64 twice in clean output roots with `/Brepro` and
+rejects any DLL or import-library digest drift.
 
 The isolated Android ARM64 gate uses exact NDK 28.2.13676358 (r28c), API 26,
 and the pinned Rust toolchain. It verifies the `.so` export allowlist,
@@ -119,6 +121,6 @@ Run the bounded hostile drift tests separately:
 ./eng/Test-DeepMlKemBraidEvidenceDrift.ps1
 ```
 
-Windows ARM64 is intentionally `pending`: the required Visual Studio ARM64 C++
-toolchain is absent, and the manifest contains neither an artifact nor an
-execution claim for that target.
+Windows ARM64 is cross-built by the official workflow and remains pending until
+the exact binary has passed the managed production wrapper on a physical ARM64
+Windows host and its reviewed release evidence is committed.

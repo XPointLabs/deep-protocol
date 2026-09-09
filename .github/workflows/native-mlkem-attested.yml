@@ -53,13 +53,31 @@ jobs:
             -OutputRoot $output `
             -WindowsArm64AcceptancePath 'native/Deep.MlKem/evidence/official-windows-3481ce7/windows-arm64-physical-acceptance.v1.json'
 
-      - name: Build and test Deep Braid x64 runtime
+      - name: Build reproducible Deep Braid x64 and ARM64 runtimes
         shell: pwsh
-        run: ./eng/Build-DeepMlKemBraid.ps1 -Target windows-x64
-
-      - name: Cross-build Deep Braid ARM64 runtime and ABI probe
-        shell: pwsh
-        run: ./eng/Build-DeepMlKemBraid.ps1 -Target windows-arm64
+        run: |
+          $passA = Join-Path $env:RUNNER_TEMP 'deep-native-official\braid-pass-a'
+          $passB = Join-Path $env:RUNNER_TEMP 'deep-native-official\braid-pass-b'
+          foreach ($pass in @($passA, $passB)) {
+            ./eng/Build-DeepMlKemBraid.ps1 -Target windows-x64 -OutputRoot $pass
+            ./eng/Build-DeepMlKemBraid.ps1 -Target windows-arm64 -OutputRoot $pass
+          }
+          $targetMap = @{
+            'windows-x64' = 'x86_64-pc-windows-msvc'
+            'windows-arm64' = 'aarch64-pc-windows-msvc'
+          }
+          foreach ($target in $targetMap.Keys) {
+            foreach ($name in @('deep_mlkem_braid.dll', 'deep_mlkem_braid.dll.lib')) {
+              $relative = Join-Path "$($targetMap[$target])\release" $name
+              $a = Join-Path $passA $relative
+              $b = Join-Path $passB $relative
+              if ((Get-Item -LiteralPath $a).Length -ne (Get-Item -LiteralPath $b).Length -or
+                  (Get-FileHash -LiteralPath $a -Algorithm SHA256).Hash -cne
+                  (Get-FileHash -LiteralPath $b -Algorithm SHA256).Hash) {
+                throw "Deep Braid $target $name is not reproducible across clean output roots."
+              }
+            }
+          }
 
       - name: Assemble closed official bundle
         shell: pwsh
@@ -81,7 +99,7 @@ jobs:
           foreach ($target in $braidMap.Keys) {
             $braidTarget = Join-Path $bundle "braid\$target"
             New-Item -ItemType Directory -Path $braidTarget -Force | Out-Null
-            $release = Join-Path $PWD "native\Deep.MlKemBraid\target\$($braidMap[$target])\release"
+            $release = Join-Path $outputRoot "braid-pass-a\$($braidMap[$target])\release"
             Copy-Item -LiteralPath (Join-Path $release 'deep_mlkem_braid.dll') -Destination $braidTarget
             Copy-Item -LiteralPath (Join-Path $release 'deep_mlkem_braid.dll.lib') -Destination $braidTarget
           }
