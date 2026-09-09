@@ -93,11 +93,30 @@ jobs:
             } | Set-Content -LiteralPath (Join-Path $bundle 'SHA256SUMS') -Encoding ascii
 
       - name: Attest official binaries and manifest
+        id: attest
+        continue-on-error: true
         uses: actions/attest@v4
         with:
           subject-path: ${{ runner.temp }}\deep-native-official\bundle\**
 
-      - name: Upload attested official binary bundle
+      - name: Record GitHub attestation availability
+        shell: pwsh
+        run: |
+          [pscustomobject]@{
+            schema = 'deep/native-github-attestation-status/v1'
+            outcome = '${{ steps.attest.outcome }}'
+            repositoryVisibility = '${{ github.event.repository.visibility }}'
+            sourceCommit = '${{ github.sha }}'
+            note = if ('${{ steps.attest.outcome }}' -eq 'success') {
+              'GitHub build provenance attestation was persisted.'
+            } else {
+              'GitHub build provenance attestation was unavailable; SHA256SUMS and the completed official workflow remain mandatory evidence.'
+            }
+          } | ConvertTo-Json -Depth 3 | Set-Content `
+            -LiteralPath (Join-Path $env:RUNNER_TEMP 'deep-native-official\bundle\github-attestation-status.v1.json') `
+            -Encoding utf8NoBOM
+
+      - name: Upload official binary bundle
         uses: actions/upload-artifact@v4
         with:
           name: deep-native-windows-${{ github.sha }}
