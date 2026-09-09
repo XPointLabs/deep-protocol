@@ -26,6 +26,21 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
+      - name: Checkout pinned cross-protocol specification snapshot
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/deep-platform
+          ref: 0c7c7936a6c2de6f2f92d48a31a2233904bf0d4d
+          path: integration-source
+          persist-credentials: false
+
+      - name: Materialize cross-protocol specifications for integration tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e "${GITHUB_WORKSPACE}/../docs"
+          cp -a integration-source/docs "${GITHUB_WORKSPACE}/../docs"
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         env:
