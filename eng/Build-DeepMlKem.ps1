@@ -486,6 +486,7 @@ function Invoke-BuildPass {
         exactExportSurface = $true
         finalRuntimeHardening = $true
     }
+    Write-Host ("Native runtime candidate " + ($result | ConvertTo-Json -Compress))
     if ($Target -like 'windows-*') {
         $importLibraryPath = Require-File (Join-Path $BuildDirectory 'deep_mlkem.lib')
         $result.importLibraryPath = $importLibraryPath
