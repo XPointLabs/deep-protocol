@@ -15,6 +15,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Checkout approved normative specification snapshot
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/deep-platform
+          ref: 2651599913bf92c021d36b6a53395499b6a091fb
+          path: normative-source
+          persist-credentials: false
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         env:
@@ -64,13 +72,17 @@ jobs:
             'artifacts/dnp1-vector-fragments/genesis-full-dag.json'
           )
           ./eng/Test-Dnp1EvidenceOwnership.ps1 `
+            -NormativeRoot '${{ github.workspace }}/normative-source/docs/survival-program/releases/v3.0.0/specs' `
             -MappingPaths $mappings `
             -RequirePackageComplete
 
       - name: DNP1 executable package vectors
         if: ${{ hashFiles('tests/Deep.Protocol.GoldenVectors/Vectors/dnp1-classical-v1.executable.json') != '' }}
         shell: pwsh
-        run: ./eng/Test-Dnp1ExecutableVectors.ps1 -NoBuild
+        run: >
+          ./eng/Test-Dnp1ExecutableVectors.ps1
+          -NormativeRoot '${{ github.workspace }}/normative-source/docs/survival-program/releases/v3.0.0/specs'
+          -NoBuild
 
       - name: Test
         run: >
