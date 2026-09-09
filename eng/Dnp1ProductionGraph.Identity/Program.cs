@@ -564,7 +564,8 @@ internal static class GraphPolicy
             ["Deep.Protocol.GoldenVectors"] =
             [
                 "Deep.Protocol.GoldenVectors|111|2240014178B7AB47479E21279B75E9C2CE0C3A1D499EFB549AD124A455D6CBBF",
-                "Deep.Protocol.GoldenVectors|111|F747403B5CD0A9CDD6F824DEA79B508D7292B8E2241936D8353B9B0B5EFA2737"
+                "Deep.Protocol.GoldenVectors|111|F747403B5CD0A9CDD6F824DEA79B508D7292B8E2241936D8353B9B0B5EFA2737",
+                "Deep.Protocol.GoldenVectors|111|1636E0CC50CB9C3CCD557A649E676B7D01962109F369D2DD74A38BA74BCC4CC2"
             ]
         };
 }
