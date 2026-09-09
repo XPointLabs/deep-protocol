@@ -556,7 +556,17 @@ $managedProbeProject = Require-File (Join-Path $repositoryRoot 'eng\Deep.MlKem.M
 $runtimeWrapperProbeProject = Require-File (Join-Path $repositoryRoot 'eng\Deep.MlKem.RuntimeWrapperProbe\Deep.MlKem.RuntimeWrapperProbe.csproj')
 $protocolTestsProject = Require-File (Join-Path $repositoryRoot 'tests\Deep.Protocol.Tests\Deep.Protocol.Tests.csproj')
 $script:DotnetPath = Require-File ((Get-Command dotnet -ErrorAction Stop).Source)
-$script:DotnetX64Path = Require-File (Join-Path (Split-Path -Parent $script:DotnetPath) 'x64\dotnet.exe')
+$nestedDotnetX64Path = Join-Path (Split-Path -Parent $script:DotnetPath) 'x64\dotnet.exe'
+if (Test-Path -LiteralPath $nestedDotnetX64Path -PathType Leaf) {
+    $script:DotnetX64Path = (Resolve-Path -LiteralPath $nestedDotnetX64Path).Path
+}
+elseif ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq
+    [Runtime.InteropServices.Architecture]::X64) {
+    $script:DotnetX64Path = $script:DotnetPath
+}
+else {
+    throw "Required x64 .NET host is absent: $nestedDotnetX64Path"
+}
 $dotnetVersion = (& $script:DotnetPath --version).Trim()
 $dotnetX64Runtimes = @(& $script:DotnetX64Path --list-runtimes)
 if ($LASTEXITCODE -ne 0 -or $dotnetVersion -notmatch '^10\.0\.' -or
@@ -649,9 +659,16 @@ if ((Get-FileHash -LiteralPath $script:CmakePath -Algorithm SHA256).Hash.ToLower
     (Get-FileHash -LiteralPath $script:NinjaPath -Algorithm SHA256).Hash.ToLowerInvariant() -cne $expectedNinjaSha256) {
     throw 'CMake, CTest or Ninja differs from the reviewed Windows build toolchain.'
 }
+$dotnetHash = (Get-FileHash -LiteralPath $script:DotnetPath -Algorithm SHA256).Hash.ToLowerInvariant()
+$dotnetX64Hash = (Get-FileHash -LiteralPath $script:DotnetX64Path -Algorithm SHA256).Hash.ToLowerInvariant()
+$dotnetHostsApproved = if ($script:DotnetPath -ceq $script:DotnetX64Path) {
+    $dotnetHash -ceq $expectedDotnetX64Sha256
+}
+else {
+    $dotnetHash -ceq $expectedDotnetSha256 -and $dotnetX64Hash -ceq $expectedDotnetX64Sha256
+}
 if ((Get-FileHash -LiteralPath $script:VsDevCmd -Algorithm SHA256).Hash.ToLowerInvariant() -cne $expectedVsDevCmdSha256 -or
-    (Get-FileHash -LiteralPath $script:DotnetPath -Algorithm SHA256).Hash.ToLowerInvariant() -cne $expectedDotnetSha256 -or
-    (Get-FileHash -LiteralPath $script:DotnetX64Path -Algorithm SHA256).Hash.ToLowerInvariant() -cne $expectedDotnetX64Sha256) {
+    -not $dotnetHostsApproved) {
     throw 'VsDevCmd or .NET host differs from the reviewed Windows build toolchain.'
 }
 
