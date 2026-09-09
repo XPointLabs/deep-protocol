@@ -208,9 +208,9 @@ function Build-ManagedEvidenceProject {
     }
     New-Item -ItemType Directory -Path $ArtifactsDirectory -Force | Out-Null
     Invoke-Checked -Command $script:DotnetPath -Arguments @(
-        'restore', $Project, '--locked-mode', '--artifacts-path', $ArtifactsDirectory)
+        'restore', $Project, '--locked-mode', '-r', 'win-x64', '--artifacts-path', $ArtifactsDirectory)
     Invoke-Checked -Command $script:DotnetPath -Arguments @(
-        'build', $Project, '-c', 'Release', '--no-restore', '--artifacts-path', $ArtifactsDirectory)
+        'build', $Project, '-c', 'Release', '--no-restore', '-r', 'win-x64', '--artifacts-path', $ArtifactsDirectory)
     $binRoot = Require-Directory (Join-Path $ArtifactsDirectory 'bin')
     $matches = @(Get-ChildItem -LiteralPath $binRoot -Filter $AssemblyName -File -Recurse)
     if ($matches.Count -ne 1) {
