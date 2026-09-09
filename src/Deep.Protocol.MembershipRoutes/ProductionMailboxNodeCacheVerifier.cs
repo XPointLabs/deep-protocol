@@ -209,7 +209,7 @@ public static class ProductionMailboxNodeCacheVerifier
         {
             if (proof.OldIssuerSignature.Span.IndexOfAnyExcept((byte)0) >= 0)
                 throw new FormatException("PMC2 offline PSS2 has a non-zero retired-issuer slot.");
-            authority = ProductionMailboxAuthorityVerifier.VerifyForwardCheckpoint(
+            authority = ProductionMailboxRoutesVerificationFacade.VerifyForwardCheckpoint(
                 artifacts.CanonicalAuthority.Span,
                 new ProductionMailboxAuthorityCheckpointVerificationContext
                 {

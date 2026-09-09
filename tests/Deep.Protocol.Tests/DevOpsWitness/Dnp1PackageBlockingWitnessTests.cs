@@ -168,7 +168,7 @@ public sealed class Dnp1PackageBlockingWitnessTests
             "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script
         };
         all.AddRange(arguments);
-        return Run("powershell.exe", all);
+        return Run("pwsh", all);
     }
 
     private static ProcessResult Run(string fileName, IReadOnlyList<string> arguments)

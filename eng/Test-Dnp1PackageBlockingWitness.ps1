@@ -8,13 +8,14 @@ Set-StrictMode -Version Latest
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+. (Join-Path $PSScriptRoot 'ProductionProtocolClosure.Common.ps1')
 $artifactsRoot = Join-Path $root 'artifacts/dnp1-devops-witness-runs'
 [IO.Directory]::CreateDirectory($artifactsRoot) | Out-Null
 $runRoot = Join-Path $artifactsRoot ([Guid]::NewGuid().ToString('N'))
+$sourceRoot = Join-Path $runRoot 'source'
 $input = Join-Path $runRoot 'input'
 $normalized = Join-Path $runRoot 'normalized'
 $version = '0.0.0-dnp1witness'
-$repositoryUrl = 'https://github.com/XPointLabs/deep-protocol.git'
 
 function Invoke-DotNet {
     param([Parameter(Mandatory)] [string[]] $Arguments, [Parameter(Mandatory)] [string] $Label)
@@ -42,41 +43,56 @@ function Invoke-DotNetMustFail {
 }
 
 try {
-    [IO.Directory]::CreateDirectory($input) | Out-Null
-    $projects = @(
-        'src/Deep.Protocol/Deep.Protocol.csproj',
-        'src/Deep.Protocol.MembershipRoutes/Deep.Protocol.MembershipRoutes.csproj',
-        'src/Deep.Protocol.ProfileCarrier/Deep.Protocol.ProfileCarrier.csproj')
-    foreach ($project in $projects) {
-        $arguments = @(
-            'pack', (Join-Path $root $project), '--configuration', $Configuration,
-            '--no-build', '--no-restore', '--output', $input,
-            "-p:Version=$version", "-p:PackageVersion=$version",
-            "-p:RepositoryUrl=$repositoryUrl")
-        if ($project -like '*ProfileCarrier*') {
-            $arguments += "-p:DeepProtocolPackageVersion=[$version]"
-        }
-        Invoke-DotNet $arguments "dotnet pack $project"
-    }
-
+    New-PrivateDirectoryAtomic $runRoot
+    $workspaceEntries = @(Get-CanonicalWorkspaceEntries $root)
+    [void] (Copy-CanonicalWorkspaceSnapshot $root $sourceRoot $workspaceEntries)
     $head = (& git -C $root rev-parse HEAD | Out-String).Trim()
     if ($LASTEXITCODE -ne 0 -or $head -notmatch '^[0-9a-f]{40}$') {
         throw 'Cannot bind the package witness to the protocol source commit.'
     }
-    & (Join-Path $PSScriptRoot 'Normalize-ProductionProtocolClosure.ps1') `
+
+    $policy = Read-ClosurePolicy `
+        (Join-Path $sourceRoot 'eng/production-protocol-closure.policy.json') `
+        (Join-Path $sourceRoot 'eng/production-protocol-closure.policy.schema.json')
+    $config = Join-Path $sourceRoot 'eng/production-protocol-closure.NuGet.Config'
+    $goldenProject = Join-Path $sourceRoot 'tests/Deep.Protocol.GoldenVectors/Deep.Protocol.GoldenVectors.csproj'
+    Invoke-DotNet @(
+        'restore', $goldenProject, '--locked-mode', '--configfile', $config) `
+        'locked restore golden-vector resource assembly'
+    Invoke-DotNet @(
+        'build', $goldenProject, '--configuration', 'Release', '--no-restore') `
+        'golden-vector resource assembly build'
+    foreach ($package in $policy.packages) {
+        [void] (Get-LockedGraph $sourceRoot $package)
+        [void] (Get-EvaluatedProjectContract $sourceRoot $policy $package $version)
+        $properties = @(Get-HermeticMsBuildProperties $sourceRoot $package $version $policy $head)
+        $project = Join-Path $sourceRoot $package.project
+        Invoke-DotNet `
+            (@('restore', $project, '--locked-mode', '--configfile', $config) + $properties) `
+            "audited locked restore $($package.id)"
+        Assert-HermeticEvaluatedInputClosure $sourceRoot $policy $package $version $head
+    }
+    foreach ($package in $policy.packages) {
+        Invoke-HermeticAuditedTarget $sourceRoot $policy $package $version $head Build
+    }
+    New-PrivateDirectoryAtomic $input
+    foreach ($package in $policy.packages) {
+        Invoke-HermeticAuditedTarget $sourceRoot $policy $package $version $head Pack $input
+    }
+
+    & (Join-Path $sourceRoot 'eng/Normalize-ProductionProtocolClosure.ps1') `
         -InputDirectory $input `
         -OutputDirectory $normalized `
-        -ProductionVersion $version `
-        -ProfileCarrierVersion $version `
+        -Version $version `
         -SourceCommit $head `
-        -RepositoryUrl $repositoryUrl
+        -SourceRoot $sourceRoot
     if ($LASTEXITCODE -ne 0) { throw 'Exact-three package normalization failed.' }
 
     $assemblies = [ordered]@{
-        '--protocol-assembly' = Join-Path $root "src/Deep.Protocol/bin/$Configuration/net10.0/Deep.Protocol.dll"
-        '--routes-assembly' = Join-Path $root "src/Deep.Protocol.MembershipRoutes/bin/$Configuration/net10.0/Deep.Protocol.MembershipRoutes.dll"
-        '--carrier-assembly' = Join-Path $root "src/Deep.Protocol.ProfileCarrier/bin/$Configuration/net10.0/Deep.Protocol.ProfileCarrier.dll"
-        '--golden-assembly' = Join-Path $root "tests/Deep.Protocol.GoldenVectors/bin/$Configuration/net10.0/Deep.Protocol.GoldenVectors.dll"
+        '--protocol-assembly' = Join-Path $sourceRoot 'src/Deep.Protocol/bin/Release/net10.0/Deep.Protocol.dll'
+        '--routes-assembly' = Join-Path $sourceRoot 'src/Deep.Protocol.MembershipRoutes/bin/Release/net10.0/Deep.Protocol.MembershipRoutes.dll'
+        '--carrier-assembly' = Join-Path $sourceRoot 'src/Deep.Protocol.ProfileCarrier/bin/Release/net10.0/Deep.Protocol.ProfileCarrier.dll'
+        '--golden-assembly' = Join-Path $sourceRoot 'tests/Deep.Protocol.GoldenVectors/bin/Release/net10.0/Deep.Protocol.GoldenVectors.dll'
     }
     foreach ($assembly in $assemblies.Values) {
         if (-not (Test-Path -LiteralPath $assembly -PathType Leaf)) {

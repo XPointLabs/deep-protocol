@@ -172,7 +172,7 @@ public sealed record ProductionMailboxAuthorityVerificationContext
 /// PMA1 rotation. The downloaded PMA1 is still authenticated by the caller-pinned Mr. X key and
 /// must be live; only the exact previous-hash requirement is replaced by a bounded forward jump.
 /// </summary>
-internal sealed record ProductionMailboxAuthorityCheckpointVerificationContext
+public sealed record ProductionMailboxAuthorityCheckpointVerificationContext
 {
     public required ReadOnlyMemory<byte> PinnedMrXPublicKeySha256 { get; init; }
     public required ReadOnlyMemory<byte> ExpectedNetworkId { get; init; }

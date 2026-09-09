@@ -301,7 +301,7 @@ internal static class ProductionMailboxRouteHistoryCodec
             payload.Length > ProductionMailboxAuthorityConstants.MaximumArtifactBytes)
             throw new FormatException("RHB1 PMA1 length is outside its bound.");
         if (kind == ProductionMailboxRouteHistoryArtifactKind.Revocations)
-            ProductionMailboxRevocationSnapshotCodec.PreflightCanonical(payload);
+            ProductionMailboxRoutesVerificationFacade.PreflightCanonicalRevocationSnapshot(payload);
     }
 
     internal static ProductionMailboxRouteHistoryBatch Decode(ReadOnlySpan<byte> encoded)

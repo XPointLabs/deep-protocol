@@ -1,0 +1,41 @@
+<Project>
+  <PropertyGroup>
+    <ProvideCommandLineArgs>true</ProvideCommandLineArgs>
+  </PropertyGroup>
+
+  <Target Name="_ProductionProtocolEvaluateAudit" />
+
+  <Target Name="_GuardProductionProtocolCompiler"
+          BeforeTargets="CoreCompile"
+          Condition="'$(ProductionProtocolClosureAuditKind)' == 'Build'">
+    <Error Condition="'$(CompilerResponseFile)' != '' Or '$(CscToolPath)' != '' Or '$(CscToolExe)' != '' Or '$(CscEnvironment)' != '' Or '$(AdditionalCompilerArguments)' != '' Or '$(Features)' != '' Or '$(InterceptorsNamespaces)' != '' Or '$(InterceptorsPreviewNamespaces)' != ''"
+           Text="Production protocol compiler overrides/response files are forbidden." />
+    <Error Condition="'$(NoConfig)' != 'true' Or '$(NoStandardLib)' != 'true' Or '$(UseSharedCompilation)' != 'false' Or '$(SkipCompilerExecution)' != 'false'"
+           Text="Production protocol compiler global controls were overridden." />
+  </Target>
+
+  <Target Name="_CaptureProductionProtocolActualCompilerInputs"
+          AfterTargets="CoreCompile"
+          Condition="'$(ProductionProtocolClosureAuditKind)' == 'Build' And '$(MSBuildProjectFullPath)' == '$(ProductionProtocolClosureAuditProject)'">
+    <ItemGroup>
+      <_ProductionProtocolActualCompilerInput Include="@(Compile->'%(FullPath)')" InputKind="Compile" />
+      <_ProductionProtocolActualCompilerInput Include="@(ReferencePathWithRefAssemblies->'%(FullPath)')" InputKind="Reference" />
+      <_ProductionProtocolActualCompilerInput Include="@(Analyzer->'%(FullPath)')" InputKind="Analyzer" />
+      <_ProductionProtocolActualCompilerInput Include="@(AdditionalFiles->'%(FullPath)')" InputKind="AdditionalFiles" />
+      <_ProductionProtocolActualCompilerInput Include="@(EditorConfigFiles->'%(FullPath)')" InputKind="EditorConfig" />
+      <_ProductionProtocolActualCompilerInput Include="@(_CoreCompileResourceInputs->'%(FullPath)')" InputKind="Resource" />
+      <_ProductionProtocolActualCompilerInput Include="$(SourceLink)" InputKind="SourceLink" Condition="'$(SourceLink)' != ''" />
+      <_ProductionProtocolActualCompilerInput Include="$(Win32Resource)" InputKind="Win32Resource" Condition="'$(Win32Resource)' != ''" />
+      <_ProductionProtocolActualCompilerInput Include="$(KeyOriginatorFile)" InputKind="SigningKey" Condition="'$(KeyOriginatorFile)' != ''" />
+    </ItemGroup>
+    <Error Condition="'@(CscCommandLineArgs)' == ''" Text="Production protocol compiler audit did not receive actual Csc command-line arguments." />
+  </Target>
+
+  <Target Name="_CaptureProductionProtocolActualPackInputs"
+          AfterTargets="_CalculateInputsOutputsForPack"
+          Condition="'$(ProductionProtocolClosureAuditKind)' == 'Pack' And '$(MSBuildProjectFullPath)' == '$(ProductionProtocolClosureAuditProject)'">
+    <ItemGroup>
+      <_ProductionProtocolActualPackInput Include="@(NuGetPackInput->'%(FullPath)')" InputKind="NuGetPackInput" />
+    </ItemGroup>
+  </Target>
+</Project>

@@ -2,7 +2,7 @@
 param(
     [string] $NormativeRoot = '',
     [string[]] $MappingPaths = @(),
-    [string] $ExpectedNormativeCommit = '2562b11cdacdcc6e60cf79bdb6265b4f4687fbbe',
+    [string] $ExpectedNormativeCommit = '2651599913bf92c021d36b6a53395499b6a091fb',
     [switch] $RequirePackageComplete
 )
 

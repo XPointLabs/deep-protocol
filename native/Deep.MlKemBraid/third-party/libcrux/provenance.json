@@ -1,0 +1,28 @@
+{
+  "package": "libcrux-ml-kem",
+  "crateVersion": "0.0.10",
+  "crateRegistry": "https://crates.io/crates/libcrux-ml-kem/0.0.10",
+  "crateSha256": "1d8160f7d64fd2716b4fd05cc886a042f8dcda18d9206c0d506e2c67bdf97daa",
+  "repository": "https://github.com/cryspen/libcrux",
+  "repositoryCommit": "c5fb80f37530ee9b2df9501ae5ff8cb4a973a4bd",
+  "repositoryTag": "libcrux-ml-kem-v0.0.10",
+  "pathInRepository": "libcrux-ml-kem",
+  "declaredCrateLicense": "Apache-2.0",
+  "repositoryAdditionalLicenseFile": "LICENSE-MIT",
+  "licenseEvidence": [
+    {
+      "file": "LICENSE-APACHE",
+      "sourcePath": "LICENSE",
+      "sourceGitBlobSha1": "b9000b9bdcba593e73aa283f9a7a7b4cc16e3d26",
+      "localSha256": "89a704092ec99209cd19f1d60cd67a353e3ec069e7f19f17cd41fcac052811c4"
+    },
+    {
+      "file": "LICENSE-MIT",
+      "sourcePath": "LICENSE-MIT",
+      "sourceGitBlobSha1": "e37060b8f11a166b0368a5144814fc081fbb3779",
+      "localSha256": "182ab7e3c88dd73b9c264ae0d5ed27f73b2b28f8d187e4d42b0eed2b93bfb4c3"
+    }
+  ],
+  "licenseConclusion": "The published 0.0.10 crate metadata declares Apache-2.0. The repository also contains LICENSE-MIT, but this spike conservatively consumes the crate under Apache-2.0 and does not claim that the published crate is dual-licensed.",
+  "upstreamWorkspaceMsrv": "1.89.0"
+}

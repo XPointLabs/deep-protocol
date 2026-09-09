@@ -471,27 +471,9 @@ public sealed class ProductionMailboxRouteIssuerAuthoringTests
         internal static DirectIntentClosure Create(RouteV2TestFixture f)
         {
             var currentAuthority = f.Authority.Authority;
-            var oldAuthorityHash = currentAuthority.PreviousAuthorityHash.ToArray();
-            var oldAuthorityValue = currentAuthority with
-            {
-                AuthorityGeneration = currentAuthority.AuthorityGeneration - 1,
-                PreviousAuthorityHash = RouteV2TestFixture.Bytes(205, 32),
-                CurrentEpoch = currentAuthority.CurrentEpoch with
-                {
-                    Epoch = currentAuthority.CurrentEpoch.Epoch - 1,
-                    Generation = currentAuthority.CurrentEpoch.Generation - 1
-                },
-                NextEpoch = currentAuthority.CurrentEpoch,
-                Revocation = currentAuthority.Revocation with
-                {
-                    SnapshotHash = RouteV2TestFixture.Bytes(23, 32),
-                    HeadHash = currentAuthority.Revocation.PreviousHeadHash,
-                    PreviousHeadHash = RouteV2TestFixture.Bytes(206, 32),
-                    Generation = currentAuthority.Revocation.Generation - 1
-                }
-            };
-            var oldAuthority = new VerifiedProductionMailboxAuthority(
-                oldAuthorityValue, oldAuthorityHash, oldAuthorityValue.AuthorityGeneration);
+            var oldAuthority = f.PreviousAuthority;
+            var oldAuthorityValue = oldAuthority.Authority;
+            var oldAuthorityHash = oldAuthority.CanonicalAuthorityHash.ToArray();
 
             var nodes = new[]
             {

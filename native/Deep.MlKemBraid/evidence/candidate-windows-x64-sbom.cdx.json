@@ -1,0 +1,255 @@
+{
+  "$schema": "http://cyclonedx.org/schema/bom-1.5.schema.json",
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "application",
+      "bom-ref": "pkg:cargo/deep-mlkem-braid@0.1.0",
+      "name": "deep-mlkem-braid",
+      "version": "0.1.0",
+      "licenses": [
+        {
+          "expression": "Apache-2.0"
+        }
+      ]
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "bom-ref": "pkg:cargo/cfg-if@1.0.4",
+      "name": "cfg-if",
+      "version": "1.0.4",
+      "licenses": [{ "expression": "MIT OR Apache-2.0" }],
+      "hashes": [{ "alg": "SHA-256", "content": "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801" }],
+      "purl": "pkg:cargo/cfg-if@1.0.4",
+      "properties": [{ "name": "cargo:source", "value": "registry+https://github.com/rust-lang/crates.io-index" }]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:cargo/chacha20@0.10.2",
+      "name": "chacha20",
+      "version": "0.10.2",
+      "licenses": [{ "expression": "MIT OR Apache-2.0" }],
+      "hashes": [{ "alg": "SHA-256", "content": "65c35e4b699c7e15ccbe7ee35c005e4fc0a278d22238a2857e6ce2dadeda1b06" }],
+      "purl": "pkg:cargo/chacha20@0.10.2",
+      "properties": [{ "name": "cargo:source", "value": "registry+https://github.com/rust-lang/crates.io-index" }]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:cargo/cpufeatures@0.3.1",
+      "name": "cpufeatures",
+      "version": "0.3.1",
+      "licenses": [{ "expression": "MIT OR Apache-2.0" }],
+      "hashes": [{ "alg": "SHA-256", "content": "5ca28b0ae3115b884660db4118d803791fd6756b6e88f39c0f3f7859060d7566" }],
+      "purl": "pkg:cargo/cpufeatures@0.3.1",
+      "properties": [{ "name": "cargo:source", "value": "registry+https://github.com/rust-lang/crates.io-index" }]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:cargo/getrandom@0.3.3",
+      "name": "getrandom",
+      "version": "0.3.3",
+      "licenses": [{ "expression": "MIT OR Apache-2.0" }],
+      "hashes": [{ "alg": "SHA-256", "content": "26145e563e54f2cadc477553f1ec5ee650b00862f0a58bcd12cbdc5f0ea2d2f4" }],
+      "purl": "pkg:cargo/getrandom@0.3.3",
+      "properties": [{ "name": "cargo:source", "value": "registry+https://github.com/rust-lang/crates.io-index" }]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:cargo/getrandom@0.4.3",
+      "name": "getrandom",
+      "version": "0.4.3",
+      "licenses": [{ "expression": "MIT OR Apache-2.0" }],
+      "hashes": [{ "alg": "SHA-256", "content": "300e883d756b2e4ec94e02791f39b04b522276138852cfc41d9fb7e904106099" }],
+      "purl": "pkg:cargo/getrandom@0.4.3",
+      "properties": [{ "name": "cargo:source", "value": "registry+https://github.com/rust-lang/crates.io-index" }]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:cargo/hax-lib@0.3.7",
+      "name": "hax-lib",
+      "version": "0.3.7",
+      "licenses": [{ "expression": "Apache-2.0" }],
+      "hashes": [{ "alg": "SHA-256", "content": "01a33cb227f97ee5c419064c31d7c55a7d895f28d8019ccdadc311cc036500c4" }],
+      "purl": "pkg:cargo/hax-lib@0.3.7",
+      "properties": [{ "name": "cargo:source", "value": "registry+https://github.com/rust-lang/crates.io-index" }]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:cargo/hax-lib-macros@0.3.7",
+      "name": "hax-lib-macros",
+      "version": "0.3.7",
+      "licenses": [{ "expression": "Apache-2.0" }],
+      "hashes": [{ "alg": "SHA-256", "content": "28da835a5f153e9f3d0cc1f42ee605a1cfa9093c93348193793d60a1b0908b51" }],
+      "purl": "pkg:cargo/hax-lib-macros@0.3.7",
+      "properties": [{ "name": "cargo:source", "value": "registry+https://github.com/rust-lang/crates.io-index" }]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:cargo/libc@0.2.189",
+      "name": "libc",
+      "version": "0.2.189",
+      "licenses": [{ "expression": "MIT OR Apache-2.0" }],
+      "hashes": [{ "alg": "SHA-256", "content": "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2" }],
+      "purl": "pkg:cargo/libc@0.2.189",
+      "properties": [{ "name": "cargo:source", "value": "registry+https://github.com/rust-lang/crates.io-index" }]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:cargo/libcrux-intrinsics@0.0.8",
+      "name": "libcrux-intrinsics",
+      "version": "0.0.8",
+      "licenses": [{ "expression": "Apache-2.0" }],
+      "hashes": [{ "alg": "SHA-256", "content": "98a0c574d4eb81d0814bc2b91e4a433d7e0b35851b1d62eb5dd95c064f1f76d0" }],
+      "purl": "pkg:cargo/libcrux-intrinsics@0.0.8",
+      "properties": [{ "name": "cargo:source", "value": "registry+https://github.com/rust-lang/crates.io-index" }]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:cargo/libcrux-ml-kem@0.0.10",
+      "name": "libcrux-ml-kem",
+      "version": "0.0.10",
+      "licenses": [{ "expression": "Apache-2.0" }],
+      "hashes": [{ "alg": "SHA-256", "content": "1d8160f7d64fd2716b4fd05cc886a042f8dcda18d9206c0d506e2c67bdf97daa" }],
+      "purl": "pkg:cargo/libcrux-ml-kem@0.0.10",
+      "properties": [{ "name": "cargo:source", "value": "registry+https://github.com/rust-lang/crates.io-index" }]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:cargo/libcrux-platform@0.0.3",
+      "name": "libcrux-platform",
+      "version": "0.0.3",
+      "licenses": [{ "expression": "Apache-2.0" }],
+      "hashes": [{ "alg": "SHA-256", "content": "1d9e21d7ed31a92ac539bd69a8c970b183ee883872d2d19ce27036e24cb8ecc4" }],
+      "purl": "pkg:cargo/libcrux-platform@0.0.3",
+      "properties": [{ "name": "cargo:source", "value": "registry+https://github.com/rust-lang/crates.io-index" }]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:cargo/libcrux-secrets@0.0.6",
+      "name": "libcrux-secrets",
+      "version": "0.0.6",
+      "licenses": [{ "expression": "Apache-2.0" }],
+      "hashes": [{ "alg": "SHA-256", "content": "79054fc9037cb70d6a546cf094cea7d7df06af5e49d230ba24103d27ccc886f1" }],
+      "purl": "pkg:cargo/libcrux-secrets@0.0.6",
+      "properties": [{ "name": "cargo:source", "value": "registry+https://github.com/rust-lang/crates.io-index" }]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:cargo/libcrux-sha3@0.0.10",
+      "name": "libcrux-sha3",
+      "version": "0.0.10",
+      "licenses": [{ "expression": "Apache-2.0" }],
+      "hashes": [{ "alg": "SHA-256", "content": "c09f5c39afae0528e1f70a3c1e3c6ee649ec1f19dda26fc9b6ea91108fb879ef" }],
+      "purl": "pkg:cargo/libcrux-sha3@0.0.10",
+      "properties": [{ "name": "cargo:source", "value": "registry+https://github.com/rust-lang/crates.io-index" }]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:cargo/libcrux-traits@0.0.8",
+      "name": "libcrux-traits",
+      "version": "0.0.8",
+      "licenses": [{ "expression": "Apache-2.0" }],
+      "hashes": [{ "alg": "SHA-256", "content": "3fa7a21e8c2e8baa8b40f0b176740f2ca4baadd79d1b00e48d6b1e363c42085a" }],
+      "purl": "pkg:cargo/libcrux-traits@0.0.8",
+      "properties": [{ "name": "cargo:source", "value": "registry+https://github.com/rust-lang/crates.io-index" }]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:cargo/proc-macro2@1.0.107",
+      "name": "proc-macro2",
+      "version": "1.0.107",
+      "licenses": [{ "expression": "MIT OR Apache-2.0" }],
+      "hashes": [{ "alg": "SHA-256", "content": "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9" }],
+      "purl": "pkg:cargo/proc-macro2@1.0.107",
+      "properties": [{ "name": "cargo:source", "value": "registry+https://github.com/rust-lang/crates.io-index" }]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:cargo/quote@1.0.47",
+      "name": "quote",
+      "version": "1.0.47",
+      "licenses": [{ "expression": "MIT OR Apache-2.0" }],
+      "hashes": [{ "alg": "SHA-256", "content": "1fbf4db142a473a8d80c26bbf18454ed458bf8d26c8219c331daecfdbd079001" }],
+      "purl": "pkg:cargo/quote@1.0.47",
+      "properties": [{ "name": "cargo:source", "value": "registry+https://github.com/rust-lang/crates.io-index" }]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:cargo/rand@0.10.2",
+      "name": "rand",
+      "version": "0.10.2",
+      "licenses": [{ "expression": "MIT OR Apache-2.0" }],
+      "hashes": [{ "alg": "SHA-256", "content": "c7f5fa3a058cd35567ef9bfa5e75732bee0f9e4c55fa90477bef2dfcdbc4be80" }],
+      "purl": "pkg:cargo/rand@0.10.2",
+      "properties": [{ "name": "cargo:source", "value": "registry+https://github.com/rust-lang/crates.io-index" }]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:cargo/rand_core@0.10.1",
+      "name": "rand_core",
+      "version": "0.10.1",
+      "licenses": [{ "expression": "MIT OR Apache-2.0" }],
+      "hashes": [{ "alg": "SHA-256", "content": "63b8176103e19a2643978565ca18b50549f6101881c443590420e4dc998a3c69" }],
+      "purl": "pkg:cargo/rand_core@0.10.1",
+      "properties": [{ "name": "cargo:source", "value": "registry+https://github.com/rust-lang/crates.io-index" }]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:cargo/syn@2.0.119",
+      "name": "syn",
+      "version": "2.0.119",
+      "licenses": [{ "expression": "MIT OR Apache-2.0" }],
+      "hashes": [{ "alg": "SHA-256", "content": "872831b642d1a07999a962a351ed35b955ea2cfc8f3862091e2a240a84f17297" }],
+      "purl": "pkg:cargo/syn@2.0.119",
+      "properties": [{ "name": "cargo:source", "value": "registry+https://github.com/rust-lang/crates.io-index" }]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:cargo/unicode-ident@1.0.24",
+      "name": "unicode-ident",
+      "version": "1.0.24",
+      "licenses": [{ "expression": "(MIT OR Apache-2.0) AND Unicode-3.0" }],
+      "hashes": [{ "alg": "SHA-256", "content": "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75" }],
+      "purl": "pkg:cargo/unicode-ident@1.0.24",
+      "properties": [{ "name": "cargo:source", "value": "registry+https://github.com/rust-lang/crates.io-index" }]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:cargo/zeroize@1.8.1",
+      "name": "zeroize",
+      "version": "1.8.1",
+      "licenses": [{ "expression": "Apache-2.0 OR MIT" }],
+      "hashes": [{ "alg": "SHA-256", "content": "ced3678a2879b30306d323f4542626697a464a97c0a07c9aebf7ebca65cd4dde" }],
+      "purl": "pkg:cargo/zeroize@1.8.1",
+      "properties": [{ "name": "cargo:source", "value": "registry+https://github.com/rust-lang/crates.io-index" }]
+    }
+  ],
+  "dependencies": [
+    { "ref": "pkg:cargo/deep-mlkem-braid@0.1.0", "dependsOn": ["pkg:cargo/getrandom@0.3.3", "pkg:cargo/libcrux-ml-kem@0.0.10", "pkg:cargo/zeroize@1.8.1"] },
+    { "ref": "pkg:cargo/cfg-if@1.0.4", "dependsOn": [] },
+    { "ref": "pkg:cargo/chacha20@0.10.2", "dependsOn": ["pkg:cargo/cfg-if@1.0.4", "pkg:cargo/cpufeatures@0.3.1", "pkg:cargo/rand_core@0.10.1"] },
+    { "ref": "pkg:cargo/cpufeatures@0.3.1", "dependsOn": [] },
+    { "ref": "pkg:cargo/getrandom@0.3.3", "dependsOn": ["pkg:cargo/cfg-if@1.0.4"] },
+    { "ref": "pkg:cargo/getrandom@0.4.3", "dependsOn": ["pkg:cargo/cfg-if@1.0.4", "pkg:cargo/rand_core@0.10.1"] },
+    { "ref": "pkg:cargo/hax-lib@0.3.7", "dependsOn": ["pkg:cargo/hax-lib-macros@0.3.7"] },
+    { "ref": "pkg:cargo/hax-lib-macros@0.3.7", "dependsOn": ["pkg:cargo/proc-macro2@1.0.107", "pkg:cargo/quote@1.0.47", "pkg:cargo/syn@2.0.119"] },
+    { "ref": "pkg:cargo/libc@0.2.189", "dependsOn": [] },
+    { "ref": "pkg:cargo/libcrux-intrinsics@0.0.8", "dependsOn": ["pkg:cargo/hax-lib@0.3.7"] },
+    { "ref": "pkg:cargo/libcrux-ml-kem@0.0.10", "dependsOn": ["pkg:cargo/hax-lib@0.3.7", "pkg:cargo/libcrux-intrinsics@0.0.8", "pkg:cargo/libcrux-platform@0.0.3", "pkg:cargo/libcrux-secrets@0.0.6", "pkg:cargo/libcrux-sha3@0.0.10", "pkg:cargo/libcrux-traits@0.0.8"] },
+    { "ref": "pkg:cargo/libcrux-platform@0.0.3", "dependsOn": ["pkg:cargo/libc@0.2.189"] },
+    { "ref": "pkg:cargo/libcrux-secrets@0.0.6", "dependsOn": ["pkg:cargo/hax-lib@0.3.7"] },
+    { "ref": "pkg:cargo/libcrux-sha3@0.0.10", "dependsOn": ["pkg:cargo/hax-lib@0.3.7", "pkg:cargo/libcrux-intrinsics@0.0.8", "pkg:cargo/libcrux-platform@0.0.3", "pkg:cargo/libcrux-traits@0.0.8"] },
+    { "ref": "pkg:cargo/libcrux-traits@0.0.8", "dependsOn": ["pkg:cargo/libcrux-secrets@0.0.6", "pkg:cargo/rand@0.10.2"] },
+    { "ref": "pkg:cargo/proc-macro2@1.0.107", "dependsOn": ["pkg:cargo/unicode-ident@1.0.24"] },
+    { "ref": "pkg:cargo/quote@1.0.47", "dependsOn": ["pkg:cargo/proc-macro2@1.0.107"] },
+    { "ref": "pkg:cargo/rand@0.10.2", "dependsOn": ["pkg:cargo/chacha20@0.10.2", "pkg:cargo/getrandom@0.4.3", "pkg:cargo/rand_core@0.10.1"] },
+    { "ref": "pkg:cargo/rand_core@0.10.1", "dependsOn": [] },
+    { "ref": "pkg:cargo/syn@2.0.119", "dependsOn": ["pkg:cargo/proc-macro2@1.0.107", "pkg:cargo/quote@1.0.47", "pkg:cargo/unicode-ident@1.0.24"] },
+    { "ref": "pkg:cargo/unicode-ident@1.0.24", "dependsOn": [] },
+    { "ref": "pkg:cargo/zeroize@1.8.1", "dependsOn": [] }
+  ]
+}

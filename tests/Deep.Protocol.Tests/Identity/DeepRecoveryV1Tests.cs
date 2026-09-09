@@ -1,8 +1,9 @@
 using System.Reflection;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
+using Deep.Protocol.ApplicationCore;
 using Deep.Protocol.Identity;
-using Sodium;
 
 namespace Deep.Protocol.Tests.Identity;
 
@@ -18,9 +19,13 @@ public sealed class DeepRecoveryV1Tests
         var entropy = Convert.FromHexString(vector.Entropy);
         try
         {
-            var phrase = DeepRecoveryV1.EncodeEntropy(entropy);
-            Assert.Equal(vector.Mnemonic, phrase);
-            Assert.Equal(DeepRecoveryV1.WordCount, phrase.Split(' ').Length);
+            using var verified = DeepRecoveryV1.VerifyCanonicalUtf8(
+                Encoding.ASCII.GetBytes(vector.Mnemonic));
+            var phrase = new byte[verified.CanonicalUtf8Length];
+            Assert.Equal(phrase.Length, verified.WriteCanonicalUtf8(phrase));
+            Assert.Equal(Encoding.ASCII.GetBytes(vector.Mnemonic), phrase);
+            Assert.Equal(DeepRecoveryV1.WordCount - 1, phrase.Count(static value => value == (byte)' '));
+            CryptographicOperations.ZeroMemory(phrase);
         }
         finally
         {
@@ -29,16 +34,52 @@ public sealed class DeepRecoveryV1Tests
     }
 
     [Fact]
-    public void Verify_NormalizesCaseAndUnicodeWhitespace()
+    public void VerifyCanonicalUtf8_RejectsCaseAndNonAsciiWhitespace()
     {
         var vector = LoadVector();
         var mixed = "\t" + vector.Mnemonic
             .ToUpperInvariant()
             .Replace(" ", "\r\n\u00a0", StringComparison.Ordinal) + "\u00a0";
 
-        using var verified = DeepRecoveryV1.Verify(mixed);
+        Assert.Throws<ArgumentException>(() =>
+            DeepRecoveryV1.VerifyCanonicalUtf8(Encoding.UTF8.GetBytes(mixed)));
+    }
 
-        Assert.Equal(vector.Mnemonic, verified.CanonicalPhrase);
+    [Theory]
+    [InlineData(" abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art")]
+    [InlineData("abandon  abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art")]
+    [InlineData("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art ")]
+    [InlineData("Abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art")]
+    public void VerifyCanonicalUtf8_RejectsEveryNonCanonicalAsciiForm(string value)
+    {
+        Assert.Throws<ArgumentException>(() =>
+            DeepRecoveryV1.VerifyCanonicalUtf8(Encoding.ASCII.GetBytes(value)));
+    }
+
+    [Fact]
+    public void WriteCanonicalUtf8_ShortDestinationIsRejectedBeforeMutation()
+    {
+        using var phrase = VerifyVector(LoadVector().Mnemonic);
+        var destination = Enumerable.Repeat((byte)0xa5, phrase.CanonicalUtf8Length - 1).ToArray();
+
+        Assert.Throws<ArgumentException>(() => phrase.WriteCanonicalUtf8(destination));
+
+        Assert.All(destination, static value => Assert.Equal(0xa5, value));
+        CryptographicOperations.ZeroMemory(destination);
+    }
+
+    [Fact]
+    public void UseCanonicalUtf8_ThrowKeepsPhraseUsableAndNeverExportsAString()
+    {
+        using var phrase = VerifyVector(LoadVector().Mnemonic);
+
+        Assert.Throws<InjectedConsumerException>(() =>
+            phrase.UseCanonicalUtf8(static _ => throw new InjectedConsumerException()));
+
+        var encoded = new byte[phrase.CanonicalUtf8Length];
+        phrase.WriteCanonicalUtf8(encoded);
+        Assert.Equal(Encoding.ASCII.GetBytes(LoadVector().Mnemonic), encoded);
+        CryptographicOperations.ZeroMemory(encoded);
     }
 
     [Theory]
@@ -46,7 +87,8 @@ public sealed class DeepRecoveryV1Tests
     [InlineData("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about")]
     public void Verify_RejectsTwelveAndThirteenWordPhrases(string phrase)
     {
-        var exception = Assert.Throws<ArgumentException>(() => DeepRecoveryV1.Verify(phrase));
+        var exception = Assert.Throws<ArgumentException>(() =>
+            DeepRecoveryV1.VerifyCanonicalUtf8(Encoding.ASCII.GetBytes(phrase)));
 
         Assert.Contains("exactly 24 words", exception.Message, StringComparison.Ordinal);
     }
@@ -57,7 +99,8 @@ public sealed class DeepRecoveryV1Tests
         var words = LoadVector().Mnemonic.Split(' ');
         words[7] = "notaword";
 
-        var exception = Assert.Throws<ArgumentException>(() => DeepRecoveryV1.Verify(string.Join(' ', words)));
+        var exception = Assert.Throws<ArgumentException>(() =>
+            DeepRecoveryV1.VerifyCanonicalUtf8(Encoding.ASCII.GetBytes(string.Join(' ', words))));
 
         Assert.Contains("unknown", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
@@ -65,7 +108,8 @@ public sealed class DeepRecoveryV1Tests
     [Fact]
     public void Verify_RejectsOversizedInputBeforeNormalization()
     {
-        var exception = Assert.Throws<ArgumentException>(() => DeepRecoveryV1.Verify(new string('a', 1025)));
+        var exception = Assert.Throws<ArgumentException>(() =>
+            DeepRecoveryV1.VerifyCanonicalUtf8(new byte[DeepRecoveryV1.MaxCanonicalUtf8Length + 1]));
 
         Assert.Contains("too large", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
@@ -76,7 +120,8 @@ public sealed class DeepRecoveryV1Tests
         var words = LoadVector().Mnemonic.Split(' ');
         words[^1] = "zoo";
 
-        var exception = Assert.Throws<ArgumentException>(() => DeepRecoveryV1.Verify(string.Join(' ', words)));
+        var exception = Assert.Throws<ArgumentException>(() =>
+            DeepRecoveryV1.VerifyCanonicalUtf8(Encoding.ASCII.GetBytes(string.Join(' ', words))));
 
         Assert.Contains("checksum", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
@@ -85,19 +130,19 @@ public sealed class DeepRecoveryV1Tests
     public void DeriveAccountCapabilities_MatchesIndependentPythonVector()
     {
         var vector = LoadVector();
-        using var phrase = DeepRecoveryV1.Verify(vector.Mnemonic);
+        using var phrase = VerifyVector(vector.Mnemonic);
         using var capabilities = DeepRecoveryV1.DeriveAccountCapabilities(
             phrase,
             Convert.FromHexString(vector.NetworkId),
             ulong.Parse(vector.AccountGeneration, System.Globalization.CultureInfo.InvariantCulture));
 
-        Assert.Equal(vector.AccountSigningSeed, Hex(capabilities.SnapshotAccountSigningSeed()));
-        Assert.Equal(vector.DeviceIssuerSigningSeed, Hex(capabilities.SnapshotDeviceIssuerSigningSeed()));
-        Assert.Equal(vector.AccountRevocationSigningSeed, Hex(capabilities.SnapshotAccountRevocationSigningSeed()));
-        Assert.Equal(vector.ResetControlSigningSeed, Hex(capabilities.SnapshotResetControlSigningSeed()));
-        Assert.Equal(vector.AddressSigningSeed, Hex(capabilities.SnapshotAddressSigningSeed()));
-        Assert.Equal(vector.AddressReadCapability, Hex(capabilities.SnapshotAddressReadCapability()));
-        Assert.Equal(vector.BackupWrappingSeed, Hex(capabilities.SnapshotBackupWrappingSeed()));
+        Assert.Equal(vector.AccountSigningSeed, Hex(SnapshotBuffer(capabilities, "accountSigningSeed")));
+        Assert.Equal(vector.DeviceIssuerSigningSeed, Hex(SnapshotBuffer(capabilities, "deviceIssuerSigningSeed")));
+        Assert.Equal(vector.AccountRevocationSigningSeed, Hex(SnapshotBuffer(capabilities, "accountRevocationSigningSeed")));
+        Assert.Equal(vector.ResetControlSigningSeed, Hex(SnapshotBuffer(capabilities, "resetControlSigningSeed")));
+        Assert.Equal(vector.AddressSigningSeed, Hex(SnapshotBuffer(capabilities, "addressSigningSeed")));
+        Assert.Equal(vector.AddressReadCapability, Hex(SnapshotBuffer(capabilities, "addressReadCapability")));
+        Assert.Equal(vector.BackupWrappingSeed, Hex(SnapshotBuffer(capabilities, "backupWrappingSeed")));
         Assert.Equal(Convert.FromHexString(vector.NetworkId), capabilities.NetworkId.ToArray());
     }
 
@@ -105,7 +150,7 @@ public sealed class DeepRecoveryV1Tests
     public void DeriveAccountCapabilities_SeparatesRolesNetworkAndGeneration_WhileAddressIsPermanent()
     {
         var vector = LoadVector();
-        using var phrase = DeepRecoveryV1.Verify(vector.Mnemonic);
+        using var phrase = VerifyVector(vector.Mnemonic);
         var network = Convert.FromHexString(vector.NetworkId);
         using var generationOne = DeepRecoveryV1.DeriveAccountCapabilities(phrase, network, 1);
         using var generationTwo = DeepRecoveryV1.DeriveAccountCapabilities(phrase, network, 2);
@@ -114,22 +159,22 @@ public sealed class DeepRecoveryV1Tests
 
         var roleSeedHex = new[]
         {
-            Hex(generationOne.SnapshotAccountSigningSeed()),
-            Hex(generationOne.SnapshotDeviceIssuerSigningSeed()),
-            Hex(generationOne.SnapshotAccountRevocationSigningSeed()),
-            Hex(generationOne.SnapshotResetControlSigningSeed()),
-            Hex(generationOne.SnapshotAddressSigningSeed()),
-            Hex(generationOne.SnapshotBackupWrappingSeed())
+            Hex(SnapshotBuffer(generationOne, "accountSigningSeed")),
+            Hex(SnapshotBuffer(generationOne, "deviceIssuerSigningSeed")),
+            Hex(SnapshotBuffer(generationOne, "accountRevocationSigningSeed")),
+            Hex(SnapshotBuffer(generationOne, "resetControlSigningSeed")),
+            Hex(SnapshotBuffer(generationOne, "addressSigningSeed")),
+            Hex(SnapshotBuffer(generationOne, "backupWrappingSeed"))
         };
         Assert.Equal(roleSeedHex.Length, roleSeedHex.Distinct(StringComparer.Ordinal).Count());
-        Assert.NotEqual(roleSeedHex[0], Hex(generationTwo.SnapshotAccountSigningSeed()));
-        Assert.NotEqual(roleSeedHex[0], Hex(otherNetwork.SnapshotAccountSigningSeed()));
+        Assert.NotEqual(roleSeedHex[0], Hex(SnapshotBuffer(generationTwo, "accountSigningSeed")));
+        Assert.NotEqual(roleSeedHex[0], Hex(SnapshotBuffer(otherNetwork, "accountSigningSeed")));
         Assert.Equal(
-            Hex(generationOne.SnapshotAddressSigningSeed()),
-            Hex(generationTwo.SnapshotAddressSigningSeed()));
+            Hex(SnapshotBuffer(generationOne, "addressSigningSeed")),
+            Hex(SnapshotBuffer(generationTwo, "addressSigningSeed")));
         Assert.Equal(
-            Hex(generationOne.SnapshotAddressReadCapability()),
-            Hex(otherNetwork.SnapshotAddressReadCapability()));
+            Hex(SnapshotBuffer(generationOne, "addressReadCapability")),
+            Hex(SnapshotBuffer(otherNetwork, "addressReadCapability")));
     }
 
     [Fact]
@@ -169,57 +214,53 @@ public sealed class DeepRecoveryV1Tests
     }
 
     [Fact]
-    public void RoleSpecificSigningCapabilities_UseIndependentEd25519Keys()
+    public void RecoveryCapability_HasNoAssemblyVisibleGenericSigningSurface()
     {
-        using var phrase = DeepRecoveryV1.Verify(LoadVector().Mnemonic);
-        using var capabilities = DeepRecoveryV1.DeriveAccountCapabilities(
-            phrase,
-            Convert.FromHexString(LoadVector().NetworkId),
-            1);
-        var message = SHA256.HashData("bounded identity authoring input"u8);
+        var callableFromFriend = typeof(DeepRecoveryAccountCapabilities)
+            .GetMethods(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly)
+            .Where(static method => method.IsAssembly || method.IsFamilyOrAssembly)
+            .Where(static method => method.Name.StartsWith("Sign", StringComparison.Ordinal))
+            .ToArray();
 
-        var accountSignature = capabilities.SignAccount(message);
-        var deviceSignature = capabilities.SignDeviceCertificate(message);
-
-        Assert.True(PublicKeyAuth.VerifyDetached(
-            accountSignature, message, capabilities.AccountSigningPublicKey.ToArray()));
-        Assert.True(PublicKeyAuth.VerifyDetached(
-            deviceSignature, message, capabilities.DeviceIssuerSigningPublicKey.ToArray()));
-        Assert.False(PublicKeyAuth.VerifyDetached(
-            accountSignature, message, capabilities.DeviceIssuerSigningPublicKey.ToArray()));
-        Assert.False(PublicKeyAuth.VerifyDetached(
-            deviceSignature, message, capabilities.AccountSigningPublicKey.ToArray()));
-    }
-
-    [Fact]
-    public void RoleSpecificSigningCapabilities_RejectEmptyAndOversizedInputBeforeAllocation()
-    {
-        using var phrase = DeepRecoveryV1.Verify(LoadVector().Mnemonic);
-        using var capabilities = DeepRecoveryV1.DeriveAccountCapabilities(
-            phrase,
-            Convert.FromHexString(LoadVector().NetworkId),
-            1);
-
-        Assert.Throws<ArgumentException>(() => capabilities.SignAccount([]));
-        Assert.Throws<ArgumentException>(() => capabilities.SignAccount(new byte[(64 * 1024) + 1]));
+        Assert.Equal(
+            new[]
+            {
+                "SignGenesisAccountCertificate",
+                "SignGenesisDeviceCertificateAsIssuer",
+                "SignGenesisRevocationSnapshot"
+            },
+            callableFromFriend.Select(static method => method.Name).Order().ToArray());
+        Assert.All(callableFromFriend, static method =>
+            Assert.Contains(method.GetParameters(), static parameter =>
+                parameter.ParameterType.Name.EndsWith("SigningIntent", StringComparison.Ordinal)));
+        Assert.DoesNotContain(callableFromFriend, static method =>
+            method.GetParameters().Any(static parameter =>
+                parameter.ParameterType.Name == "OwnedRecord"
+                || parameter.ParameterType == typeof(ReadOnlySpan<byte>)
+                || parameter.ParameterType == typeof(byte[])));
     }
 
     [Fact]
     public void Generate_ReturnsRoundTrippableTwentyFourWordPhrase()
     {
         using var generated = DeepRecoveryV1.Generate();
-        var phrase = generated.CanonicalPhrase;
-        using var reparsed = DeepRecoveryV1.Verify(phrase);
+        var phrase = new byte[generated.CanonicalUtf8Length];
+        generated.WriteCanonicalUtf8(phrase);
+        using var reparsed = DeepRecoveryV1.VerifyCanonicalUtf8(phrase);
+        var roundTrip = new byte[reparsed.CanonicalUtf8Length];
+        reparsed.WriteCanonicalUtf8(roundTrip);
 
-        Assert.Equal(DeepRecoveryV1.WordCount, phrase.Split(' ').Length);
-        Assert.Equal(phrase, reparsed.CanonicalPhrase);
+        Assert.Equal(DeepRecoveryV1.WordCount - 1, phrase.Count(static value => value == (byte)' '));
+        Assert.Equal(phrase, roundTrip);
+        CryptographicOperations.ZeroMemory(phrase);
+        CryptographicOperations.ZeroMemory(roundTrip);
     }
 
     [Fact]
     public void DisposingCapabilities_ZeroesEveryOwnedSecretBuffer()
     {
         var vector = LoadVector();
-        var phrase = DeepRecoveryV1.Verify(vector.Mnemonic);
+        var phrase = VerifyVector(vector.Mnemonic);
         var phraseEntropy = GetBuffer(phrase, "entropy");
         var capabilities = DeepRecoveryV1.DeriveAccountCapabilities(
             phrase,
@@ -242,10 +283,9 @@ public sealed class DeepRecoveryV1Tests
 
         Assert.All(phraseEntropy, static value => Assert.Equal(0, value));
         Assert.All(capabilityBuffers.SelectMany(static value => value), static value => Assert.Equal(0, value));
-        Assert.Throws<ObjectDisposedException>(() => _ = phrase.CanonicalPhrase);
+        Assert.Throws<ObjectDisposedException>(() => _ = phrase.CanonicalUtf8Length);
         Assert.Throws<ObjectDisposedException>(() => _ = capabilities.NetworkId);
         Assert.Throws<ObjectDisposedException>(() => _ = capabilities.AddressReadCapability);
-        Assert.Throws<ObjectDisposedException>(() => capabilities.SignAccount([1]));
     }
 
     [Fact]
@@ -265,6 +305,40 @@ public sealed class DeepRecoveryV1Tests
         Assert.DoesNotContain(publicMembers, static name => name.Contains("Pq", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(publicMembers, static name => name.Contains("X25519", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(publicMembers, static name => name.Contains("Convert", StringComparison.OrdinalIgnoreCase));
+        var dmdAuthor = Assert.Single(
+            typeof(DeepRecoveryAccountCapabilities).GetMethods(
+                BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+            static method => method.Name == nameof(DeepRecoveryAccountCapabilities.AuthorGenesisDmd1));
+        Assert.Equal(typeof(Dmd1LineageState), dmdAuthor.ReturnType);
+        Assert.Equal(
+            [typeof(VerifiedApplicationIdentityClosure), typeof(ulong)],
+            dmdAuthor.GetParameters().Select(static parameter => parameter.ParameterType).ToArray());
+        Assert.DoesNotContain(
+            typeof(VerifiedDeepRecoveryPhrase).GetMembers(BindingFlags.Public | BindingFlags.Instance),
+            static member => member.Name.Contains("Phrase", StringComparison.Ordinal)
+                || member is PropertyInfo { PropertyType: { } type } && type == typeof(string));
+        Assert.DoesNotContain(
+            typeof(DeepRecoveryV1).GetMethods(BindingFlags.Public | BindingFlags.Static),
+            static method => method.GetParameters().Any(parameter => parameter.ParameterType == typeof(string))
+                || method.ReturnType == typeof(string));
+        Assert.DoesNotContain(
+            typeof(DeepRecoveryV1).GetMethods(
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static),
+            static method => method.Name == "Verify"
+                && method.GetParameters().Any(parameter =>
+                    parameter.ParameterType == typeof(string)));
+        Assert.DoesNotContain(
+            typeof(VerifiedDeepRecoveryPhrase).GetMethods(
+                BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+            static method => method.IsAssembly &&
+                (method.Name.Contains("Copy", StringComparison.Ordinal)
+                    || method.Name.Contains("Snapshot", StringComparison.Ordinal)
+                    || method.Name.Contains("Entropy", StringComparison.Ordinal)));
+        Assert.DoesNotContain(
+            typeof(DeepRecoveryAccountCapabilities).GetMethods(
+                BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+            static method => method.IsAssembly
+                && method.Name.StartsWith("Snapshot", StringComparison.Ordinal));
         Assert.Equal("Deep.Protocol.Identity", typeof(DeepRecoveryV1).Namespace);
     }
 
@@ -291,6 +365,22 @@ public sealed class DeepRecoveryV1Tests
         Assert.IsType<byte[]>(instance.GetType()
             .GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!
             .GetValue(instance));
+
+    private static byte[] SnapshotBuffer(object instance, string name) =>
+        GetBuffer(instance, name).ToArray();
+
+    private static VerifiedDeepRecoveryPhrase VerifyVector(string mnemonic)
+    {
+        var encoded = Encoding.ASCII.GetBytes(mnemonic);
+        try
+        {
+            return DeepRecoveryV1.VerifyCanonicalUtf8(encoded);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(encoded);
+        }
+    }
 
     private static string Hex(byte[] value)
     {
@@ -327,4 +417,6 @@ public sealed class DeepRecoveryV1Tests
         string Mnemonic,
         string NetworkId,
         string ResetControlSigningSeed);
+
+    private sealed class InjectedConsumerException : Exception;
 }

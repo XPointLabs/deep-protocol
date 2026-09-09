@@ -634,7 +634,7 @@ public static class ProductionMailboxSelectionSuccessorVerifier
                         ClockSkewSeconds = context.ClockSkewSeconds
                     }, signatureVerifier),
             ProductionMailboxSelectionSuccessorMode.OfflineCheckpoint =>
-                ProductionMailboxAuthorityVerifier.VerifyForwardCheckpoint(
+                ProductionMailboxRoutesVerificationFacade.VerifyForwardCheckpoint(
                     proof.CanonicalNewAuthority.Span,
                     new ProductionMailboxAuthorityCheckpointVerificationContext
                     {

@@ -652,7 +652,7 @@ internal sealed class IdentityAuthorityVerifier
             authority.CurrentEd25519PublicKey.Span), "current key hash");
     }
 
-    private static byte[] ComputeKeyHash(
+    internal static byte[] ComputeKeyHash(
         ReadOnlySpan<byte> network,
         KeyScope scope,
         ReadOnlySpan<byte> accountHash,
@@ -913,7 +913,12 @@ public sealed class IdentityRelativeVerifier
         return identity;
     }
 
-    internal VerifiedDeviceRelative VerifyDevice(
+    /// <summary>
+    /// Verifies one exact DPD1 and its live X25519 possession transcript against
+    /// an already verified current DPA1/DRS1 identity. The returned capability
+    /// is non-forgeable; raw certificate bytes alone are never promoted.
+    /// </summary>
+    public VerifiedDeviceRelative VerifyDevice(
         VerifiedIdentityRelative identity,
         ReadOnlySpan<byte> canonical,
         ReadOnlySpan<byte> possessionTranscript,

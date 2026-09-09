@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-android</TargetFramework>
+    <TargetPlatformVersion>36.0</TargetPlatformVersion>
+    <SupportedOSPlatformVersion>26.0</SupportedOSPlatformVersion>
+    <RuntimeIdentifier>android-arm64</RuntimeIdentifier>
+    <OutputType>Exe</OutputType>
+    <!-- Reuse the existing probe-only IVT identity without widening the production assembly surface. -->
+    <AssemblyName>Deep.MlKem.AndroidProbe</AssemblyName>
+    <RootNamespace>Deep.MlKemBraid.AndroidManagedProbe</RootNamespace>
+    <ApplicationId>org.deep.protocol.mlkembraidprobe</ApplicationId>
+    <ApplicationTitle>Deep ML-KEM Braid Probe</ApplicationTitle>
+    <ApplicationVersion>1</ApplicationVersion>
+    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <AndroidPackageFormat>apk</AndroidPackageFormat>
+    <EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Deep.Protocol\Deep.Protocol.csproj"
+                      AdditionalProperties="MlKemAndroidProbe=true;RecoveryTestSeam=true" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(DeepMlKemBraidAndroidAsset)' != ''">
+    <AndroidAsset Include="$(DeepMlKemBraidAndroidAsset)"
+                  Link="Assets\deep-mlkem-braid\libdeep_mlkem_braid.so" />
+  </ItemGroup>
+
+  <Target Name="ValidateDeepMlKemBraidAndroidAsset" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(DeepMlKemBraidAndroidAsset)' == ''"
+           Text="DeepMlKemBraidAndroidAsset must name the fixed Android arm64 libdeep_mlkem_braid.so candidate." />
+    <Error Condition="!Exists('$(DeepMlKemBraidAndroidAsset)')"
+           Text="The DeepMlKemBraidAndroidAsset file is absent." />
+    <GetFileHash Files="$(DeepMlKemBraidAndroidAsset)" Algorithm="SHA256" HashEncoding="hex">
+      <Output TaskParameter="Items" ItemName="_DeepMlKemBraidAndroidAssetHash" />
+    </GetFileHash>
+    <Error Condition="'%(_DeepMlKemBraidAndroidAssetHash.FileHash)' != 'fa287d90ffff2c6e5b199c7f8ec487e16d989f75e39c2620b07c26e1dccbdf0d'"
+           Text="The packaged incremental ML-KEM Braid Android asset digest is not probe-approved." />
+  </Target>
+</Project>

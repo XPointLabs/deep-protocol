@@ -538,7 +538,7 @@ public static class ProductionMailboxRouteIssuerAuthoring
             }
             else
             {
-                reverifiedAuthority = ProductionMailboxAuthorityVerifier.VerifyForwardCheckpoint(
+                reverifiedAuthority = ProductionMailboxRoutesVerificationFacade.VerifyForwardCheckpoint(
                     ProductionMailboxAuthorityCodec.Encode(currentAuthorityValue),
                     new ProductionMailboxAuthorityCheckpointVerificationContext
                     {

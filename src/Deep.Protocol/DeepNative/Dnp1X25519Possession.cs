@@ -106,6 +106,8 @@ internal static class X25519PossessionVerifier
         byte[]? derivedPublic = null;
         byte[]? shared = null;
         byte[]? key = null;
+        byte[]? proof = null;
+        byte[]? transcriptHash = null;
         try
         {
             derivedPublic = ScalarMult.Base(privateKey);
@@ -114,8 +116,12 @@ internal static class X25519PossessionVerifier
             shared = ScalarMult.Mult(privateKey, frozen.AsSpan(88, 32).ToArray());
             if (CanonicalGrammar.IsZero(shared)) Invalid("The DXP1 X25519 result is invalid.");
             key = DeriveKey(frozen, shared, role);
-            var proof = ComputeProof(key, frozen);
-            return (proof, ComputeTranscriptHash(frozen, proof));
+            proof = ComputeProof(key, frozen);
+            transcriptHash = ComputeTranscriptHash(frozen, proof);
+            var result = (proof, transcriptHash);
+            proof = null;
+            transcriptHash = null;
+            return result;
         }
         finally
         {
@@ -123,6 +129,8 @@ internal static class X25519PossessionVerifier
             if (derivedPublic is not null) CryptographicOperations.ZeroMemory(derivedPublic);
             if (shared is not null) CryptographicOperations.ZeroMemory(shared);
             if (key is not null) CryptographicOperations.ZeroMemory(key);
+            if (proof is not null) CryptographicOperations.ZeroMemory(proof);
+            if (transcriptHash is not null) CryptographicOperations.ZeroMemory(transcriptHash);
         }
     }
 
@@ -209,6 +217,11 @@ internal static class X25519PossessionVerifier
                 throw new CryptographicException("HKDF Extract returned an unexpected length.");
             HKDF.Expand(HashAlgorithmName.SHA256, prk, key, info);
             return key;
+        }
+        catch
+        {
+            CryptographicOperations.ZeroMemory(key);
+            throw;
         }
         finally
         {

@@ -43,7 +43,7 @@ internal static class RecordDefinitions
          F("deviceEd",32),F("deviceX",32),F("revocationHandle",32),F("issuerTransitionGeneration",8),
          F("issuerTransition",38),F("issuerKeyHash",32),F("drsRevision",8),F("drs",38),F("drsCount",8),
          F("drsHead",32),F("issuedAt",8),F("expiresAt",8),F("capabilities",8),F("suite",2),
-         F("predecessor",38),F("xPopTranscriptHash",32),F("devicePop",64),F("issuerSignature",64)], 21,22,23);
+         F("predecessor",38),F("xPopTranscriptHash",32),F("devicePop",64),F("issuerSignature",64)], 22,23);
 
     internal static RecordDefinition Dpm1 { get; } = Public(ProtocolMagic.DPM1, 1, 670, 670,
         [F("network",16),F("accountHash",32),F("accountGeneration",8),F("deviceId",32),F("device",38),

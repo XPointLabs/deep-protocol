@@ -46,16 +46,18 @@ public sealed class DeepPermanentIdV1 : IEquatable<DeepPermanentIdV1>
     public static DeepPermanentIdV1 FromCapabilities(DeepRecoveryAccountCapabilities capabilities)
     {
         ArgumentNullException.ThrowIfNull(capabilities);
-        var publicKey = capabilities.AddressSigningPublicKey.ToArray();
-        var readCapability = capabilities.AddressReadCapability.ToArray();
+        byte[]? publicKey = null;
+        byte[]? readCapability = null;
         try
         {
+            publicKey = capabilities.AddressSigningPublicKey.ToArray();
+            readCapability = capabilities.AddressReadCapability.ToArray();
             return Create(publicKey, readCapability);
         }
         finally
         {
-            CryptographicOperations.ZeroMemory(publicKey);
-            CryptographicOperations.ZeroMemory(readCapability);
+            if (publicKey is not null) CryptographicOperations.ZeroMemory(publicKey);
+            if (readCapability is not null) CryptographicOperations.ZeroMemory(readCapability);
         }
     }
 

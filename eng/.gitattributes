@@ -1,0 +1,7 @@
+.gitattributes text eol=lf
+Build-DeepMlKemBraid.ps1 text eol=lf
+Test-DeepMlKemBraidEvidence.ps1 text eol=lf
+Test-DeepMlKemBraidEvidenceDrift.ps1 text eol=lf
+Deep.MlKemBraid.NativeProbe/*.c text eol=lf
+Deep.MlKemBraid.AndroidProbe/*.c text eol=lf
+README.md text eol=lf

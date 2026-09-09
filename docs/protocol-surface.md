@@ -1,6 +1,6 @@
 # Protocol Surface - DNP1 Wave 1
 
-Updated: 2026-08-30.
+Updated: 2026-09-07.
 
 The production package closure is exactly `Deep.Protocol`,
 `Deep.Protocol.MembershipRoutes`, and `Deep.Protocol.ProfileCarrier`.
@@ -26,6 +26,27 @@ target production surface.
 `Deep.Protocol.ProfileCarrier` retains its existing carrier surface and exact
 `Deep.Protocol` package dependency.
 
+`Deep.Protocol.ContactV1` contains the frozen, inactive CONTACT-CODEC parser
+and structural closure grammar. Ed25519 promotion is protocol-owned: no public
+signature callback or accept-all verifier can mint a bundle or route result.
+`VerifiedContactBundleClosure` additionally requires an unforgeable witnessed
+ADL1/ADH1 freshness capability, and route promotion requires a distinct
+`VerifiedContactRouteClosure` rooted in exact XNV1/XNH1/ADH1 witness authority
+and one trusted instant. These capability producers are deliberately not wired
+into the production composition, so `ContactCodec.RuntimeActivation` remains
+false and parsing does not authorize state mutation or emission.
+
+`Deep.Protocol.DeepExtension.PrivacyRouting` contains the implemented frozen
+ONION-01 XRF1/XRL1/XRE1/XPR1/XRS1 codec and deterministic conformance seam. Its
+production public API remains inactive. The only authorized successor surface is
+the sealed section-7 capability boundary: verified XNA1/XVP1/XNV1/XND1 plus non-wire
+DTT1-backed XTT, exact-three path/receive-position capabilities, mandatory durable
+replay transaction/key lease, separate exit/client reply contexts, closed
+operation-specific exact MAU2/MQR3/MRP1/MAR1 and ContactV1 request/result-pairing
+verifiers, and a protected CSPRNG uniqueness
+authority. Internal vector helpers and process-local replay memory are not a
+release API or durability claim.
+
 ## Explicit exclusions
 
 - `Deep.Protocol.Native*` and its dark solution no longer exist. Production and
@@ -39,13 +60,15 @@ target production surface.
   surface and is not releasable. The DNP1-native message/ratchet successor is
   specified in the superproject architecture/crypto documents but remains
   absent from production packages and consumers.
-- Target XRF1/XRL1/XRE1/XPR1/XRS1 routing and PMA2/PMT2/PMS2 route authority
-  are specified in the superproject but not implemented in this package.
+- The frozen XRF1/XRL1/XRE1/XPR1/XRS1 codec is implemented, but its sealed
+  production capability producers, asynchronous public API and runtime composition
+  are absent/inactive. PMA2/PMT2/PMS2 route-authority activation remains a separate
+  producer gate; codec presence cannot substitute for it.
 
 ## DNP1 classical Wave 1
 
 The DNP1 classical identity/reset/MRL2 design is frozen in docs repository
-commit `2562b11cdacdcc6e60cf79bdb6265b4f4687fbbe` (36 records,
+commit `2651599913bf92c021d36b6a53395499b6a091fb` (36 records,
 158 domains and 314 executable vector IDs). `Deep.Protocol` implements the
 classical grammar, closed artifact registry, relative identity/revocation and
 ReleaseRoot chains, protected cutover state, recovery-candidate parsing,

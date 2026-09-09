@@ -19,7 +19,7 @@
     <RepositoryType>git</RepositoryType>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
-    <RestoreAdditionalProjectSources>$(MSBuildThisFileDirectory)..\..\vendor\p10i-profile-carrier\packages;$(MSBuildThisFileDirectory)..\..\vendor\p14-profile-carrier\packages</RestoreAdditionalProjectSources>
+    <RestoreAdditionalProjectSources Condition="'$(UsePackagedDeepProtocol)' == 'true'">$(MSBuildThisFileDirectory)..\..\vendor\p10i-profile-carrier\packages;$(MSBuildThisFileDirectory)..\..\vendor\p14-profile-carrier\packages</RestoreAdditionalProjectSources>
   </PropertyGroup>
 
   <ItemGroup>

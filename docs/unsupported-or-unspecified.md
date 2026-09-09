@@ -1,6 +1,6 @@
 # Unsupported Or Unspecified - DNP1 Wave 1
 
-Updated: 2026-08-30.
+Updated: 2026-09-07.
 
 ## Clean-break state
 
@@ -16,9 +16,30 @@ envelope over authenticated MAU2 and Deep privacy routing and is disposable
 evidence, not a public-release protocol. Managed ingress is transport-only and
 does not interpret or authorize those inner bytes.
 
+The exact ONION-01 XRF1/XRL1/XRE1/XPR1/XRS1 codec and deterministic test seam are
+implemented, but production use is unsupported while `runtimeActivation=false`.
+No caller may treat the internal builder/open helpers or process-local replay window
+as a public codec. Missing/inactive production pieces are the sealed verified
+XNA1/XVP1/XNV1/XND1 plus DTT1-backed XTT capability producers, exact-three receive-
+position proof, mandatory durable replay transaction/key lease, opaque key-vault
+binding, explicit exit/client reply contexts, closed operation payload verifier set,
+protected monotonic expiry and durable CSPRNG nonce/key uniqueness authority. These
+are specified by `deep-extension-privacy-routing-v1.md` section 7 and must be
+implemented without raw-key, wall-clock, trust-callback, arbitrary-route or replay-
+optional shortcuts.
+
+The frozen internal payload verifier now rejects non-MAU2 mailbox requests,
+cross-operation/cross-network MAU2, arbitrary mailbox success bodies, and invalid
+ContactResolve request/result pairs. This does not activate ONION-01: Contact and
+mailbox consumers still have no public synchronous/raw integration surface, and no
+direct HTTP fallback is part of the protocol contract.
+
 Pre-cutover PMA1/PMT1/PMS1 and PRA/PSS/RCD/RCA route-continuity bytes are also
 not the clean-break target. DR-0004 selects PMA2/PMT2/PMS2 and
-XRA1/XRC1/XRR1/XSS1; their machine codecs/vectors and runtime are absent.
+XRA1/XRC1/XRR1/XSS1. Their frozen CONTACT-CODEC grammar is present but runtime
+activation is absent: production has no ADL1/ADH1 or XNV1/XNH1 authority
+capability producer, and therefore cannot promote parsed bytes into contact or
+route state.
 
 Direct P2P mesh is a future architecture requirement, not part of the current
 DNP1 production surface. No peer/relay handshake, authenticated neighbor

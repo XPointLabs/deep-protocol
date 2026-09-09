@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Deep.Protocol.Identity;
 
 namespace Deep.Protocol.Tests.Identity;
@@ -10,7 +12,7 @@ public sealed class DeepPermanentIdV1Tests
     [Fact]
     public void FromCapabilities_MatchesIndependentRfc8032AndBip350Vector()
     {
-        using var phrase = DeepRecoveryV1.Verify(Mnemonic);
+        using var phrase = VerifyMnemonic();
         using var capabilities = DeepRecoveryV1.DeriveAccountCapabilities(
             phrase,
             Convert.FromHexString("000102030405060708090a0b0c0d0e0f"),
@@ -21,6 +23,19 @@ public sealed class DeepPermanentIdV1Tests
         Assert.Equal(Expected, deepId.CanonicalText);
         Assert.Equal(DeepPermanentIdV1.CanonicalTextLength, deepId.CanonicalText.Length);
         Assert.Equal("019bd3764e70a00ce467ee471de6bc427d80bd687bc48be3ba4410e0d5c2ae86ad6e8ce8a0b751859f115a5264d5315ca8", Convert.ToHexStringLower(deepId.Payload.Span));
+    }
+
+    private static VerifiedDeepRecoveryPhrase VerifyMnemonic()
+    {
+        var utf8 = Encoding.ASCII.GetBytes(Mnemonic);
+        try
+        {
+            return DeepRecoveryV1.VerifyCanonicalUtf8(utf8);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(utf8);
+        }
     }
 
     [Fact]

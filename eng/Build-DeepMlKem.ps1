@@ -7,7 +7,9 @@ param(
 
     [string]$OutputRoot,
 
-    [switch]$SkipReproducibilityCheck
+    [switch]$SkipReproducibilityCheck,
+
+    [switch]$AllowDirtyDevelopmentBuild
 )
 
 Set-StrictMode -Version Latest
@@ -19,6 +21,7 @@ $buildRoot = Join-Path $nativeRoot 'out'
 $provenancePath = Join-Path $nativeRoot 'vendor\mlkem-native.provenance.json'
 $expectedProviderCommit = 'd1b2fe782888bdb761a50336012923180be7f502'
 $expectedProviderTree = 'd9d581290ea1e6fa37462bfbc61b9b4266a2e9e5'
+$expectedProviderIdentifier = 'mlkem-native/v2.0.0/portable-c/deep-abi-v1'
 $expectedProvenanceSha256 = '0cf82b548b1a466b7b7d2a8c684e7b9ac3d4045bd489f33896262e5611844b1a'
 $expectedVendoredFileCount = 34
 $expectedVsInstallationVersion = '17.14.37314.3'
@@ -52,11 +55,28 @@ $targets = @($BuildTarget | Select-Object -Unique)
 if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
     $OutputRoot = Join-Path $nativeRoot 'artifacts'
 }
+$repositoryFullForOutput = [IO.Path]::GetFullPath($repositoryRoot).TrimEnd('\')
+$outputFullForValidation = [IO.Path]::GetFullPath($OutputRoot).TrimEnd('\')
+$approvedRepositoryOutput = [IO.Path]::GetFullPath((Join-Path $nativeRoot 'artifacts')).TrimEnd('\')
+if ($outputFullForValidation.StartsWith(
+        $repositoryFullForOutput + '\',
+        [StringComparison]::OrdinalIgnoreCase) -and
+    $outputFullForValidation -ine $approvedRepositoryOutput) {
+    throw 'An in-repository ML-KEM OutputRoot must be exactly native/Deep.MlKem/artifacts.'
+}
 
 function Require-File {
     param([Parameter(Mandatory = $true)][string]$Path)
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
         throw "Required file is absent: $Path"
+    }
+    return (Resolve-Path -LiteralPath $Path).Path
+}
+
+function Require-Directory {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
+        throw "Required directory is absent: $Path"
     }
     return (Resolve-Path -LiteralPath $Path).Path
 }
@@ -122,6 +142,81 @@ function Assert-ChildPath {
     if (-not $childFull.StartsWith($parentFull, [System.StringComparison]::OrdinalIgnoreCase)) {
         throw "Unsafe generated-path target outside '$Parent': $Child"
     }
+}
+
+function Get-RepositoryStatusExcludingOutput {
+    $repositoryFull = [IO.Path]::GetFullPath($repositoryRoot).TrimEnd('\')
+    $outputFull = [IO.Path]::GetFullPath($OutputRoot).TrimEnd('\')
+    if ($outputFull -ceq $repositoryFull) {
+        throw 'The ML-KEM output root cannot be the source repository root.'
+    }
+
+    $arguments = [System.Collections.Generic.List[string]]::new()
+    foreach ($argument in @('-C', $repositoryRoot, 'status', '--porcelain=v1', '--untracked-files=all', '--', '.')) {
+        $arguments.Add($argument)
+    }
+    $repositoryPrefix = $repositoryFull + '\'
+    if ($outputFull.StartsWith($repositoryPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+        $relativeOutput = [IO.Path]::GetRelativePath($repositoryFull, $outputFull).Replace('\', '/')
+        $arguments.Add(":(exclude)$relativeOutput")
+        $arguments.Add(":(exclude)$relativeOutput/**")
+    }
+
+    $status = @(& git @arguments)
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Cannot resolve the source repository state for ML-KEM build evidence.'
+    }
+    return @($status)
+}
+
+function Get-BuildInputEvidence {
+    param([Parameter(Mandatory = $true)][string[]]$Paths)
+    return @($Paths | ForEach-Object {
+            $fullPath = Require-File (Join-Path $repositoryRoot $_)
+            [ordered]@{
+                path = $_
+                sha256 = (Get-FileHash -LiteralPath $fullPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            }
+        })
+}
+
+function Assert-BuildInputsUnchanged {
+    param(
+        [Parameter(Mandatory = $true)][object[]]$Initial,
+        [Parameter(Mandatory = $true)][object[]]$Current
+    )
+    if ($Initial.Count -ne $Current.Count) {
+        throw 'The ML-KEM exact build-input closure changed while evidence was produced.'
+    }
+    for ($index = 0; $index -lt $Initial.Count; $index++) {
+        if ([string]$Initial[$index].path -cne [string]$Current[$index].path -or
+            [string]$Initial[$index].sha256 -cne [string]$Current[$index].sha256) {
+            throw "ML-KEM build input changed while evidence was produced: $($Initial[$index].path)"
+        }
+    }
+}
+
+function Build-ManagedEvidenceProject {
+    param(
+        [Parameter(Mandatory = $true)][string]$Project,
+        [Parameter(Mandatory = $true)][string]$AssemblyName,
+        [Parameter(Mandatory = $true)][string]$ArtifactsDirectory
+    )
+    Assert-ChildPath -Parent $buildRoot -Child $ArtifactsDirectory
+    if (Test-Path -LiteralPath $ArtifactsDirectory) {
+        Remove-Item -LiteralPath $ArtifactsDirectory -Recurse -Force
+    }
+    New-Item -ItemType Directory -Path $ArtifactsDirectory -Force | Out-Null
+    Invoke-Checked -Command $script:DotnetPath -Arguments @(
+        'restore', $Project, '--locked-mode', '--artifacts-path', $ArtifactsDirectory)
+    Invoke-Checked -Command $script:DotnetPath -Arguments @(
+        'build', $Project, '-c', 'Release', '--no-restore', '--artifacts-path', $ArtifactsDirectory)
+    $binRoot = Require-Directory (Join-Path $ArtifactsDirectory 'bin')
+    $matches = @(Get-ChildItem -LiteralPath $binRoot -Filter $AssemblyName -File -Recurse)
+    if ($matches.Count -ne 1) {
+        throw "Expected one isolated managed evidence assembly '$AssemblyName', found $($matches.Count)."
+    }
+    return $matches[0].FullName
 }
 
 function Invoke-Checked {
@@ -403,14 +498,63 @@ function Invoke-BuildPass {
         $result.testSha256 = (Get-FileHash -LiteralPath $testPath -Algorithm SHA256).Hash.ToLowerInvariant()
         Invoke-Checked -Command $script:DotnetX64Path -Arguments @($script:ManagedProbeAssembly, $runtimePath)
         $result.managedProbeExecuted = $true
+        Invoke-Checked -Command $script:DotnetX64Path -Arguments @(
+            $script:RuntimeWrapperProbeAssembly,
+            $script:ProtocolTestsAssembly,
+            $runtimePath)
+        $result.productionWrapperProbeExecuted = $true
     }
     return $result
 }
+
+$deepSourcePaths = @(
+    'global.json',
+    'eng/Build-DeepMlKem.ps1',
+    'eng/Generate-DeepMlKemApprovedAssets.ps1',
+    'eng/Deep.MlKem.ManagedProbe/Deep.MlKem.ManagedProbe.csproj',
+    'eng/Deep.MlKem.ManagedProbe/packages.lock.json',
+    'eng/Deep.MlKem.ManagedProbe/Program.cs',
+    'eng/Deep.MlKem.RuntimeWrapperProbe/Deep.MlKem.RuntimeWrapperProbe.csproj',
+    'eng/Deep.MlKem.RuntimeWrapperProbe/packages.lock.json',
+    'eng/Deep.MlKem.RuntimeWrapperProbe/Program.cs',
+    'src/Deep.Protocol/Deep.Protocol.csproj',
+    'src/Deep.Protocol/packages.lock.json',
+    'src/Deep.Protocol/MessagingCrypto/DeepMlKemApprovedAssets.Generated.cs',
+    'src/Deep.Protocol/MessagingCrypto/DeepMlKemNativeProvider.cs',
+    'src/Deep.Protocol/MessagingCrypto/HybridPreKeyHandshake.cs',
+    'src/Deep.Protocol/MessagingCrypto/MessagingCryptoPrimitives.cs',
+    'tests/Deep.Protocol.GoldenVectors/Deep.Protocol.GoldenVectors.csproj',
+    'tests/Deep.Protocol.GoldenVectors/packages.lock.json',
+    'tests/Deep.Protocol.Tests/Deep.Protocol.Tests.csproj',
+    'tests/Deep.Protocol.Tests/packages.lock.json',
+    'tests/Deep.Protocol.Tests/MessagingCrypto/DeepMlKemNativeProviderTests.cs',
+    'tests/Deep.Protocol.Tests/MessagingCrypto/MessagingCryptoSurfaceTests.cs',
+    'native/Deep.MlKem/CMakeLists.txt',
+    'native/Deep.MlKem/README.md',
+    'native/Deep.MlKem/include/deep_mlkem_v1.h',
+    'native/Deep.MlKem/src/deep_mlkem_provider_config.h',
+    'native/Deep.MlKem/src/deep_mlkem_v1.c',
+    'native/Deep.MlKem/src/deep_mlkem_v1.def',
+    'native/Deep.MlKem/tests/deep_mlkem_v1_tests.c',
+    'native/Deep.MlKem/vendor/mlkem-native.provenance.json'
+)
+$repositoryCommit = (& git -C $repositoryRoot rev-parse HEAD).Trim()
+if ($LASTEXITCODE -ne 0 -or $repositoryCommit -notmatch '^[0-9a-f]{40}$') {
+    throw 'Cannot resolve the source repository commit for build evidence.'
+}
+$initialRepositoryStatus = @(Get-RepositoryStatusExcludingOutput)
+$repositoryDirty = $initialRepositoryStatus.Count -ne 0
+if ($repositoryDirty -and -not $AllowDirtyDevelopmentBuild) {
+    throw 'Release ML-KEM build evidence requires a clean source repository.'
+}
+$initialBuildInputEvidence = @(Get-BuildInputEvidence -Paths $deepSourcePaths)
 
 Assert-CleanBuildEnvironment
 $null = Require-File (Join-Path $nativeRoot 'CMakeLists.txt')
 $null = Require-File $provenancePath
 $managedProbeProject = Require-File (Join-Path $repositoryRoot 'eng\Deep.MlKem.ManagedProbe\Deep.MlKem.ManagedProbe.csproj')
+$runtimeWrapperProbeProject = Require-File (Join-Path $repositoryRoot 'eng\Deep.MlKem.RuntimeWrapperProbe\Deep.MlKem.RuntimeWrapperProbe.csproj')
+$protocolTestsProject = Require-File (Join-Path $repositoryRoot 'tests\Deep.Protocol.Tests\Deep.Protocol.Tests.csproj')
 $script:DotnetPath = Require-File ((Get-Command dotnet -ErrorAction Stop).Source)
 $script:DotnetX64Path = Require-File (Join-Path (Split-Path -Parent $script:DotnetPath) 'x64\dotnet.exe')
 $dotnetVersion = (& $script:DotnetPath --version).Trim()
@@ -419,9 +563,33 @@ if ($LASTEXITCODE -ne 0 -or $dotnetVersion -notmatch '^10\.0\.' -or
     -not ($dotnetX64Runtimes -match '^Microsoft\.NETCore\.App 10\.0\.')) {
     throw 'The dark managed ABI probe requires a .NET 10 SDK.'
 }
-Invoke-Checked -Command $script:DotnetPath -Arguments @('restore', $managedProbeProject)
-Invoke-Checked -Command $script:DotnetPath -Arguments @('build', $managedProbeProject, '-c', 'Release', '--no-restore')
-$script:ManagedProbeAssembly = Require-File (Join-Path (Split-Path -Parent $managedProbeProject) 'bin\Release\net10.0\Deep.MlKem.ManagedProbe.dll')
+$managedEvidenceRoot = Join-Path $buildRoot 'managed-evidence'
+Assert-ChildPath -Parent $buildRoot -Child $managedEvidenceRoot
+if (Test-Path -LiteralPath $managedEvidenceRoot) {
+    Remove-Item -LiteralPath $managedEvidenceRoot -Recurse -Force
+}
+New-Item -ItemType Directory -Path $managedEvidenceRoot -Force | Out-Null
+$script:ManagedProbeAssembly = Build-ManagedEvidenceProject `
+    -Project $managedProbeProject `
+    -AssemblyName 'Deep.MlKem.ManagedProbe.dll' `
+    -ArtifactsDirectory (Join-Path $managedEvidenceRoot 'managed-probe')
+$script:RuntimeWrapperProbeAssembly = Build-ManagedEvidenceProject `
+    -Project $runtimeWrapperProbeProject `
+    -AssemblyName 'Deep.MlKem.RuntimeWrapperProbe.dll' `
+    -ArtifactsDirectory (Join-Path $managedEvidenceRoot 'runtime-wrapper-probe')
+$protocolProjectRoot = Join-Path $repositoryRoot 'src\Deep.Protocol'
+foreach ($generatedTestSeamPath in @(
+        (Join-Path $protocolProjectRoot 'bin\Release\test-seam'),
+        (Join-Path $protocolProjectRoot 'obj\Release\net10.0\test-seam'))) {
+    Assert-ChildPath -Parent $protocolProjectRoot -Child $generatedTestSeamPath
+    if (Test-Path -LiteralPath $generatedTestSeamPath) {
+        Remove-Item -LiteralPath $generatedTestSeamPath -Recurse -Force
+    }
+}
+$script:ProtocolTestsAssembly = Build-ManagedEvidenceProject `
+    -Project $protocolTestsProject `
+    -AssemblyName 'Deep.Protocol.Tests.dll' `
+    -ArtifactsDirectory (Join-Path $managedEvidenceRoot 'protocol-tests')
 
 $actualProvenanceHash = (Get-FileHash -LiteralPath $provenancePath -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($actualProvenanceHash -cne $expectedProvenanceSha256) {
@@ -623,6 +791,7 @@ foreach ($target in $targets) {
         sha256 = (Get-FileHash -LiteralPath $runtimeDestination -Algorithm SHA256).Hash.ToLowerInvariant()
         nativeTestsExecuted = ($target -eq 'windows-x64')
         managedProbeExecuted = ($target -eq 'windows-x64')
+        productionWrapperProbeExecuted = ($target -eq 'windows-x64')
         exactExportSurface = $first.exactExportSurface
         finalRuntimeHardening = $first.finalRuntimeHardening
         cleanDistinctPathRebuildMatched = $reproducible
@@ -638,6 +807,7 @@ foreach ($target in $targets) {
             sha256 = (Get-FileHash -LiteralPath $importDestination -Algorithm SHA256).Hash.ToLowerInvariant()
             nativeTestsExecuted = $false
             managedProbeExecuted = $false
+            productionWrapperProbeExecuted = $false
             exactExportSurface = $null
             finalRuntimeHardening = $null
             cleanDistinctPathRebuildMatched = $reproducible
@@ -665,26 +835,16 @@ if (($actualPublishedDirectories -join "`n") -cne ($expectedPublishedDirectories
     throw "Recursive publish directory closure mismatch. Expected [$($expectedPublishedDirectories -join ', ')], actual [$($actualPublishedDirectories -join ', ')]."
 }
 
-$deepSourcePaths = @(
-    'eng/Build-DeepMlKem.ps1',
-    'eng/Deep.MlKem.ManagedProbe/Deep.MlKem.ManagedProbe.csproj',
-    'eng/Deep.MlKem.ManagedProbe/Program.cs',
-    'native/Deep.MlKem/CMakeLists.txt',
-    'native/Deep.MlKem/include/deep_mlkem_v1.h',
-    'native/Deep.MlKem/src/deep_mlkem_provider_config.h',
-    'native/Deep.MlKem/src/deep_mlkem_v1.c',
-    'native/Deep.MlKem/src/deep_mlkem_v1.def',
-    'native/Deep.MlKem/tests/deep_mlkem_v1_tests.c'
-)
-$deepSourceEvidence = @($deepSourcePaths | ForEach-Object {
-        $fullPath = Require-File (Join-Path $repositoryRoot $_)
-        [ordered]@{ path = $_; sha256 = (Get-FileHash -LiteralPath $fullPath -Algorithm SHA256).Hash.ToLowerInvariant() }
-    })
-$repositoryCommit = (& git -C $repositoryRoot rev-parse HEAD).Trim()
-if ($LASTEXITCODE -ne 0 -or $repositoryCommit -notmatch '^[0-9a-f]{40}$') {
-    throw 'Cannot resolve the source repository commit for build evidence.'
+$finalRepositoryCommit = (& git -C $repositoryRoot rev-parse HEAD).Trim()
+if ($LASTEXITCODE -ne 0 -or $finalRepositoryCommit -cne $repositoryCommit) {
+    throw 'The source repository HEAD changed while ML-KEM evidence was produced.'
 }
-$repositoryDirty = @(& git -C $repositoryRoot status --porcelain=v1).Count -ne 0
+$finalRepositoryStatus = @(Get-RepositoryStatusExcludingOutput)
+if (($finalRepositoryStatus -join "`n") -cne ($initialRepositoryStatus -join "`n")) {
+    throw 'The source repository state changed while ML-KEM evidence was produced.'
+}
+$deepSourceEvidence = @(Get-BuildInputEvidence -Paths $deepSourcePaths)
+Assert-BuildInputsUnchanged -Initial $initialBuildInputEvidence -Current $deepSourceEvidence
 
 $manifest = [ordered]@{
     schemaVersion = 1
@@ -705,6 +865,7 @@ $manifest = [ordered]@{
         sourceDateEpoch = 0
         buildParallelism = 1
         runtimeAbi = 'Deep-owned C v1 shared library; provider remains internal static'
+        providerIdentifier = $expectedProviderIdentifier
     }
     buildTools = [ordered]@{
         visualStudioProduct = $vs.displayName
@@ -722,6 +883,11 @@ $manifest = [ordered]@{
     deepSources = [ordered]@{
         repositoryCommit = $repositoryCommit
         repositoryDirty = $repositoryDirty
+        headRecheckedBeforeManifest = $true
+        repositoryStateRecheckedBeforeManifest = $true
+        exactBuildInputClosureRechecked = $true
+        managedRestoreLocked = $true
+        managedArtifactsIsolatedOrCleaned = $true
         files = $deepSourceEvidence
     }
     artifacts = @($artifacts)
@@ -729,8 +895,18 @@ $manifest = [ordered]@{
         acvp = 'pending'
         androidArm64Physical = if ('android-arm64' -in $targets) { 'build-only; physical pending' } else { 'pending' }
         windowsArm64Runtime = if ('windows-arm64' -in $targets) { 'build-only; runtime pending' } else { 'pending' }
+        trustedPackageAppBase = 'pending; signed package/install ACL evidence required before activation'
     }
 }
 $manifestPath = Join-Path $OutputRoot 'build-manifest.v1.json'
 $manifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $manifestPath -Encoding utf8
+$generatorScript = Require-File (Join-Path $repositoryRoot 'eng\Generate-DeepMlKemApprovedAssets.ps1')
+$generatorArguments = @{
+    ManifestPath = $manifestPath
+    OutputPath = (Join-Path $repositoryRoot 'src\Deep.Protocol\MessagingCrypto\DeepMlKemApprovedAssets.Generated.cs')
+    Check = $true
+}
+if ($repositoryDirty) { $generatorArguments.AllowDirtyManifest = $true }
+if ($SkipReproducibilityCheck) { $generatorArguments.AllowIncompleteEvidence = $true }
+& $generatorScript @generatorArguments
 Write-Host "Deep ML-KEM build complete. Manifest: $manifestPath"

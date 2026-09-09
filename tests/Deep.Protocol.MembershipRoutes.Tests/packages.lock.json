@@ -115,7 +115,7 @@
       "deep.protocol": {
         "type": "Project",
         "dependencies": {
-          "Sodium.Core": "[1.4.1, )"
+          "Sodium.Core": "[1.4.1, 1.4.1]"
         }
       },
       "deep.protocol.membershiproutes": {

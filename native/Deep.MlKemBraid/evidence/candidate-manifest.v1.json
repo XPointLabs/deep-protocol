@@ -1,0 +1,160 @@
+{
+  "schema": "deep-mlkem-braid-candidate-evidence.v1",
+  "releaseDisposition": "candidate-evidence-only",
+  "scope": {
+    "runtimeIntegration": "unchanged-and-out-of-scope",
+    "productionApproval": "not-granted",
+    "supportedEvidenceTargets": ["windows-x64", "android-arm64"],
+    "pendingEvidenceTargets": ["windows-arm64"]
+  },
+  "source": {
+    "rustToolchain": {
+      "channel": "1.89.0-x86_64-pc-windows-msvc",
+      "release": "1.89.0",
+      "commitHash": "29483883eed69d5fb4db01964cdf2af4d86e9cb2",
+      "commitDate": "2025-08-04",
+      "host": "x86_64-pc-windows-msvc",
+      "llvmVersion": "20.1.7",
+      "fileSha256": "6d3feafc5883eb6fbf830bbc29887a7b7aedc568dd7c8a853721f3bbd2472211"
+    },
+    "cargoLock": {
+      "version": 4,
+      "path": "native/Deep.MlKemBraid/Cargo.lock",
+      "size": 18941,
+      "sha256": "88e4f11da6f9df9f35b2d79ea00e709eeb3e61e93118b314941e4c8205c4f466"
+    },
+    "libcrux": {
+      "package": "libcrux-ml-kem",
+      "version": "0.0.10",
+      "crateSha256": "1d8160f7d64fd2716b4fd05cc886a042f8dcda18d9206c0d506e2c67bdf97daa",
+      "repositoryCommit": "c5fb80f37530ee9b2df9501ae5ff8cb4a973a4bd",
+      "repositoryTag": "libcrux-ml-kem-v0.0.10",
+      "provenanceSha256": "0888551da7bbdd38f7f389a810294042b26edc886f5887f9cbf4a996db77be6c"
+    },
+    "inputs": [
+      { "path": "native/Deep.MlKemBraid/.gitattributes", "size": 50, "sha256": "6704b0c10dd088f684fdd3c9bd19bed733da59a5cc24ebcb0c8a89d3745a4681" },
+      { "path": "native/Deep.MlKemBraid/Cargo.toml", "size": 423, "sha256": "66aac0d9a4ff56c1aa19d30b84b2c00e1ff1bc9909ee2aa31e88e22b958895f9" },
+      { "path": "native/Deep.MlKemBraid/rust-toolchain.toml", "size": 111, "sha256": "6d3feafc5883eb6fbf830bbc29887a7b7aedc568dd7c8a853721f3bbd2472211" },
+      { "path": "native/Deep.MlKemBraid/src/lib.rs", "size": 34417, "sha256": "a1a852e6463cd784ea94f4b03bb24f8a83bbf92578f8f92b55485ee2a9cc1571" },
+      { "path": "native/Deep.MlKemBraid/include/deep_mlkem_braid_v1.h", "size": 3665, "sha256": "06d0d457a29c23b33e5ed564314a4179b3aa5c24e8071b02c3ee008055a8a87b" },
+      { "path": "native/Deep.MlKemBraid/third-party/libcrux/provenance.json", "size": 1301, "sha256": "0888551da7bbdd38f7f389a810294042b26edc886f5887f9cbf4a996db77be6c" },
+      { "path": "native/Deep.MlKemBraid/third-party/libcrux/LICENSE-APACHE", "size": 10757, "sha256": "89a704092ec99209cd19f1d60cd67a353e3ec069e7f19f17cd41fcac052811c4" },
+      { "path": "native/Deep.MlKemBraid/third-party/libcrux/LICENSE-MIT", "size": 1065, "sha256": "182ab7e3c88dd73b9c264ae0d5ed27f73b2b28f8d187e4d42b0eed2b93bfb4c3" },
+      { "path": "eng/.gitattributes", "size": 268, "sha256": "e7754bf59833a7e100b6157f7c2ea99dfcb0a1f2f52512c07b7ed53f77e3302c" },
+      { "path": "eng/Build-DeepMlKemBraid.ps1", "size": 13970, "sha256": "8b61b67575012c9f8407d64dd2a2cfe0bc4fea77bfd49e4d19aac3402f7c30c4" },
+      { "path": "eng/Deep.MlKemBraid.NativeProbe/deep_mlkem_braid_probe.c", "size": 4523, "sha256": "eba787e2432cc905172247fa27dfc2dc6d652042b6599c26d30721f5377668bb" },
+      { "path": "eng/Deep.MlKemBraid.AndroidProbe/deep_mlkem_braid_android_probe.c", "size": 9031, "sha256": "f6cdfa6022b6cb689cb89e5a015ea8f783edb180432912f593b69d5d7d84915c" }
+    ]
+  },
+  "sboms": [
+    {
+      "target": "windows-x64",
+      "format": "CycloneDX",
+      "specVersion": "1.5",
+      "path": "native/Deep.MlKemBraid/evidence/candidate-windows-x64-sbom.cdx.json",
+      "componentCountIncludingRoot": 22,
+      "sha256": "7efb0a6d356f252b87ba8b4d3044ab818abf5de54254c856262172e65d9b1ceb"
+    },
+    {
+      "target": "android-arm64",
+      "format": "CycloneDX",
+      "specVersion": "1.5",
+      "path": "native/Deep.MlKemBraid/evidence/candidate-android-arm64-sbom.cdx.json",
+      "componentCountIncludingRoot": 21,
+      "sha256": "27e882cb488d0d48e677c7f14081db4dc6b839a7b5a19ecaa624d116142189bd"
+    }
+  ],
+  "abi": {
+    "exports": [
+      "deep_mlkem_braid_v1_ciphertext1_size",
+      "deep_mlkem_braid_v1_ciphertext2_size",
+      "deep_mlkem_braid_v1_decapsulate",
+      "deep_mlkem_braid_v1_decapsulation_key_size",
+      "deep_mlkem_braid_v1_encaps1_from_random",
+      "deep_mlkem_braid_v1_encaps1_generate",
+      "deep_mlkem_braid_v1_encaps2",
+      "deep_mlkem_braid_v1_encapsulation_key_hash_size",
+      "deep_mlkem_braid_v1_encapsulation_key_seed_size",
+      "deep_mlkem_braid_v1_encapsulation_key_vector_size",
+      "deep_mlkem_braid_v1_encapsulation_random_size",
+      "deep_mlkem_braid_v1_keygen_random_size",
+      "deep_mlkem_braid_v1_keypair_from_random",
+      "deep_mlkem_braid_v1_keypair_generate",
+      "deep_mlkem_braid_v1_shared_secret_size",
+      "deep_mlkem_braid_v1_state_free",
+      "deep_mlkem_braid_v1_zero"
+    ]
+  },
+  "targets": [
+    {
+      "id": "windows-x64",
+      "status": "evidenced-candidate",
+      "triple": "x86_64-pc-windows-msvc",
+      "artifact": {
+        "path": "native/Deep.MlKemBraid/target/x86_64-pc-windows-msvc/release/deep_mlkem_braid.dll",
+        "size": 526336,
+        "sha256": "41ba8b15429bfc55b6a66cdadbb1ad3372dfc98a9f2bd1bce75a86d54426cd25"
+      },
+      "toolchain": {
+        "windowsSdk": "10.0.26100.0",
+        "msvcHost": "x64",
+        "msvcTarget": "x64"
+      },
+      "binary": {
+        "format": "PE32+ DLL",
+        "machine": "x64",
+        "dependencies": ["api-ms-win-core-synch-l1-2-0.dll", "bcryptprimitives.dll", "KERNEL32.dll", "ntdll.dll"],
+        "requiredHardening": ["Dynamic base", "High Entropy Virtual Addresses", "NX compatible", "Control Flow Guard"]
+      },
+      "testEvidence": [
+        { "id": "rust-release-tests", "expectedPassed": 7, "expectedFailed": 0 },
+        { "id": "native-c-abi-probe", "expectedMarker": "Deep ML-KEM Braid native C ABI probe passed." }
+      ]
+    },
+    {
+      "id": "android-arm64",
+      "status": "evidenced-candidate",
+      "triple": "aarch64-linux-android",
+      "artifact": {
+        "path": "native/Deep.MlKemBraid/target/aarch64-linux-android/release/libdeep_mlkem_braid.so",
+        "size": 612344,
+        "sha256": "fa287d90ffff2c6e5b199c7f8ec487e16d989f75e39c2620b07c26e1dccbdf0d"
+      },
+      "toolchain": {
+        "ndkVersion": "28.2.13676358",
+        "androidApi": 26
+      },
+      "binary": {
+        "format": "ELF64 shared object",
+        "machine": "AArch64",
+        "endianness": "little",
+        "dependencies": ["libc.so", "libdl.so"],
+        "requiredHardening": ["BIND_NOW", "GNU_RELRO", "non-executable GNU_STACK"],
+        "forbiddenFeatures": ["TEXTREL"]
+      },
+      "testEvidence": [
+        {
+          "id": "android-native-device-probe",
+          "requiredAbi": "arm64-v8a",
+          "minimumApi": 26,
+          "expected": {
+            "schema": "deep-mlkem-braid-android-probe-v1",
+            "result": "pass",
+            "roundTrips": 2,
+            "replayRejected": true,
+            "doubleDisposeRejected": true,
+            "reloadPassed": true,
+            "secretsEmitted": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "windows-arm64",
+      "status": "pending",
+      "triple": "aarch64-pc-windows-msvc",
+      "artifact": null,
+      "reason": "The required Visual Studio ARM64 C++ toolchain is not installed; no artifact or execution evidence is accepted."
+    }
+  ]
+}

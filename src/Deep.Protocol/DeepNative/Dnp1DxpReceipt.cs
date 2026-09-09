@@ -10,18 +10,14 @@ public enum DxpReceiptPhase : byte { Pending = 0, Verified = 1, Aborted = 2 }
 /// </summary>
 public sealed class DxpOperationSource
 {
-    private const string Domain = "Deep/IdentityAuth/V1/dxp-operation-source";
+    private const string Domain = "Deep/IdentityAuth/V2/dxp-operation-source";
     private readonly byte[] _canonical;
     private readonly byte[] _fingerprint;
+    private readonly DxpIdentityIssuanceSource _issuanceSource;
 
     internal DxpOperationSource(
-        X25519PossessionRole role,
+        DxpIdentityIssuanceSource issuanceSource,
         byte stage,
-        ReadOnlySpan<byte> cutoverSource32,
-        ulong drsRevision,
-        ulong drsCount,
-        ReadOnlySpan<byte> drsHead32,
-        ReadOnlySpan<byte> drsRef38,
         ReadOnlySpan<byte> subjectProjectionHash32,
         ReadOnlySpan<byte> priorSubjectLkgRef38,
         ReadOnlySpan<byte> transcriptHash32,
@@ -30,13 +26,11 @@ public sealed class DxpOperationSource
         ReadOnlySpan<byte> dxrKeyId32,
         ReadOnlySpan<byte> nonceIndexKeyId32)
     {
-        if (role is not (X25519PossessionRole.Device or X25519PossessionRole.Router) ||
-            stage > 1 || cutoverSource32.Length != 32 || drsHead32.Length != 32 ||
-            drsRef38.Length != 38 || subjectProjectionHash32.Length != 32 ||
+        ArgumentNullException.ThrowIfNull(issuanceSource);
+        if (stage > 1 || subjectProjectionHash32.Length != 32 ||
             priorSubjectLkgRef38.Length != 38 || transcriptHash32.Length != 32 ||
             subjectArtifactRef38.Length != 38 || identityCatalogKeyId32.Length != 32 ||
             dxrKeyId32.Length != 32 || nonceIndexKeyId32.Length != 32 ||
-            CanonicalGrammar.IsZero(cutoverSource32) ||
             CanonicalGrammar.IsZero(subjectProjectionHash32) ||
             CanonicalGrammar.IsZero(identityCatalogKeyId32) ||
             CanonicalGrammar.IsZero(dxrKeyId32) ||
@@ -48,15 +42,18 @@ public sealed class DxpOperationSource
                            CanonicalGrammar.IsZero(subjectArtifactRef38)))
             Invalid("The DXP operation source stage shape is invalid.");
 
-        _canonical = new byte[1 + 1 + 32 + 8 + 8 + 32 + 38 + 32 + 38 + 32 + 38 + 32 + 32 + 32];
+        _issuanceSource = issuanceSource;
+        _canonical = new byte[1 + 1 + 1 + 32 + 32 + 8 + 8 + 32 + 38 + 32 + 38 + 32 + 38 + 32 + 32 + 32];
         var offset = 0;
-        Append([(byte)role]);
+        Append([(byte)issuanceSource.Kind]);
+        Append([(byte)issuanceSource.Role]);
         Append([stage]);
-        Append(cutoverSource32);
+        Append(issuanceSource.TrustedIdentityIssuanceSource);
+        Append(issuanceSource.TrustedIssuanceScope);
         Span<byte> scalar = stackalloc byte[8];
-        BinaryPrimitives.WriteUInt64BigEndian(scalar, drsRevision); Append(scalar);
-        BinaryPrimitives.WriteUInt64BigEndian(scalar, drsCount); Append(scalar);
-        Append(drsHead32); Append(drsRef38); Append(subjectProjectionHash32);
+        BinaryPrimitives.WriteUInt64BigEndian(scalar, issuanceSource.DrsRevision); Append(scalar);
+        BinaryPrimitives.WriteUInt64BigEndian(scalar, issuanceSource.DrsCount); Append(scalar);
+        Append(issuanceSource.DrsHead); Append(issuanceSource.DrsReference); Append(subjectProjectionHash32);
         Append(priorSubjectLkgRef38); Append(transcriptHash32); Append(subjectArtifactRef38);
         Append(identityCatalogKeyId32); Append(dxrKeyId32); Append(nonceIndexKeyId32);
         if (offset != _canonical.Length) Invalid("The DXP operation source length is invalid.");
@@ -70,14 +67,32 @@ public sealed class DxpOperationSource
     }
 
     internal ReadOnlySpan<byte> TrustedCanonical => _canonical;
-    internal X25519PossessionRole Role => (X25519PossessionRole)_canonical[0];
-    internal byte Stage => _canonical[1];
-    internal ulong DrsRevision => BinaryPrimitives.ReadUInt64BigEndian(_canonical.AsSpan(34, 8));
-    internal ulong DrsCount => BinaryPrimitives.ReadUInt64BigEndian(_canonical.AsSpan(42, 8));
-    internal ReadOnlySpan<byte> DrsHead => _canonical.AsSpan(50, 32);
-    internal ReadOnlySpan<byte> DrsReference => _canonical.AsSpan(82, 38);
+    internal DxpIdentityIssuanceSource IssuanceSource => _issuanceSource;
+    internal X25519PossessionRole Role => (X25519PossessionRole)_canonical[1];
+    internal byte Stage => _canonical[2];
+    internal ReadOnlySpan<byte> Network => _issuanceSource.Network;
+    internal ulong DrsRevision => BinaryPrimitives.ReadUInt64BigEndian(_canonical.AsSpan(67, 8));
+    internal ulong DrsCount => BinaryPrimitives.ReadUInt64BigEndian(_canonical.AsSpan(75, 8));
+    internal ReadOnlySpan<byte> DrsHead => _canonical.AsSpan(83, 32);
+    internal ReadOnlySpan<byte> DrsReference => _canonical.AsSpan(115, 38);
+    internal ReadOnlySpan<byte> SubjectProjectionHash => _canonical.AsSpan(153, 32);
+    internal ReadOnlySpan<byte> TranscriptHash => _canonical.AsSpan(223, 32);
+    internal ReadOnlySpan<byte> SubjectArtifactReference => _canonical.AsSpan(255, 38);
+    internal ReadOnlySpan<byte> DxrKeyId => _canonical.AsSpan(325, 32);
     public ReadOnlyMemory<byte> Fingerprint => _fingerprint.ToArray();
     public bool NoAuthorityClaim => true;
+
+    internal bool IsFinalSuccessorOf(DxpOperationSource pending)
+    {
+        if (pending.Stage != 0 || Stage != 1 || !_issuanceSource.SameBase(pending._issuanceSource))
+            return false;
+        return CanonicalGrammar.FixedEquals(
+            pending._canonical.AsSpan(0, 2), _canonical.AsSpan(0, 2)) &&
+            CanonicalGrammar.FixedEquals(
+                pending._canonical.AsSpan(3, 220), _canonical.AsSpan(3, 220)) &&
+            CanonicalGrammar.FixedEquals(
+                pending._canonical.AsSpan(293), _canonical.AsSpan(293));
+    }
 
     private static void Invalid(string message) =>
         throw new RecordException(RecordError.InvalidField, message);
@@ -127,7 +142,7 @@ public sealed class DxpReceiptTransitionPlan
 /// <summary>Restores and compares protected DXR1 rows without accepting key material.</summary>
 public sealed class DxpReceiptVerifier
 {
-    private const string ProtectedDomain = "Deep/ProtectedState/V1/DXP1-verified-receipt";
+    internal const string ProtectedDomain = "Deep/ProtectedState/V1/DXP1-verified-receipt";
 
     public async ValueTask<DxpReceiptRelative> RestoreAsync(
         ReadOnlyMemory<byte> canonicalDxr1,
@@ -140,10 +155,43 @@ public sealed class DxpReceiptVerifier
         cancellationToken.ThrowIfCancellationRequested();
         CanonicalGrammar.Preflight(canonicalDxr1.Span, RecordDefinitions.Dxr1);
         var record = CanonicalGrammar.DecodeOwned(canonicalDxr1.Span, RecordDefinitions.Dxr1);
-        if (record.FieldSpan(1)[0] != expectedSource.Stage ||
-            !CanonicalGrammar.FixedEquals(record.FieldSpan(15), expectedSource.Fingerprint.Span))
+        var phase = record.FieldSpan(1)[0];
+        if (phase != expectedSource.Stage &&
+            !(phase == (byte)DxpReceiptPhase.Aborted && expectedSource.Stage == 0))
             throw new RecordException(RecordError.InvalidTransition,
-                "The DXR1 row belongs to a different exact operation source.");
+                "The DXR1 phase differs from its exact operation source.");
+        if (phase == (byte)DxpReceiptPhase.Aborted &&
+            (!CanonicalGrammar.IsZero(record.FieldSpan(12)) ||
+             !CanonicalGrammar.IsZero(record.FieldSpan(13)) ||
+             !CanonicalGrammar.IsZero(record.FieldSpan(14))))
+            throw new RecordException(RecordError.InvalidTransition,
+                "An Aborted DXR1 must not carry verified subject evidence.");
+        if (phase == (byte)DxpReceiptPhase.Pending &&
+            (!CanonicalGrammar.IsZero(record.FieldSpan(12)) ||
+             !CanonicalGrammar.IsZero(record.FieldSpan(13)) ||
+             !CanonicalGrammar.IsZero(record.FieldSpan(14))))
+            throw new RecordException(RecordError.InvalidTransition,
+                "A Pending DXR1 must not carry verified subject evidence.");
+        if (record.FieldSpan(2)[0] != (byte)expectedSource.Role)
+            throw new RecordException(RecordError.InvalidTransition,
+                "The DXR1 role differs from its exact operation source.");
+        if (!CanonicalGrammar.FixedEquals(record.FieldSpan(3), expectedSource.Network))
+            throw new RecordException(RecordError.InvalidTransition,
+                "The DXR1 network differs from its exact operation source.");
+        if (!CanonicalGrammar.FixedEquals(record.FieldSpan(5), expectedSource.SubjectProjectionHash))
+            throw new RecordException(RecordError.InvalidTransition,
+                "The DXR1 projection differs from its exact operation source.");
+        if (!CanonicalGrammar.FixedEquals(record.FieldSpan(13), expectedSource.TranscriptHash) ||
+            !CanonicalGrammar.FixedEquals(
+                record.FieldSpan(14), expectedSource.SubjectArtifactReference))
+            throw new RecordException(RecordError.InvalidTransition,
+                "The DXR1 final evidence differs from its exact operation source.");
+        if (!CanonicalGrammar.FixedEquals(record.FieldSpan(15), expectedSource.Fingerprint.Span))
+            throw new RecordException(RecordError.InvalidTransition,
+                "The DXR1 fingerprint differs from its exact operation source.");
+        if (!CanonicalGrammar.FixedEquals(record.FieldSpan(16), expectedSource.DxrKeyId))
+            throw new RecordException(RecordError.InvalidTransition,
+                "The DXR1 protected key differs from its exact operation source.");
         var unsigned = Unsigned(record);
         var request = new ProtectedHmacRequest(
             ProtectedDomain,
@@ -171,7 +219,8 @@ public sealed class DxpReceiptVerifier
         ArgumentNullException.ThrowIfNull(expectedVerifiedSource);
         if (pending.Phase != DxpReceiptPhase.Pending ||
             verified.Phase != DxpReceiptPhase.Verified ||
-            expectedPendingSource.Stage != 0 || expectedVerifiedSource.Stage != 1)
+            expectedPendingSource.Stage != 0 || expectedVerifiedSource.Stage != 1 ||
+            !expectedVerifiedSource.IsFinalSuccessorOf(expectedPendingSource))
             Invalid("The DXR1 final CAS phases are invalid.");
         for (var tag = 2; tag <= 11; tag++)
             Equal(pending.Record.FieldSpan(tag), verified.Record.FieldSpan(tag),
@@ -184,13 +233,15 @@ public sealed class DxpReceiptVerifier
             "The DXR1 Verified source changed.");
         Equal(pending.Record.FieldSpan(16), verified.Record.FieldSpan(16),
             "The DXR1 protected key changed.");
+        Equal(pending.Record.FieldSpan(18), verified.Record.FieldSpan(18),
+            "The DXR1 retention horizon changed.");
         if (pending.ForkLatched || verified.ForkLatched)
             throw new RecordException(RecordError.ForkDetected,
                 "A fork-latched DXR1 cannot transition.");
         return new DxpReceiptTransitionPlan(pending, verified);
     }
 
-    private static byte[] Unsigned(OwnedRecord record)
+    internal static byte[] Unsigned(OwnedRecord record)
     {
         var definition = record.Definition with
         {

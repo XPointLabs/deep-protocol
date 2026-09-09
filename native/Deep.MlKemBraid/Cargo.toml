@@ -1,0 +1,22 @@
+[package]
+name = "deep-mlkem-braid"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+publish = false
+license = "Apache-2.0"
+
+[lib]
+name = "deep_mlkem_braid"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+getrandom = "=0.3.3"
+libcrux-ml-kem = { version = "=0.0.10", default-features = false, features = ["incremental", "mlkem768"] }
+zeroize = "=1.8.1"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+

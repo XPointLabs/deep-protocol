@@ -184,6 +184,7 @@ internal sealed record RouteV2TestFixture(
     byte[] Commitment,
     byte[] IssuerPrivateKey,
     byte[] OwnerPrivateKey,
+    VerifiedProductionMailboxAuthority PreviousAuthority,
     VerifiedProductionMailboxAuthority Authority,
     VerifiedProductionMailboxRevocationSnapshot RevocationSnapshot,
     VerifiedProductionMailboxRouteCertificate VerifiedCertificate,
@@ -204,6 +205,45 @@ internal sealed record RouteV2TestFixture(
         var mrX = PublicKeyAuth.GenerateKeyPair(Bytes((byte)(60 + variant), 32));
         var owner = PublicKeyAuth.GenerateKeyPair(Bytes((byte)(90 + variant), 32));
         var authorityValue = AuthorityValue(issuer.PublicKey, mrX.PublicKey, variant);
+        var previousAuthorityValue = SignAuthority(authorityValue with
+        {
+            AuthorityGeneration = authorityValue.AuthorityGeneration - 1,
+            PreviousAuthorityHash = Bytes((byte)(101 + variant), 32),
+            CurrentEpoch = authorityValue.CurrentEpoch with
+            {
+                Epoch = authorityValue.CurrentEpoch.Epoch - 1,
+                Generation = authorityValue.CurrentEpoch.Generation - 1
+            },
+            NextEpoch = authorityValue.CurrentEpoch,
+            Revocation = authorityValue.Revocation with
+            {
+                SnapshotHash = Bytes((byte)(102 + variant), 32),
+                HeadHash = authorityValue.Revocation.PreviousHeadHash,
+                PreviousHeadHash = Bytes((byte)(103 + variant), 32),
+                Generation = authorityValue.Revocation.Generation - 1
+            }
+        }, mrX.PrivateKey);
+        var previousAuthority = ProductionMailboxAuthorityVerifier.Verify(previousAuthorityValue,
+            new ProductionMailboxAuthorityVerificationContext
+            {
+                PinnedMrXPublicKeySha256 = SHA256.HashData(mrX.PublicKey),
+                ExpectedNetworkId = previousAuthorityValue.NetworkId,
+                LastCommittedGeneration = previousAuthorityValue.AuthorityGeneration - 1,
+                LastCommittedAuthorityHash = previousAuthorityValue.PreviousAuthorityHash,
+                LastCommittedRevocationGeneration = previousAuthorityValue.Revocation.Generation - 1,
+                LastCommittedRevocationHeadHash = previousAuthorityValue.Revocation.PreviousHeadHash,
+                LastCommittedRevocationSnapshotHash = Bytes((byte)(104 + variant), 32),
+                NowUnixSeconds = Now,
+                ClockSkewSeconds = 0
+            }, new SodiumProductionMailboxAuthoritySignatureVerifier());
+        authorityValue = authorityValue with
+        {
+            PreviousAuthorityHash = previousAuthority.CanonicalAuthorityHash,
+            Revocation = authorityValue.Revocation with
+            {
+                PreviousHeadHash = previousAuthorityValue.Revocation.HeadHash
+            }
+        };
         var unsignedPmr = new ProductionMailboxRevocationSnapshot
         {
             NetworkId = authorityValue.NetworkId,
@@ -406,7 +446,7 @@ internal sealed record RouteV2TestFixture(
             ClockSkewSeconds = 0
         };
         return new RouteV2TestFixture(authorityValue.NetworkId.ToArray(), routeDomain, salt, commitment,
-            issuer.PrivateKey, owner.PrivateKey, authority, verifiedPmr, verifiedCertificate, pra,
+            issuer.PrivateKey, owner.PrivateKey, previousAuthority, authority, verifiedPmr, verifiedCertificate, pra,
             verifiedPra, preDelegationRouteOriginLkg, delegation, acceptance, revocation,
             checkpoint, enrollmentContext);
     }

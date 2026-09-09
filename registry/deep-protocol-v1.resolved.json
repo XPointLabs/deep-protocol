@@ -3,9 +3,9 @@
   "schemaVersion": "1.0.0",
   "registryGeneration": 1,
   "registryId": "deep-protocol-v1-resolved",
-  "sourceRegistrySha256": "8c5c8c0f4633904c45eb125e5501281522e9dbeaef4fe0948b2419efaf2bf5e1",
-  "dnp1ApprovedCommit": "2562b11cdacdcc6e60cf79bdb6265b4f4687fbbe",
-  "dnp1RegistrySha256": "abbfdbe76d768ac4b132403d54943dbbf4781bd6865377519e13796b5b5c8b18",
+  "sourceRegistrySha256": "84ad221b07af11dc5482377ed3bdc2a5ff553477bc68842bd225af7de004dbb4",
+  "dnp1ApprovedCommit": "2651599913bf92c021d36b6a53395499b6a091fb",
+  "dnp1RegistrySha256": "31482ef7b8e6f89e3677701fbcb2cc2248df4e51e5315ee48b5f37198b68f1c4",
   "records": [
     {
       "magic": "DBG1",
@@ -28,46 +28,6 @@
         "src/Deep.Protocol/DeepNative/Dnp1RecordDefinitions.cs"
       ],
       "contractBlocker": null
-    },
-    {
-      "magic": "MSB1",
-      "version": null,
-      "grammar": null,
-      "suiteNamespace": null,
-      "allowedSuites": [],
-      "minBytes": null,
-      "maxBytes": null,
-      "visibility": "public",
-      "normativeSource": "production-wire-source",
-      "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "deep-protocol:production-wire-source:vectors",
-      "schemaOwner": "deep-protocol:production-wire-source:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
-      "implementationPaths": [
-        "src/Deep.Protocol/DeepExtension/Membership/MembershipContractCodec.cs"
-      ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "MSD1",
-      "version": null,
-      "grammar": null,
-      "suiteNamespace": null,
-      "allowedSuites": [],
-      "minBytes": null,
-      "maxBytes": null,
-      "visibility": "public",
-      "normativeSource": "production-wire-source",
-      "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "deep-protocol:production-wire-source:vectors",
-      "schemaOwner": "deep-protocol:production-wire-source:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
-      "implementationPaths": [
-        "src/Deep.Protocol/DeepExtension/Membership/MembershipContractCodec.cs"
-      ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
       "magic": "MSR1",
@@ -122,9 +82,11 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:xpoint-network-v1:vectors",
       "schemaOwner": "deep-protocol:xpoint-network-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/XPointNetworkV1/XPointNetworkForwardCheckpointVerifier.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -183,7 +145,9 @@
       "schemaOwner": "deep-protocol:xpoint-network-v1:schema",
       "lifecycle": "TARGET_UNFROZEN",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ContactV1/ContactCodec.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -289,6 +253,26 @@
       "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
+      "magic": "MSD1",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "public",
+      "normativeSource": "production-wire-source",
+      "ownerPackage": "Deep.Protocol",
+      "vectorOwner": "deep-protocol:production-wire-source:vectors",
+      "schemaOwner": "deep-protocol:production-wire-source:schema",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "contractState": "current-source-bound",
+      "implementationPaths": [
+        "src/Deep.Protocol/DeepExtension/Membership/MembershipContractCodec.cs"
+      ],
+      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
       "magic": "PMS2",
       "version": null,
       "grammar": null,
@@ -301,34 +285,15 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:xpoint-network-v1:vectors",
       "schemaOwner": "deep-protocol:xpoint-network-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
-      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "PMT1",
-      "version": null,
-      "grammar": null,
-      "suiteNamespace": null,
-      "allowedSuites": [],
-      "minBytes": null,
-      "maxBytes": null,
-      "visibility": "public",
-      "normativeSource": "production-wire-source",
-      "ownerPackage": "Deep.Protocol.MembershipRoutes",
-      "vectorOwner": "deep-protocol:production-wire-source:vectors",
-      "schemaOwner": "deep-protocol:production-wire-source:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
       "implementationPaths": [
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxNodeCacheVerifier.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxOwnerControlTransportCodec.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteIssuerAuthoring.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxSelectionSuccessorVerifier.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxTopologyCodec.cs"
+        "src/Deep.Protocol/ApplicationCore/ApplicationMessageCodec.cs",
+        "src/Deep.Protocol/ContactV1/ContactCodec.cs",
+        "src/Deep.Protocol/ContactV1/ContactNetworkAuthorityVerifier.cs",
+        "src/Deep.Protocol/ContactV1/ContactServiceWireCodec.cs"
       ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
       "magic": "PMT2",
@@ -343,9 +308,16 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:xpoint-network-v1:vectors",
       "schemaOwner": "deep-protocol:xpoint-network-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ApplicationCore/ApplicationMessageCodec.cs",
+        "src/Deep.Protocol/ContactV1/ContactCodec.cs",
+        "src/Deep.Protocol/ContactV1/ContactNetworkAuthorityVerifier.cs",
+        "src/Deep.Protocol/ContactV1/ContactServiceWireCodec.cs",
+        "src/Deep.Protocol/GroupV1/GroupCodec.cs",
+        "src/Deep.Protocol/XPointNetworkV1/XPointOnionCapabilityProducer.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -496,26 +468,6 @@
       "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "MRT1",
-      "version": null,
-      "grammar": null,
-      "suiteNamespace": null,
-      "allowedSuites": [],
-      "minBytes": null,
-      "maxBytes": null,
-      "visibility": "public",
-      "normativeSource": "production-wire-source",
-      "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "deep-protocol:production-wire-source:vectors",
-      "schemaOwner": "deep-protocol:production-wire-source:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
-      "implementationPaths": [
-        "src/Deep.Protocol/DeepExtension/MailboxCapabilities/MailboxClientCodec.cs"
-      ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
       "magic": "RAH1",
       "version": null,
       "grammar": null,
@@ -538,6 +490,116 @@
       "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
+      "magic": "RCA1",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "public",
+      "normativeSource": "protocol-registry-v1",
+      "ownerPackage": "Deep.Protocol.MembershipRoutes",
+      "vectorOwner": "deep-protocol:protocol-registry-v1:vectors",
+      "schemaOwner": "deep-protocol:protocol-registry-v1:schema",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "contractState": "current-source-bound",
+      "implementationPaths": [
+        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteAuthorizationCodec.cs",
+        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteAuthorizationVerifier.cs",
+        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteIssuerAuthoring.cs"
+      ],
+      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "RCD1",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "public",
+      "normativeSource": "protocol-registry-v1",
+      "ownerPackage": "Deep.Protocol.MembershipRoutes",
+      "vectorOwner": "deep-protocol:protocol-registry-v1:vectors",
+      "schemaOwner": "deep-protocol:protocol-registry-v1:schema",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "contractState": "current-source-bound",
+      "implementationPaths": [
+        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteContinuityCodec.cs",
+        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteContinuityVerifier.cs"
+      ],
+      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "PMT1",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "public",
+      "normativeSource": "production-wire-source",
+      "ownerPackage": "Deep.Protocol.MembershipRoutes",
+      "vectorOwner": "deep-protocol:production-wire-source:vectors",
+      "schemaOwner": "deep-protocol:production-wire-source:schema",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "contractState": "current-source-bound",
+      "implementationPaths": [
+        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxNodeCacheVerifier.cs",
+        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxOwnerControlTransportCodec.cs",
+        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteIssuerAuthoring.cs",
+        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxSelectionSuccessorVerifier.cs",
+        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxTopologyCodec.cs"
+      ],
+      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "RCH1",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "public",
+      "normativeSource": "production-wire-source",
+      "ownerPackage": "Deep.Protocol.MembershipRoutes",
+      "vectorOwner": "deep-protocol:production-wire-source:vectors",
+      "schemaOwner": "deep-protocol:production-wire-source:schema",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "contractState": "current-source-bound",
+      "implementationPaths": [
+        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxLiveTransitionAuthoring.cs",
+        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteContinuityCodec.cs",
+        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteContinuityVerifier.cs",
+        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteIssuerAuthoring.cs"
+      ],
+      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "MSB1",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "public",
+      "normativeSource": "production-wire-source",
+      "ownerPackage": "Deep.Protocol",
+      "vectorOwner": "deep-protocol:production-wire-source:vectors",
+      "schemaOwner": "deep-protocol:production-wire-source:schema",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "contractState": "current-source-bound",
+      "implementationPaths": [
+        "src/Deep.Protocol/DeepExtension/Membership/MembershipContractCodec.cs"
+      ],
+      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
       "magic": "MRR1",
       "version": null,
       "grammar": null,
@@ -554,82 +616,6 @@
       "contractState": "current-source-bound",
       "implementationPaths": [
         "src/Deep.Protocol/DeepExtension/MailboxCapabilities/MailboxReceiptCodec.cs"
-      ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "MRL1",
-      "version": null,
-      "grammar": null,
-      "suiteNamespace": null,
-      "allowedSuites": [],
-      "minBytes": null,
-      "maxBytes": null,
-      "visibility": "public",
-      "normativeSource": "production-wire-source",
-      "ownerPackage": "Deep.Protocol.MembershipRoutes",
-      "vectorOwner": "deep-protocol:production-wire-source:vectors",
-      "schemaOwner": "deep-protocol:production-wire-source:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
-      "implementationPaths": [
-        "src/Deep.Protocol.MembershipRoutes/MembershipRouteDescriptor.cs"
-      ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "GSS1",
-      "version": null,
-      "grammar": null,
-      "suiteNamespace": null,
-      "allowedSuites": [],
-      "minBytes": null,
-      "maxBytes": null,
-      "visibility": "unfrozen",
-      "normativeSource": "contact-group-v1",
-      "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "deep-protocol:contact-group-v1:vectors",
-      "schemaOwner": "deep-protocol:contact-group-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
-      "contractState": "allocation-only",
-      "implementationPaths": [],
-      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "GSW1",
-      "version": null,
-      "grammar": null,
-      "suiteNamespace": null,
-      "allowedSuites": [],
-      "minBytes": null,
-      "maxBytes": null,
-      "visibility": "unfrozen",
-      "normativeSource": "contact-group-v1",
-      "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "deep-protocol:contact-group-v1:vectors",
-      "schemaOwner": "deep-protocol:contact-group-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
-      "contractState": "allocation-only",
-      "implementationPaths": [],
-      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "GTI1",
-      "version": null,
-      "grammar": null,
-      "suiteNamespace": null,
-      "allowedSuites": [],
-      "minBytes": null,
-      "maxBytes": null,
-      "visibility": "public",
-      "normativeSource": "production-wire-source",
-      "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "deep-protocol:production-wire-source:vectors",
-      "schemaOwner": "deep-protocol:production-wire-source:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
-      "implementationPaths": [
-        "src/Deep.Protocol/DeepNative/Dnp1GenesisProtectedRecords.cs"
       ],
       "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
@@ -694,6 +680,26 @@
       "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
+      "magic": "MBA1",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "unfrozen",
+      "normativeSource": "deep-crypto-v1",
+      "ownerPackage": "Deep.Protocol",
+      "vectorOwner": "deep-protocol:deep-crypto-v1:vectors",
+      "schemaOwner": "deep-protocol:deep-crypto-v1:schema",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+      "contractState": "allocation-only",
+      "implementationPaths": [
+        "src/Deep.Protocol/MessagingCrypto/ManagedMlKemBraidProfile.cs"
+      ],
+      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
       "magic": "MBA2",
       "version": null,
       "grammar": null,
@@ -732,6 +738,26 @@
         "src/Deep.Protocol/DeepExtension/MailboxCapabilities/MailboxReceiptCodec.cs"
       ],
       "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "MBM1",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "unfrozen",
+      "normativeSource": "deep-crypto-v1",
+      "ownerPackage": "Deep.Protocol",
+      "vectorOwner": "deep-protocol:deep-crypto-v1:vectors",
+      "schemaOwner": "deep-protocol:deep-crypto-v1:schema",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+      "contractState": "allocation-only",
+      "implementationPaths": [
+        "src/Deep.Protocol/MessagingCrypto/ManagedMlKemBraidStateMachine.cs"
+      ],
+      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
       "magic": "MBR2",
@@ -814,6 +840,26 @@
       "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
+      "magic": "MRT1",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "public",
+      "normativeSource": "production-wire-source",
+      "ownerPackage": "Deep.Protocol",
+      "vectorOwner": "deep-protocol:production-wire-source:vectors",
+      "schemaOwner": "deep-protocol:production-wire-source:schema",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "contractState": "current-source-bound",
+      "implementationPaths": [
+        "src/Deep.Protocol/DeepExtension/MailboxCapabilities/MailboxClientCodec.cs"
+      ],
+      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
       "magic": "MCP2",
       "version": null,
       "grammar": null,
@@ -830,29 +876,6 @@
       "contractState": "current-source-bound",
       "implementationPaths": [
         "src/Deep.Protocol/DeepExtension/MailboxCapabilities/MailboxAuthenticatedCapabilityCodec.cs"
-      ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "MEO1",
-      "version": null,
-      "grammar": null,
-      "suiteNamespace": null,
-      "allowedSuites": [],
-      "minBytes": null,
-      "maxBytes": null,
-      "visibility": "public",
-      "normativeSource": "production-wire-source",
-      "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "deep-protocol:production-wire-source:vectors",
-      "schemaOwner": "deep-protocol:production-wire-source:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
-      "implementationPaths": [
-        "src/Deep.Protocol/DeepExtension/MailboxCapabilities/MailboxAuthenticatedRequestTranscript.cs",
-        "src/Deep.Protocol/DeepExtension/MailboxCapabilities/MailboxClientCodec.cs",
-        "src/Deep.Protocol/DeepExtension/MailboxCapabilities/MailboxPeerReplicationCodec.cs",
-        "src/Deep.Protocol/DeepExtension/MailboxCapabilities/MailboxPeerWireV2Codec.cs"
       ],
       "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
@@ -1036,6 +1059,26 @@
       "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
+      "magic": "MRL1",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "public",
+      "normativeSource": "production-wire-source",
+      "ownerPackage": "Deep.Protocol.MembershipRoutes",
+      "vectorOwner": "deep-protocol:production-wire-source:vectors",
+      "schemaOwner": "deep-protocol:production-wire-source:schema",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "contractState": "current-source-bound",
+      "implementationPaths": [
+        "src/Deep.Protocol.MembershipRoutes/MembershipRouteDescriptor.cs"
+      ],
+      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
       "magic": "MRP1",
       "version": null,
       "grammar": null,
@@ -1051,30 +1094,56 @@
       "lifecycle": "CURRENT_PRE_CUTOVER",
       "contractState": "current-source-bound",
       "implementationPaths": [
-        "src/Deep.Protocol/DeepExtension/MailboxCapabilities/MailboxClientCodec.cs"
+        "src/Deep.Protocol/DeepExtension/MailboxCapabilities/MailboxClientCodec.cs",
+        "src/Deep.Protocol/DeepExtension/PrivacyRouting/PrivacyRoutingCodec.cs"
       ],
       "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "GSR1",
+      "magic": "MEO1",
       "version": null,
       "grammar": null,
       "suiteNamespace": null,
       "allowedSuites": [],
       "minBytes": null,
       "maxBytes": null,
-      "visibility": "unfrozen",
-      "normativeSource": "contact-group-v1",
+      "visibility": "public",
+      "normativeSource": "production-wire-source",
       "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "deep-protocol:contact-group-v1:vectors",
-      "schemaOwner": "deep-protocol:contact-group-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
-      "contractState": "allocation-only",
-      "implementationPaths": [],
-      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+      "vectorOwner": "deep-protocol:production-wire-source:vectors",
+      "schemaOwner": "deep-protocol:production-wire-source:schema",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "contractState": "current-source-bound",
+      "implementationPaths": [
+        "src/Deep.Protocol/DeepExtension/MailboxCapabilities/MailboxAuthenticatedRequestTranscript.cs",
+        "src/Deep.Protocol/DeepExtension/MailboxCapabilities/MailboxClientCodec.cs",
+        "src/Deep.Protocol/DeepExtension/MailboxCapabilities/MailboxPeerReplicationCodec.cs",
+        "src/Deep.Protocol/DeepExtension/MailboxCapabilities/MailboxPeerWireV2Codec.cs"
+      ],
+      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "RCA1",
+      "magic": "GTI1",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "public",
+      "normativeSource": "production-wire-source",
+      "ownerPackage": "Deep.Protocol",
+      "vectorOwner": "deep-protocol:production-wire-source:vectors",
+      "schemaOwner": "deep-protocol:production-wire-source:schema",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "contractState": "current-source-bound",
+      "implementationPaths": [
+        "src/Deep.Protocol/DeepNative/Dnp1GenesisProtectedRecords.cs"
+      ],
+      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "RCR1",
       "version": null,
       "grammar": null,
       "suiteNamespace": null,
@@ -1089,14 +1158,12 @@
       "lifecycle": "CURRENT_PRE_CUTOVER",
       "contractState": "current-source-bound",
       "implementationPaths": [
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteAuthorizationCodec.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteAuthorizationVerifier.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteIssuerAuthoring.cs"
+        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteContinuityCodec.cs"
       ],
       "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "RCH1",
+      "magic": "RFC1",
       "version": null,
       "grammar": null,
       "suiteNamespace": null,
@@ -1105,36 +1172,17 @@
       "maxBytes": null,
       "visibility": "public",
       "normativeSource": "production-wire-source",
-      "ownerPackage": "Deep.Protocol.MembershipRoutes",
+      "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:production-wire-source:vectors",
       "schemaOwner": "deep-protocol:production-wire-source:schema",
       "lifecycle": "CURRENT_PRE_CUTOVER",
       "contractState": "current-source-bound",
       "implementationPaths": [
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxLiveTransitionAuthoring.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteContinuityCodec.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteContinuityVerifier.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteIssuerAuthoring.cs"
+        "src/Deep.Protocol/DeepNative/Dnp1GenesisManifestAuthor.cs",
+        "src/Deep.Protocol/DeepNative/Dnp1RecoveryManifest.cs",
+        "src/Deep.Protocol/DeepNative/Dnp1RecoveryModels.cs"
       ],
       "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "XNP1",
-      "version": null,
-      "grammar": null,
-      "suiteNamespace": null,
-      "allowedSuites": [],
-      "minBytes": null,
-      "maxBytes": null,
-      "visibility": "unfrozen",
-      "normativeSource": "xpoint-network-v1",
-      "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "deep-protocol:xpoint-network-v1:vectors",
-      "schemaOwner": "deep-protocol:xpoint-network-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
-      "contractState": "allocation-only",
-      "implementationPaths": [],
-      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
       "magic": "XNV1",
@@ -1149,9 +1197,14 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:xpoint-network-v1:vectors",
       "schemaOwner": "deep-protocol:xpoint-network-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ContactV1/ContactCodec.cs",
+        "src/Deep.Protocol/ContactV1/ContactNetworkAuthorityVerifier.cs",
+        "src/Deep.Protocol/XPointNetworkV1/XPointNetworkForwardCheckpointVerifier.cs",
+        "src/Deep.Protocol/XPointNetworkV1/XPointOnionCapabilityProducer.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -1169,7 +1222,10 @@
       "schemaOwner": "deep-protocol:carriers-v1:schema",
       "lifecycle": "TARGET_UNFROZEN",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAdl1Codec.cs",
+        "src/Deep.Protocol/XPointNetworkV1/XPointNetworkSemantics.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -1223,7 +1279,10 @@
       "schemaOwner": "deep-protocol:contact-resolver-v1:schema",
       "lifecycle": "TARGET_UNFROZEN",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ContactV1/ContactServiceWireCodec.cs",
+        "src/Deep.Protocol/ContactV1/Xpa1PublicationAuthorizationVerifier.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -1241,7 +1300,30 @@
       "schemaOwner": "deep-protocol:contact-resolver-v1:schema",
       "lifecycle": "TARGET_UNFROZEN",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ContactV1/ContactServiceWireCodec.cs"
+      ],
+      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "XPI1",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "unfrozen",
+      "normativeSource": "contact-resolver-v1",
+      "ownerPackage": "Deep.Protocol",
+      "vectorOwner": "deep-protocol:contact-resolver-v1:vectors",
+      "schemaOwner": "deep-protocol:contact-resolver-v1:schema",
+      "lifecycle": "TARGET_UNFROZEN",
+      "contractState": "allocation-only",
+      "implementationPaths": [
+        "src/Deep.Protocol/ContactV1/ContactCodec.cs",
+        "src/Deep.Protocol/ContactV1/PreKeyInventoryPublication.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -1259,7 +1341,10 @@
       "schemaOwner": "deep-protocol:contact-resolver-v1:schema",
       "lifecycle": "TARGET_UNFROZEN",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ContactV1/ContactServiceWireCodec.cs",
+        "src/Deep.Protocol/DeepExtension/PrivacyRouting/PrivacyRoutingCodec.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -1277,7 +1362,29 @@
       "schemaOwner": "deep-protocol:contact-resolver-v1:schema",
       "lifecycle": "TARGET_UNFROZEN",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ContactV1/ContactServiceWireCodec.cs"
+      ],
+      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "XPP1",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "unfrozen",
+      "normativeSource": "contact-resolver-v1",
+      "ownerPackage": "Deep.Protocol",
+      "vectorOwner": "deep-protocol:contact-resolver-v1:vectors",
+      "schemaOwner": "deep-protocol:contact-resolver-v1:schema",
+      "lifecycle": "TARGET_UNFROZEN",
+      "contractState": "allocation-only",
+      "implementationPaths": [
+        "src/Deep.Protocol/ContactV1/PreKeyInventoryPublication.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -1293,7 +1400,27 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:privacy-routing-v1:vectors",
       "schemaOwner": "deep-protocol:privacy-routing-v1:schema",
-      "lifecycle": "TARGET_RENAME_REQUIRED",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+      "contractState": "allocation-only",
+      "implementationPaths": [
+        "src/Deep.Protocol/DeepExtension/PrivacyRouting/PrivacyRoutingResultCodec.cs"
+      ],
+      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "XNP1",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "unfrozen",
+      "normativeSource": "xpoint-network-v1",
+      "ownerPackage": "Deep.Protocol",
+      "vectorOwner": "deep-protocol:xpoint-network-v1:vectors",
+      "schemaOwner": "deep-protocol:xpoint-network-v1:schema",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
       "implementationPaths": [],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
@@ -1313,25 +1440,11 @@
       "schemaOwner": "deep-protocol:contact-resolver-v1:schema",
       "lifecycle": "TARGET_UNFROZEN",
       "contractState": "allocation-only",
-      "implementationPaths": [],
-      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "XPU1",
-      "version": null,
-      "grammar": null,
-      "suiteNamespace": null,
-      "allowedSuites": [],
-      "minBytes": null,
-      "maxBytes": null,
-      "visibility": "unfrozen",
-      "normativeSource": "contact-resolver-v1",
-      "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "deep-protocol:contact-resolver-v1:vectors",
-      "schemaOwner": "deep-protocol:contact-resolver-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
-      "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ContactV1/ContactCodec.cs",
+        "src/Deep.Protocol/ContactV1/PreKeyInventoryPublication.cs",
+        "src/Deep.Protocol/ContactV1/Xpc1PreKeyClaimReceiptVerifier.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -1347,9 +1460,13 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:xpoint-network-v1:vectors",
       "schemaOwner": "deep-protocol:xpoint-network-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ApplicationCore/ApplicationMessageCodec.cs",
+        "src/Deep.Protocol/ContactV1/ContactCodec.cs",
+        "src/Deep.Protocol/ContactV1/ContactServiceWireCodec.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -1365,9 +1482,13 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:xpoint-network-v1:vectors",
       "schemaOwner": "deep-protocol:xpoint-network-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ApplicationCore/ApplicationMessageCodec.cs",
+        "src/Deep.Protocol/ContactV1/ContactCodec.cs",
+        "src/Deep.Protocol/ContactV1/ContactServiceWireCodec.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -1383,9 +1504,11 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:privacy-routing-v1:vectors",
       "schemaOwner": "deep-protocol:privacy-routing-v1:schema",
-      "lifecycle": "TARGET_RENAME_REQUIRED",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/DeepExtension/PrivacyRouting/PrivacyRoutingCodec.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -1401,9 +1524,11 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:privacy-routing-v1:vectors",
       "schemaOwner": "deep-protocol:privacy-routing-v1:schema",
-      "lifecycle": "TARGET_RENAME_REQUIRED",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/DeepExtension/PrivacyRouting/PrivacyRoutingCodec.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -1419,9 +1544,11 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:privacy-routing-v1:vectors",
       "schemaOwner": "deep-protocol:privacy-routing-v1:schema",
-      "lifecycle": "TARGET_RENAME_REQUIRED",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/DeepExtension/PrivacyRouting/PrivacyRoutingCodec.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -1437,9 +1564,13 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:xpoint-network-v1:vectors",
       "schemaOwner": "deep-protocol:xpoint-network-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ApplicationCore/ApplicationMessageCodec.cs",
+        "src/Deep.Protocol/ContactV1/ContactCodec.cs",
+        "src/Deep.Protocol/ContactV1/ContactServiceWireCodec.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -1455,9 +1586,11 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:privacy-routing-v1:vectors",
       "schemaOwner": "deep-protocol:privacy-routing-v1:schema",
-      "lifecycle": "TARGET_RENAME_REQUIRED",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/DeepExtension/PrivacyRouting/PrivacyRoutingCodec.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -1473,9 +1606,13 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:xpoint-network-v1:vectors",
       "schemaOwner": "deep-protocol:xpoint-network-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ApplicationCore/ApplicationMessageCodec.cs",
+        "src/Deep.Protocol/ContactV1/ContactCodec.cs",
+        "src/Deep.Protocol/ContactV1/ContactServiceWireCodec.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -1493,7 +1630,10 @@
       "schemaOwner": "deep-protocol:contact-resolver-v1:schema",
       "lifecycle": "TARGET_UNFROZEN",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ContactV1/ContactServiceWireCodec.cs",
+        "src/Deep.Protocol/DeepExtension/PrivacyRouting/PrivacyRoutingCodec.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -1509,9 +1649,12 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:contact-resolver-v1:vectors",
       "schemaOwner": "deep-protocol:contact-resolver-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ApplicationCore/ApplicationMessageCodec.cs",
+        "src/Deep.Protocol/ContactV1/ContactCodec.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -1529,50 +1672,13 @@
       "schemaOwner": "deep-protocol:contact-resolver-v1:schema",
       "lifecycle": "TARGET_UNFROZEN",
       "contractState": "allocation-only",
-      "implementationPaths": [],
-      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "XNH1",
-      "version": null,
-      "grammar": null,
-      "suiteNamespace": null,
-      "allowedSuites": [],
-      "minBytes": null,
-      "maxBytes": null,
-      "visibility": "unfrozen",
-      "normativeSource": "xpoint-network-v1",
-      "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "deep-protocol:xpoint-network-v1:vectors",
-      "schemaOwner": "deep-protocol:xpoint-network-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
-      "contractState": "allocation-only",
-      "implementationPaths": [],
-      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "RCD1",
-      "version": null,
-      "grammar": null,
-      "suiteNamespace": null,
-      "allowedSuites": [],
-      "minBytes": null,
-      "maxBytes": null,
-      "visibility": "public",
-      "normativeSource": "protocol-registry-v1",
-      "ownerPackage": "Deep.Protocol.MembershipRoutes",
-      "vectorOwner": "deep-protocol:protocol-registry-v1:vectors",
-      "schemaOwner": "deep-protocol:protocol-registry-v1:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
       "implementationPaths": [
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteContinuityCodec.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteContinuityVerifier.cs"
+        "src/Deep.Protocol/ContactV1/ContactServiceWireCodec.cs"
       ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "XNF1",
+      "magic": "XPU1",
       "version": null,
       "grammar": null,
       "suiteNamespace": null,
@@ -1580,52 +1686,17 @@
       "minBytes": null,
       "maxBytes": null,
       "visibility": "unfrozen",
-      "normativeSource": "xpoint-network-v1",
+      "normativeSource": "contact-resolver-v1",
       "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "deep-protocol:xpoint-network-v1:vectors",
-      "schemaOwner": "deep-protocol:xpoint-network-v1:schema",
+      "vectorOwner": "deep-protocol:contact-resolver-v1:vectors",
+      "schemaOwner": "deep-protocol:contact-resolver-v1:schema",
       "lifecycle": "TARGET_UNFROZEN",
       "contractState": "allocation-only",
-      "implementationPaths": [],
-      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "XNA1",
-      "version": null,
-      "grammar": null,
-      "suiteNamespace": null,
-      "allowedSuites": [],
-      "minBytes": null,
-      "maxBytes": null,
-      "visibility": "unfrozen",
-      "normativeSource": "xpoint-network-v1",
-      "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "deep-protocol:xpoint-network-v1:vectors",
-      "schemaOwner": "deep-protocol:xpoint-network-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
-      "contractState": "allocation-only",
-      "implementationPaths": [],
-      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "RCR1",
-      "version": null,
-      "grammar": null,
-      "suiteNamespace": null,
-      "allowedSuites": [],
-      "minBytes": null,
-      "maxBytes": null,
-      "visibility": "public",
-      "normativeSource": "protocol-registry-v1",
-      "ownerPackage": "Deep.Protocol.MembershipRoutes",
-      "vectorOwner": "deep-protocol:protocol-registry-v1:vectors",
-      "schemaOwner": "deep-protocol:protocol-registry-v1:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
       "implementationPaths": [
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteContinuityCodec.cs"
+        "src/Deep.Protocol/ContactV1/ContactServiceWireCodec.cs",
+        "src/Deep.Protocol/DeepExtension/PrivacyRouting/PrivacyRoutingCodec.cs"
       ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
       "magic": "RDA1",
@@ -1649,26 +1720,48 @@
       "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "RFC1",
+      "magic": "XNH1",
       "version": null,
       "grammar": null,
       "suiteNamespace": null,
       "allowedSuites": [],
       "minBytes": null,
       "maxBytes": null,
-      "visibility": "public",
-      "normativeSource": "production-wire-source",
+      "visibility": "unfrozen",
+      "normativeSource": "xpoint-network-v1",
       "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "deep-protocol:production-wire-source:vectors",
-      "schemaOwner": "deep-protocol:production-wire-source:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
+      "vectorOwner": "deep-protocol:xpoint-network-v1:vectors",
+      "schemaOwner": "deep-protocol:xpoint-network-v1:schema",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+      "contractState": "allocation-only",
       "implementationPaths": [
-        "src/Deep.Protocol/DeepNative/Dnp1GenesisManifestAuthor.cs",
-        "src/Deep.Protocol/DeepNative/Dnp1RecoveryManifest.cs",
-        "src/Deep.Protocol/DeepNative/Dnp1RecoveryModels.cs"
+        "src/Deep.Protocol/ContactV1/ContactCodec.cs",
+        "src/Deep.Protocol/ContactV1/ContactNetworkAuthorityVerifier.cs",
+        "src/Deep.Protocol/XPointNetworkV1/XPointNetworkForwardCheckpointVerifier.cs",
+        "src/Deep.Protocol/XPointNetworkV1/XPointOnionCapabilityProducer.cs"
       ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "XND1",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "unfrozen",
+      "normativeSource": "xpoint-network-v1",
+      "ownerPackage": "Deep.Protocol",
+      "vectorOwner": "deep-protocol:xpoint-network-v1:vectors",
+      "schemaOwner": "deep-protocol:xpoint-network-v1:schema",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+      "contractState": "allocation-only",
+      "implementationPaths": [
+        "src/Deep.Protocol/XPointNetworkV1/XPointNetworkSemantics.cs",
+        "src/Deep.Protocol/XPointNetworkV1/XPointOnionCapabilityProducer.cs"
+      ],
+      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
       "magic": "RHB1",
@@ -1836,6 +1929,46 @@
       "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
+      "magic": "TRC1",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "unfrozen",
+      "normativeSource": "deep-crypto-v1",
+      "ownerPackage": "Deep.Protocol",
+      "vectorOwner": "deep-protocol:deep-crypto-v1:vectors",
+      "schemaOwner": "deep-protocol:deep-crypto-v1:schema",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+      "contractState": "allocation-only",
+      "implementationPaths": [
+        "src/Deep.Protocol/MessagingCrypto/ManagedTripleRatchetComponentProvider.cs"
+      ],
+      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "TRS1",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "unfrozen",
+      "normativeSource": "deep-crypto-v1",
+      "ownerPackage": "Deep.Protocol",
+      "vectorOwner": "deep-protocol:deep-crypto-v1:vectors",
+      "schemaOwner": "deep-protocol:deep-crypto-v1:schema",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+      "contractState": "allocation-only",
+      "implementationPaths": [
+        "src/Deep.Protocol/MessagingCrypto/TripleRatchetDurableStateCodec.cs"
+      ],
+      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
       "magic": "WHL1",
       "version": null,
       "grammar": null,
@@ -1856,7 +1989,7 @@
       "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "XBA1",
+      "magic": "XNF1",
       "version": null,
       "grammar": null,
       "suiteNamespace": null,
@@ -1864,17 +1997,20 @@
       "minBytes": null,
       "maxBytes": null,
       "visibility": "unfrozen",
-      "normativeSource": "carriers-v1",
+      "normativeSource": "xpoint-network-v1",
       "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "deep-protocol:carriers-v1:vectors",
-      "schemaOwner": "deep-protocol:carriers-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "vectorOwner": "deep-protocol:xpoint-network-v1:vectors",
+      "schemaOwner": "deep-protocol:xpoint-network-v1:schema",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/XPointNetworkV1/XPointNetworkForwardCheckpointVerifier.cs",
+        "src/Deep.Protocol/XPointNetworkV1/XPointNetworkSemantics.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "XBB1",
+      "magic": "XBA1",
       "version": null,
       "grammar": null,
       "suiteNamespace": null,
@@ -1906,7 +2042,10 @@
       "schemaOwner": "deep-protocol:carriers-v1:schema",
       "lifecycle": "TARGET_UNFROZEN",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/XPointNetworkV1/XPointNetworkSemantics.cs",
+        "src/Deep.Protocol/XPointNetworkV1/XPointNetworkVerification.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -1924,7 +2063,9 @@
       "schemaOwner": "deep-protocol:carriers-v1:schema",
       "lifecycle": "TARGET_UNFROZEN",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/XPointNetworkV1/XPointNetworkVerification.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -1940,9 +2081,12 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:xpoint-network-v1:vectors",
       "schemaOwner": "deep-protocol:xpoint-network-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/XPointNetworkV1/XPointNetworkSemantics.cs",
+        "src/Deep.Protocol/XPointNetworkV1/XPointNetworkVerification.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -2000,6 +2144,26 @@
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
+      "magic": "XIC1",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "unfrozen",
+      "normativeSource": "contact-resolver-v1",
+      "ownerPackage": "Deep.Protocol",
+      "vectorOwner": "deep-protocol:contact-resolver-v1:vectors",
+      "schemaOwner": "deep-protocol:contact-resolver-v1:schema",
+      "lifecycle": "TARGET_UNFROZEN",
+      "contractState": "allocation-only",
+      "implementationPaths": [
+        "src/Deep.Protocol/ContactV1/PreKeyInventoryPublication.cs"
+      ],
+      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
       "magic": "XIQ1",
       "version": null,
       "grammar": null,
@@ -2014,7 +2178,10 @@
       "schemaOwner": "deep-protocol:contact-resolver-v1:schema",
       "lifecycle": "TARGET_UNFROZEN",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ContactV1/ContactServiceWireCodec.cs",
+        "src/Deep.Protocol/DeepExtension/PrivacyRouting/PrivacyRoutingCodec.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -2030,9 +2197,11 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:contact-resolver-v1:vectors",
       "schemaOwner": "deep-protocol:contact-resolver-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ContactV1/ContactCodec.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -2050,11 +2219,13 @@
       "schemaOwner": "deep-protocol:contact-resolver-v1:schema",
       "lifecycle": "TARGET_UNFROZEN",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ContactV1/ContactServiceWireCodec.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "XND1",
+      "magic": "XNA1",
       "version": null,
       "grammar": null,
       "suiteNamespace": null,
@@ -2066,13 +2237,23 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:xpoint-network-v1:vectors",
       "schemaOwner": "deep-protocol:xpoint-network-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAdf1Codec.cs",
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAdh1Codec.cs",
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAdp1Codec.cs",
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAfp1Codec.cs",
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryDtt1Codec.cs",
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryFreshnessVerification.cs",
+        "src/Deep.Protocol/XPointNetworkV1/XPointNetworkAuthorityVerifier.cs",
+        "src/Deep.Protocol/XPointNetworkV1/XPointNetworkForwardCheckpointVerifier.cs",
+        "src/Deep.Protocol/XPointNetworkV1/XPointNetworkSemantics.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "XUW1",
+      "magic": "XBB1",
       "version": null,
       "grammar": null,
       "suiteNamespace": null,
@@ -2080,17 +2261,17 @@
       "minBytes": null,
       "maxBytes": null,
       "visibility": "unfrozen",
-      "normativeSource": "contact-resolver-v1",
+      "normativeSource": "carriers-v1",
       "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "deep-protocol:contact-resolver-v1:vectors",
-      "schemaOwner": "deep-protocol:contact-resolver-v1:schema",
+      "vectorOwner": "deep-protocol:carriers-v1:vectors",
+      "schemaOwner": "deep-protocol:carriers-v1:schema",
       "lifecycle": "TARGET_UNFROZEN",
       "contractState": "allocation-only",
       "implementationPaths": [],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "GSQ1",
+      "magic": "GSW1",
       "version": null,
       "grammar": null,
       "suiteNamespace": null,
@@ -2102,55 +2283,55 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:contact-group-v1:vectors",
       "schemaOwner": "deep-protocol:contact-group-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/GroupV1/GroupCodec.cs",
+        "src/Deep.Protocol/GroupV1/GroupRecords.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "GRI1",
+      "magic": "GSS1",
       "version": null,
       "grammar": null,
       "suiteNamespace": null,
       "allowedSuites": [],
       "minBytes": null,
       "maxBytes": null,
-      "visibility": "public",
-      "normativeSource": "production-wire-source",
+      "visibility": "unfrozen",
+      "normativeSource": "contact-group-v1",
       "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "deep-protocol:production-wire-source:vectors",
-      "schemaOwner": "deep-protocol:production-wire-source:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
+      "vectorOwner": "deep-protocol:contact-group-v1:vectors",
+      "schemaOwner": "deep-protocol:contact-group-v1:schema",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+      "contractState": "allocation-only",
       "implementationPaths": [
-        "src/Deep.Protocol/DeepNative/Dnp1GenesisProtectedRecords.cs"
+        "src/Deep.Protocol/GroupV1/GroupCodec.cs",
+        "src/Deep.Protocol/GroupV1/GroupRecords.cs"
       ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "KRT1",
-      "version": 1,
-      "grammar": "dnp1-canonical:publicAuthenticated",
-      "suiteNamespace": "dnp1-header-u16",
-      "allowedSuites": [
-        1
-      ],
-      "minBytes": 412,
-      "maxBytes": 412,
-      "visibility": "public",
-      "normativeSource": "dnp1-frozen",
+      "magic": "GSR1",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "unfrozen",
+      "normativeSource": "contact-group-v1",
       "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "docs/survival-program/releases/v3.0.0/specs/dnp1-classical-v1.evidence-ownership.json",
-      "schemaOwner": "dnp1-classical-v1.registry.schema.json",
+      "vectorOwner": "deep-protocol:contact-group-v1:vectors",
+      "schemaOwner": "deep-protocol:contact-group-v1:schema",
       "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
-      "contractState": "frozen-exact",
+      "contractState": "allocation-only",
       "implementationPaths": [
-        "src/Deep.Protocol/DeepNative/Dnp1AccountResetOrigins.cs",
-        "src/Deep.Protocol/DeepNative/Dnp1GenesisAuthoringContexts.cs",
-        "src/Deep.Protocol/DeepNative/Dnp1IdentityAuthorityVerifier.cs",
-        "src/Deep.Protocol/DeepNative/Dnp1RecordDefinitions.cs"
+        "src/Deep.Protocol/GroupV1/GroupCodec.cs",
+        "src/Deep.Protocol/GroupV1/GroupRecords.cs"
       ],
-      "contractBlocker": null
+      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
       "magic": "MRL2",
@@ -2388,27 +2569,32 @@
       "contractBlocker": "The approved DNP1 registry allocates this retained opaque artifact type but does not define a canonical record grammar or byte bounds."
     },
     {
-      "magic": "MRV1",
-      "version": null,
-      "grammar": "opaque-retained-artifact-reference",
+      "magic": "KRT1",
+      "version": 1,
+      "grammar": "dnp1-canonical:publicAuthenticated",
       "suiteNamespace": "dnp1-header-u16",
-      "allowedSuites": [],
-      "minBytes": null,
-      "maxBytes": null,
+      "allowedSuites": [
+        1
+      ],
+      "minBytes": 412,
+      "maxBytes": 412,
       "visibility": "public",
       "normativeSource": "dnp1-frozen",
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "docs/survival-program/releases/v3.0.0/specs/dnp1-classical-v1.evidence-ownership.json",
       "schemaOwner": "dnp1-classical-v1.registry.schema.json",
       "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
-      "contractState": "current-source-bound",
+      "contractState": "frozen-exact",
       "implementationPaths": [
-        "src/Deep.Protocol/DeepExtension/Membership/MembershipContractCodec.cs"
+        "src/Deep.Protocol/DeepNative/Dnp1AccountResetOrigins.cs",
+        "src/Deep.Protocol/DeepNative/Dnp1GenesisAuthoringContexts.cs",
+        "src/Deep.Protocol/DeepNative/Dnp1IdentityAuthorityVerifier.cs",
+        "src/Deep.Protocol/DeepNative/Dnp1RecordDefinitions.cs"
       ],
-      "contractBlocker": "The approved DNP1 registry allocates this retained opaque artifact type but does not define a canonical record grammar or byte bounds."
+      "contractBlocker": null
     },
     {
-      "magic": "MSM1",
+      "magic": "MRV1",
       "version": null,
       "grammar": "opaque-retained-artifact-reference",
       "suiteNamespace": "dnp1-header-u16",
@@ -2510,7 +2696,13 @@
       "schemaOwner": "deep-protocol:account-directory-v1:schema",
       "lifecycle": "TARGET_UNFROZEN",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAdc1Codec.cs",
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAdp1Codec.cs",
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryFreshnessVerification.cs",
+        "src/Deep.Protocol/GroupV1/GroupCodec.cs",
+        "src/Deep.Protocol/GroupV1/GroupTransitionVerifier.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -2528,7 +2720,11 @@
       "schemaOwner": "deep-protocol:account-directory-v1:schema",
       "lifecycle": "TARGET_UNFROZEN",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAdf1Codec.cs",
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAdp1Codec.cs",
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAfp1Codec.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -2546,7 +2742,17 @@
       "schemaOwner": "deep-protocol:account-directory-v1:schema",
       "lifecycle": "TARGET_UNFROZEN",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAdf1Codec.cs",
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAdh1Codec.cs",
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAdp1Codec.cs",
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAfp1Codec.cs",
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryFreshnessVerification.cs",
+        "src/Deep.Protocol/ContactV1/ContactCodec.cs",
+        "src/Deep.Protocol/ContactV1/ContactNetworkAuthorityVerifier.cs",
+        "src/Deep.Protocol/GroupV1/GroupCodec.cs",
+        "src/Deep.Protocol/GroupV1/GroupTransitionVerifier.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -2564,7 +2770,9 @@
       "schemaOwner": "deep-protocol:account-directory-v1:schema",
       "lifecycle": "TARGET_UNFROZEN",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAdl1Codec.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -2582,7 +2790,14 @@
       "schemaOwner": "deep-protocol:account-directory-v1:schema",
       "lifecycle": "TARGET_UNFROZEN",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAdp1Codec.cs",
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryFreshnessVerification.cs",
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryProofAuthor.cs",
+        "src/Deep.Protocol/GroupV1/GroupCodec.cs",
+        "src/Deep.Protocol/GroupV1/GroupProductionAuthor.cs",
+        "src/Deep.Protocol/GroupV1/GroupTransitionVerifier.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -2598,6 +2813,83 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:account-directory-v1:vectors",
       "schemaOwner": "deep-protocol:account-directory-v1:schema",
+      "lifecycle": "TARGET_UNFROZEN",
+      "contractState": "allocation-only",
+      "implementationPaths": [
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAdp1Codec.cs",
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAfp1Codec.cs"
+      ],
+      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "CAA1",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "unfrozen",
+      "normativeSource": "call-session-v1",
+      "ownerPackage": "Deep.Protocol",
+      "vectorOwner": "deep-protocol:call-session-v1:vectors",
+      "schemaOwner": "deep-protocol:call-session-v1:schema",
+      "lifecycle": "TARGET_UNFROZEN",
+      "contractState": "allocation-only",
+      "implementationPaths": [],
+      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "CAC1",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "unfrozen",
+      "normativeSource": "call-session-v1",
+      "ownerPackage": "Deep.Protocol",
+      "vectorOwner": "deep-protocol:call-session-v1:vectors",
+      "schemaOwner": "deep-protocol:call-session-v1:schema",
+      "lifecycle": "TARGET_UNFROZEN",
+      "contractState": "allocation-only",
+      "implementationPaths": [],
+      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "MSM1",
+      "version": null,
+      "grammar": "opaque-retained-artifact-reference",
+      "suiteNamespace": "dnp1-header-u16",
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "public",
+      "normativeSource": "dnp1-frozen",
+      "ownerPackage": "Deep.Protocol",
+      "vectorOwner": "docs/survival-program/releases/v3.0.0/specs/dnp1-classical-v1.evidence-ownership.json",
+      "schemaOwner": "dnp1-classical-v1.registry.schema.json",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+      "contractState": "current-source-bound",
+      "implementationPaths": [
+        "src/Deep.Protocol/DeepExtension/Membership/MembershipContractCodec.cs"
+      ],
+      "contractBlocker": "The approved DNP1 registry allocates this retained opaque artifact type but does not define a canonical record grammar or byte bounds."
+    },
+    {
+      "magic": "CAL1",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "unfrozen",
+      "normativeSource": "call-session-v1",
+      "ownerPackage": "Deep.Protocol",
+      "vectorOwner": "deep-protocol:call-session-v1:vectors",
+      "schemaOwner": "deep-protocol:call-session-v1:schema",
       "lifecycle": "TARGET_UNFROZEN",
       "contractState": "allocation-only",
       "implementationPaths": [],
@@ -2626,55 +2918,13 @@
       "contractBlocker": null
     },
     {
-      "magic": "CAA1",
-      "version": null,
-      "grammar": null,
-      "suiteNamespace": null,
+      "magic": "DXP1",
+      "version": 1,
+      "grammar": "fixed-transcript:fixed-transcript",
+      "suiteNamespace": "dnp1-header-u16",
       "allowedSuites": [],
-      "minBytes": null,
-      "maxBytes": null,
-      "visibility": "unfrozen",
-      "normativeSource": "call-session-v1",
-      "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "deep-protocol:call-session-v1:vectors",
-      "schemaOwner": "deep-protocol:call-session-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
-      "contractState": "allocation-only",
-      "implementationPaths": [],
-      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "DXR1",
-      "version": 1,
-      "grammar": "dnp1-canonical:protectedHmac",
-      "suiteNamespace": "dnp1-header-u16",
-      "allowedSuites": [
-        32769
-      ],
-      "minBytes": 573,
-      "maxBytes": 573,
-      "visibility": "protected-internal",
-      "normativeSource": "dnp1-frozen",
-      "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "docs/survival-program/releases/v3.0.0/specs/dnp1-classical-v1.evidence-ownership.json",
-      "schemaOwner": "dnp1-classical-v1.registry.schema.json",
-      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
-      "contractState": "frozen-exact",
-      "implementationPaths": [
-        "src/Deep.Protocol/DeepNative/Dnp1RecordDefinitions.cs"
-      ],
-      "contractBlocker": null
-    },
-    {
-      "magic": "DWT1",
-      "version": 1,
-      "grammar": "dnp1-canonical:publicAuthenticated",
-      "suiteNamespace": "dnp1-header-u16",
-      "allowedSuites": [
-        1
-      ],
-      "minBytes": 714,
-      "maxBytes": 714,
+      "minBytes": 168,
+      "maxBytes": 168,
       "visibility": "public",
       "normativeSource": "dnp1-frozen",
       "ownerPackage": "Deep.Protocol",
@@ -2683,7 +2933,8 @@
       "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "frozen-exact",
       "implementationPaths": [
-        "src/Deep.Protocol/DeepNative/Dnp1RecordDefinitions.cs"
+        "src/Deep.Protocol/DeepNative/Dnp1X25519Possession.cs",
+        "src/Deep.Protocol/Identity/Dnp1IdentityAuthoringV1.cs"
       ],
       "contractBlocker": null
     },
@@ -2909,7 +3160,13 @@
       "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "frozen-exact",
       "implementationPaths": [
-        "src/Deep.Protocol/DeepNative/Dnp1RecordDefinitions.cs"
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAdc1Codec.cs",
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAdc1Verification.cs",
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAdp1Codec.cs",
+        "src/Deep.Protocol/ApplicationCore/ApplicationCoreCodec.cs",
+        "src/Deep.Protocol/DeepNative/Dnp1RecordDefinitions.cs",
+        "src/Deep.Protocol/GroupV1/GroupCodec.cs",
+        "src/Deep.Protocol/GroupV1/GroupTransitionVerifier.cs"
       ],
       "contractBlocker": null
     },
@@ -2924,6 +3181,28 @@
       "minBytes": 427,
       "maxBytes": 680,
       "visibility": "public",
+      "normativeSource": "dnp1-frozen",
+      "ownerPackage": "Deep.Protocol",
+      "vectorOwner": "docs/survival-program/releases/v3.0.0/specs/dnp1-classical-v1.evidence-ownership.json",
+      "schemaOwner": "dnp1-classical-v1.registry.schema.json",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+      "contractState": "frozen-exact",
+      "implementationPaths": [
+        "src/Deep.Protocol/DeepNative/Dnp1RecordDefinitions.cs"
+      ],
+      "contractBlocker": null
+    },
+    {
+      "magic": "DXR1",
+      "version": 1,
+      "grammar": "dnp1-canonical:protectedHmac",
+      "suiteNamespace": "dnp1-header-u16",
+      "allowedSuites": [
+        32769
+      ],
+      "minBytes": 573,
+      "maxBytes": 573,
+      "visibility": "protected-internal",
       "normativeSource": "dnp1-frozen",
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "docs/survival-program/releases/v3.0.0/specs/dnp1-classical-v1.evidence-ownership.json",
@@ -2953,29 +3232,14 @@
       "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "frozen-exact",
       "implementationPaths": [
-        "src/Deep.Protocol/DeepNative/Dnp1RecordDefinitions.cs"
-      ],
-      "contractBlocker": null
-    },
-    {
-      "magic": "DPJ1",
-      "version": 1,
-      "grammar": "dnp1-canonical:protectedHmac",
-      "suiteNamespace": "dnp1-header-u16",
-      "allowedSuites": [
-        32769
-      ],
-      "minBytes": 609,
-      "maxBytes": 609,
-      "visibility": "protected-internal",
-      "normativeSource": "dnp1-frozen",
-      "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "docs/survival-program/releases/v3.0.0/specs/dnp1-classical-v1.evidence-ownership.json",
-      "schemaOwner": "dnp1-classical-v1.registry.schema.json",
-      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
-      "contractState": "frozen-exact",
-      "implementationPaths": [
-        "src/Deep.Protocol/DeepNative/Dnp1RecordDefinitions.cs"
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAdp1Codec.cs",
+        "src/Deep.Protocol/ApplicationCore/ApplicationCoreCodec.cs",
+        "src/Deep.Protocol/ContactV1/ContactCodec.cs",
+        "src/Deep.Protocol/ContactV1/ContactNetworkAuthorityVerifier.cs",
+        "src/Deep.Protocol/DeepNative/Dnp1RecordDefinitions.cs",
+        "src/Deep.Protocol/GroupV1/GroupCodec.cs",
+        "src/Deep.Protocol/GroupV1/GroupProductionAuthor.cs",
+        "src/Deep.Protocol/GroupV1/GroupTransitionVerifier.cs"
       ],
       "contractBlocker": null
     },
@@ -3041,7 +3305,6 @@
       "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "frozen-exact",
       "implementationPaths": [
-        "src/Deep.Protocol/DeepExtension/PrivacyRouting/PrivacyRoutingResultCodec.cs",
         "src/Deep.Protocol/DeepNative/Dnp1RecordDefinitions.cs"
       ],
       "contractBlocker": null
@@ -3130,8 +3393,17 @@
       "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "frozen-exact",
       "implementationPaths": [
-        "src/Deep.Protocol/DeepExtension/PrivacyRouting/PrivacyRoutingCodec.cs",
-        "src/Deep.Protocol/DeepNative/Dnp1RecordDefinitions.cs"
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAdc1Codec.cs",
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAdc1Verification.cs",
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAdp1Codec.cs",
+        "src/Deep.Protocol/ApplicationCore/ApplicationCoreCodec.cs",
+        "src/Deep.Protocol/ContactV1/ContactCodec.cs",
+        "src/Deep.Protocol/ContactV1/PreKeyInventoryPublication.cs",
+        "src/Deep.Protocol/ContactV1/Xpc1PreKeyClaimReceiptVerifier.cs",
+        "src/Deep.Protocol/DeepNative/Dnp1RecordDefinitions.cs",
+        "src/Deep.Protocol/GroupV1/GroupCodec.cs",
+        "src/Deep.Protocol/GroupV1/GroupProductionAuthor.cs",
+        "src/Deep.Protocol/GroupV1/GroupTransitionVerifier.cs"
       ],
       "contractBlocker": null
     },
@@ -3202,13 +3474,15 @@
       "contractBlocker": null
     },
     {
-      "magic": "DXP1",
+      "magic": "DWT1",
       "version": 1,
-      "grammar": "fixed-transcript:fixed-transcript",
+      "grammar": "dnp1-canonical:publicAuthenticated",
       "suiteNamespace": "dnp1-header-u16",
-      "allowedSuites": [],
-      "minBytes": 168,
-      "maxBytes": 168,
+      "allowedSuites": [
+        1
+      ],
+      "minBytes": 714,
+      "maxBytes": 714,
       "visibility": "public",
       "normativeSource": "dnp1-frozen",
       "ownerPackage": "Deep.Protocol",
@@ -3217,47 +3491,31 @@
       "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "frozen-exact",
       "implementationPaths": [
-        "src/Deep.Protocol/DeepNative/Dnp1X25519Possession.cs"
+        "src/Deep.Protocol/DeepNative/Dnp1RecordDefinitions.cs"
       ],
       "contractBlocker": null
     },
     {
-      "magic": "GRR1",
-      "version": null,
-      "grammar": null,
-      "suiteNamespace": null,
-      "allowedSuites": [],
-      "minBytes": null,
-      "maxBytes": null,
-      "visibility": "public",
-      "normativeSource": "production-wire-source",
-      "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "deep-protocol:production-wire-source:vectors",
-      "schemaOwner": "deep-protocol:production-wire-source:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
-      "implementationPaths": [
-        "src/Deep.Protocol/DeepNative/Dnp1GenesisProtectedRecords.cs"
+      "magic": "DPJ1",
+      "version": 1,
+      "grammar": "dnp1-canonical:protectedHmac",
+      "suiteNamespace": "dnp1-header-u16",
+      "allowedSuites": [
+        32769
       ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "CAC1",
-      "version": null,
-      "grammar": null,
-      "suiteNamespace": null,
-      "allowedSuites": [],
-      "minBytes": null,
-      "maxBytes": null,
-      "visibility": "unfrozen",
-      "normativeSource": "call-session-v1",
+      "minBytes": 609,
+      "maxBytes": 609,
+      "visibility": "protected-internal",
+      "normativeSource": "dnp1-frozen",
       "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "deep-protocol:call-session-v1:vectors",
-      "schemaOwner": "deep-protocol:call-session-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
-      "contractState": "allocation-only",
-      "implementationPaths": [],
-      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+      "vectorOwner": "docs/survival-program/releases/v3.0.0/specs/dnp1-classical-v1.evidence-ownership.json",
+      "schemaOwner": "dnp1-classical-v1.registry.schema.json",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+      "contractState": "frozen-exact",
+      "implementationPaths": [
+        "src/Deep.Protocol/DeepNative/Dnp1RecordDefinitions.cs"
+      ],
+      "contractBlocker": null
     },
     {
       "magic": "CAO1",
@@ -3278,7 +3536,7 @@
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "DPK2",
+      "magic": "CAR1",
       "version": null,
       "grammar": null,
       "suiteNamespace": null,
@@ -3286,17 +3544,17 @@
       "minBytes": null,
       "maxBytes": null,
       "visibility": "unfrozen",
-      "normativeSource": "deep-crypto-v1",
+      "normativeSource": "call-session-v1",
       "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "deep-protocol:deep-crypto-v1:vectors",
-      "schemaOwner": "deep-protocol:deep-crypto-v1:schema",
+      "vectorOwner": "deep-protocol:call-session-v1:vectors",
+      "schemaOwner": "deep-protocol:call-session-v1:schema",
       "lifecycle": "TARGET_UNFROZEN",
       "contractState": "allocation-only",
       "implementationPaths": [],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "DPKB",
+      "magic": "CMD1",
       "version": null,
       "grammar": null,
       "suiteNamespace": null,
@@ -3304,54 +3562,14 @@
       "minBytes": null,
       "maxBytes": null,
       "visibility": "unfrozen",
-      "normativeSource": "protocol-registry-v1",
+      "normativeSource": "call-session-v1",
       "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "deep-protocol:protocol-registry-v1:vectors",
-      "schemaOwner": "deep-protocol:protocol-registry-v1:schema",
-      "lifecycle": "RETIRED_REJECT",
+      "vectorOwner": "deep-protocol:call-session-v1:vectors",
+      "schemaOwner": "deep-protocol:call-session-v1:schema",
+      "lifecycle": "TARGET_UNFROZEN",
       "contractState": "allocation-only",
       "implementationPaths": [],
-      "contractBlocker": null
-    },
-    {
-      "magic": "DRE1",
-      "version": null,
-      "grammar": null,
-      "suiteNamespace": null,
-      "allowedSuites": [],
-      "minBytes": null,
-      "maxBytes": null,
-      "visibility": "public",
-      "normativeSource": "privacy-routing-v1",
-      "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "deep-protocol:privacy-routing-v1:vectors",
-      "schemaOwner": "deep-protocol:privacy-routing-v1:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
-      "implementationPaths": [
-        "src/Deep.Protocol/DeepExtension/PrivacyRouting/PrivacyRoutingCodec.cs"
-      ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "DRF1",
-      "version": null,
-      "grammar": null,
-      "suiteNamespace": null,
-      "allowedSuites": [],
-      "minBytes": null,
-      "maxBytes": null,
-      "visibility": "public",
-      "normativeSource": "privacy-routing-v1",
-      "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "deep-protocol:privacy-routing-v1:vectors",
-      "schemaOwner": "deep-protocol:privacy-routing-v1:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
-      "implementationPaths": [
-        "src/Deep.Protocol/DeepExtension/PrivacyRouting/PrivacyRoutingCodec.cs"
-      ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
       "magic": "DRL1",
@@ -3361,17 +3579,15 @@
       "allowedSuites": [],
       "minBytes": null,
       "maxBytes": null,
-      "visibility": "public",
+      "visibility": "unfrozen",
       "normativeSource": "privacy-routing-v1",
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:privacy-routing-v1:vectors",
       "schemaOwner": "deep-protocol:privacy-routing-v1:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
-      "implementationPaths": [
-        "src/Deep.Protocol/DeepExtension/PrivacyRouting/PrivacyRoutingCodec.cs"
-      ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "lifecycle": "RETIRED_REJECT",
+      "contractState": "allocation-only",
+      "implementationPaths": [],
+      "contractBlocker": null
     },
     {
       "magic": "DRMV",
@@ -3417,6 +3633,26 @@
       "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
+      "magic": "DTR2",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "unfrozen",
+      "normativeSource": "deep-crypto-v1",
+      "ownerPackage": "Deep.Protocol",
+      "vectorOwner": "deep-protocol:deep-crypto-v1:vectors",
+      "schemaOwner": "deep-protocol:deep-crypto-v1:schema",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+      "contractState": "allocation-only",
+      "implementationPaths": [
+        "src/Deep.Protocol/MessagingWire/Dtr2Codec.cs"
+      ],
+      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
       "magic": "DTS1",
       "version": null,
       "grammar": null,
@@ -3431,7 +3667,13 @@
       "schemaOwner": "deep-protocol:account-directory-v1:schema",
       "lifecycle": "TARGET_UNFROZEN",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryDts1Codec.cs",
+        "src/Deep.Protocol/XPointNetworkV1/XPointNetworkAuthorityVerifier.cs",
+        "src/Deep.Protocol/XPointNetworkV1/XPointNetworkBootstrapAuthor.cs",
+        "src/Deep.Protocol/XPointNetworkV1/XPointNetworkForwardCheckpointVerifier.cs",
+        "src/Deep.Protocol/XPointNetworkV1/XPointNetworkVerification.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -3449,7 +3691,12 @@
       "schemaOwner": "deep-protocol:account-directory-v1:schema",
       "lifecycle": "TARGET_UNFROZEN",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryDtt1Codec.cs",
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryFreshnessVerification.cs",
+        "src/Deep.Protocol/XPointNetworkV1/XPointNetworkForwardCheckpointVerifier.cs",
+        "src/Deep.Protocol/XPointNetworkV1/XPointNetworkVerification.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -3550,10 +3797,32 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:contact-group-v1:vectors",
       "schemaOwner": "deep-protocol:contact-group-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+      "contractState": "allocation-only",
+      "implementationPaths": [
+        "src/Deep.Protocol/GroupV1/GroupCodec.cs",
+        "src/Deep.Protocol/GroupV1/GroupDmc2Payload.cs",
+        "src/Deep.Protocol/GroupV1/GroupRecords.cs"
+      ],
+      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "DRF1",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "unfrozen",
+      "normativeSource": "privacy-routing-v1",
+      "ownerPackage": "Deep.Protocol",
+      "vectorOwner": "deep-protocol:privacy-routing-v1:vectors",
+      "schemaOwner": "deep-protocol:privacy-routing-v1:schema",
+      "lifecycle": "RETIRED_REJECT",
       "contractState": "allocation-only",
       "implementationPaths": [],
-      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+      "contractBlocker": null
     },
     {
       "magic": "GCP1",
@@ -3568,30 +3837,14 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:contact-group-v1:vectors",
       "schemaOwner": "deep-protocol:contact-group-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
-      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "GDI1",
-      "version": null,
-      "grammar": null,
-      "suiteNamespace": null,
-      "allowedSuites": [],
-      "minBytes": null,
-      "maxBytes": null,
-      "visibility": "public",
-      "normativeSource": "production-wire-source",
-      "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "deep-protocol:production-wire-source:vectors",
-      "schemaOwner": "deep-protocol:production-wire-source:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
       "implementationPaths": [
-        "src/Deep.Protocol/DeepNative/Dnp1DeploymentGovernanceOrigins.cs"
+        "src/Deep.Protocol/GroupV1/GroupCodec.cs",
+        "src/Deep.Protocol/GroupV1/GroupProductionAuthor.cs",
+        "src/Deep.Protocol/GroupV1/GroupRecords.cs"
       ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
       "magic": "GFL1",
@@ -3626,9 +3879,15 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:contact-group-v1:vectors",
       "schemaOwner": "deep-protocol:contact-group-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ApplicationCore/ApplicationMessageCodec.cs",
+        "src/Deep.Protocol/GroupV1/GroupCodec.cs",
+        "src/Deep.Protocol/GroupV1/GroupDmc2Payload.cs",
+        "src/Deep.Protocol/GroupV1/GroupProductionAuthor.cs",
+        "src/Deep.Protocol/GroupV1/GroupRecords.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -3644,9 +3903,35 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:contact-group-v1:vectors",
       "schemaOwner": "deep-protocol:contact-group-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ApplicationCore/ApplicationMessageCodec.cs",
+        "src/Deep.Protocol/GroupV1/GroupCodec.cs",
+        "src/Deep.Protocol/GroupV1/GroupDmc2Payload.cs",
+        "src/Deep.Protocol/GroupV1/GroupProductionAuthor.cs",
+        "src/Deep.Protocol/GroupV1/GroupRecords.cs"
+      ],
+      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "GLS1",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "unfrozen",
+      "normativeSource": "contact-group-v1",
+      "ownerPackage": "Deep.Protocol",
+      "vectorOwner": "deep-protocol:contact-group-v1:vectors",
+      "schemaOwner": "deep-protocol:contact-group-v1:schema",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+      "contractState": "allocation-only",
+      "implementationPaths": [
+        "src/Deep.Protocol/GroupV1/GroupTransitionVerifier.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -3732,7 +4017,106 @@
       "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "DPHI",
+      "magic": "GRI1",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "public",
+      "normativeSource": "production-wire-source",
+      "ownerPackage": "Deep.Protocol",
+      "vectorOwner": "deep-protocol:production-wire-source:vectors",
+      "schemaOwner": "deep-protocol:production-wire-source:schema",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "contractState": "current-source-bound",
+      "implementationPaths": [
+        "src/Deep.Protocol/DeepNative/Dnp1GenesisProtectedRecords.cs"
+      ],
+      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "GRR1",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "public",
+      "normativeSource": "production-wire-source",
+      "ownerPackage": "Deep.Protocol",
+      "vectorOwner": "deep-protocol:production-wire-source:vectors",
+      "schemaOwner": "deep-protocol:production-wire-source:schema",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "contractState": "current-source-bound",
+      "implementationPaths": [
+        "src/Deep.Protocol/DeepNative/Dnp1GenesisProtectedRecords.cs"
+      ],
+      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "GSQ1",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "unfrozen",
+      "normativeSource": "contact-group-v1",
+      "ownerPackage": "Deep.Protocol",
+      "vectorOwner": "deep-protocol:contact-group-v1:vectors",
+      "schemaOwner": "deep-protocol:contact-group-v1:schema",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+      "contractState": "allocation-only",
+      "implementationPaths": [
+        "src/Deep.Protocol/GroupV1/GroupCodec.cs",
+        "src/Deep.Protocol/GroupV1/GroupRecords.cs"
+      ],
+      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "GDI1",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "public",
+      "normativeSource": "production-wire-source",
+      "ownerPackage": "Deep.Protocol",
+      "vectorOwner": "deep-protocol:production-wire-source:vectors",
+      "schemaOwner": "deep-protocol:production-wire-source:schema",
+      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "contractState": "current-source-bound",
+      "implementationPaths": [
+        "src/Deep.Protocol/DeepNative/Dnp1DeploymentGovernanceOrigins.cs"
+      ],
+      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "DRE1",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "unfrozen",
+      "normativeSource": "privacy-routing-v1",
+      "ownerPackage": "Deep.Protocol",
+      "vectorOwner": "deep-protocol:privacy-routing-v1:vectors",
+      "schemaOwner": "deep-protocol:privacy-routing-v1:schema",
+      "lifecycle": "RETIRED_REJECT",
+      "contractState": "allocation-only",
+      "implementationPaths": [],
+      "contractBlocker": null
+    },
+    {
+      "magic": "DPKB",
       "version": null,
       "grammar": null,
       "suiteNamespace": null,
@@ -3750,25 +4134,7 @@
       "contractBlocker": null
     },
     {
-      "magic": "CAL1",
-      "version": null,
-      "grammar": null,
-      "suiteNamespace": null,
-      "allowedSuites": [],
-      "minBytes": null,
-      "maxBytes": null,
-      "visibility": "unfrozen",
-      "normativeSource": "call-session-v1",
-      "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "deep-protocol:call-session-v1:vectors",
-      "schemaOwner": "deep-protocol:call-session-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
-      "contractState": "allocation-only",
-      "implementationPaths": [],
-      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "DPH2",
+      "magic": "DPK2",
       "version": null,
       "grammar": null,
       "suiteNamespace": null,
@@ -3780,63 +4146,11 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:deep-crypto-v1:vectors",
       "schemaOwner": "deep-protocol:deep-crypto-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
-      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "DPE2",
-      "version": null,
-      "grammar": null,
-      "suiteNamespace": null,
-      "allowedSuites": [],
-      "minBytes": null,
-      "maxBytes": null,
-      "visibility": "unfrozen",
-      "normativeSource": "deep-crypto-v1",
-      "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "deep-protocol:deep-crypto-v1:vectors",
-      "schemaOwner": "deep-protocol:deep-crypto-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
-      "contractState": "allocation-only",
-      "implementationPaths": [],
-      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "CAR1",
-      "version": null,
-      "grammar": null,
-      "suiteNamespace": null,
-      "allowedSuites": [],
-      "minBytes": null,
-      "maxBytes": null,
-      "visibility": "unfrozen",
-      "normativeSource": "call-session-v1",
-      "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "deep-protocol:call-session-v1:vectors",
-      "schemaOwner": "deep-protocol:call-session-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
-      "contractState": "allocation-only",
-      "implementationPaths": [],
-      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "CMD1",
-      "version": null,
-      "grammar": null,
-      "suiteNamespace": null,
-      "allowedSuites": [],
-      "minBytes": null,
-      "maxBytes": null,
-      "visibility": "unfrozen",
-      "normativeSource": "call-session-v1",
-      "ownerPackage": "Deep.Protocol",
-      "vectorOwner": "deep-protocol:call-session-v1:vectors",
-      "schemaOwner": "deep-protocol:call-session-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
-      "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/MessagingWire/Dpk2Codec.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -3852,9 +4166,13 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:contact-group-v1:vectors",
       "schemaOwner": "deep-protocol:contact-group-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ApplicationCore/ApplicationCoreCodec.cs",
+        "src/Deep.Protocol/ApplicationCore/ApplicationCoreRecords.cs",
+        "src/Deep.Protocol/ApplicationCore/ApplicationMessageCodec.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -3870,9 +4188,11 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:contact-group-v1:vectors",
       "schemaOwner": "deep-protocol:contact-group-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ApplicationCore/AttachmentManifestCodec.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -3888,9 +4208,12 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:contact-group-v1:vectors",
       "schemaOwner": "deep-protocol:contact-group-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ApplicationCore/ApplicationCoreCodec.cs",
+        "src/Deep.Protocol/ApplicationCore/ApplicationCoreRecords.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -3906,9 +4229,15 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:contact-group-v1:vectors",
       "schemaOwner": "deep-protocol:contact-group-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ApplicationCore/ApplicationCoreCodec.cs",
+        "src/Deep.Protocol/ApplicationCore/ApplicationCoreRecords.cs",
+        "src/Deep.Protocol/ContactV1/ContactCodec.cs",
+        "src/Deep.Protocol/ContactV1/ContactNetworkAuthorityVerifier.cs",
+        "src/Deep.Protocol/ContactV1/Xpc1PreKeyClaimReceiptVerifier.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -3924,9 +4253,13 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:contact-group-v1:vectors",
       "schemaOwner": "deep-protocol:contact-group-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ContactV1/ContactClaimClosureVerifier.cs",
+        "src/Deep.Protocol/ContactV1/ContactCodec.cs",
+        "src/Deep.Protocol/ContactV1/PermanentContactResolveVerifier.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -3942,9 +4275,12 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:contact-resolver-v1:vectors",
       "schemaOwner": "deep-protocol:contact-resolver-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ContactV1/ContactCodec.cs",
+        "src/Deep.Protocol/ContactV1/Dcr1ObjectProtectionCodec.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -3960,9 +4296,15 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:contact-group-v1:vectors",
       "schemaOwner": "deep-protocol:contact-group-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ApplicationCore/ApplicationMessageCodec.cs",
+        "src/Deep.Protocol/GroupV1/GroupCodec.cs",
+        "src/Deep.Protocol/GroupV1/GroupProductionAuthor.cs",
+        "src/Deep.Protocol/GroupV1/GroupRecords.cs",
+        "src/Deep.Protocol/GroupV1/GroupTransitionVerifier.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -3998,9 +4340,15 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:contact-group-v1:vectors",
       "schemaOwner": "deep-protocol:contact-group-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ApplicationCore/ApplicationMessageCodec.cs",
+        "src/Deep.Protocol/GroupV1/GroupCodec.cs",
+        "src/Deep.Protocol/GroupV1/GroupDmc2Payload.cs",
+        "src/Deep.Protocol/GroupV1/GroupProductionAuthor.cs",
+        "src/Deep.Protocol/GroupV1/GroupRecords.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -4036,9 +4384,16 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:contact-group-v1:vectors",
       "schemaOwner": "deep-protocol:contact-group-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ApplicationCore/ApplicationMessageCodec.cs",
+        "src/Deep.Protocol/GroupV1/GroupCodec.cs",
+        "src/Deep.Protocol/GroupV1/GroupDmc2Payload.cs",
+        "src/Deep.Protocol/GroupV1/GroupProductionAuthor.cs",
+        "src/Deep.Protocol/GroupV1/GroupRecords.cs",
+        "src/Deep.Protocol/GroupV1/GroupTransitionVerifier.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -4054,9 +4409,15 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:contact-group-v1:vectors",
       "schemaOwner": "deep-protocol:contact-group-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ApplicationCore/ApplicationMessageCodec.cs",
+        "src/Deep.Protocol/GroupV1/GroupCodec.cs",
+        "src/Deep.Protocol/GroupV1/GroupDmc2Payload.cs",
+        "src/Deep.Protocol/GroupV1/GroupRecords.cs",
+        "src/Deep.Protocol/GroupV1/GroupTransitionVerifier.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -4072,9 +4433,14 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:contact-group-v1:vectors",
       "schemaOwner": "deep-protocol:contact-group-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ContactV1/ContactClaimClosureVerifier.cs",
+        "src/Deep.Protocol/ContactV1/ContactCodec.cs",
+        "src/Deep.Protocol/ContactV1/Dcr1ObjectProtectionCodec.cs",
+        "src/Deep.Protocol/ContactV1/DeepInvitationTextCodec.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -4090,9 +4456,12 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:contact-group-v1:vectors",
       "schemaOwner": "deep-protocol:contact-group-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ApplicationCore/ApplicationCoreCodec.cs",
+        "src/Deep.Protocol/ApplicationCore/ApplicationCoreRecords.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -4146,9 +4515,12 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:contact-group-v1:vectors",
       "schemaOwner": "deep-protocol:contact-group-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ApplicationCore/ApplicationMessageCodec.cs",
+        "src/Deep.Protocol/ApplicationCore/ApplicationMessageRecords.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -4164,9 +4536,15 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:contact-group-v1:vectors",
       "schemaOwner": "deep-protocol:contact-group-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/ApplicationCore/ApplicationCoreCodec.cs",
+        "src/Deep.Protocol/ApplicationCore/ApplicationCoreRecords.cs",
+        "src/Deep.Protocol/GroupV1/GroupCodec.cs",
+        "src/Deep.Protocol/GroupV1/GroupProductionAuthor.cs",
+        "src/Deep.Protocol/GroupV1/GroupTransitionVerifier.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -4224,6 +4602,26 @@
       "contractBlocker": null
     },
     {
+      "magic": "DPE2",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "unfrozen",
+      "normativeSource": "deep-crypto-v1",
+      "ownerPackage": "Deep.Protocol",
+      "vectorOwner": "deep-protocol:deep-crypto-v1:vectors",
+      "schemaOwner": "deep-protocol:deep-crypto-v1:schema",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+      "contractState": "allocation-only",
+      "implementationPaths": [
+        "src/Deep.Protocol/MessagingWire/Dpe2Codec.cs"
+      ],
+      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
       "magic": "DPF1",
       "version": null,
       "grammar": null,
@@ -4244,6 +4642,65 @@
       "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
+      "magic": "DPH2",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "unfrozen",
+      "normativeSource": "deep-crypto-v1",
+      "ownerPackage": "Deep.Protocol",
+      "vectorOwner": "deep-protocol:deep-crypto-v1:vectors",
+      "schemaOwner": "deep-protocol:deep-crypto-v1:schema",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+      "contractState": "allocation-only",
+      "implementationPaths": [
+        "src/Deep.Protocol/MessagingWire/Dph2Codec.cs"
+      ],
+      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "DPHI",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "unfrozen",
+      "normativeSource": "protocol-registry-v1",
+      "ownerPackage": "Deep.Protocol",
+      "vectorOwner": "deep-protocol:protocol-registry-v1:vectors",
+      "schemaOwner": "deep-protocol:protocol-registry-v1:schema",
+      "lifecycle": "RETIRED_REJECT",
+      "contractState": "allocation-only",
+      "implementationPaths": [],
+      "contractBlocker": null
+    },
+    {
+      "magic": "XUW1",
+      "version": null,
+      "grammar": null,
+      "suiteNamespace": null,
+      "allowedSuites": [],
+      "minBytes": null,
+      "maxBytes": null,
+      "visibility": "unfrozen",
+      "normativeSource": "contact-resolver-v1",
+      "ownerPackage": "Deep.Protocol",
+      "vectorOwner": "deep-protocol:contact-resolver-v1:vectors",
+      "schemaOwner": "deep-protocol:contact-resolver-v1:schema",
+      "lifecycle": "TARGET_UNFROZEN",
+      "contractState": "allocation-only",
+      "implementationPaths": [
+        "src/Deep.Protocol/ContactV1/ContactServiceWireCodec.cs",
+        "src/Deep.Protocol/DeepExtension/PrivacyRouting/PrivacyRoutingCodec.cs"
+      ],
+      "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
       "magic": "XVP1",
       "version": null,
       "grammar": null,
@@ -4256,9 +4713,11 @@
       "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:xpoint-network-v1:vectors",
       "schemaOwner": "deep-protocol:xpoint-network-v1:schema",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
-      "implementationPaths": [],
+      "implementationPaths": [
+        "src/Deep.Protocol/XPointNetworkV1/XPointOnionCapabilityProducer.cs"
+      ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     }
   ],
@@ -4291,8 +4750,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 4.1 DNP1 identity/protected-state suites (`u16be`)",
-        "startLine": 105,
-        "endLine": 105,
+        "startLine": 107,
+        "endLine": 107,
         "normalizedSha256": "c528a031e2a416e22e62ac5e6894c18547cbef40311bc16ee529ec53fa30624c",
         "ownerSourceId": "protocol-registry-v1",
         "scope": "suite:dnp1-header-u16",
@@ -4316,8 +4775,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 4.1 DNP1 identity/protected-state suites (`u16be`)",
-        "startLine": 106,
-        "endLine": 106,
+        "startLine": 108,
+        "endLine": 108,
         "normalizedSha256": "824b48c696c906f4eb9f6ac9286e4f78fffb18a974087ad89e10dd593f30cb03",
         "ownerSourceId": "protocol-registry-v1",
         "scope": "suite:dnp1-header-u16",
@@ -4354,22 +4813,22 @@
       "id": 513,
       "symbol": "Dhm2X25519MlKem768TripleXChaCha20",
       "canonicalName": "DHM2-X25519-MLKEM768-TRIPLE-XCHACHA20",
-      "lifecycle": "TARGET_UNFROZEN",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "sourceId": "deep-crypto-v1",
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 4.2 Pairwise messaging/application suite (`u16be`)",
-        "startLine": 115,
-        "endLine": 115,
-        "normalizedSha256": "494450dbac22b4cd2c077198e0e3cb67950d189638c0f86f4aa3ac77d325342e",
+        "startLine": 118,
+        "endLine": 118,
+        "normalizedSha256": "cfd3a93fc092fdd81f35d058b3f26f8aafdfafdb2b3a8b2684ccd64e71125fc9",
         "ownerSourceId": "deep-crypto-v1",
         "scope": "suite:pairwise-messaging-u16",
         "id": "pairwise-messaging-u16:0x0201",
         "name": "DHM2-X25519-MLKEM768-TRIPLE-XCHACHA20",
-        "lifecycle": "TARGET_UNFROZEN",
+        "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
         "evidenceTokens": [
           "DHM2-X25519-MLKEM768-TRIPLE-XCHACHA20",
-          "TARGET_UNFROZEN"
+          "FROZEN_TARGET_NOT_ACTIVE"
         ]
       }
     },
@@ -4383,8 +4842,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 4.2 Pairwise messaging/application suite (`u16be`)",
-        "startLine": 116,
-        "endLine": 116,
+        "startLine": 119,
+        "endLine": 119,
         "normalizedSha256": "0ec78fef4e210a7c4cb37d37cc3cc194f9146e20762ed24ee214247a6d346207",
         "ownerSourceId": "protocol-registry-v1",
         "scope": "suite:pairwise-messaging-u16",
@@ -4402,22 +4861,22 @@
       "id": 1,
       "symbol": "XPointFrameX25519XChaCha20V1",
       "canonicalName": "XPointFrameX25519XChaCha20V1",
-      "lifecycle": "TARGET_RENAME_REQUIRED",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "sourceId": "privacy-routing-v1",
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 4.3 XPoint onion suite (`u8`)",
-        "startLine": 127,
-        "endLine": 127,
-        "normalizedSha256": "7e5de9edb4a1fe096fd14587b13713b215e533312592b53b2fa2e4e640dd0b1c",
+        "startLine": 135,
+        "endLine": 135,
+        "normalizedSha256": "211181f5b75550d0931a471b0554169d4f816f82fda9cd479ba1afb1d43cb27c",
         "ownerSourceId": "privacy-routing-v1",
         "scope": "suite:xpoint-onion-u8",
-        "id": "xpoint-onion-u8:0x0001",
+        "id": "xpoint-onion-u8:0x01",
         "name": "XPointFrameX25519XChaCha20V1",
-        "lifecycle": "TARGET_RENAME_REQUIRED",
+        "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
         "evidenceTokens": [
           "XPointFrameX25519XChaCha20V1",
-          "TARGET_RENAME_REQUIRED"
+          "FROZEN_TARGET_NOT_ACTIVE"
         ]
       }
     }
@@ -4432,8 +4891,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 5.1 Carrier IDs (`u16be`)",
-        "startLine": 141,
-        "endLine": 141,
+        "startLine": 149,
+        "endLine": 149,
         "normalizedSha256": "a3074cd42c12bd69bb6bce8adec8f9e3f03f5e910e166172920143127661d165",
         "ownerSourceId": "carriers-v1",
         "scope": "carrier",
@@ -4455,8 +4914,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 5.1 Carrier IDs (`u16be`)",
-        "startLine": 142,
-        "endLine": 142,
+        "startLine": 150,
+        "endLine": 150,
         "normalizedSha256": "601383ca1438304a02b2c0e23c12816d1b0653fdfdae07402e58c96e9cd4bdc8",
         "ownerSourceId": "carriers-v1",
         "scope": "carrier",
@@ -4478,8 +4937,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 5.1 Carrier IDs (`u16be`)",
-        "startLine": 143,
-        "endLine": 143,
+        "startLine": 151,
+        "endLine": 151,
         "normalizedSha256": "44ed56a983bdcc35fb9926df6f04fdcde35419e8ed1db1d69725271cb083e0cc",
         "ownerSourceId": "carriers-v1",
         "scope": "carrier",
@@ -4501,8 +4960,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 5.1 Carrier IDs (`u16be`)",
-        "startLine": 144,
-        "endLine": 144,
+        "startLine": 152,
+        "endLine": 152,
         "normalizedSha256": "af6c239c4dad81d8dc8675b95d1a9ee36104091283184263b598a19038307aea",
         "ownerSourceId": "carriers-v1",
         "scope": "carrier",
@@ -4524,8 +4983,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 5.1 Carrier IDs (`u16be`)",
-        "startLine": 145,
-        "endLine": 145,
+        "startLine": 153,
+        "endLine": 153,
         "normalizedSha256": "59c7bef04a9393e49beaf8266b18dbbc11b12ef8325e77ca89d90842cb48c1e3",
         "ownerSourceId": "protocol-registry-v1",
         "scope": "carrier",
@@ -4548,10 +5007,10 @@
       "sourceId": "deployment-profiles-v1",
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
-        "section": "### 5.1 Carrier IDs (`u16be`)",
-        "startLine": 145,
-        "endLine": 145,
-        "normalizedSha256": "59c7bef04a9393e49beaf8266b18dbbc11b12ef8325e77ca89d90842cb48c1e3",
+        "section": "### 5.2 Deployment profile IDs (`u16be`)",
+        "startLine": 164,
+        "endLine": 164,
+        "normalizedSha256": "d54ce84e7a6f2df90d44f390cb7fda2d1d63459f6ca162b17940fd2a80427b7e",
         "ownerSourceId": "deployment-profiles-v1",
         "scope": "deployment-profile",
         "id": "0x0001",
@@ -4571,8 +5030,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 5.2 Deployment profile IDs (`u16be`)",
-        "startLine": 157,
-        "endLine": 157,
+        "startLine": 165,
+        "endLine": 165,
         "normalizedSha256": "53da2fea1cfb67eecd67a854eb2b59b09f2024dff08b491ff65088651ecd0b2d",
         "ownerSourceId": "deployment-profiles-v1",
         "scope": "deployment-profile",
@@ -4593,8 +5052,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 5.2 Deployment profile IDs (`u16be`)",
-        "startLine": 158,
-        "endLine": 158,
+        "startLine": 166,
+        "endLine": 166,
         "normalizedSha256": "c27f62e8c32ab066a1ed6748b022c2743e4caf7236c501423c8282671432e981",
         "ownerSourceId": "deployment-profiles-v1",
         "scope": "deployment-profile",
@@ -4615,8 +5074,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 5.2 Deployment profile IDs (`u16be`)",
-        "startLine": 159,
-        "endLine": 159,
+        "startLine": 167,
+        "endLine": 167,
         "normalizedSha256": "1ddb0d5bc0378aa7a2fba769ff66f262ca07672add1c4cbd4287d4218b5faa3a",
         "ownerSourceId": "deployment-profiles-v1",
         "scope": "deployment-profile",
@@ -4639,8 +5098,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 5.3 Call names",
-        "startLine": 175,
-        "endLine": 175,
+        "startLine": 183,
+        "endLine": 183,
         "normalizedSha256": "38877470ad38125ced04a6e96cbf0451fee87b406310660c8d693796403c35d9",
         "ownerSourceId": "call-session-v1",
         "scope": "call:media-carrier",
@@ -4661,8 +5120,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 5.3 Call names",
-        "startLine": 174,
-        "endLine": 174,
+        "startLine": 182,
+        "endLine": 182,
         "normalizedSha256": "6a6347e6d55abc2daa1dac9d248254307f13c9c78c254ecd976ed655532434c9",
         "ownerSourceId": "call-session-v1",
         "scope": "call:media-carrier",
@@ -4683,8 +5142,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 5.3 Call names",
-        "startLine": 176,
-        "endLine": 176,
+        "startLine": 184,
+        "endLine": 184,
         "normalizedSha256": "960b23987be4e98e52dd6175b9cadbbc6fb39b8639ec19d18c4c84081f39fb8f",
         "ownerSourceId": "protocol-registry-v1",
         "scope": "call:network-condition",
@@ -4705,8 +5164,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 5.3 Call names",
-        "startLine": 177,
-        "endLine": 177,
+        "startLine": 185,
+        "endLine": 185,
         "normalizedSha256": "6681cdea9216a527b6d9cab58ac2f8709e5ab384f53495bf5d75c80fa8a53a11",
         "ownerSourceId": "protocol-registry-v1",
         "scope": "call:network-condition",
@@ -4727,8 +5186,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 5.3 Call names",
-        "startLine": 173,
-        "endLine": 173,
+        "startLine": 181,
+        "endLine": 181,
         "normalizedSha256": "5aa31f5e5a82b1734856796f055172923803a85bc73a8ef29d4046bfbd6607ed",
         "ownerSourceId": "call-session-v1",
         "scope": "call:privacy-profile",
@@ -4749,8 +5208,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 5.3 Call names",
-        "startLine": 172,
-        "endLine": 172,
+        "startLine": 180,
+        "endLine": 180,
         "normalizedSha256": "e609570bbfef94081fe371cbe1d13d11d410be391faa7980d442eec497c49e12",
         "ownerSourceId": "call-session-v1",
         "scope": "call:privacy-profile",
@@ -4773,8 +5232,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 5.4 Canonical public interface names",
-        "startLine": 192,
-        "endLine": 192,
+        "startLine": 200,
+        "endLine": 200,
         "normalizedSha256": "b4daf7d55379b80c5f3e76aebc2a5aa7321ee4839730a73e00a62f0a0e0cd4a9",
         "ownerSourceId": "transport-neutral-v1",
         "scope": "interface",
@@ -4795,8 +5254,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 5.4 Canonical public interface names",
-        "startLine": 193,
-        "endLine": 193,
+        "startLine": 201,
+        "endLine": 201,
         "normalizedSha256": "350a461d3b01bc7d07b06bd68cafb70ac9191eaebdfafc02336b65de011e5202",
         "ownerSourceId": "transport-neutral-v1",
         "scope": "interface",
@@ -4817,8 +5276,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 5.4 Canonical public interface names",
-        "startLine": 196,
-        "endLine": 196,
+        "startLine": 204,
+        "endLine": 204,
         "normalizedSha256": "15fe8ecb1f7c829540278a71ab99e04630d68c3f2c038cc4cc0f5311d339c868",
         "ownerSourceId": "protocol-registry-v1",
         "scope": "interface",
@@ -4839,8 +5298,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 5.4 Canonical public interface names",
-        "startLine": 190,
-        "endLine": 190,
+        "startLine": 198,
+        "endLine": 198,
         "normalizedSha256": "4e4fb1546544def75e499b326d13bd8e4380b217ea7420ceee33211e039be023",
         "ownerSourceId": "transport-neutral-v1",
         "scope": "interface",
@@ -4861,8 +5320,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 5.4 Canonical public interface names",
-        "startLine": 194,
-        "endLine": 194,
+        "startLine": 202,
+        "endLine": 202,
         "normalizedSha256": "14a9839a3b2eaf5ffe02eaaefe78fcabc9b5136a30bcee107459acb63b3230bb",
         "ownerSourceId": "transport-neutral-v1",
         "scope": "interface",
@@ -4883,8 +5342,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 5.4 Canonical public interface names",
-        "startLine": 191,
-        "endLine": 191,
+        "startLine": 199,
+        "endLine": 199,
         "normalizedSha256": "6c6c1dd53281e4347fdc5671b122ba563957b5a441060f414e0a3172553691e2",
         "ownerSourceId": "transport-neutral-v1",
         "scope": "interface",
@@ -4905,8 +5364,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 5.4 Canonical public interface names",
-        "startLine": 195,
-        "endLine": 195,
+        "startLine": 203,
+        "endLine": 203,
         "normalizedSha256": "2b294541602d471834e1e9a3f53e5b7c3fce10712becdfbb40cf78eb69bd0a30",
         "ownerSourceId": "protocol-registry-v1",
         "scope": "interface",
@@ -4948,6 +5407,21 @@
     {
       "namespace": "magic",
       "value": "DPKB",
+      "replacement": null
+    },
+    {
+      "namespace": "magic",
+      "value": "DRE1",
+      "replacement": null
+    },
+    {
+      "namespace": "magic",
+      "value": "DRF1",
+      "replacement": null
+    },
+    {
+      "namespace": "magic",
+      "value": "DRL1",
       "replacement": null
     },
     {
@@ -5019,21 +5493,6 @@
   "plannedRetirements": [
     {
       "namespace": "magic",
-      "value": "DRE1",
-      "targetLifecycle": "RETIRED_REJECT"
-    },
-    {
-      "namespace": "magic",
-      "value": "DRF1",
-      "targetLifecycle": "RETIRED_REJECT"
-    },
-    {
-      "namespace": "magic",
-      "value": "DRL1",
-      "targetLifecycle": "RETIRED_REJECT"
-    },
-    {
-      "namespace": "magic",
       "value": "PRA1",
       "targetLifecycle": "RETIRED_REJECT"
     },
@@ -5089,18 +5548,6 @@
       "reason": "The approved DNP1 registry allocates this retained opaque artifact type but does not define a canonical record grammar or byte bounds."
     },
     {
-      "magic": "POC1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "PRA1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "PRA2",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
       "magic": "PRC1",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
@@ -5133,11 +5580,11 @@
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "RCR1",
+      "magic": "PRA2",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "RDA1",
+      "magic": "RCR1",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
@@ -5157,28 +5604,36 @@
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
+      "magic": "ROL1",
+      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "RPF1",
+      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "RSM2",
+      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "RTC1",
+      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "RDA1",
+      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "PRA1",
+      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "POC1",
+      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
       "magic": "PMT2",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "PMT1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "PMS2",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "PMS1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "MQR3",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "MRC1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
       "magic": "MRL1",
@@ -5205,11 +5660,11 @@
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "ROL1",
+      "magic": "MSR1",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "MSR1",
+      "magic": "MST1",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
@@ -5245,27 +5700,35 @@
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "MST1",
+      "magic": "PMS1",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "RPF1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "RSM2",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "RTC1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "XPA1",
+      "magic": "PMS2",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "XPC1",
+      "magic": "PMT1",
+      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "SHR1",
+      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "MRC1",
+      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "TRC1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "WHL1",
+      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "XPI1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -5274,6 +5737,10 @@
     },
     {
       "magic": "XPO1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "XPP1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -5293,7 +5760,7 @@
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "XOR1",
+      "magic": "XPC1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -5337,24 +5804,16 @@
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "MQR2",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "magic": "XPA1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "XOR1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
       "magic": "XOQ1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "XNV1",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "SHR1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "WHL1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
       "magic": "XBA1",
@@ -5381,11 +5840,15 @@
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "XOD1",
+      "magic": "XHA1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "XHA1",
+      "magic": "XHC1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "XIC1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -5421,7 +5884,15 @@
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "XHC1",
+      "magic": "XNV1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "XOD1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "TRS1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -5429,16 +5900,12 @@
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "MQR1",
+      "magic": "MQR3",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "MPA1",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "DAO1",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+      "magic": "MQR1",
+      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
       "magic": "DCA1",
@@ -5473,11 +5940,11 @@
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "DGT1",
+      "magic": "DAO1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "DIA1",
+      "magic": "DGT1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -5505,6 +5972,18 @@
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
+      "magic": "DPH2",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "DPK2",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "DIA1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
       "magic": "DAM1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
@@ -5514,10 +5993,6 @@
     },
     {
       "magic": "CMD1",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "CAR1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -5553,11 +6028,11 @@
       "reason": "The approved DNP1 registry allocates this retained opaque artifact type but does not define a canonical record grammar or byte bounds."
     },
     {
-      "magic": "DPH2",
+      "magic": "ADC1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "ADC1",
+      "magic": "ADF1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -5593,36 +6068,24 @@
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "ADF1",
+      "magic": "CAR1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "DPK2",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "DRE1",
+      "magic": "DRMV",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "DRF1",
+      "magic": "MQR2",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "GSR1",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "GSS1",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "GSW1",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "GTI1",
+      "magic": "DTC2",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "DTS1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
       "magic": "MAK1",
@@ -5637,23 +6100,31 @@
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "MBA2",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "magic": "MBA1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "GSQ1",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+      "magic": "MBA2",
+      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
       "magic": "MBE1",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "MBS1",
+      "magic": "MBM1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "MBR2",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "MCG2",
+      "magic": "GTI1",
+      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "MBS1",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
@@ -5681,35 +6152,27 @@
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "MBR2",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "magic": "MPA1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
       "magic": "MPC1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "GRR1",
+      "magic": "MCG2",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "GRA1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "magic": "GSW1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "DRL1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "magic": "GSS1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "DRMV",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "DTC2",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "DTS1",
+      "magic": "GSR1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -5729,12 +6192,12 @@
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "GRI1",
+      "magic": "GAS1",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "GAS1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "magic": "GCF1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
       "magic": "GCP1",
@@ -5757,6 +6220,10 @@
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
+      "magic": "GLS1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
       "magic": "GMD1",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
@@ -5769,20 +6236,28 @@
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "GCF1",
+      "magic": "GRA1",
+      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "GRI1",
+      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "GRR1",
+      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "GSQ1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "DTR2",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
       "magic": "XVP1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "DPR1",
-      "reason": "Pre-cutover runtime prefix src/Deep.Protocol/DeepExtension/PrivacyRouting/ still uses the frozen DNP1 allocation; clean-break replacement XPR1 is required before activation."
-    },
-    {
-      "magic": "DRS1",
-      "reason": "Pre-cutover runtime prefix src/Deep.Protocol/DeepExtension/PrivacyRouting/ still uses the frozen DNP1 allocation; clean-break replacement XRS1 is required before activation."
     }
   ]
 }

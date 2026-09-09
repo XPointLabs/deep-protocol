@@ -77,7 +77,8 @@ function Get-ProductionWireInventory {
             throw "Production assembly source root is missing: $assembly"
         }
         foreach ($file in Get-ChildItem -LiteralPath $assemblyRoot -Filter '*.cs' -File -Recurse) {
-            if ($file.FullName -match '[\\/]Generated[\\/]') { continue }
+            if ($file.FullName -match '[\\/]Generated[\\/]' -or
+                $file.Name.EndsWith('.Generated.cs', [StringComparison]::Ordinal)) { continue }
             $relative = [IO.Path]::GetRelativePath($Root, $file.FullName).Replace('\', '/')
             $text = [IO.File]::ReadAllText($file.FullName)
             foreach ($match in [regex]::Matches(
@@ -232,8 +233,14 @@ foreach ($source in $registry.sources) {
     }
 }
 foreach ($entry in $registry.suites | Where-Object sourceId -NE 'dnp1-frozen') {
+    $suiteScope = @($registry.suiteScopes | Where-Object name -CEQ ([string]$entry.scope))
+    if ($suiteScope.Count -ne 1 -or ([int]$suiteScope[0].widthBits % 4) -ne 0) {
+        throw "Suite scope has no exact hexadecimal width: $($entry.scope)"
+    }
+    $suiteHexDigits = [int]$suiteScope[0].widthBits / 4
+    $suiteId = ([int]$entry.id).ToString("X$suiteHexDigits", [Globalization.CultureInfo]::InvariantCulture)
     Assert-SourceAnchor $entry "suite:$($entry.scope)" `
-        "$($entry.scope):0x$('{0:X4}' -f [int]$entry.id)" ([string]$entry.canonicalName) `
+        "$($entry.scope):0x$suiteId" ([string]$entry.canonicalName) `
         ([string]$entry.lifecycle) $sources $sourceRoot
 }
 foreach ($entry in $registry.magic | Where-Object sourceId -NE 'production-wire-source') {
@@ -311,8 +318,11 @@ foreach ($entry in $registry.magic | Where-Object lifecycle -EQ 'CURRENT_PRE_CUT
     }
 }
 foreach ($entry in $registry.magic | Where-Object { $productionInventory.Map.Contains($_.value) }) {
-    if ($entry.lifecycle -ne 'CURRENT_PRE_CUTOVER') {
-        throw "Implemented local magic is not CURRENT_PRE_CUTOVER: $($entry.value)"
+    if ($entry.lifecycle -notin @(
+            'CURRENT_PRE_CUTOVER',
+            'FROZEN_TARGET_NOT_ACTIVE',
+            'TARGET_UNFROZEN')) {
+        throw "Implemented local magic has no implemented-but-release-gated lifecycle: $($entry.value)"
     }
 }
 foreach ($entry in $registry.magic | Where-Object lifecycle -EQ 'RETIRED_REJECT') {

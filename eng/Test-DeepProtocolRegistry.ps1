@@ -52,7 +52,8 @@ function Get-ProductionWireInventory {
     foreach ($assembly in $Configuration.assemblies) {
         $assemblyRoot = Join-Path $repoRoot "src/$assembly"
         foreach ($file in Get-ChildItem -LiteralPath $assemblyRoot -Filter '*.cs' -File -Recurse) {
-            if ($file.FullName -match '[\\/]Generated[\\/]') { continue }
+            if ($file.FullName -match '[\\/]Generated[\\/]' -or
+                $file.Name.EndsWith('.Generated.cs', [StringComparison]::Ordinal)) { continue }
             $relative = [IO.Path]::GetRelativePath($repoRoot, $file.FullName).Replace('\', '/')
             $text = [IO.File]::ReadAllText($file.FullName)
             foreach ($match in [regex]::Matches(
@@ -199,8 +200,11 @@ foreach ($entry in $registry.magic | Where-Object lifecycle -EQ 'CURRENT_PRE_CUT
         "CURRENT_PRE_CUTOVER magic has no production implementation: $($entry.value)"
 }
 foreach ($entry in $registry.magic | Where-Object { $inventory.Map.Contains($_.value) }) {
-    Assert-True ($entry.lifecycle -eq 'CURRENT_PRE_CUTOVER') `
-        "Implemented local magic is not CURRENT_PRE_CUTOVER: $($entry.value)"
+    Assert-True ($entry.lifecycle -in @(
+            'CURRENT_PRE_CUTOVER',
+            'FROZEN_TARGET_NOT_ACTIVE',
+            'TARGET_UNFROZEN')) `
+        "Implemented local magic has no implemented-but-release-gated lifecycle: $($entry.value)"
 }
 foreach ($entry in $registry.magic | Where-Object lifecycle -EQ 'RETIRED_REJECT') {
     Assert-True (-not $inventory.Map.Contains($entry.value)) `
@@ -259,6 +263,35 @@ $sourceAnchoredAllocations = @(
 )
 Assert-True (@($sourceAnchoredAllocations | Where-Object { $null -eq $_.sourceAnchor }).Count -eq 0) `
     'A non-imported allocation lacks its exact structured source anchor.'
+
+$protocolRegistryLines = [IO.File]::ReadAllText(
+    (Join-Path $superprojectRoot 'docs/architecture/PROTOCOL-REGISTRY-V1.md')).Replace("`r`n", "`n").Split("`n")
+foreach ($entry in @($sourceAnchoredAllocations | Where-Object {
+        $_.sourceAnchor.anchorSourceId -eq 'protocol-registry-v1' -and
+        $_.sourceAnchor.scope -notlike 'alias:*'
+    })) {
+    $anchor = $entry.sourceAnchor
+    Assert-True ([int]$anchor.startLine -eq [int]$anchor.endLine) `
+        "Protocol-registry allocation anchor must be one canonical table row: $($anchor.scope)/$($anchor.id)"
+    $row = $protocolRegistryLines[[int]$anchor.startLine - 1]
+    $rowMatches = switch -Wildcard ([string]$anchor.scope) {
+        'magic' { $row -match "^\|[^|]*``$([regex]::Escape([string]$anchor.id))``[^|]*\|"; break }
+        'suite:*' {
+            $id = ([string]$anchor.id).Split(':')[-1]
+            $row -match "^\|\s*``$([regex]::Escape($id))``\s*\|"; break
+        }
+        'carrier' { $row -match "^\|\s*``$([regex]::Escape([string]$anchor.id))``\s*\|"; break }
+        'deployment-profile' { $row -match "^\|\s*``$([regex]::Escape([string]$anchor.id))``\s*\|"; break }
+        'call:*' {
+            $axis = [regex]::Escape($anchor.scope.Substring(5).Replace('-', ' '))
+            $name = [regex]::Escape([string]$anchor.name)
+            $row -match "^\|\s*$axis\s*\|\s*``$name``\s*\|"; break
+        }
+        'interface' { $row -match "^\|\s*``$([regex]::Escape([string]$anchor.name))``\s*\|"; break }
+        default { throw "Unhandled protocol-registry anchor scope: $($anchor.scope)" }
+    }
+    Assert-True $rowMatches "Protocol-registry anchor does not bind its canonical table row: $($anchor.scope)/$($anchor.id)"
+}
 
 foreach ($assembly in $registry.productionInventory.assemblies) {
     $aliasPath = Join-Path $repoRoot "src/$assembly/ProtocolRegistryAliases.cs"

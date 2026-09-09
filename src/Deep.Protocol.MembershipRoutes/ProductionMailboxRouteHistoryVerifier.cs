@@ -123,7 +123,7 @@ internal sealed class ProductionMailboxRouteHistoryCryptographicLinkVerifier(
         }
         else
         {
-            authority = ProductionMailboxAuthorityVerifier.VerifyForwardCheckpoint(authorityBytes,
+            authority = ProductionMailboxRoutesVerificationFacade.VerifyForwardCheckpoint(authorityBytes,
                 new ProductionMailboxAuthorityCheckpointVerificationContext
                 {
                     PinnedMrXPublicKeySha256 = _mrX,

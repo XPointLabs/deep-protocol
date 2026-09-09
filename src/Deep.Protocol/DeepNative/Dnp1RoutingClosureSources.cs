@@ -547,13 +547,8 @@ public sealed class RoutingClosureSourceVerifier
                           !CanonicalGrammar.IsZero(record.FieldSpan(21))))
             Invalid("The router DXP source has the wrong pre-PoP/final shape.");
         return new DxpOperationSource(
-            X25519PossessionRole.Router,
+            DxpIdentityIssuanceSourceVerifier.CreateCurrentCutoverRouter(cutover),
             verified ? (byte)1 : (byte)0,
-            cutover.SourceFingerprint.Span,
-            cutover.DrsRevision,
-            cutover.DrsCount,
-            cutover.TrustedDrsHead,
-            cutover.TrustedDrsRef,
             projection,
             record.FieldSpan(18),
             transcript,

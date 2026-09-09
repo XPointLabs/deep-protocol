@@ -1,0 +1,106 @@
+name: native-mlkem-attested
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  windows-x64-arm64:
+    name: Windows x64 and ARM64 official binary evidence
+    runs-on: windows-2022
+    timeout-minutes: 90
+
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+      DEEP_OFFICIAL_OUTPUT: ${{ runner.temp }}\deep-native-official
+
+    steps:
+      - name: Checkout exact source commit
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup pinned .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.301
+
+      - name: Install pinned Rust toolchain and Windows targets
+        shell: pwsh
+        run: |
+          rustup toolchain install 1.89.0-x86_64-pc-windows-msvc --profile minimal
+          rustup target add x86_64-pc-windows-msvc --toolchain 1.89.0-x86_64-pc-windows-msvc
+          rustup target add aarch64-pc-windows-msvc --toolchain 1.89.0-x86_64-pc-windows-msvc
+
+      - name: Verify clean source checkout
+        shell: pwsh
+        run: |
+          $status = @(git status --porcelain=v1 --untracked-files=all)
+          if ($LASTEXITCODE -ne 0 -or $status.Count -ne 0) {
+            throw "Official native build requires a clean checkout: $($status -join ', ')"
+          }
+
+      - name: Build reproducible Deep ML-KEM x64 and ARM64 runtimes
+        shell: pwsh
+        run: |
+          $output = Join-Path $env:DEEP_OFFICIAL_OUTPUT 'mlkem'
+          ./eng/Build-DeepMlKem.ps1 `
+            -BuildTarget @('windows-x64', 'windows-arm64') `
+            -OutputRoot $output
+
+      - name: Build and test Deep Braid x64 runtime
+        shell: pwsh
+        run: ./eng/Build-DeepMlKemBraid.ps1 -Target windows-x64
+
+      - name: Cross-build Deep Braid ARM64 runtime and ABI probe
+        shell: pwsh
+        run: ./eng/Build-DeepMlKemBraid.ps1 -Target windows-arm64
+
+      - name: Assemble closed official bundle
+        shell: pwsh
+        run: |
+          $bundle = Join-Path $env:DEEP_OFFICIAL_OUTPUT 'bundle'
+          New-Item -ItemType Directory -Path $bundle -Force | Out-Null
+          Copy-Item -LiteralPath (Join-Path $env:DEEP_OFFICIAL_OUTPUT 'mlkem\build-manifest.v1.json') -Destination $bundle
+          foreach ($target in @('windows-x64', 'windows-arm64')) {
+            $mlkemTarget = Join-Path $bundle "mlkem\$target"
+            New-Item -ItemType Directory -Path $mlkemTarget -Force | Out-Null
+            Copy-Item -LiteralPath (Join-Path $env:DEEP_OFFICIAL_OUTPUT "mlkem\$target\deep_mlkem.dll") -Destination $mlkemTarget
+            Copy-Item -LiteralPath (Join-Path $env:DEEP_OFFICIAL_OUTPUT "mlkem\$target\deep_mlkem.lib") -Destination $mlkemTarget
+          }
+          $braidMap = @{
+            'windows-x64' = 'x86_64-pc-windows-msvc'
+            'windows-arm64' = 'aarch64-pc-windows-msvc'
+          }
+          foreach ($target in $braidMap.Keys) {
+            $braidTarget = Join-Path $bundle "braid\$target"
+            New-Item -ItemType Directory -Path $braidTarget -Force | Out-Null
+            $release = Join-Path $PWD "native\Deep.MlKemBraid\target\$($braidMap[$target])\release"
+            Copy-Item -LiteralPath (Join-Path $release 'deep_mlkem_braid.dll') -Destination $braidTarget
+            Copy-Item -LiteralPath (Join-Path $release 'deep_mlkem_braid.dll.lib') -Destination $braidTarget
+          }
+          git rev-parse HEAD | Set-Content -LiteralPath (Join-Path $bundle 'source-commit.txt') -Encoding ascii
+          Get-ChildItem -LiteralPath $bundle -File -Recurse |
+            Sort-Object FullName |
+            ForEach-Object {
+              $relative = [IO.Path]::GetRelativePath($bundle, $_.FullName).Replace('\', '/')
+              "{0}  {1}" -f (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant(), $relative
+            } | Set-Content -LiteralPath (Join-Path $bundle 'SHA256SUMS') -Encoding ascii
+
+      - name: Attest official binaries and manifest
+        uses: actions/attest@v4
+        with:
+          subject-path: ${{ env.DEEP_OFFICIAL_OUTPUT }}\bundle\**
+
+      - name: Upload attested official binary bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: deep-native-windows-${{ github.sha }}
+          path: ${{ env.DEEP_OFFICIAL_OUTPUT }}\bundle
+          if-no-files-found: error
+          retention-days: 30

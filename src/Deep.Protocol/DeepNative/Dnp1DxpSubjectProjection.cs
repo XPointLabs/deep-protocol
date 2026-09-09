@@ -11,14 +11,16 @@ internal static class DxpSubjectProjection
     private const string Domain = "Deep/IdentityAuth/V1/x25519-pop-subject";
 
     internal static byte[] HashDevice(OwnedRecord record) =>
-        Hash(record, X25519PossessionRole.Device, 21, 22, 23, 632);
+        Hash(EncodeDevice(record), X25519PossessionRole.Device);
+
+    internal static byte[] EncodeDevice(OwnedRecord record) =>
+        Encode(record, 21, 22, 23, 632);
 
     internal static byte[] HashRouter(OwnedRecord record) =>
-        Hash(record, X25519PossessionRole.Router, 19, 20, 21, 612);
+        Hash(Encode(record, 19, 20, 21, 612), X25519PossessionRole.Router);
 
-    private static byte[] Hash(
+    private static byte[] Encode(
         OwnedRecord record,
-        X25519PossessionRole role,
         int transcriptTag,
         int firstOmittedTag,
         int secondOmittedTag,
@@ -45,10 +47,15 @@ internal static class DxpSubjectProjection
             throw new RecordException(RecordError.InvalidLength,
                 "The DXP subject projection length is invalid.");
 
+        return projection;
+    }
+
+    private static byte[] Hash(ReadOnlySpan<byte> projection, X25519PossessionRole role)
+    {
         var payload = new byte[1 + 4 + projection.Length];
         payload[0] = (byte)role;
         BinaryPrimitives.WriteUInt32BigEndian(payload.AsSpan(1, 4), checked((uint)projection.Length));
-        projection.CopyTo(payload, 5);
+        projection.CopyTo(payload.AsSpan(5));
         return CanonicalGrammar.Sha256Domain(Domain, payload);
     }
 }

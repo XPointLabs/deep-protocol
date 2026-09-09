@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-android</TargetFramework>
+    <TargetPlatformVersion>36.0</TargetPlatformVersion>
+    <SupportedOSPlatformVersion>26.0</SupportedOSPlatformVersion>
+    <RuntimeIdentifier>android-arm64</RuntimeIdentifier>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>Deep.MlKem.AndroidProbe</AssemblyName>
+    <RootNamespace>Deep.MlKem.AndroidProbe</RootNamespace>
+    <ApplicationId>org.deep.protocol.mlkemprobe</ApplicationId>
+    <ApplicationTitle>Deep ML-KEM Android Probe</ApplicationTitle>
+    <ApplicationVersion>1</ApplicationVersion>
+    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <AndroidPackageFormat>apk</AndroidPackageFormat>
+    <EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Deep.Protocol\Deep.Protocol.csproj"
+                      AdditionalProperties="MlKemAndroidProbe=true" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(DeepMlKemAndroidAsset)' != ''">
+    <AndroidAsset Include="$(DeepMlKemAndroidAsset)"
+                  Link="Assets\deep-mlkem\libdeep_mlkem.so" />
+  </ItemGroup>
+
+  <Target Name="ValidateDeepMlKemAndroidAsset" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(DeepMlKemAndroidAsset)' == ''"
+           Text="DeepMlKemAndroidAsset must name the fixed Android arm64 libdeep_mlkem.so evidence asset." />
+    <Error Condition="!Exists('$(DeepMlKemAndroidAsset)')"
+           Text="The DeepMlKemAndroidAsset file is absent." />
+    <GetFileHash Files="$(DeepMlKemAndroidAsset)" Algorithm="SHA256" HashEncoding="hex">
+      <Output TaskParameter="Items" ItemName="_DeepMlKemAndroidAssetHash" />
+    </GetFileHash>
+    <Error Condition="'%(_DeepMlKemAndroidAssetHash.FileHash)' != '7799b36b8c522905f655af518124cdd74b97224c4ee42beb2f8142065392cd87'"
+           Text="The packaged Deep ML-KEM Android asset digest is not probe-approved." />
+  </Target>
+
+</Project>

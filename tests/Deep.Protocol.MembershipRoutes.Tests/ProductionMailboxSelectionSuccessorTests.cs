@@ -1717,25 +1717,27 @@ public sealed class ProductionMailboxSelectionSuccessorTests
             Revocation = f.OldAuthority.Authority.Revocation with
             { Generation = ulong.MaxValue - 1 }
         }, f.MrXPrivateKey);
+        var verifiedOldTerminalAuthority = ProductionMailboxAuthorityVerifier.Verify(
+            oldTerminalRevocationAuthority,
+            AuthorityContext(oldTerminalRevocationAuthority,
+                oldTerminalRevocationAuthority.MrXApprovalEd25519PublicKey.ToArray(),
+                oldTerminalRevocationAuthority.AuthorityGeneration - 1,
+                oldTerminalRevocationAuthority.PreviousAuthorityHash, Now),
+            new SodiumProductionMailboxAuthoritySignatureVerifier());
         var newTerminalRevocationAuthority = SignAuthority(f.NewAuthority.Authority with
         {
+            PreviousAuthorityHash = verifiedOldTerminalAuthority.CanonicalAuthorityHash,
             Revocation = f.NewAuthority.Authority.Revocation with
             { Generation = ulong.MaxValue }
         }, f.MrXPrivateKey);
-        var forgedOldAuthority = new VerifiedProductionMailboxAuthority(
-            oldTerminalRevocationAuthority,
-            SHA256.HashData(ProductionMailboxAuthorityCodec.Encode(oldTerminalRevocationAuthority)),
-            oldTerminalRevocationAuthority.AuthorityGeneration);
-        var forgedNewAuthority = new VerifiedProductionMailboxAuthority(
-            newTerminalRevocationAuthority,
-            SHA256.HashData(ProductionMailboxAuthorityCodec.Encode(newTerminalRevocationAuthority)),
-            newTerminalRevocationAuthority.AuthorityGeneration);
-        AssertError(ProductionMailboxSelectionSuccessorError.AuthorityNotSuccessor,
-            () => ProductionMailboxSelectionSuccessorVerifier.VerifyDirectPromotion(
-                encoded, forgedOldAuthority, f.OldTopology, forgedNewAuthority, f.NewTopology,
-                f.Context, new SodiumProductionMailboxAuthoritySignatureVerifier(),
-                new SodiumProductionMailboxTopologySignatureVerifier(),
-                new SodiumProductionMailboxSelectionSuccessorSignatureVerifier()));
+        Assert.Equal(ProductionMailboxAuthorityError.AuthorityRollback,
+            Assert.Throws<ProductionMailboxAuthorityException>(() =>
+                ProductionMailboxAuthorityVerifier.Verify(newTerminalRevocationAuthority,
+                    AuthorityContext(newTerminalRevocationAuthority,
+                        newTerminalRevocationAuthority.MrXApprovalEd25519PublicKey.ToArray(),
+                        verifiedOldTerminalAuthority.Authority.AuthorityGeneration,
+                        verifiedOldTerminalAuthority.CanonicalAuthorityHash, Now),
+                    new SodiumProductionMailboxAuthoritySignatureVerifier())).Error);
 
         var oldTerminalTopology = SignTopology(f.OldTopology.Snapshot with
         { TopologyGeneration = ulong.MaxValue - 1 }, f.OldIssuerPrivateKey);
@@ -1843,7 +1845,7 @@ public sealed class ProductionMailboxSelectionSuccessorTests
         { AuthorityGeneration = ulong.MaxValue, Signature = new byte[64] }, f.MrXPrivateKey);
         Assert.Equal(ProductionMailboxAuthorityError.AuthorityRollback,
             Assert.Throws<ProductionMailboxAuthorityException>(() =>
-                ProductionMailboxAuthorityVerifier.VerifyForwardCheckpoint(
+                ProductionMailboxRoutesVerificationFacade.VerifyForwardCheckpoint(
                     ProductionMailboxAuthorityCodec.Encode(terminalAuthority), checkpointContext,
                     new SodiumProductionMailboxAuthoritySignatureVerifier())).Error);
         var terminalRevocation = SignAuthority(f.NewAuthority.Authority with
@@ -1854,7 +1856,7 @@ public sealed class ProductionMailboxSelectionSuccessorTests
         }, f.MrXPrivateKey);
         Assert.Equal(ProductionMailboxAuthorityError.AuthorityRollback,
             Assert.Throws<ProductionMailboxAuthorityException>(() =>
-                ProductionMailboxAuthorityVerifier.VerifyForwardCheckpoint(
+                ProductionMailboxRoutesVerificationFacade.VerifyForwardCheckpoint(
                     ProductionMailboxAuthorityCodec.Encode(terminalRevocation), checkpointContext,
                     new SodiumProductionMailboxAuthoritySignatureVerifier())).Error);
         var terminalTopology = SignTopology(f.NewTopology.Snapshot with
@@ -2118,7 +2120,7 @@ public sealed class ProductionMailboxSelectionSuccessorTests
                 AuthorityContext(newAuthorityValue, mrX.PublicKey, lastGeneration: 7,
                     lastAuthorityHash: oldAuthorityHash, now: Now),
                 new SodiumProductionMailboxAuthoritySignatureVerifier())
-            : ProductionMailboxAuthorityVerifier.VerifyForwardCheckpoint(
+            : ProductionMailboxRoutesVerificationFacade.VerifyForwardCheckpoint(
                 ProductionMailboxAuthorityCodec.Encode(newAuthorityValue),
                 new ProductionMailboxAuthorityCheckpointVerificationContext
                 {

@@ -49,6 +49,13 @@ The vendored subset contains:
 
 ## Build
 
+Production consumers do not rebuild this provider locally. They package only
+an already approved Deep ABI binary whose exact length/SHA-256 and evidence are
+present in the generated RID allowlist. The commands below document the
+official build producer/evidence lane; they are not a workstation prerequisite.
+An upstream `mlkem-native` source release or a generic provider library cannot
+replace `deep_mlkem.dll`, because it does not export the Deep-owned v1 ABI.
+
 The production build uses CMake and Ninja bundled with Visual Studio 2022
 Build Tools. No global CMake/Ninja or Rust toolchain is used.
 
@@ -67,6 +74,14 @@ MSVC x64 compiler/linker/librarian/inspector, CMake, CTest, Ninja and .NET host
 binaries are pinned by the script. The selected Windows SDK version and required
 file closure are recorded; a hermetic full-SDK image is still a release hardening
 item. `-SkipReproducibilityCheck` is only for local iteration.
+
+Release evidence additionally requires an unchanged clean Git HEAD. Managed
+probe/test projects restore in locked mode into isolated artifacts directories.
+The existing Deep.Protocol test-seam output override is explicitly deleted
+before its build, so it cannot reuse stale binaries. The script rechecks HEAD,
+repository state and the exact hashed build-input closure before writing the
+manifest. `-AllowDirtyDevelopmentBuild` is only for local evidence and is always
+recorded as `repositoryDirty=true`.
 
 The script checks the exact dynamic export table and hardening of the final
 DLL/SO rather than only its constituent objects. Windows requires CFG, DEP/NX,
@@ -92,12 +107,44 @@ implicit rejection, explicit zeroing, and unchanged outputs on observed
 failures.
 
 `eng/Deep.MlKem.ManagedProbe` is deliberately absent from production solutions
-and project references. It loads the built DLL by absolute path, exercises the
-managed Span/owned-secret wrapper, and verifies KAT hashes, roundtrip, exact
+and project references. It independently exercises the C ABI through a small
+managed interop implementation and verifies KAT hashes, roundtrip, exact
 implicit rejection, invalid-public-key behavior, disposal zeroization, and the
-known runtime export surface.
+known runtime export surface. It is not evidence for the production wrapper.
+
+`eng/Deep.MlKem.RuntimeWrapperProbe` invokes the skipped Windows x64 evidence
+tests against the actual `DeepMlKemNativeProvider` compiled from the production
+source. It covers release allowlist drift, size/hash rejection, roundtrip and
+implicit rejection, exact overlap/zero-on-error behavior, deterministic
+in-flight-call versus Dispose serialization, constructor-failure handle release,
+SafeHandle finalization, and the production-owned provider factory. The build
+manifest records this separately as `productionWrapperProbeExecuted`.
+
+## Approved managed asset allowlist
+
+The native build manifest owns the exact `providerIdentifier`, target artifact
+length and SHA-256. After release evidence is approved, regenerate the managed
+RID allowlist rather than editing it manually:
+
+```powershell
+pwsh -File .\eng\Generate-DeepMlKemApprovedAssets.ps1 `
+  -ManifestPath .\native\Deep.MlKem\artifacts\build-manifest.v1.json
+```
+
+Release builds run the same generator with `-Check`; ABI, length or digest drift
+therefore fails evidence generation. Dirty manifests are rejected for generation.
+
+The current runtime allowlist is Windows x64 only. It resolves a fixed relative
+path below `AppContext.BaseDirectory`, rejects reparse points, then keeps the
+verified file open without write/delete sharing while loading. This is valid only
+for a signed/package-controlled application base that is not attacker-writable.
+Packaging/install ACL or equivalent OS package-integrity evidence is an explicit
+activation prerequisite. Developer folders are allowed for local testing but do
+not satisfy that release gate; the runtime does not guess ACL semantics and risk
+false rejection of normal development deployments.
 
 The upstream deterministic KAT is not a substitute for an ACVP validation
 campaign. Production enablement remains gated on ACVP vectors, Android arm64
 build plus physical-device tests with the pinned NDK, Windows arm64 cross-build
-plus runtime tests, and independent security review of the final binaries.
+plus runtime tests, trusted package app-base evidence, and independent security
+review of the final binaries.

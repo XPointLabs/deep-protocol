@@ -174,14 +174,22 @@ internal static class CanonicalGrammar
         record.CanonicalSpan[..HeaderLength].CopyTo(header);
         BinaryPrimitives.WriteUInt16BigEndian(header.Slice(8, 2),
             checked((ushort)(record.Definition.Fields.Count - 1)));
-        using var hmac = IncrementalHash.CreateHMAC(HashAlgorithmName.SHA256, key.ToArray());
-        hmac.AppendData(prefix[..2]);
-        hmac.AppendData(domainBytes);
-        hmac.AppendData(prefix[2..]);
-        hmac.AppendData(header);
-        hmac.AppendData(record.CanonicalSpan.Slice(HeaderLength,
-            unsignedLength - HeaderLength));
-        return hmac.GetHashAndReset();
+        var ownedKey = key.ToArray();
+        try
+        {
+            using var hmac = IncrementalHash.CreateHMAC(HashAlgorithmName.SHA256, ownedKey);
+            hmac.AppendData(prefix[..2]);
+            hmac.AppendData(domainBytes);
+            hmac.AppendData(prefix[2..]);
+            hmac.AppendData(header);
+            hmac.AppendData(record.CanonicalSpan.Slice(HeaderLength,
+                unsignedLength - HeaderLength));
+            return hmac.GetHashAndReset();
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(ownedKey);
+        }
     }
 
     internal static void VerifyProtectedHmac(OwnedRecord record, ReadOnlySpan<byte> key)
