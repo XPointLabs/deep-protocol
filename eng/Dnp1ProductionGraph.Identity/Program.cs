@@ -193,6 +193,15 @@ static string CreateSnapshot(byte[] dll)
         var length = BinaryPrimitives.ReadInt32LittleEndian(resourceBytes.AsSpan(offset, 4));
         if (length < 0 || length > resourceBytes.Length - offset - 4)
             throw new InvalidOperationException($"{assemblyName}: embedded resource length is invalid: {name}.");
+        if (assemblyName == "Deep.Protocol.GoldenVectors" &&
+            name.EndsWith("dnp1-classical-v1.executable.json", StringComparison.Ordinal))
+        {
+            // This manifest separately binds this verifier in its implementation
+            // scope. Hashing its bytes here would create a self-referential digest
+            // cycle between the resource snapshot and implementationScopeSha256.
+            lines.Add($"resource|{name}|dnp1-executable-integrity-gate");
+            continue;
+        }
         var hash = Convert.ToHexString(SHA256.HashData(resourceBytes.AsSpan(offset + 4, length)));
         lines.Add($"resource|{name}|{length}|{hash}");
     }
@@ -563,8 +572,7 @@ internal static class GraphPolicy
             ],
             ["Deep.Protocol.GoldenVectors"] =
             [
-                "Deep.Protocol.GoldenVectors|111|90DB1F42CFCA26D75018975DF83A30F5716A7FF96A6B127AF149D2F9AD2F63E9",
-                "Deep.Protocol.GoldenVectors|111|B383BB209CCB5931E1344384BF8FF12F3C6860FC860BCFBB88F54279D19DF621"
+                "Deep.Protocol.GoldenVectors|111|A10E47D43865462CEBF5236781E3F82D70B1D97F8DCF287F062B7C78791F26D0"
             ]
         };
 }

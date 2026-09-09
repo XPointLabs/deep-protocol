@@ -88,7 +88,7 @@
     "tests/Deep.Protocol.Tests/DeepNative/RecoveryColdProtectedPayloadTests.cs",
     "tests/Deep.Protocol.Tests/DevOpsWitness/Dnp1PackageBlockingWitnessTests.cs"
   ],
-  "implementationScopeSha256": "8534628B5676EBB74CF603F098DD11324CA54F4E9841965BA91738D601AA30A1",
+  "implementationScopeSha256": "721427FEB19D2FB2169841C3FC7E4A00D647F624ACB2A370DE828BC715CE1170",
   "mappings": [
     {
       "id": "api-recovery-freeze-provider-nonce",
@@ -2874,7 +2874,7 @@
       },
       "testFqn": "Deep.Protocol.Tests.DeepExtension.ManagedIngress.ManagedIngressContractTests.HttpFramingCompressionAndTrailing_RejectBeforeOpaqueBodyAllocation",
       "fixturePath": "tests/Deep.Protocol.Tests/DeepExtension/ManagedIngress/ManagedIngressContractTests.cs",
-      "fixtureSha256": "5FAB92406E680293313B2A7994B08E94024C57E70CA356D3B592D40220F54FA7"
+      "fixtureSha256": "0EF8EBA6AB80D634C6EC5908C48A5614EDF540628B1C918A4ECF1B9BB53529AC"
     },
     {
       "id": "peer-outer-request-hash-transcript",

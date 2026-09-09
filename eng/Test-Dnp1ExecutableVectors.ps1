@@ -49,7 +49,13 @@ if ($protocolBase -notmatch '^[0-9a-f]{40}$') { throw 'Protocol base commit is i
 if ($LASTEXITCODE -ne 0) { throw 'Protocol base commit is not an ancestor of the checked-out source.' }
 
 function Get-Sha256([string] $Path) {
-    return (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToUpperInvariant()
+    # All executable fixtures and implementation-scope inputs are UTF-8 text.
+    # Hash their repository-canonical LF representation so Git checkout policy
+    # (CRLF on Windows, LF on hosted Linux) cannot change package evidence.
+    $bytes = [IO.File]::ReadAllBytes($Path)
+    $text = [Text.Encoding]::UTF8.GetString($bytes)
+    $canonical = $text.Replace("`r`n", "`n").Replace("`r", "`n")
+    return Get-BytesSha256 ([Text.Encoding]::UTF8.GetBytes($canonical))
 }
 
 function Get-RelativeWithin([string] $Base, [string] $Path) {
