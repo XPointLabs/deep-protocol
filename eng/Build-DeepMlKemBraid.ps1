@@ -70,8 +70,13 @@ function Get-ExpectedExports {
     )
 }
 
-$cargo = Require-File (Join-Path $env:USERPROFILE '.cargo\bin\cargo.exe')
-$rustc = Require-File (Join-Path $env:USERPROFILE ".rustup\toolchains\$toolchain\bin\rustc.exe")
+$cargo = Require-File ((Get-Command cargo.exe -ErrorAction Stop).Source)
+$rustup = Require-File ((Get-Command rustup.exe -ErrorAction Stop).Source)
+$rustcPath = (& $rustup which rustc --toolchain $toolchain | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($rustcPath)) {
+    throw 'The pinned Rust 1.89.0 Windows x64 toolchain is unavailable.'
+}
+$rustc = Require-File $rustcPath
 $rustVersion = (& $rustc --version --verbose | Out-String)
 if ($rustVersion -notmatch 'release: 1\.89\.0' -or $rustVersion -notmatch 'host: x86_64-pc-windows-msvc') {
     throw 'The pinned Rust 1.89.0 Windows x64 toolchain is unavailable.'
@@ -105,7 +110,6 @@ if ($Target -ceq 'android-arm64') {
     $androidLinker = Require-File (Join-Path $ndkBin "aarch64-linux-android$androidApi-clang.cmd")
     $llvmNm = Require-File (Join-Path $ndkBin 'llvm-nm.exe')
     $llvmReadElf = Require-File (Join-Path $ndkBin 'llvm-readelf.exe')
-    $rustup = Require-File (Join-Path $env:USERPROFILE '.cargo\bin\rustup.exe')
     $installedTargets = @(& $rustup target list --installed --toolchain $toolchain)
     if ($installedTargets -cnotcontains $androidTriple) {
         throw "Rust target $androidTriple is not installed for $toolchain."
@@ -230,7 +234,6 @@ $env:LIB = (@(
 ) -join ';')
 $env:RUSTFLAGS = '-Dwarnings -Ccontrol-flow-guard=yes -Ctarget-feature=+crt-static -Clink-arg=/guard:cf -Clink-arg=/Brepro'
 
-$rustup = Require-File (Join-Path $env:USERPROFILE '.cargo\bin\rustup.exe')
 $installedTargets = @(& $rustup target list --installed --toolchain $toolchain)
 if ($installedTargets -cnotcontains $targetTriple) {
     throw "Rust target $targetTriple is not installed for $toolchain."

@@ -378,7 +378,14 @@ $cargoLockPath = Require-File (Resolve-EvidencePath 'native/Deep.MlKemBraid/Carg
 $cargoLockText = Get-Content -LiteralPath $cargoLockPath -Raw
 Assert-Equal (Get-LockChecksum $cargoLockText 'libcrux-ml-kem' '0.0.10') $expectedLibcruxCrateSha256 'Cargo.lock libcrux checksum'
 
-$crateCacheRoot = Join-Path $env:USERPROFILE '.cargo\registry\cache'
+$cargo = Require-File ((Get-Command cargo.exe -ErrorAction Stop).Source)
+$rustup = Require-File ((Get-Command rustup.exe -ErrorAction Stop).Source)
+$cargoHome = if ([string]::IsNullOrWhiteSpace($env:CARGO_HOME)) {
+    Split-Path -Parent (Split-Path -Parent $cargo)
+} else {
+    [IO.Path]::GetFullPath($env:CARGO_HOME)
+}
+$crateCacheRoot = Join-Path $cargoHome 'registry\cache'
 $crateArchives = @(Get-ChildItem -LiteralPath $crateCacheRoot -Recurse -Filter 'libcrux-ml-kem-0.0.10.crate' -File -ErrorAction SilentlyContinue)
 if ($crateArchives.Count -lt 1) {
     throw 'The pinned libcrux-ml-kem 0.0.10 crate archive is absent from the Cargo cache.'
@@ -387,8 +394,11 @@ foreach ($crateArchive in $crateArchives) {
     Assert-Equal (Get-LowerSha256 $crateArchive.FullName) $expectedLibcruxCrateSha256 "crate archive hash $($crateArchive.FullName)"
 }
 
-$cargo = Require-File (Join-Path $env:USERPROFILE '.cargo\bin\cargo.exe')
-$rustc = Require-File (Join-Path $env:USERPROFILE ".rustup\toolchains\$toolchain\bin\rustc.exe")
+$rustcPath = (& $rustup which rustc --toolchain $toolchain | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($rustcPath)) {
+    throw 'The installed Rust toolchain differs from the candidate evidence pin.'
+}
+$rustc = Require-File $rustcPath
 $rustVersion = (& $rustc --version --verbose | Out-String)
 if ($LASTEXITCODE -ne 0 -or
     $rustVersion -notmatch '(?m)^release: 1\.89\.0\s*$' -or
