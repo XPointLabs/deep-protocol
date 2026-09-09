@@ -7,10 +7,10 @@ namespace Deep.Protocol.Tests.MessagingCrypto;
 
 public sealed class DeepMlKemNativeProviderTests
 {
-    [Fact(Skip = "Executed by the explicit Windows x64 ML-KEM wrapper evidence harness.")]
-    public void WindowsX64_ReviewedAssetRoundTripsAndImplicitlyRejectsMutation()
+    [Fact(Skip = "Executed by the explicit Windows ML-KEM wrapper evidence harness.")]
+    public void Windows_ReviewedAssetRoundTripsAndImplicitlyRejectsMutation()
     {
-        RequireWindowsX64AndStageApprovedAsset();
+        RequireWindowsAndStageApprovedAsset();
         using var provider = DeepMlKemNativeProvider.LoadApprovedForCurrentProcess();
         using var keyPair = provider.GenerateKeyPair();
         var publicKey = keyPair.EncapsulationKey.ToArray();
@@ -54,15 +54,15 @@ public sealed class DeepMlKemNativeProviderTests
         }
     }
 
-    [Fact(Skip = "Executed by the explicit Windows x64 ML-KEM wrapper evidence harness.")]
-    public void WindowsX64_DigestMismatchAndOverlappingBuffersFailClosed()
+    [Fact(Skip = "Executed by the explicit Windows ML-KEM wrapper evidence harness.")]
+    public void Windows_DigestMismatchAndOverlappingBuffersFailClosed()
     {
-        RequireWindowsX64AndStageApprovedAsset(corrupt: true);
+        var approved = RequireWindowsAndStageApprovedAsset(corrupt: true);
         Assert.Throws<CryptographicException>(DeepMlKemNativeProvider.LoadApprovedForCurrentProcess);
-        RequireWindowsX64AndStageApprovedAsset();
+        approved = RequireWindowsAndStageApprovedAsset();
         using var provider = DeepMlKemNativeProvider.LoadApprovedForCurrentProcess();
-        DeepMlKemNativeProvider.ValidateApprovedAssetIdentity(DeepMlKemApprovedAssets.WindowsX64);
-        var driftedAbi = DeepMlKemApprovedAssets.WindowsX64 with { Abi = "mlkem-native/drifted-abi" };
+        DeepMlKemNativeProvider.ValidateApprovedAssetIdentity(approved);
+        var driftedAbi = approved with { Abi = "mlkem-native/drifted-abi" };
         Assert.Throws<CryptographicException>(() =>
             DeepMlKemNativeProvider.ValidateApprovedAssetIdentity(driftedAbi));
         var backing = new byte[2400];
@@ -97,10 +97,10 @@ public sealed class DeepMlKemNativeProviderTests
         Assert.All(clearedSecret, static value => Assert.Equal(0, value));
     }
 
-    [Fact(Skip = "Executed by the explicit Windows x64 ML-KEM wrapper evidence harness.")]
-    public async Task WindowsX64_DisposeIsIdempotentAndOperationsFailClosed()
+    [Fact(Skip = "Executed by the explicit Windows ML-KEM wrapper evidence harness.")]
+    public async Task Windows_DisposeIsIdempotentAndOperationsFailClosed()
     {
-        RequireWindowsX64AndStageApprovedAsset();
+        RequireWindowsAndStageApprovedAsset();
         var provider = DeepMlKemNativeProvider.LoadApprovedForCurrentProcess();
         provider.Dispose();
         provider.Dispose();
@@ -196,22 +196,29 @@ public sealed class DeepMlKemNativeProviderTests
         return new WeakReference(provider);
     }
 
-    private static void RequireWindowsX64AndStageApprovedAsset(bool corrupt = false)
+    private static DeepMlKemApprovedAsset RequireWindowsAndStageApprovedAsset(
+        bool corrupt = false)
     {
         Assert.True(OperatingSystem.IsWindows());
-        Assert.Equal(Architecture.X64, RuntimeInformation.ProcessArchitecture);
-        var source = FindReviewedWindowsX64Asset();
+        var approved = RuntimeInformation.ProcessArchitecture switch
+        {
+            Architecture.X64 => DeepMlKemApprovedAssets.WindowsX64,
+            Architecture.Arm64 => DeepMlKemApprovedAssets.WindowsArm64,
+            _ => throw new PlatformNotSupportedException(
+                "The reviewed Windows ML-KEM assets support x64 and arm64.")
+        };
+        var source = FindReviewedWindowsAsset(approved);
         var destination = Path.Combine(
             AppContext.BaseDirectory,
-            DeepMlKemApprovedAssets.WindowsX64.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+            approved.RelativePath.Replace('/', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
         if (!corrupt && File.Exists(destination))
         {
             var digest = SHA256.HashData(File.ReadAllBytes(destination));
             if (CryptographicOperations.FixedTimeEquals(
                     digest,
-                    Convert.FromHexString(DeepMlKemApprovedAssets.WindowsX64.Sha256)))
-                return;
+                    Convert.FromHexString(approved.Sha256)))
+                return approved;
         }
         File.Copy(source, destination, overwrite: true);
         if (corrupt)
@@ -223,9 +230,10 @@ public sealed class DeepMlKemNativeProviderTests
             stream.WriteByte(checked((byte)(value ^ 0x80)));
             stream.Flush(flushToDisk: true);
         }
+        return approved;
     }
 
-    private static string FindReviewedWindowsX64Asset()
+    private static string FindReviewedWindowsAsset(DeepMlKemApprovedAsset approved)
     {
         var explicitPath = Environment.GetEnvironmentVariable("DEEP_MLKEM_TEST_ASSET");
         if (!string.IsNullOrWhiteSpace(explicitPath) && File.Exists(explicitPath))
@@ -235,10 +243,12 @@ public sealed class DeepMlKemNativeProviderTests
         {
             var candidate = Path.Combine(
                 current.FullName,
-                "native", "Deep.MlKem", "artifacts", "windows-x64", "deep_mlkem.dll");
+                "src", "Deep.Protocol",
+                approved.RelativePath.Replace('/', Path.DirectorySeparatorChar));
             if (File.Exists(candidate)) return candidate;
             current = current.Parent;
         }
-        throw new FileNotFoundException("The reviewed Windows x64 Deep ML-KEM asset is absent.");
+        throw new FileNotFoundException(
+            $"The reviewed {approved.RuntimeIdentifier} Deep ML-KEM asset is absent.");
     }
 }

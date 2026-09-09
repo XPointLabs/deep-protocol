@@ -1,0 +1,25 @@
+{
+  "schema": "deep/windows-arm64-mlkem-acceptance/v1",
+  "authority": "Mr. X",
+  "verifiedAtUtc": "2026-09-09T12:45:00Z",
+  "officialWorkflowRunId": 34351196758,
+  "officialArtifactId": 10103962340,
+  "sourceCommit": "3481ce7fb3b0c80fffbe13d66a4e2ba9acf277ea",
+  "buildManifestSha256": "bbcfb8d405d2a0357cbf573710015238c325a7d0b69a6b9594f3ab454b4b0e69",
+  "runtimeSha256": "cd27e3c716a1b3cf4123f909e7d03861423becd8799a4abceb37f7f359d092f7",
+  "runtimeBytes": 123904,
+  "processRid": "win-arm64",
+  "dotnetSdk": "10.0.301",
+  "osVersion": "10.0.26200",
+  "gates": {
+    "cleanDistinctPathRebuildMatched": "passed",
+    "exactExportSurface": "passed",
+    "finalRuntimeHardening": "passed",
+    "managedAbiKat": "passed",
+    "productionWrapperProbe": "passed"
+  },
+  "attestation": {
+    "githubArtifactAttestation": "unavailable-private-organization-plan",
+    "substituteEvidence": "official-workflow-log-plus-sha256sums-plus-physical-arm64-probes"
+  }
+}

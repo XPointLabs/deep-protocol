@@ -20,12 +20,24 @@ internal static class DeepMlKemApprovedAssets
         "462a80feda563b30312e836cad108923eeed0aa16ce1365de7a8506d389af8eb",
         ManifestProviderIdentifier);
 
+    internal static DeepMlKemApprovedAsset WindowsArm64 { get; } = new(
+        "win-arm64",
+        "runtimes/win-arm64/native/deep_mlkem.dll",
+        123904,
+        "cd27e3c716a1b3cf4123f909e7d03861423becd8799a4abceb37f7f359d092f7",
+        ManifestProviderIdentifier);
+
     internal static DeepMlKemApprovedAsset ForCurrentProcess()
     {
         if (OperatingSystem.IsWindows() &&
             System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture ==
             System.Runtime.InteropServices.Architecture.X64)
             return WindowsX64;
+
+        if (OperatingSystem.IsWindows() &&
+            System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture ==
+            System.Runtime.InteropServices.Architecture.Arm64)
+            return WindowsArm64;
 
         throw new PlatformNotSupportedException(
             "No release-approved Deep ML-KEM asset exists for the current process RID.");

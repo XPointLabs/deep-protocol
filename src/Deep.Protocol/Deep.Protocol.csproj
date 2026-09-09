@@ -44,6 +44,11 @@
              CopyToPublishDirectory="PreserveNewest"
              Pack="true"
              PackagePath="runtimes/win-x64/native" />
+    <Content Include="runtimes\win-arm64\native\deep_mlkem.dll"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest"
+             Pack="true"
+             PackagePath="runtimes/win-arm64/native" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(RecoveryTestSeam)' == 'true'">

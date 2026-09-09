@@ -9,7 +9,9 @@ param(
 
     [switch]$AllowDirtyManifest,
 
-    [switch]$AllowIncompleteEvidence
+    [switch]$AllowIncompleteEvidence,
+
+    [string]$WindowsArm64AcceptancePath
 )
 
 Set-StrictMode -Version Latest
@@ -21,6 +23,7 @@ if ([string]::IsNullOrWhiteSpace($OutputPath)) {
 }
 
 $resolvedManifest = (Resolve-Path -LiteralPath $ManifestPath -ErrorAction Stop).Path
+$manifestSha256 = (Get-FileHash -LiteralPath $resolvedManifest -Algorithm SHA256).Hash.ToLowerInvariant()
 $manifest = Get-Content -LiteralPath $resolvedManifest -Raw | ConvertFrom-Json
 if ([int]$manifest.schemaVersion -ne 1) {
     throw 'Unsupported Deep ML-KEM build-manifest schema.'
@@ -53,6 +56,11 @@ $targetMap = [ordered]@{
         rid = 'win-x64'
         relativePath = 'runtimes/win-x64/native/deep_mlkem.dll'
     }
+    'windows-arm64' = [ordered]@{
+        property = 'WindowsArm64'
+        rid = 'win-arm64'
+        relativePath = 'runtimes/win-arm64/native/deep_mlkem.dll'
+    }
 }
 
 $approved = @()
@@ -65,12 +73,13 @@ foreach ($target in $targetMap.Keys) {
         throw "Expected one shared-runtime artifact for $target."
     }
     $artifact = $matches[0]
-    $requiredGates = @(
+    $requiredGates = @('exactExportSurface', 'finalRuntimeHardening')
+    if ($target -ceq 'windows-x64') {
+        $requiredGates += @(
             'nativeTestsExecuted',
             'managedProbeExecuted',
-            'productionWrapperProbeExecuted',
-            'exactExportSurface',
-            'finalRuntimeHardening')
+            'productionWrapperProbeExecuted')
+    }
     if (-not $AllowIncompleteEvidence) {
         $requiredGates += 'cleanDistinctPathRebuildMatched'
     }
@@ -86,6 +95,23 @@ foreach ($target in $targetMap.Keys) {
     $bytes = [long]$artifact.bytes
     if ($bytes -le 0) {
         throw "Artifact $target has an invalid byte length."
+    }
+    if ($target -ceq 'windows-arm64') {
+        if ([string]::IsNullOrWhiteSpace($WindowsArm64AcceptancePath)) {
+            throw 'Windows arm64 approval requires supplemental physical acceptance evidence.'
+        }
+        $acceptancePath = (Resolve-Path -LiteralPath $WindowsArm64AcceptancePath -ErrorAction Stop).Path
+        $acceptance = Get-Content -LiteralPath $acceptancePath -Raw | ConvertFrom-Json
+        if ([string]$acceptance.schema -cne 'deep/windows-arm64-mlkem-acceptance/v1' -or
+            [string]$acceptance.authority -cne 'Mr. X' -or
+            [string]$acceptance.buildManifestSha256 -cne $manifestSha256 -or
+            [string]$acceptance.runtimeSha256 -cne $sha256 -or
+            [long]$acceptance.runtimeBytes -ne $bytes -or
+            [string]$acceptance.processRid -cne 'win-arm64' -or
+            [string]$acceptance.gates.managedAbiKat -cne 'passed' -or
+            [string]$acceptance.gates.productionWrapperProbe -cne 'passed') {
+            throw 'Windows arm64 supplemental physical acceptance evidence is incomplete or does not bind the official artifact.'
+        }
     }
     $approved += [ordered]@{
         target = $target
@@ -131,6 +157,11 @@ $lines.Add('        if (OperatingSystem.IsWindows() &&')
 $lines.Add('            System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture ==')
 $lines.Add('            System.Runtime.InteropServices.Architecture.X64)')
 $lines.Add('            return WindowsX64;')
+$lines.Add('')
+$lines.Add('        if (OperatingSystem.IsWindows() &&')
+$lines.Add('            System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture ==')
+$lines.Add('            System.Runtime.InteropServices.Architecture.Arm64)')
+$lines.Add('            return WindowsArm64;')
 $lines.Add('')
 $lines.Add('        throw new PlatformNotSupportedException(')
 $lines.Add('            "No release-approved Deep ML-KEM asset exists for the current process RID.");')
