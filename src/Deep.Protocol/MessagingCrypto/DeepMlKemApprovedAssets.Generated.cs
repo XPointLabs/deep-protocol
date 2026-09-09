@@ -17,7 +17,7 @@ internal static class DeepMlKemApprovedAssets
         "win-x64",
         "runtimes/win-x64/native/deep_mlkem.dll",
         131584,
-        "d682595f4f88d18a1a3039319d22cc06aaaa706c851ec717b06b6e45d42b2f45",
+        "462a80feda563b30312e836cad108923eeed0aa16ce1365de7a8506d389af8eb",
         ManifestProviderIdentifier);
 
     internal static DeepMlKemApprovedAsset ForCurrentProcess()
