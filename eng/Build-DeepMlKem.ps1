@@ -7,6 +7,8 @@ param(
 
     [string]$OutputRoot,
 
+    [string]$WindowsArm64AcceptancePath,
+
     [switch]$SkipReproducibilityCheck,
 
     [switch]$AllowDirtyDevelopmentBuild
@@ -939,5 +941,8 @@ $generatorArguments = @{
 }
 if ($repositoryDirty) { $generatorArguments.AllowDirtyManifest = $true }
 if ($SkipReproducibilityCheck) { $generatorArguments.AllowIncompleteEvidence = $true }
+if (-not [string]::IsNullOrWhiteSpace($WindowsArm64AcceptancePath)) {
+    $generatorArguments.WindowsArm64AcceptancePath = $WindowsArm64AcceptancePath
+}
 & $generatorScript @generatorArguments
 Write-Host "Deep ML-KEM build complete. Manifest: $manifestPath"

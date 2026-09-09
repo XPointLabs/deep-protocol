@@ -50,7 +50,8 @@ jobs:
           $output = Join-Path $env:RUNNER_TEMP 'deep-native-official\mlkem'
           ./eng/Build-DeepMlKem.ps1 `
             -BuildTarget @('windows-x64', 'windows-arm64') `
-            -OutputRoot $output
+            -OutputRoot $output `
+            -WindowsArm64AcceptancePath 'native/Deep.MlKem/evidence/official-windows-3481ce7/windows-arm64-physical-acceptance.v1.json'
 
       - name: Build and test Deep Braid x64 runtime
         shell: pwsh

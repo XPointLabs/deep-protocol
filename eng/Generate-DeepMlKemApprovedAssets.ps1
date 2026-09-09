@@ -23,7 +23,6 @@ if ([string]::IsNullOrWhiteSpace($OutputPath)) {
 }
 
 $resolvedManifest = (Resolve-Path -LiteralPath $ManifestPath -ErrorAction Stop).Path
-$manifestSha256 = (Get-FileHash -LiteralPath $resolvedManifest -Algorithm SHA256).Hash.ToLowerInvariant()
 $manifest = Get-Content -LiteralPath $resolvedManifest -Raw | ConvertFrom-Json
 if ([int]$manifest.schemaVersion -ne 1) {
     throw 'Unsupported Deep ML-KEM build-manifest schema.'
@@ -102,9 +101,24 @@ foreach ($target in $targetMap.Keys) {
         }
         $acceptancePath = (Resolve-Path -LiteralPath $WindowsArm64AcceptancePath -ErrorAction Stop).Path
         $acceptance = Get-Content -LiteralPath $acceptancePath -Raw | ConvertFrom-Json
+        $acceptedManifestPath = Join-Path (Split-Path -Parent $acceptancePath) 'build-manifest.v1.json'
+        $acceptedManifestPath = (Resolve-Path -LiteralPath $acceptedManifestPath -ErrorAction Stop).Path
+        $acceptedManifestSha256 = (Get-FileHash -LiteralPath $acceptedManifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        $acceptedManifest = Get-Content -LiteralPath $acceptedManifestPath -Raw | ConvertFrom-Json
+        $acceptedArtifacts = @($acceptedManifest.artifacts | Where-Object {
+                [string]$_.target -ceq 'windows-arm64' -and
+                [string]$_.role -ceq 'shared-runtime'
+            })
         if ([string]$acceptance.schema -cne 'deep/windows-arm64-mlkem-acceptance/v1' -or
             [string]$acceptance.authority -cne 'Mr. X' -or
-            [string]$acceptance.buildManifestSha256 -cne $manifestSha256 -or
+            [string]$acceptance.buildManifestSha256 -cne $acceptedManifestSha256 -or
+            [string]$acceptance.sourceCommit -cne [string]$acceptedManifest.deepSources.repositoryCommit -or
+            $acceptedArtifacts.Count -ne 1 -or
+            [string]$acceptedArtifacts[0].sha256 -cne $sha256 -or
+            [long]$acceptedArtifacts[0].bytes -ne $bytes -or
+            -not [bool]$acceptedArtifacts[0].cleanDistinctPathRebuildMatched -or
+            -not [bool]$acceptedArtifacts[0].exactExportSurface -or
+            -not [bool]$acceptedArtifacts[0].finalRuntimeHardening -or
             [string]$acceptance.runtimeSha256 -cne $sha256 -or
             [long]$acceptance.runtimeBytes -ne $bytes -or
             [string]$acceptance.processRid -cne 'win-arm64' -or
