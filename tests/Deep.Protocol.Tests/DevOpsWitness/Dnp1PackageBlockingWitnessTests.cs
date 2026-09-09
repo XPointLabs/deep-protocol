@@ -8,8 +8,9 @@ namespace Deep.Protocol.Tests.DevOpsWitness;
 public sealed class Dnp1PackageBlockingWitnessTests
 {
     private static readonly string Root = FindProtocolRoot();
+    private static readonly string NormativeRepositoryRoot = FindNormativeRepositoryRoot();
     private static readonly string NormativeRoot = Path.Combine(
-        Directory.GetParent(Root)!.FullName,
+        NormativeRepositoryRoot,
         "docs", "survival-program", "releases", "v3.0.0", "specs");
 
     [Fact]
@@ -111,7 +112,7 @@ public sealed class Dnp1PackageBlockingWitnessTests
     [Fact]
     public void GrammarVectorSchemaAdditionalProperty_RealClosedSchemaGateRejectsTopAndCaseProperties()
     {
-        var checker = Path.Combine(Directory.GetParent(Root)!.FullName, "scripts", "check-dnp1-classical-spec.ps1");
+        var checker = Path.Combine(NormativeRepositoryRoot, "scripts", "check-dnp1-classical-spec.ps1");
         var result = RunPowerShell(checker);
 
         AssertSucceeded(result);
@@ -228,6 +229,30 @@ public sealed class Dnp1PackageBlockingWitnessTests
             directory = directory.Parent;
         }
         throw new DirectoryNotFoundException("Could not locate the deep-protocol repository root.");
+    }
+
+    private static string FindNormativeRepositoryRoot()
+    {
+        var configured = Environment.GetEnvironmentVariable("DEEP_DNP1_NORMATIVE_REPOSITORY_ROOT");
+        var candidates = new[]
+        {
+            configured,
+            Path.Combine(Root, "normative-source"),
+            Directory.GetParent(Root)?.FullName
+        };
+        foreach (var candidate in candidates)
+        {
+            if (string.IsNullOrWhiteSpace(candidate)) continue;
+            var fullPath = Path.GetFullPath(candidate);
+            if (File.Exists(Path.Combine(
+                fullPath,
+                "docs", "survival-program", "releases", "v3.0.0", "specs",
+                "dnp1-classical-v1.registry.json")))
+            {
+                return fullPath;
+            }
+        }
+        throw new DirectoryNotFoundException("Could not locate the approved DNP1 normative repository root.");
     }
 
     private sealed record ProcessResult(int ExitCode, string Output);
