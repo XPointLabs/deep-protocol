@@ -9,8 +9,8 @@ permissions:
   attestations: write
 
 jobs:
-  windows-x64-arm64:
-    name: Windows x64 and ARM64 official binary evidence
+  windows-android-x64-arm64:
+    name: Windows and Android ARM64 official binary evidence
     runs-on: windows-2022
     timeout-minutes: 90
 
@@ -37,6 +37,22 @@ jobs:
           rustup toolchain install 1.89.0-x86_64-pc-windows-msvc --profile minimal
           rustup target add x86_64-pc-windows-msvc --toolchain 1.89.0-x86_64-pc-windows-msvc
           rustup target add aarch64-pc-windows-msvc --toolchain 1.89.0-x86_64-pc-windows-msvc
+          rustup target add aarch64-linux-android --toolchain 1.89.0-x86_64-pc-windows-msvc
+
+      - name: Install pinned Android NDK
+        shell: pwsh
+        run: |
+          $sdkManager = Join-Path $env:ANDROID_HOME 'cmdline-tools\latest\bin\sdkmanager.bat'
+          if (-not (Test-Path -LiteralPath $sdkManager -PathType Leaf)) {
+            throw "Android sdkmanager is unavailable at the hosted-runner path."
+          }
+          & $sdkManager 'ndk;28.2.13676358'
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned Android NDK installation failed.' }
+          $ndk = Join-Path $env:ANDROID_HOME 'ndk\28.2.13676358'
+          if (-not (Test-Path -LiteralPath (Join-Path $ndk 'source.properties') -PathType Leaf)) {
+            throw 'Pinned Android NDK did not materialize.'
+          }
+          "DEEP_ANDROID_NDK=$ndk" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Verify clean source checkout
         shell: pwsh
@@ -46,24 +62,25 @@ jobs:
             throw "Official native build requires a clean checkout: $($status -join ', ')"
           }
 
-      - name: Build reproducible Deep ML-KEM x64 and ARM64 runtimes
+      - name: Build reproducible Deep ML-KEM Windows and Android runtimes
         shell: pwsh
         run: |
           $output = Join-Path $env:RUNNER_TEMP 'deep-native-official\mlkem'
           ./eng/Build-DeepMlKem.ps1 `
-            -BuildTarget @('windows-x64', 'windows-arm64') `
+            -BuildTarget @('windows-x64', 'windows-arm64', 'android-arm64') `
+            -AndroidNdkRoot $env:DEEP_ANDROID_NDK `
             -OutputRoot $output `
             -WindowsArm64AcceptancePath 'native/Deep.MlKem/evidence/official-windows-3481ce7/windows-arm64-physical-acceptance.v1.json'
 
-      - name: Build reproducible Deep Braid x64 and ARM64 runtimes
+      - name: Build reproducible Deep Braid Windows and Android runtimes
         shell: pwsh
         run: |
           $passA = Join-Path $env:RUNNER_TEMP 'deep-native-official\braid-pass-a'
           $passB = Join-Path $env:RUNNER_TEMP 'deep-native-official\braid-pass-b'
           foreach ($pass in @($passA, $passB)) {
-            foreach ($target in @('windows-x64', 'windows-arm64')) {
+            foreach ($target in @('windows-x64', 'windows-arm64', 'android-arm64')) {
               & pwsh -NoLogo -NoProfile -File ./eng/Build-DeepMlKemBraid.ps1 `
-                -Target $target -OutputRoot $pass
+                -Target $target -OutputRoot $pass -NdkRoot $env:DEEP_ANDROID_NDK
               if ($LASTEXITCODE -ne 0) {
                 throw "Deep Braid $target build failed in isolated producer process."
               }
@@ -84,6 +101,14 @@ jobs:
                 throw "Deep Braid $target $name is not reproducible across clean output roots."
               }
             }
+          }
+          $androidRelative = 'aarch64-linux-android\release\libdeep_mlkem_braid.so'
+          $androidA = Join-Path $passA $androidRelative
+          $androidB = Join-Path $passB $androidRelative
+          if ((Get-Item -LiteralPath $androidA).Length -ne (Get-Item -LiteralPath $androidB).Length -or
+              (Get-FileHash -LiteralPath $androidA -Algorithm SHA256).Hash -cne
+              (Get-FileHash -LiteralPath $androidB -Algorithm SHA256).Hash) {
+            throw 'Deep Braid android-arm64 runtime is not reproducible across clean output roots.'
           }
 
       - name: Verify approved x64 Braid managed runtime boundary
@@ -119,6 +144,9 @@ jobs:
             Copy-Item -LiteralPath (Join-Path $outputRoot "mlkem\$target\deep_mlkem.dll") -Destination $mlkemTarget
             Copy-Item -LiteralPath (Join-Path $outputRoot "mlkem\$target\deep_mlkem.lib") -Destination $mlkemTarget
           }
+          $androidMlKemTarget = Join-Path $bundle 'mlkem\android-arm64'
+          New-Item -ItemType Directory -Path $androidMlKemTarget -Force | Out-Null
+          Copy-Item -LiteralPath (Join-Path $outputRoot 'mlkem\android-arm64\libdeep_mlkem.so') -Destination $androidMlKemTarget
           $braidMap = @{
             'windows-x64' = 'x86_64-pc-windows-msvc'
             'windows-arm64' = 'aarch64-pc-windows-msvc'
@@ -136,6 +164,9 @@ jobs:
             Copy-Item -LiteralPath (Join-Path $release 'deep_mlkem_braid.dll') -Destination $braidTarget
             Copy-Item -LiteralPath (Join-Path $release 'deep_mlkem_braid.dll.lib') -Destination $braidTarget
           }
+          $androidBraidTarget = Join-Path $bundle 'braid\android-arm64'
+          New-Item -ItemType Directory -Path $androidBraidTarget -Force | Out-Null
+          Copy-Item -LiteralPath (Join-Path $outputRoot 'braid-pass-a\aarch64-linux-android\release\libdeep_mlkem_braid.so') -Destination $androidBraidTarget
           git rev-parse HEAD | Set-Content -LiteralPath (Join-Path $bundle 'source-commit.txt') -Encoding ascii
           Get-ChildItem -LiteralPath $bundle -File -Recurse |
             Sort-Object FullName |
@@ -171,7 +202,7 @@ jobs:
       - name: Upload official binary bundle
         uses: actions/upload-artifact@v4
         with:
-          name: deep-native-windows-${{ github.sha }}
+          name: deep-native-windows-android-${{ github.sha }}
           path: ${{ runner.temp }}\deep-native-official\bundle
           if-no-files-found: error
           retention-days: 30
