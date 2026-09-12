@@ -310,7 +310,15 @@ try {
 "@
     [void] (Get-EvaluatedProjectContract $sourceFixture $policy (Get-PolicyPackage $policy 'Deep.Protocol') '1.2.3-test')
     if (Test-Path -LiteralPath $ambientSentinel) { throw 'Hostile ambient Directory.Build.targets executed.' }
-    $fixturePackage = Get-PolicyPackage $policy 'Deep.Protocol'
+    # The hostile-parent fixture intentionally contains only a synthetic managed
+    # project. Keep its pack contract scoped to those two generated outputs;
+    # platform runtime assets are covered by the real repository materialization
+    # below and must not be invented inside this isolated compiler fixture.
+    $productionPackage = Get-PolicyPackage $policy 'Deep.Protocol'
+    $fixturePackage = [ordered]@{}
+    foreach ($key in $productionPackage.Keys) { $fixturePackage[$key] = $productionPackage[$key] }
+    $fixturePackage.packInputs = @('build:Deep.Protocol.dll', 'build:Deep.Protocol.pdb')
+    $fixturePackage.packTargets = @('lib/net10.0/Deep.Protocol.dll', 'lib/net10.0/Deep.Protocol.pdb')
     $lockPath = Join-Path $sourceFixture $fixturePackage.lockFile
     [IO.File]::Copy((Join-Path $RepositoryRoot $fixturePackage.lockFile), $lockPath, $true)
     $fixtureConfig = Join-Path $sourceFixture 'eng/production-protocol-closure.NuGet.Config'
