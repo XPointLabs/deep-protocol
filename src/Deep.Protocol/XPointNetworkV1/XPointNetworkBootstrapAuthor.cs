@@ -269,6 +269,34 @@ public sealed class VerifiedXPointNetworkBootstrap
 
 public static class XPointNetworkBootstrapAuthor
 {
+    /// <summary>
+    /// Restores an immutable, already-authored generation-zero bootstrap only after the same
+    /// verifier and explicit release pin used by clients accept its exact XNA1/DTS1 bytes.
+    /// This is the renewal boundary for short-lived operational views; it never re-signs or
+    /// silently derives a new genesis pin from caller-provided artifacts.
+    /// </summary>
+    public static VerifiedXPointNetworkBootstrap VerifyExistingGenesis(
+        ReadOnlySpan<byte> exactXna1,
+        ReadOnlySpan<byte> exactDts1,
+        XPointNetworkGenesisPin expectedGenesisPin)
+    {
+        ArgumentNullException.ThrowIfNull(expectedGenesisPin);
+        if (exactXna1.IsEmpty || exactDts1.IsEmpty)
+            throw new ArgumentException("Exact generation-zero XNA1 and DTS1 are required.");
+
+        var xna = exactXna1.ToArray();
+        var dts = exactDts1.ToArray();
+        var authority = XPointNetworkAuthorityVerifier.Verify(
+            expectedGenesisPin,
+            new ReadOnlyMemory<byte>[] { xna },
+            new ReadOnlyMemory<byte>[] { dts });
+        if (authority.AuthorityGeneration != 0)
+            throw new XPointNetworkAuthorityVerificationException(
+                "GenesisGenerationMismatch",
+                "An existing bootstrap must resolve to authority generation zero.");
+        return new VerifiedXPointNetworkBootstrap(xna, dts, expectedGenesisPin, authority);
+    }
+
     public static async ValueTask<VerifiedXPointNetworkBootstrap> AuthorGenesisAsync(
         XPointNetworkGenesisAuthoringRequest request,
         IReadOnlyList<IXPointNetworkBootstrapRootSigner> rootSigners,

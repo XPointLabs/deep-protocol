@@ -41,6 +41,29 @@ public sealed class XPointNetworkBootstrapAuthorTests
     }
 
     [Fact]
+    public async Task VerifyExistingGenesis_RestoresOnlyExactBytesUnderExplicitPin()
+    {
+        var fixture = Fixture.Create();
+        var authored = await XPointNetworkBootstrapAuthor.AuthorGenesisAsync(
+            fixture.Request, fixture.Signers.Take(2).ToArray());
+
+        var restored = XPointNetworkBootstrapAuthor.VerifyExistingGenesis(
+            authored.ExactXna1.Span, authored.ExactDts1.Span, authored.GenesisPin);
+
+        Assert.Equal(authored.ExactXna1.ToArray(), restored.ExactXna1.ToArray());
+        Assert.Equal(authored.ExactDts1.ToArray(), restored.ExactDts1.ToArray());
+        Assert.Equal(authored.Authority.AuthorityCoreHash.ToArray(),
+            restored.Authority.AuthorityCoreHash.ToArray());
+
+        var wrongPin = new XPointNetworkGenesisPin(
+            authored.GenesisPin.NetworkId.Span, Bytes(32, 0xee));
+        var error = Assert.Throws<XPointNetworkAuthorityVerificationException>(() =>
+            XPointNetworkBootstrapAuthor.VerifyExistingGenesis(
+                authored.ExactXna1.Span, authored.ExactDts1.Span, wrongPin));
+        Assert.Equal("GenesisPinMismatch", error.Code);
+    }
+
+    [Fact]
     public async Task AuthorGenesis_SuppliesExactPurposeSeparatedSigningInputsAndClearsRequests()
     {
         var fixture = Fixture.Create();
