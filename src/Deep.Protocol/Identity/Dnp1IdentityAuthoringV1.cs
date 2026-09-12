@@ -1146,6 +1146,35 @@ public static class Dnp1IdentityAuthoringV1
         AuthorGenesisAccount(accountSecrets, createdAtUnixSeconds, policyGeneration,
             SystemIdentityAuthoringRandom.Instance);
 
+    /// <summary>
+    /// Restores an already authored generation-one account from its exact signed
+    /// DPA1/DRS1 evidence. This does not reopen recovery signing authority and is
+    /// safe to use after the optional retained recovery phrase has been deleted.
+    /// </summary>
+    public static GenesisAccountAuthoringResult RestoreGenesisAccount(
+        ReadOnlyMemory<byte> canonicalDpa1,
+        ReadOnlyMemory<byte> canonicalDrs1,
+        ulong transactionTimeUnixSeconds)
+    {
+        if (transactionTimeUnixSeconds == 0)
+            throw new ArgumentOutOfRangeException(nameof(transactionTimeUnixSeconds));
+        var identity = new IdentityRelativeVerifier().VerifyGenesis(
+            canonicalDpa1.Span,
+            canonicalDrs1.Span,
+            [],
+            transactionTimeUnixSeconds);
+        return new GenesisAccountAuthoringResult(
+            identity,
+            DeepAccountIdentityCapability.FromVerifiedInputs(
+                DeepNetworkId16.FromVerifiedBytes(
+                    identity.Account.Certificate.NetworkId.Span),
+                identity.Account.Certificate.AccountGeneration,
+                AccountEd25519PublicKey32.FromVerifiedBytes(
+                    identity.Account.Certificate.AccountEd25519PublicKey.Span)),
+            canonicalDpa1.Span,
+            canonicalDrs1.Span);
+    }
+
     public static async ValueTask<GenesisDeviceIssuanceResult> IssueGenesisDeviceAsync(
         DeepRecoveryAccountCapabilities accountSecrets,
         GenesisAccountAuthoringResult? currentAccount,

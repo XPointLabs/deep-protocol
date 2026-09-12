@@ -200,6 +200,29 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
     }
 
     [Fact]
+    public void AuthoredGenesisAccount_RestoresWithoutRecoveryAuthority()
+    {
+        byte[] dpa;
+        byte[] drs;
+        DeepAccountIdentityCapability expected;
+        using (var recovery = Recovery(Network))
+        {
+            var authored = Dnp1IdentityAuthoringV1.AuthorGenesisAccount(
+                recovery, 1_900_000_000, 1, new FillRandom(0xa1));
+            dpa = authored.CanonicalDpa1.ToArray();
+            drs = authored.CanonicalDrs1.ToArray();
+            expected = authored.AccountIdentity;
+        }
+
+        var restored = Dnp1IdentityAuthoringV1.RestoreGenesisAccount(
+            dpa, drs, 2_000_000_000);
+
+        Assert.Equal(expected, restored.AccountIdentity);
+        Assert.Equal(dpa, restored.CanonicalDpa1.ToArray());
+        Assert.Equal(drs, restored.CanonicalDrs1.ToArray());
+    }
+
+    [Fact]
     public async Task DurableVerifiedReplay_DoesNotDependOnRotatedCurrentProfile()
     {
         using var recovery = Recovery(Network);
@@ -464,6 +487,7 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
             {
                 "AuthorGenesisAccount",
                 "IssueGenesisDeviceAsync",
+                "RestoreGenesisAccount",
                 "RestoreGenesisDeviceAsync"
             },
             authorMethods.Select(static method => method.Name).Order().ToArray());
