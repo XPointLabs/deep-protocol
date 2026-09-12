@@ -86,6 +86,24 @@ public sealed class XPointOnionCapabilityProducerTests
     }
 
     [Fact]
+    public async Task ExactGenesisHead_RehydratesOnlyAnIdenticalProtectedLkg()
+    {
+        var fixture = Fixture.Create();
+        var original = await fixture.VerifyAsync();
+
+        var rehydrated = await fixture.RehydrateAsync(original.ProtectedLkg!);
+
+        Assert.Equal(original.ProtectedLkg!.NetworkId.ToArray(), rehydrated.ProtectedLkg!.NetworkId.ToArray());
+        Assert.Equal(original.ProtectedLkg.HeadCoreReference.ToArray(), rehydrated.ProtectedLkg.HeadCoreReference.ToArray());
+        Assert.Equal(original.ProtectedLkg.ViewCoreReference.ToArray(), rehydrated.ProtectedLkg.ViewCoreReference.ToArray());
+
+        var foreign = await Fixture.Create(networkMarker: 0x21).VerifyAsync();
+        var mismatch = await Assert.ThrowsAsync<OnionBoundaryException>(async () =>
+            await fixture.RehydrateAsync(foreign.ProtectedLkg!));
+        Assert.Equal("network-rehydration-mismatch", mismatch.Code);
+    }
+
+    [Fact]
     public async Task ExactClosure_RejectsBadThresholdForkAndStaleMonotonicTime()
     {
         var fixture = Fixture.Create();
@@ -218,7 +236,7 @@ public sealed class XPointOnionCapabilityProducerTests
 
         var verifyMethods = typeof(OnionNetworkContextVerifier).GetMethods(
             BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
-        Assert.Equal(["VerifyAsync", "VerifyFromForwardCheckpointAsync"],
+        Assert.Equal(["VerifyAsync", "VerifyFromForwardCheckpointAsync", "VerifyRehydratedCurrentAsync"],
             verifyMethods.Select(static method => method.Name).Order(StringComparer.Ordinal).ToArray());
         Assert.All(verifyMethods, verify => Assert.DoesNotContain(verify.GetParameters(), parameter =>
             typeof(Delegate).IsAssignableFrom(parameter.ParameterType) ||
@@ -509,6 +527,14 @@ public sealed class XPointOnionCapabilityProducerTests
                 new ReadOnlyMemory<byte>[] { _xnv }, new ReadOnlyMemory<byte>[] { _xnh },
                 _nodes.Select(static value => (ReadOnlyMemory<byte>)value).ToArray(),
                 new ReadOnlyMemory<byte>[] { _pmt }, previous,
+                new OnionTrustedTimeAuthority(new FixedClock(Bytes(16, 0xc1), _clockSample)), default);
+
+        internal ValueTask<VerifiedOnionNetworkContext> RehydrateAsync(XPointNetworkProtectedLkg protectedCurrent) =>
+            OnionNetworkContextVerifier.VerifyRehydratedCurrentAsync(
+                _authority, _freshness, new ReadOnlyMemory<byte>[] { _xvp },
+                new ReadOnlyMemory<byte>[] { _xnv }, new ReadOnlyMemory<byte>[] { _xnh },
+                _nodes.Select(static value => (ReadOnlyMemory<byte>)value).ToArray(),
+                new ReadOnlyMemory<byte>[] { _pmt }, protectedCurrent,
                 new OnionTrustedTimeAuthority(new FixedClock(Bytes(16, 0xc1), _clockSample)), default);
 
         internal SuccessorFixture BuildSuccessorChain()

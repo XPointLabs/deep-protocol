@@ -516,6 +516,41 @@ public static class OnionNetworkContextVerifier
             protectedPrevious, trustedTimeAuthority,
             cancellationToken);
 
+    /// <summary>
+    /// Rehydrates the non-serializable capability for an exact generation-zero
+    /// network head that is already present in caller-protected storage.
+    /// The supplied package is verified from the immutable genesis authority and
+    /// is accepted only when the resulting protected tuple exactly matches the
+    /// caller's current LKG. This method cannot advance, roll back, or replace it.
+    /// </summary>
+    public static async ValueTask<VerifiedOnionNetworkContext> VerifyRehydratedCurrentAsync(
+        VerifiedXPointNetworkAuthority authority,
+        VerifiedAccountDirectoryFreshness trustedFreshness,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedXvp1Chain,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedXnv1Chain,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedXnh1Chain,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactActiveXnd1,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedPmt2Chain,
+        XPointNetworkProtectedLkg protectedCurrent,
+        OnionTrustedTimeAuthority trustedTimeAuthority,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(protectedCurrent);
+        var candidate = await XPointOnionCapabilityProducer.VerifyAsync(
+            authority, trustedFreshness, exactOrderedXvp1Chain, exactOrderedXnv1Chain,
+            exactOrderedXnh1Chain, exactActiveXnd1, exactOrderedPmt2Chain,
+            null, trustedTimeAuthority,
+            cancellationToken).ConfigureAwait(false);
+        var candidateLkg = candidate.ProtectedLkg ?? throw new OnionBoundaryException(
+            "network-context-incomplete",
+            "The verified network package did not produce a protected LKG.");
+        if (!SameProtectedLkg(candidateLkg, protectedCurrent))
+            throw new OnionBoundaryException(
+                "network-rehydration-mismatch",
+                "The genesis-verified network package does not exactly match the caller-protected current LKG.");
+        return candidate;
+    }
+
     public static ValueTask<VerifiedOnionNetworkContext> VerifyFromForwardCheckpointAsync(
         VerifiedXPointNetworkAuthority authority,
         VerifiedAccountDirectoryFreshness trustedFreshness,
@@ -539,6 +574,22 @@ public static class OnionNetworkContextVerifier
             cancellationToken,
             forwardCheckpoint);
     }
+
+    private static bool SameProtectedLkg(
+        XPointNetworkProtectedLkg left,
+        XPointNetworkProtectedLkg right) =>
+        Fixed(left.NetworkId.Span, right.NetworkId.Span)
+        && Fixed(left.HeadCoreReference.Span, right.HeadCoreReference.Span)
+        && left.HeadTreeSize == right.HeadTreeSize
+        && Fixed(left.HeadRoot.Span, right.HeadRoot.Span)
+        && Fixed(left.ViewCoreReference.Span, right.ViewCoreReference.Span)
+        && left.ViewGeneration == right.ViewGeneration
+        && Fixed(left.AuthorityCoreReference.Span, right.AuthorityCoreReference.Span)
+        && Fixed(left.LastForwardCheckpointCoreReference.Span, right.LastForwardCheckpointCoreReference.Span)
+        && left.LastForwardCheckpointGeneration == right.LastForwardCheckpointGeneration;
+
+    private static bool Fixed(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right) =>
+        left.Length == right.Length && CryptographicOperations.FixedTimeEquals(left, right);
 }
 
 /// <summary>

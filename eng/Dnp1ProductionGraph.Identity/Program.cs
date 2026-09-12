@@ -556,7 +556,7 @@ internal static class GraphPolicy
         {
             ["Deep.Protocol"] =
             [
-                "Deep.Protocol|11288|2BB75A19C16FA6394B3B29922CC8A6185F8642652D7E1019562EA9C3FBEF8AE3"
+                "Deep.Protocol|11289|7CFBFE965B3E8BDB200CA4DEF29DC8FFB366EE31FE0CAF37ECEB4B1A82A4233A"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [
