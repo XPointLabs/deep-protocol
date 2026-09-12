@@ -23,6 +23,7 @@ public sealed class Xpc1PreKeyClaimReceiptException : CryptographicException
 /// </summary>
 public sealed class VerifiedXpc1PreKeyClaimReceipt
 {
+    private readonly VerifiedDpk2Offering _offering;
     private readonly byte[] _networkId;
     private readonly byte[] _operationId;
     private readonly byte[] _requestHash;
@@ -47,6 +48,7 @@ public sealed class VerifiedXpc1PreKeyClaimReceipt
         ReadOnlySpan<byte> fullExactReplayHash,
         IReadOnlyList<VerifiedNetworkNode> replicas)
     {
+        _offering = new VerifiedDpk2Offering(dpk2, exactDpk2Hash.ToArray());
         _networkId = request.NetworkId.ToArray();
         _operationId = request.OperationId.ToArray();
         _requestHash = request.RequestHash.ToArray();
@@ -109,11 +111,13 @@ public sealed class VerifiedXpc1PreKeyClaimReceipt
              (lastResortUseCounter is < 1 or > 64 || lastResortUseCounter > dpk2.ReuseLimit)))
             throw new ArgumentOutOfRangeException(nameof(lastResortUseCounter));
 
+        var exactDpk2Hash = MessagingWireCryptographicInputs.ComputeExactDpk2Hash(dpk2);
+        _offering = new VerifiedDpk2Offering(dpk2, exactDpk2Hash);
         _networkId = dpk2.NetworkId.ToArray();
         _operationId = operationId.ToArray();
         _requestHash = SHA256.HashData(operationId);
         _claimReceiptHash = claimReceiptHash.ToArray();
-        _exactDpk2Hash = MessagingWireCryptographicInputs.ComputeExactDpk2Hash(dpk2);
+        _exactDpk2Hash = exactDpk2Hash;
         _xpi1Hash = SHA256.HashData(dpk2.BundleId.Span);
         _responderAccountId = dpk2.ResponderAccountId.ToArray();
         _responderDeviceId = dpk2.ResponderDeviceId.ToArray();
@@ -139,6 +143,12 @@ public sealed class VerifiedXpc1PreKeyClaimReceipt
 #endif
 
     public ReadOnlyMemory<byte> NetworkId => _networkId.ToArray();
+    /// <summary>
+    /// The exact DPK2 selected and authenticated by this XPC1 receipt. This is
+    /// public pre-key material; the corresponding secrets remain solely with
+    /// the responder's pre-key owner.
+    /// </summary>
+    public VerifiedDpk2Offering Offering => _offering;
     public ReadOnlyMemory<byte> OperationId => _operationId.ToArray();
     public ReadOnlyMemory<byte> RequestHash => _requestHash.ToArray();
     public ReadOnlyMemory<byte> ClaimReceiptHash => _claimReceiptHash.ToArray();

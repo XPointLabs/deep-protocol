@@ -40,6 +40,77 @@ public sealed class ManagedInitiatorInitialSessionFactory
     }
 
     /// <summary>
+    /// Creates the public correlation values which must be committed by XPK1
+    /// before the resolver selects and returns an exact DPK2 offering. No
+    /// device agreement is performed and no native PQ provider is loaded in
+    /// this phase.
+    /// </summary>
+    public InitiatorDph2PreKeyClaim BeginClaim(
+        LocalDeviceX25519AgreementAuthority localAuthority,
+        Dmd1LineageState exactCurrentDirectory)
+    {
+        ArgumentNullException.ThrowIfNull(localAuthority);
+        ArgumentNullException.ThrowIfNull(exactCurrentDirectory);
+        var directory = localAuthority
+            .RequireActiveDirectoryForProtocolOperation(exactCurrentDirectory)
+            .Record;
+        var operationId = RandomNonzero32();
+        return BeginClaimCore(
+            InitiatorAgreementFacts.FromAuthority(
+                localAuthority,
+                directory.DirectoryGeneration,
+                directory.RecordHash.Span,
+                operationId),
+            FillProductionEntropy);
+    }
+
+    /// <summary>
+    /// Consumes a pre-XPK1 claim and the matching operation-bound device lease
+    /// after XPC1 has returned a verifier-minted exact DPK2 offering.
+    /// </summary>
+    public InitiatorDph2ClaimPreparation CompleteClaim(
+        InitiatorDph2PreKeyClaim startedClaim,
+        VerifiedDpk2Offering verifiedOffering,
+        LocalDeviceX25519AgreementLease deviceAgreementLease)
+    {
+        ArgumentNullException.ThrowIfNull(startedClaim);
+        ArgumentNullException.ThrowIfNull(verifiedOffering);
+        ArgumentNullException.ThrowIfNull(deviceAgreementLease);
+
+        DeepMlKemNativeProvider? mlKem = null;
+        DeepMlKemBraidProductionRuntime? braid = null;
+        InitiatorDph2PreKeyClaimMaterial? material = null;
+        try
+        {
+            // Provider readiness is checked before either one-shot authority is
+            // consumed. A missing approved binary cannot burn the durable
+            // device-agreement operation or the pre-XPK1 entropy.
+            mlKem = DeepMlKemNativeProvider.LoadApprovedForCurrentProcess();
+            braid = DeepMlKemBraidProductionRuntime.CreateApprovedForCurrentProcess();
+            material = startedClaim.Consume();
+            var result = PrepareStartedWithLease(
+                material,
+                verifiedOffering,
+                deviceAgreementLease,
+                mlKem,
+                mlKem,
+                braid,
+                stateFactory: null,
+                FillProductionEntropy);
+            material = null;
+            mlKem = null;
+            braid = null;
+            return result;
+        }
+        finally
+        {
+            material?.Dispose();
+            mlKem?.Dispose();
+            braid?.Dispose();
+        }
+    }
+
+    /// <summary>
     /// Consumes one operation-bound device-agreement lease and owns fresh
     /// initiator ephemeral/tag-18 keys. The returned commitment is the only
     /// public value that must be placed in XPK1.
@@ -172,6 +243,117 @@ public sealed class ManagedInitiatorInitialSessionFactory
         }
     }
 
+    private InitiatorDph2ClaimPreparation PrepareStartedWithLease(
+        InitiatorDph2PreKeyClaimMaterial material,
+        VerifiedDpk2Offering verifiedOffering,
+        LocalDeviceX25519AgreementLease lease,
+        IMlKem768Provider mlKem,
+        IDisposable mlKemOwner,
+        DeepMlKemBraidProductionRuntime braidRuntime,
+#if DEEP_PROTOCOL_RECOVERY_TEST_SEAM
+        InitiatorInitialRatchetStateFactory? stateFactory,
+#else
+        object? stateFactory,
+#endif
+        InitiatorInitialSessionEntropyCore entropy)
+    {
+        var transferred = false;
+        PreparedHybridInitiation? prepared = null;
+        byte[]? ephemeralPrivate = null;
+        byte[]? ratchetPrivate = null;
+        try
+        {
+            var leased = InitiatorAgreementFacts.FromLease(lease);
+            material.Local.RequireSame(leased);
+            RequireOfferingAndLocalBinding(verifiedOffering, verifiedOffering.Record, leased);
+            ephemeralPrivate = material.CopyEphemeralPrivate();
+            prepared = HybridPreKeyHandshake.PrepareInitiation(
+                lease,
+                leased.OperationBinding,
+                ephemeralPrivate,
+                verifiedOffering.Record.DeviceAgreementPublicKeySpan,
+                verifiedOffering.Record.SignedX25519PrekeyPublicSpan,
+                verifiedOffering.Record.OneTimeX25519PrekeyPublicSpan,
+                verifiedOffering.Record.MlKem768EncapsulationKeySpan,
+                mlKem);
+            ratchetPrivate = material.CopyInitialRatchetPrivate();
+            var result = new InitiatorDph2ClaimPreparation(
+                verifiedOffering,
+                leased,
+                prepared,
+                material.EphemeralPublic,
+                ratchetPrivate,
+                material.InitialRatchetPublic,
+                material.SenderEphemeralCommitment,
+                mlKem,
+                mlKemOwner,
+                braidRuntime,
+                stateFactory,
+                entropy,
+                _maximumMessagesWithoutPqInjection);
+            prepared = null;
+            mlKemOwner = null!;
+            braidRuntime = null!;
+            transferred = true;
+            return result;
+        }
+        finally
+        {
+            prepared?.Dispose();
+            lease.Dispose();
+            if (!transferred)
+            {
+                mlKemOwner?.Dispose();
+                braidRuntime?.Dispose();
+            }
+            material.Dispose();
+            Zero(ephemeralPrivate);
+            Zero(ratchetPrivate);
+        }
+    }
+
+    private static InitiatorDph2PreKeyClaim BeginClaimCore(
+        InitiatorAgreementFacts local,
+        InitiatorInitialSessionEntropyCore entropy)
+    {
+        byte[]? ephemeralPrivate = null;
+        byte[]? ephemeralPublic = null;
+        byte[]? ratchetPrivate = null;
+        byte[]? ratchetPublic = null;
+        byte[]? senderCommitment = null;
+        try
+        {
+            (ephemeralPrivate, ephemeralPublic) = GenerateX25519KeyPair(entropy);
+            (ratchetPrivate, ratchetPublic) = GenerateX25519KeyPair(entropy);
+            senderCommitment = MessagingWireCryptographicInputs.ComputeSenderEphemeralCommitment(
+                local.NetworkId,
+                local.AccountId,
+                local.DeviceId,
+                Dpd1Reference(local.ExactDpd1Hash),
+                local.AgreementPublicKey,
+                ephemeralPublic,
+                ratchetPublic);
+            var result = new InitiatorDph2PreKeyClaim(
+                local,
+                ephemeralPrivate,
+                ephemeralPublic,
+                ratchetPrivate,
+                ratchetPublic,
+                senderCommitment);
+            ephemeralPrivate = null;
+            ratchetPrivate = null;
+            return result;
+        }
+        finally
+        {
+            Zero(ephemeralPrivate);
+            Zero(ephemeralPublic);
+            Zero(ratchetPrivate);
+            Zero(ratchetPublic);
+            Zero(senderCommitment);
+        }
+    }
+
     private InitiatorDph2ClaimPreparation PrepareCore(
         VerifiedDpk2Offering verifiedOffering,
         InitiatorAgreementFacts local,
@@ -292,6 +474,14 @@ public sealed class ManagedInitiatorInitialSessionFactory
     private static void FillProductionEntropy(Span<byte> destination) =>
         RandomNumberGenerator.Fill(destination);
 
+    private static byte[] RandomNonzero32()
+    {
+        var value = new byte[32];
+        do RandomNumberGenerator.Fill(value);
+        while (MessagingCryptoValidation.IsZero(value));
+        return value;
+    }
+
     private static bool Fixed(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right) =>
         left.Length == right.Length && CryptographicOperations.FixedTimeEquals(left, right);
 
@@ -384,8 +574,145 @@ public sealed class ManagedInitiatorInitialSessionFactory
 }
 
 /// <summary>
-/// Single-use owner of the fresh DPH2 initiator material created before XPK1.
-/// It exposes only public claim correlation data.
+/// Single-use owner of the fresh public correlation and private ephemeral
+/// material created before XPK1. It deliberately has no responder identity or
+/// pre-key because those are selected and authenticated by XPC1.
+/// </summary>
+public sealed class InitiatorDph2PreKeyClaim : IDisposable
+{
+    private readonly object _gate = new();
+    private readonly InitiatorAgreementFacts _local;
+    private readonly byte[] _senderCommitment;
+    private SecretBuffer? _ephemeralPrivate;
+    private SecretBuffer? _initialRatchetPrivate;
+    private byte[]? _ephemeralPublic;
+    private byte[]? _initialRatchetPublic;
+    private int _state;
+
+    internal InitiatorDph2PreKeyClaim(
+        InitiatorAgreementFacts local,
+        ReadOnlySpan<byte> ephemeralPrivate,
+        ReadOnlySpan<byte> ephemeralPublic,
+        ReadOnlySpan<byte> initialRatchetPrivate,
+        ReadOnlySpan<byte> initialRatchetPublic,
+        ReadOnlySpan<byte> senderCommitment)
+    {
+        _local = local ?? throw new ArgumentNullException(nameof(local));
+        _ephemeralPrivate = SecretBuffer.ImportExact(
+            ephemeralPrivate, 32, nameof(ephemeralPrivate));
+        _initialRatchetPrivate = SecretBuffer.ImportExact(
+            initialRatchetPrivate, 32, nameof(initialRatchetPrivate));
+        MessagingCryptoFaultInjection.OwnedSecret(
+            "initial-session.preclaim-ephemeral-private", _ephemeralPrivate);
+        MessagingCryptoFaultInjection.OwnedSecret(
+            "initial-session.preclaim-ratchet-private", _initialRatchetPrivate);
+        _ephemeralPublic = ephemeralPublic.ToArray();
+        _initialRatchetPublic = initialRatchetPublic.ToArray();
+        _senderCommitment = senderCommitment.ToArray();
+    }
+
+    ~InitiatorDph2PreKeyClaim() => DisposeCore();
+
+    public ReadOnlyMemory<byte> NetworkId => _local.NetworkId.ToArray();
+    public ReadOnlyMemory<byte> ClaimOperationId => _local.OperationBinding.ToArray();
+    public ReadOnlyMemory<byte> SenderEphemeralCommitment => _senderCommitment.ToArray();
+
+    internal InitiatorDph2PreKeyClaimMaterial Consume()
+    {
+        lock (_gate)
+        {
+            if (Interlocked.CompareExchange(ref _state, 1, 0) != 0)
+                throw new InvalidOperationException("The pre-XPK1 DPH2 claim is single-use.");
+            var ephemeral = Interlocked.Exchange(ref _ephemeralPrivate, null)
+                ?? throw new ObjectDisposedException(nameof(InitiatorDph2PreKeyClaim));
+            var ratchet = Interlocked.Exchange(ref _initialRatchetPrivate, null)
+                ?? throw new ObjectDisposedException(nameof(InitiatorDph2PreKeyClaim));
+            var ephemeralPublic = Interlocked.Exchange(ref _ephemeralPublic, null)!;
+            var ratchetPublic = Interlocked.Exchange(ref _initialRatchetPublic, null)!;
+            return new InitiatorDph2PreKeyClaimMaterial(
+                _local,
+                ephemeral,
+                ephemeralPublic,
+                ratchet,
+                ratchetPublic,
+                _senderCommitment);
+        }
+    }
+
+    public void Dispose()
+    {
+        DisposeCore();
+        GC.SuppressFinalize(this);
+    }
+
+    private void DisposeCore()
+    {
+        lock (_gate)
+        {
+            if (Interlocked.Exchange(ref _state, 2) == 2) return;
+            Interlocked.Exchange(ref _ephemeralPrivate, null)?.Dispose();
+            Interlocked.Exchange(ref _initialRatchetPrivate, null)?.Dispose();
+            var ephemeral = Interlocked.Exchange(ref _ephemeralPublic, null);
+            var ratchet = Interlocked.Exchange(ref _initialRatchetPublic, null);
+            if (ephemeral is not null) CryptographicOperations.ZeroMemory(ephemeral);
+            if (ratchet is not null) CryptographicOperations.ZeroMemory(ratchet);
+        }
+    }
+}
+
+internal sealed class InitiatorDph2PreKeyClaimMaterial : IDisposable
+{
+    private SecretBuffer? _ephemeralPrivate;
+    private SecretBuffer? _initialRatchetPrivate;
+    private byte[]? _ephemeralPublic;
+    private byte[]? _initialRatchetPublic;
+    private byte[]? _senderCommitment;
+
+    internal InitiatorDph2PreKeyClaimMaterial(
+        InitiatorAgreementFacts local,
+        SecretBuffer ephemeralPrivate,
+        byte[] ephemeralPublic,
+        SecretBuffer initialRatchetPrivate,
+        byte[] initialRatchetPublic,
+        ReadOnlySpan<byte> senderCommitment)
+    {
+        Local = local;
+        _ephemeralPrivate = ephemeralPrivate;
+        _ephemeralPublic = ephemeralPublic;
+        _initialRatchetPrivate = initialRatchetPrivate;
+        _initialRatchetPublic = initialRatchetPublic;
+        _senderCommitment = senderCommitment.ToArray();
+    }
+
+    internal InitiatorAgreementFacts Local { get; }
+    internal ReadOnlySpan<byte> EphemeralPublic => Value(_ephemeralPublic);
+    internal ReadOnlySpan<byte> InitialRatchetPublic => Value(_initialRatchetPublic);
+    internal ReadOnlySpan<byte> SenderEphemeralCommitment => Value(_senderCommitment);
+    internal byte[] CopyEphemeralPrivate() =>
+        (_ephemeralPrivate ?? throw new ObjectDisposedException(GetType().Name)).Copy();
+    internal byte[] CopyInitialRatchetPrivate() =>
+        (_initialRatchetPrivate ?? throw new ObjectDisposedException(GetType().Name)).Copy();
+
+    public void Dispose()
+    {
+        Interlocked.Exchange(ref _ephemeralPrivate, null)?.Dispose();
+        Interlocked.Exchange(ref _initialRatchetPrivate, null)?.Dispose();
+        Zero(Interlocked.Exchange(ref _ephemeralPublic, null));
+        Zero(Interlocked.Exchange(ref _initialRatchetPublic, null));
+        Zero(Interlocked.Exchange(ref _senderCommitment, null));
+    }
+
+    private static byte[] Value(byte[]? value) =>
+        value ?? throw new ObjectDisposedException(nameof(InitiatorDph2PreKeyClaimMaterial));
+    private static void Zero(byte[]? value)
+    {
+        if (value is not null) CryptographicOperations.ZeroMemory(value);
+    }
+}
+
+/// <summary>
+/// Single-use owner of the verified DPK2-bound DPH2 initiator material. It
+/// exposes only public claim correlation data.
 /// </summary>
 public sealed class InitiatorDph2ClaimPreparation : IDisposable
 {
@@ -1063,6 +1390,25 @@ internal sealed class InitiatorAgreementFacts
     internal byte[] AgreementPublicKey { get; }
     internal byte[] OperationBinding { get; }
 
+    internal static InitiatorAgreementFacts FromAuthority(
+        LocalDeviceX25519AgreementAuthority authority,
+        ulong directoryGeneration,
+        ReadOnlySpan<byte> exactDirectoryHash,
+        ReadOnlySpan<byte> operationBinding)
+    {
+        ArgumentNullException.ThrowIfNull(authority);
+        return new InitiatorAgreementFacts(
+            authority.NetworkId.Span,
+            authority.AccountId.Span,
+            authority.DeviceId.Span,
+            authority.DeviceGeneration,
+            authority.ExactDpd1Hash.Span,
+            directoryGeneration,
+            exactDirectoryHash,
+            authority.AgreementPublicKey.Span,
+            operationBinding);
+    }
+
     internal static InitiatorAgreementFacts FromLease(LocalDeviceX25519AgreementLease lease) =>
         new(
             lease.NetworkId.Span,
@@ -1074,4 +1420,25 @@ internal sealed class InitiatorAgreementFacts
             lease.ExactDirectoryHash.Span,
             lease.AgreementPublicKey.Span,
             lease.OperationBinding.Span);
+
+    internal void RequireSame(InitiatorAgreementFacts other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+        if (DeviceGeneration != other.DeviceGeneration ||
+            DirectoryGeneration != other.DirectoryGeneration ||
+            !Fixed(NetworkId, other.NetworkId) ||
+            !Fixed(AccountId, other.AccountId) ||
+            !Fixed(DeviceId, other.DeviceId) ||
+            !Fixed(ExactDpd1Hash, other.ExactDpd1Hash) ||
+            !Fixed(ExactDirectoryHash, other.ExactDirectoryHash) ||
+            !Fixed(AgreementPublicKey, other.AgreementPublicKey) ||
+            !Fixed(OperationBinding, other.OperationBinding))
+        {
+            throw new CryptographicException(
+                "The device-agreement lease does not match the exact pre-XPK1 claim.");
+        }
+    }
+
+    private static bool Fixed(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right) =>
+        left.Length == right.Length && CryptographicOperations.FixedTimeEquals(left, right);
 }

@@ -57,6 +57,12 @@ public sealed class VerifiedDpk2Offering
     public ReadOnlyMemory<byte> ResponderAccountId => Record.ResponderAccountId;
     public ReadOnlyMemory<byte> ResponderDeviceId => Record.ResponderDeviceId;
     public ulong ResponderDeviceGeneration => Record.ResponderDeviceGeneration;
+    /// <summary>
+    /// Exact responder signed-prekey public value to which the initiator's
+    /// durable device-agreement authorization must be bound.
+    /// </summary>
+    public ReadOnlyMemory<byte> InitiatorAgreementPeerPublicKey =>
+        Record.SignedX25519PrekeyPublic;
     public ReadOnlyMemory<byte> ExactBytes => Dpk2Codec.Encode(Record);
     private readonly byte[] _exactHash;
 }

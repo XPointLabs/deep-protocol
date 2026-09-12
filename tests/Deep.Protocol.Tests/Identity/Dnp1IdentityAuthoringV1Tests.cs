@@ -772,6 +772,32 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
     }
 
     [Fact]
+    public async Task InitiatorPreKeyClaim_IsCreatedBeforeResponderPreKeySelection()
+    {
+        using var recovery = Recovery(Network);
+        var account = Dnp1IdentityAuthoringV1.AuthorGenesisAccount(
+            recovery, 1_900_000_000, 1, new FillRandom(0xa1));
+        using var device = Device();
+        var issued = await IssueDevice(recovery, account, device);
+        var directory = ExactDirectory(account, issued);
+        using var authority = device.CreateAgreementAuthority(issued.Verified);
+        var factory = new ManagedInitiatorInitialSessionFactory(128);
+
+        using var first = factory.BeginClaim(authority, CurrentDirectory(directory));
+        using var second = factory.BeginClaim(authority, CurrentDirectory(directory));
+
+        Assert.Equal(authority.NetworkId.ToArray(), first.NetworkId.ToArray());
+        Assert.Equal(32, first.ClaimOperationId.Length);
+        Assert.Equal(32, first.SenderEphemeralCommitment.Length);
+        Assert.Contains(first.ClaimOperationId.ToArray(), static value => value != 0);
+        Assert.Contains(first.SenderEphemeralCommitment.ToArray(), static value => value != 0);
+        Assert.NotEqual(first.ClaimOperationId.ToArray(), second.ClaimOperationId.ToArray());
+        Assert.NotEqual(
+            first.SenderEphemeralCommitment.ToArray(),
+            second.SenderEphemeralCommitment.ToArray());
+    }
+
+    [Fact]
     public async Task DeviceAgreementLease_HostileBindingDoesNotConsumeButReplayFailsClosed()
     {
         using var recovery = Recovery(Network);

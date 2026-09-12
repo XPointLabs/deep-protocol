@@ -26,6 +26,10 @@ public sealed class Xpc1PreKeyClaimReceiptVerifierTests
         Assert.Equal((ushort)0, verified.InventoryIndex);
         Assert.Equal(fixture.Dpk2.OneTimeX25519PrekeyId.ToArray(), verified.SelectedOneTimePrekeyId.ToArray());
         Assert.Equal(2, verified.ReplicaNodeIds.Count);
+        Assert.Equal(Dpk2Codec.Encode(fixture.Dpk2), verified.Offering.ExactBytes.ToArray());
+        Assert.Equal(
+            fixture.Dpk2.SignedX25519PrekeyPublic.ToArray(),
+            verified.Offering.InitiatorAgreementPeerPublicKey.ToArray());
 
         var network = verified.NetworkId.ToArray();
         network[0] ^= 0xff;
