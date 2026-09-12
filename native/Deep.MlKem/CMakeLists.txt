@@ -59,6 +59,7 @@ else()
   foreach(DEEP_MLKEM_TARGET deep_mlkem_provider deep_mlkem)
     target_compile_options(${DEEP_MLKEM_TARGET} PRIVATE
       -Wall -Wextra -Wpedantic -Werror
+      $<$<CONFIG:Release>:-g0>
       -fstack-protector-strong
       -fvisibility=hidden
       -ffunction-sections
@@ -66,6 +67,7 @@ else()
   endforeach()
   target_link_options(deep_mlkem PRIVATE
     -Wl,--gc-sections
+    $<$<CONFIG:Release>:-Wl,--strip-debug,--build-id=sha1>
     -Wl,--no-undefined
     -Wl,-z,relro,-z,now)
 endif()
