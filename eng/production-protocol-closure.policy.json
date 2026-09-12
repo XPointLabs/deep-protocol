@@ -19,6 +19,8 @@
       "packInputs": [
         "build:Deep.Protocol.dll",
         "build:Deep.Protocol.pdb",
+        "src/Deep.Protocol/runtimes/android-arm64/native/libdeep_mlkem.so",
+        "src/Deep.Protocol/runtimes/android-arm64/native/libdeep_mlkem_braid.so",
         "src/Deep.Protocol/runtimes/win-arm64/native/deep_mlkem.dll",
         "src/Deep.Protocol/runtimes/win-arm64/native/deep_mlkem_braid.dll",
         "src/Deep.Protocol/runtimes/win-x64/native/deep_mlkem.dll",
@@ -27,6 +29,8 @@
       "packTargets": [
         "lib/net10.0/Deep.Protocol.dll",
         "lib/net10.0/Deep.Protocol.pdb",
+        "runtimes/android-arm64/native/libdeep_mlkem.so",
+        "runtimes/android-arm64/native/libdeep_mlkem_braid.so",
         "runtimes/win-arm64/native/deep_mlkem.dll",
         "runtimes/win-arm64/native/deep_mlkem_braid.dll",
         "runtimes/win-x64/native/deep_mlkem.dll",

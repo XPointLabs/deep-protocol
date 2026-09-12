@@ -61,7 +61,15 @@ function Invoke-Git([string] $Repository, [string[]] $Arguments) {
 
 function Assert-ExactPolicy([Collections.IDictionary] $Policy) {
     $expected = [ordered]@{
-        'Deep.Protocol' = [ordered]@{ project = 'src/Deep.Protocol/Deep.Protocol.csproj'; packages = @('Sodium.Core=[1.4.1]'); projects = @(); targets = @('lib/net10.0/Deep.Protocol.dll', 'lib/net10.0/Deep.Protocol.pdb') }
+        'Deep.Protocol' = [ordered]@{ project = 'src/Deep.Protocol/Deep.Protocol.csproj'; packages = @('Sodium.Core=[1.4.1]'); projects = @(); targets = @(
+            'lib/net10.0/Deep.Protocol.dll',
+            'lib/net10.0/Deep.Protocol.pdb',
+            'runtimes/android-arm64/native/libdeep_mlkem.so',
+            'runtimes/android-arm64/native/libdeep_mlkem_braid.so',
+            'runtimes/win-arm64/native/deep_mlkem.dll',
+            'runtimes/win-arm64/native/deep_mlkem_braid.dll',
+            'runtimes/win-x64/native/deep_mlkem.dll',
+            'runtimes/win-x64/native/deep_mlkem_braid.dll') }
         'Deep.Protocol.MembershipRoutes' = [ordered]@{ project = 'src/Deep.Protocol.MembershipRoutes/Deep.Protocol.MembershipRoutes.csproj'; packages = @(); projects = @('Deep.Protocol'); targets = @('lib/net10.0/Deep.Protocol.MembershipRoutes.dll', 'lib/net10.0/Deep.Protocol.MembershipRoutes.pdb') }
         'Deep.Protocol.ProfileCarrier' = [ordered]@{ project = 'src/Deep.Protocol.ProfileCarrier/Deep.Protocol.ProfileCarrier.csproj'; packages = @('libsodium=[1.0.22]', 'Sodium.Core=[1.4.1]'); projects = @('Deep.Protocol'); targets = @('lib/net10.0/Deep.Protocol.ProfileCarrier.dll', 'lib/net10.0/Deep.Protocol.ProfileCarrier.pdb', 'README.md') }
     }
