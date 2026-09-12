@@ -166,6 +166,40 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
     }
 
     [Fact]
+    public async Task DurableVerifiedReplay_RestoresWithoutRecoveryAuthority()
+    {
+        byte[] dpa;
+        byte[] drs;
+        byte[] firstDpd;
+        var store = new DurableState();
+        using var device = Device();
+        using (var recovery = Recovery(Network))
+        {
+            var account = Dnp1IdentityAuthoringV1.AuthorGenesisAccount(
+                recovery, 1_900_000_000, 1, new FillRandom(0xa1));
+            dpa = account.CanonicalDpa1.ToArray();
+            drs = account.CanonicalDrs1.ToArray();
+            var first = await Dnp1IdentityAuthoringV1.IssueGenesisDeviceAsync(
+                recovery, account, device, new DurablePersistence(store),
+                1_900_000_100, 1_900_086_500, 1_900_172_900,
+                new FillRandom(0xb1, 0xb2, 0xb3), default);
+            firstDpd = first.IssuedDevice!.CanonicalDpd1.ToArray();
+        }
+
+        var restored = await Dnp1IdentityAuthoringV1.RestoreGenesisDeviceAsync(
+            dpa,
+            drs,
+            device,
+            new DurablePersistence(store),
+            2_000_000_100);
+
+        Assert.Equal(GenesisDeviceIssuanceStatus.Issued, restored.Status);
+        Assert.Equal(firstDpd, restored.IssuedDevice!.CanonicalDpd1.ToArray());
+        Assert.Equal(1, store.PendingWrites);
+        Assert.Equal(1, store.VerifiedCasWrites);
+    }
+
+    [Fact]
     public async Task DurableVerifiedReplay_DoesNotDependOnRotatedCurrentProfile()
     {
         using var recovery = Recovery(Network);
@@ -426,7 +460,12 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
         var authorMethods = typeof(Dnp1IdentityAuthoringV1)
             .GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
         Assert.Equal(
-            new[] { "AuthorGenesisAccount", "IssueGenesisDeviceAsync" },
+            new[]
+            {
+                "AuthorGenesisAccount",
+                "IssueGenesisDeviceAsync",
+                "RestoreGenesisDeviceAsync"
+            },
             authorMethods.Select(static method => method.Name).Order().ToArray());
         Assert.All(authorMethods.SelectMany(static method => method.GetParameters()),
             static parameter => Assert.False(typeof(Delegate).IsAssignableFrom(parameter.ParameterType)));

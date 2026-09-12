@@ -1160,6 +1160,65 @@ public static class Dnp1IdentityAuthoringV1
             issuedAtUnixSeconds, deviceExpiresAtUnixSeconds, retainedUntilUnixSeconds,
             SystemIdentityAuthoringRandom.Instance, cancellationToken).ConfigureAwait(false);
 
+    /// <summary>
+    /// Restores the exact durable generation-one device issuance without reopening
+    /// recovery authority. The persistence owner must return the previously sealed
+    /// DXP1/DXR1/DPD1 replay tuple; changed, missing, pending-aborted, or cross-account
+    /// evidence fails closed. This is the restart path used after a user deletes the
+    /// optional retained recovery phrase.
+    /// </summary>
+    public static async ValueTask<GenesisDeviceIssuanceResult> RestoreGenesisDeviceAsync(
+        ReadOnlyMemory<byte> canonicalDpa1,
+        ReadOnlyMemory<byte> canonicalDrs1,
+        OwnedGenesisDeviceSecrets deviceSecrets,
+        Dnp1IdentityIssuancePersistence persistence,
+        ulong transactionTimeUnixSeconds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(deviceSecrets);
+        ArgumentNullException.ThrowIfNull(persistence);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (transactionTimeUnixSeconds == 0)
+            throw new ArgumentOutOfRangeException(nameof(transactionTimeUnixSeconds));
+
+        var identity = new IdentityRelativeVerifier().VerifyGenesis(
+            canonicalDpa1.Span,
+            canonicalDrs1.Span,
+            [],
+            transactionTimeUnixSeconds);
+        var source = new DxpIdentityIssuanceSourceVerifier()
+            .CreateOfflineAccountDeviceGenesis(identity);
+        var subjectKey = CreateDeviceSubjectKey(
+            identity.Account.Certificate.NetworkId.Span,
+            identity.Account.DeepAccountIdHash.Span,
+            deviceSecrets.DeviceId.Bytes.Span,
+            deviceGeneration: 1);
+        try
+        {
+            var replayRequest = new DxpDeviceSubjectRequest(source, subjectKey);
+            var replay = await persistence.ReadByDeviceSubjectAsync(
+                    replayRequest,
+                    cancellationToken)
+                .ConfigureAwait(false)
+                ?? throw new RecordException(
+                    RecordError.InvalidTransition,
+                    "The durable genesis device issuance is unavailable.");
+            return await ReconcileAsync(
+                    persistence,
+                    identity,
+                    source,
+                    replayRequest,
+                    replay,
+                    deviceSecrets,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            Zero(subjectKey);
+        }
+    }
+
     internal static GenesisAccountAuthoringResult AuthorGenesisAccount(
         DeepRecoveryAccountCapabilities accountSecrets,
         ulong createdAtUnixSeconds,
