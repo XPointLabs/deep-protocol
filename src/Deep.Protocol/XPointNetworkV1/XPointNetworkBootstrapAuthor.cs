@@ -9,6 +9,7 @@ public enum XPointNetworkRootSignaturePurpose : byte
 {
     GenesisAuthority = 1,
     DirectoryTimeSourcePolicy = 2,
+    NetworkPolicy = 3,
 }
 
 public sealed class XPointNetworkBootstrapAuthoringException : CryptographicException

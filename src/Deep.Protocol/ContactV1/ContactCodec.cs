@@ -114,6 +114,10 @@ public static class ContactCodec
         => AuthorCore(magic, fields);
 #endif
 
+    internal static ContactRecord AuthorForOperationalAuthority(
+        string magic,
+        IReadOnlyList<ReadOnlyMemory<byte>> fields) => AuthorCore(magic, fields);
+
     private static ContactRecord AuthorCore(string magic, IReadOnlyList<ReadOnlyMemory<byte>> fields)
     {
         ArgumentNullException.ThrowIfNull(magic);
