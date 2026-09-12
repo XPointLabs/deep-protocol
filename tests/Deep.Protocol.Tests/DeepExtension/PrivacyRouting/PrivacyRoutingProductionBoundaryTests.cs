@@ -144,7 +144,7 @@ public sealed class PrivacyRoutingProductionBoundaryTests
             typeof(OnionNetworkContextVerifier).GetMethods(
                     BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly)
                 .Select(static method => method.Name).Order().ToArray());
-        Assert.Equal(["CreateContactResolver", "CreateGroupControl"],
+        Assert.Equal(["CreateContactResolver", "CreateGroupControl", "CreateMailbox"],
             typeof(OnionPathContextFactory).GetMethods(
                     BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly)
                 .Select(static method => method.Name).Order(StringComparer.Ordinal).ToArray());
@@ -199,6 +199,68 @@ public sealed class PrivacyRoutingProductionBoundaryTests
         Assert.Equal(OnionReceivePosition.Exit, exit.Position);
         Assert.Throws<OnionBoundaryException>(() => OnionPathContextFactory.CreateContactResolver(
             network, placement, nodes[0].NodeId, nodes[1].NodeId, Fill(0xff, 32)));
+    }
+
+    [Fact]
+    public void MailboxPathFactory_BindsClosedOperationAndExactVerifiedReplicaPair()
+    {
+        var time = new OnionTrustedTimeLease(
+            TimeProvider.System,
+            TimeSpan.FromMinutes(5),
+            Fill(0xf2, 32));
+        var nodes = new[]
+        {
+            Node(0x11, 0xa1, 0x31, roleMask: 1 << 0, failure: 0xd1),
+            Node(0x22, 0xa2, 0x32, roleMask: 1 << 1, failure: 0xd2),
+            Node(0x33, 0xa3, 0x33, roleMask: 1 << 2, failure: 0xd3),
+            Node(0x44, 0xa4, 0x34, roleMask: 1 << 2, failure: 0xd4)
+        };
+        var network = new VerifiedOnionNetworkContext(
+            Convert.FromHexString("00112233445566778899AABBCCDDEEFF"),
+            time,
+            nodes);
+
+        var path = OnionPathContextFactory.CreateMailbox(
+            network,
+            OnionOperation.Store,
+            nodes[2].NodeId,
+            nodes[3].NodeId,
+            nodes[0].NodeId,
+            nodes[1].NodeId,
+            nodes[2].NodeId);
+
+        Assert.Equal(nodes[0].NodeId, path.EntryRouterId.ToArray());
+        Assert.Equal(OnionOperation.Store, path.Operation);
+        var wrongExit = Assert.Throws<OnionBoundaryException>(() =>
+            OnionPathContextFactory.CreateMailbox(
+                network,
+                OnionOperation.Retrieve,
+                nodes[2].NodeId,
+                nodes[3].NodeId,
+                nodes[0].NodeId,
+                nodes[1].NodeId,
+                nodes[1].NodeId));
+        Assert.Equal("path-role-invalid", wrongExit.Code);
+        var wrongOperation = Assert.Throws<OnionBoundaryException>(() =>
+            OnionPathContextFactory.CreateMailbox(
+                network,
+                OnionOperation.ContactResolve,
+                nodes[2].NodeId,
+                nodes[3].NodeId,
+                nodes[0].NodeId,
+                nodes[1].NodeId,
+                nodes[2].NodeId));
+        Assert.Equal("mailbox-operation-invalid", wrongOperation.Code);
+        var duplicate = Assert.Throws<OnionBoundaryException>(() =>
+            OnionPathContextFactory.CreateMailbox(
+                network,
+                OnionOperation.Acknowledge,
+                nodes[2].NodeId,
+                nodes[2].NodeId,
+                nodes[0].NodeId,
+                nodes[1].NodeId,
+                nodes[2].NodeId));
+        Assert.Equal("mailbox-replica-duplicate", duplicate.Code);
     }
 
     [Fact]

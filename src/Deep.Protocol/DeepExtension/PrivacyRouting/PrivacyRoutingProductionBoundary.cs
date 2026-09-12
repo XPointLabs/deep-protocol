@@ -734,6 +734,81 @@ public static class GroupControlPlacementVerifier
 
 public static class OnionPathContextFactory
 {
+    public static VerifiedOnionPathContext CreateMailbox(
+        VerifiedOnionNetworkContext network,
+        OnionOperation operation,
+        ReadOnlyMemory<byte> firstReplicaNodeId,
+        ReadOnlyMemory<byte> secondReplicaNodeId,
+        ReadOnlyMemory<byte> ingressNodeId,
+        ReadOnlyMemory<byte> coreNodeId,
+        ReadOnlyMemory<byte> exitNodeId)
+    {
+        ArgumentNullException.ThrowIfNull(network);
+        if (operation is not (
+                OnionOperation.Store or
+                OnionOperation.Retrieve or
+                OnionOperation.Acknowledge))
+        {
+            throw new OnionBoundaryException(
+                "mailbox-operation-invalid",
+                "A mailbox path accepts only Store, Retrieve, or Acknowledge operations.");
+        }
+
+        var trustedTime = network.TrustedTime ?? throw new OnionBoundaryException(
+            "network-context-incomplete", "The network context was not minted from a complete production closure.");
+        trustedTime.EnsureLive();
+
+        var replicas = new[]
+        {
+            network.ResolveNode(firstReplicaNodeId.Span),
+            network.ResolveNode(secondReplicaNodeId.Span)
+        };
+        if (CryptographicOperations.FixedTimeEquals(replicas[0].NodeId, replicas[1].NodeId))
+        {
+            throw new OnionBoundaryException(
+                "mailbox-replica-duplicate",
+                "The verified mailbox placement must contain two distinct replicas.");
+        }
+        foreach (var replica in replicas)
+        {
+            RequireRole(replica, 2, "Mailbox replica");
+            if (replica.MailboxCapacity == 0)
+            {
+                throw new OnionBoundaryException(
+                    "mailbox-replica-capacity-invalid",
+                    "A verified mailbox replica must advertise non-zero mailbox capacity.");
+            }
+        }
+
+        var nodes = new[]
+        {
+            network.ResolveNode(ingressNodeId.Span),
+            network.ResolveNode(coreNodeId.Span),
+            network.ResolveNode(exitNodeId.Span)
+        };
+        RequireRole(nodes[0], 0, "Ingress");
+        RequireRole(nodes[1], 1, "Core");
+        RequireRole(nodes[2], 2, "Exit");
+        if (nodes[2].MailboxCapacity == 0 ||
+            !replicas.Any(replica => CryptographicOperations.FixedTimeEquals(
+                replica.NodeId,
+                nodes[2].NodeId)))
+        {
+            throw new OnionBoundaryException(
+                "path-exit-placement-mismatch",
+                "The mailbox exit is not one of the exact verified placement replicas.");
+        }
+
+        RequireExactPathDiversity(nodes);
+        var route = new[]
+        {
+            Hop(nodes[0], PrivacyRoutingKeyRole.Relay),
+            Hop(nodes[1], PrivacyRoutingKeyRole.Relay),
+            Hop(nodes[2], PrivacyRoutingKeyRole.Exit)
+        };
+        return new VerifiedOnionPathContext(network, trustedTime, operation, route);
+    }
+
     public static VerifiedOnionPathContext CreateContactResolver(
         VerifiedOnionNetworkContext network,
         VerifiedContactServicePlacement placement,

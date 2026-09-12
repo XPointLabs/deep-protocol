@@ -247,7 +247,7 @@ public sealed class XPointOnionCapabilityProducerTests
 
         var creates = typeof(OnionPathContextFactory).GetMethods(
             BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
-        Assert.Equal(["CreateContactResolver", "CreateGroupControl"],
+        Assert.Equal(["CreateContactResolver", "CreateGroupControl", "CreateMailbox"],
             creates.Select(static method => method.Name).Order(StringComparer.Ordinal).ToArray());
         Assert.All(creates, create => Assert.DoesNotContain(create.GetParameters(), parameter =>
             parameter.Name?.Contains("hop", StringComparison.OrdinalIgnoreCase) == true ||
