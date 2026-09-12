@@ -969,7 +969,7 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
 
         Assert.False(typeof(LocalDeviceX25519SharedSecret).IsPublic);
         var factory = Assert.Single(typeof(OwnedGenesisDeviceSecrets).GetMethods(
-            BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+            BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
             static method => method.Name == "CreateAgreementAuthority");
         Assert.Equal(typeof(LocalDeviceX25519AgreementAuthority), factory.ReturnType);
         Assert.Equal(typeof(VerifiedDeviceRelative), Assert.Single(factory.GetParameters()).ParameterType);
@@ -996,10 +996,13 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
             .Where(static method => method.ReturnType == typeof(LocalDeviceX25519AgreementLease))
             .ToArray();
         Assert.Same(openOperation, Assert.Single(publicLeaseProducers));
-        Assert.DoesNotContain(
-            typeof(DeepIdentityCrypto).Assembly.GetExportedTypes().SelectMany(static type =>
-                type.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance)),
-            static method => method.ReturnType == typeof(LocalDeviceX25519AgreementAuthority));
+        var publicAuthorityProducers = typeof(DeepIdentityCrypto).Assembly.GetExportedTypes()
+            .SelectMany(static type => type.GetMethods(
+                BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance))
+            .Where(static method =>
+                method.ReturnType == typeof(LocalDeviceX25519AgreementAuthority))
+            .ToArray();
+        Assert.Same(factory, Assert.Single(publicAuthorityProducers));
     }
 
     [Fact]

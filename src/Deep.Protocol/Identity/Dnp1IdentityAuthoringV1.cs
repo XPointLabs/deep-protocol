@@ -454,7 +454,13 @@ public sealed class OwnedGenesisDeviceSecrets : IDisposable
         }
     }
 
-    internal LocalDeviceX25519AgreementAuthority CreateAgreementAuthority(
+    /// <summary>
+    /// Opens a verifier-bound X25519 capability for this exact device. The
+    /// returned owner exposes no secret or unrestricted agreement primitive;
+    /// each operation still requires the current unforked DMD1 and a purpose-
+    /// bound one-shot lease.
+    /// </summary>
+    public LocalDeviceX25519AgreementAuthority CreateAgreementAuthority(
         VerifiedDeviceRelative verifiedDevice)
     {
         ArgumentNullException.ThrowIfNull(verifiedDevice);
