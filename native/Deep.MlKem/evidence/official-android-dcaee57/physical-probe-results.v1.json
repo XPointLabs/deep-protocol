@@ -1,0 +1,54 @@
+{
+  "schema": "deep/android-arm64-native-physical-probes/v1",
+  "authority": "Mr. X",
+  "verifiedAtUtc": "2026-09-12T20:55:23Z",
+  "deviceClass": "physical-android-arm64",
+  "deviceIdentifierRecorded": false,
+  "wholeKem": {
+    "providerIdentifier": "mlkem-native/v2.0.0/portable-c/deep-abi-v1",
+    "bytes": 67576,
+    "sha256": "5528f0ff05cbda00bdcd648ef72dcc870c3dde3535aa5f77457b554e93261fa5",
+    "runtime": {
+      "framework": ".NET 10.0.9",
+      "architecture": "arm64",
+      "androidApiLevel": 31
+    },
+    "checks": {
+      "packagedAssetValidated": true,
+      "approvedIdentityValidated": true,
+      "driftedApprovedIdentityRejected": true,
+      "initialProviderRoundTrip": true,
+      "disposedProviderRejected": true,
+      "providerReloadRoundTrip": true,
+      "productionRuntimeLoaded": true,
+      "disposedProductionRuntimeRejected": true,
+      "productionRuntimeReloaded": true
+    }
+  },
+  "braid": {
+    "providerIdentifier": "libcrux-ml-kem/0.0.10/deep-mlkem-braid-abi-v1",
+    "bytes": 612376,
+    "sha256": "dd51b21ddd836c84a978616596a749c34bf6258532e2ae2f931f235a124cacff",
+    "runtime": {
+      "framework": ".NET 10.0.9",
+      "architecture": "arm64",
+      "androidApiLevel": 31
+    },
+    "checks": {
+      "assetDigestValidated": true,
+      "productionApprovalLoaded": true,
+      "abiLoaded": true,
+      "roundTrip": true,
+      "ciphertext1NonZero": true,
+      "ciphertext2NonZero": true,
+      "senderSecretNonZero": true,
+      "recipientSecretNonZero": true,
+      "secretsEqual": true,
+      "singleUse": true,
+      "concurrentSingleConsumer": true,
+      "performanceCompleted": true,
+      "tenRoundTripsMilliseconds": 3.576,
+      "disposedProviderClosed": true
+    }
+  }
+}

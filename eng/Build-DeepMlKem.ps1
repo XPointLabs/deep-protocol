@@ -9,6 +9,8 @@ param(
 
     [string]$WindowsArm64AcceptancePath,
 
+    [string]$AndroidArm64AcceptancePath,
+
     [switch]$SkipReproducibilityCheck,
 
     [switch]$AllowDirtyDevelopmentBuild
@@ -946,6 +948,9 @@ if ($repositoryDirty) { $generatorArguments.AllowDirtyManifest = $true }
 if ($SkipReproducibilityCheck) { $generatorArguments.AllowIncompleteEvidence = $true }
 if (-not [string]::IsNullOrWhiteSpace($WindowsArm64AcceptancePath)) {
     $generatorArguments.WindowsArm64AcceptancePath = $WindowsArm64AcceptancePath
+}
+if (-not [string]::IsNullOrWhiteSpace($AndroidArm64AcceptancePath)) {
+    $generatorArguments.AndroidArm64AcceptancePath = $AndroidArm64AcceptancePath
 }
 & $generatorScript @generatorArguments
 Write-Host "Deep ML-KEM build complete. Manifest: $manifestPath"

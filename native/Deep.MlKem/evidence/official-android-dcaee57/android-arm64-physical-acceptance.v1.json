@@ -1,0 +1,31 @@
+{
+  "schema": "deep/android-arm64-mlkem-acceptance/v1",
+  "authority": "Mr. X",
+  "verifiedAtUtc": "2026-09-12T20:55:23Z",
+  "officialWorkflowRunId": 34717655976,
+  "officialArtifactId": 10305381124,
+  "sourceCommit": "dcaee57bdfb68424a491bd8900ba81df109dd141",
+  "buildManifestSha256": "97df844e598c5824a5cf681cdc7c22c4457aaacdbfcd93b127d59790ba036113",
+  "sha256SumsSha256": "c18936fefe65a1ade8a89270be1087a8301e37380d3d9fe012e3d08a22c311b3",
+  "runtimeSha256": "5528f0ff05cbda00bdcd648ef72dcc870c3dde3535aa5f77457b554e93261fa5",
+  "runtimeBytes": 67576,
+  "processRid": "android-arm64",
+  "dotnetRuntime": ".NET 10.0.9",
+  "androidApiLevel": 31,
+  "braidRuntimeSha256": "dd51b21ddd836c84a978616596a749c34bf6258532e2ae2f931f235a124cacff",
+  "braidRuntimeBytes": 612376,
+  "gates": {
+    "cleanDistinctPathRebuildMatched": "passed",
+    "exactExportSurface": "passed",
+    "finalRuntimeHardening": "passed",
+    "managedAbiKat": "passed",
+    "productionWrapperProbe": "passed",
+    "braidStateMachineProbe": "passed",
+    "braidConcurrentSingleConsumer": "passed"
+  },
+  "attestation": {
+    "githubArtifactAttestation": "passed",
+    "repositoryVisibility": "public",
+    "physicalEvidence": "physical-probe-results.v1.json"
+  }
+}

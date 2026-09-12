@@ -15,7 +15,7 @@ internal static class ProbeRunner
     internal static string Run(AssetManager? assets)
     {
         ArgumentNullException.ThrowIfNull(assets);
-        var approved = DeepMlKemAndroidProbeApprovedAssets.AndroidArm64;
+        var approved = DeepMlKemApprovedAssets.AndroidArm64;
         var checks = new ProbeChecks();
         var errorCode = "asset_package_validation_failed";
 

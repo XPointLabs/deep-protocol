@@ -1,20 +1,19 @@
 # Deep ML-KEM Android production-wrapper probe
 
 This isolated Android arm64 application exercises the existing internal
-`DeepMlKemNativeProvider` and `DeepMlKemProductionRuntime` against a fixed
-development-evidence identity for `libdeep_mlkem.so`. The identity is compiled
-only when `MlKemAndroidProbe=true`; ordinary `Deep.Protocol` builds retain the
-release allowlist and do not approve an Android asset.
+`DeepMlKemNativeProvider` and `DeepMlKemProductionRuntime` against the exact
+release-approved Android arm64 `libdeep_mlkem.so` identity. The probe is an
+isolated package and does not widen the production assembly surface.
 
 The native library is embedded in the APK as `deep-mlkem/libdeep_mlkem.so`.
 At runtime the probe verifies its exact byte length and SHA-256, stages it below
 `AppContext.BaseDirectory`, and invokes the production wrapper, which repeats
 the approved path, length, digest, ABI, export-size, and zeroization checks.
 
-Build only this probe with the existing development asset:
+Build only this probe with the official attested asset:
 
 ```powershell
-$asset = 'C:\Work\DeepSession\artifacts\deep-mlkem-android-dev-current\android-arm64\libdeep_mlkem.so'
+$asset = '<absolute-path-to-official-bundle>\mlkem\android-arm64\libdeep_mlkem.so'
 $sdk = 'C:\Program Files (x86)\Android\android-sdk'
 dotnet restore .\eng\Deep.MlKem.AndroidProbe\Deep.MlKem.AndroidProbe.csproj `
   "-p:DeepMlKemAndroidAsset=$asset" "-p:AndroidSdkDirectory=$sdk"
@@ -39,5 +38,6 @@ $apk = '<absolute-path-to-org.deep.protocol.mlkemprobe-Signed.apk>'
 API 26 support here is isolated cryptographic compatibility evidence only; it
 does not lower the first public application's API 28 signer-lineage requirement.
 The JSON contains no key material, ciphertext, shared secret, local path,
-device serial, model, or package/user data. Success is Android runtime evidence
-only and is not a provider, platform, or release approval claim.
+device serial, model, or package/user data. Success is physical Android runtime
+evidence for the already pinned artifact; the signed acceptance record remains
+the release authority.

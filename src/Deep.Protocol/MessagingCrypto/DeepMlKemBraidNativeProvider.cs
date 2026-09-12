@@ -44,28 +44,34 @@ internal static class DeepMlKemBraidApprovedAssets
     internal static DeepMlKemBraidApprovedAsset WindowsArm64Candidate { get; } =
         WindowsArm64 with { ApprovedForProduction = false };
 
-#if DEEP_MLKEM_ANDROID_PROBE
-    internal static DeepMlKemBraidApprovedAsset AndroidArm64ProbeCandidate { get; } = new(
+    internal static DeepMlKemBraidApprovedAsset AndroidArm64 { get; } = new(
         "android-arm64",
         "runtimes/android-arm64/native/libdeep_mlkem_braid.so",
-        612344,
-        "fa287d90ffff2c6e5b199c7f8ec487e16d989f75e39c2620b07c26e1dccbdf0d",
+        612376,
+        "dd51b21ddd836c84a978616596a749c34bf6258532e2ae2f931f235a124cacff",
         ManifestProviderIdentifier,
-        ApprovedForProduction: false);
+        ApprovedForProduction: true);
+
+#if DEEP_MLKEM_ANDROID_PROBE
+    internal static DeepMlKemBraidApprovedAsset AndroidArm64ProbeCandidate { get; } =
+        AndroidArm64 with { ApprovedForProduction = false };
 #endif
 
     internal static DeepMlKemBraidApprovedAsset ForCurrentProcess()
     {
-        if (!OperatingSystem.IsWindows())
-            throw new PlatformNotSupportedException(
-                "No release-approved incremental ML-KEM Braid asset exists for this operating system.");
-        return RuntimeInformation.ProcessArchitecture switch
-        {
-            Architecture.X64 => WindowsX64,
-            Architecture.Arm64 => WindowsArm64,
-            _ => throw new PlatformNotSupportedException(
-                "No release-approved incremental ML-KEM Braid asset exists for the current process RID."),
-        };
+        if (OperatingSystem.IsWindows())
+            return RuntimeInformation.ProcessArchitecture switch
+            {
+                Architecture.X64 => WindowsX64,
+                Architecture.Arm64 => WindowsArm64,
+                _ => throw new PlatformNotSupportedException(
+                    "No release-approved incremental ML-KEM Braid asset exists for the current process RID."),
+            };
+        if (OperatingSystem.IsAndroid() &&
+            RuntimeInformation.ProcessArchitecture == Architecture.Arm64)
+            return AndroidArm64;
+        throw new PlatformNotSupportedException(
+            "No release-approved incremental ML-KEM Braid asset exists for the current process RID.");
     }
 
 #if DEEP_PROTOCOL_RECOVERY_TEST_SEAM

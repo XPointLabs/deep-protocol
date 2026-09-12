@@ -70,7 +70,8 @@ jobs:
             -BuildTarget @('windows-x64', 'windows-arm64', 'android-arm64') `
             -AndroidNdkRoot $env:DEEP_ANDROID_NDK `
             -OutputRoot $output `
-            -WindowsArm64AcceptancePath 'native/Deep.MlKem/evidence/official-windows-3481ce7/windows-arm64-physical-acceptance.v1.json'
+            -WindowsArm64AcceptancePath 'native/Deep.MlKem/evidence/official-windows-3481ce7/windows-arm64-physical-acceptance.v1.json' `
+            -AndroidArm64AcceptancePath 'native/Deep.MlKem/evidence/official-android-dcaee57/android-arm64-physical-acceptance.v1.json'
 
       - name: Build reproducible Deep Braid Windows and Android runtimes
         shell: pwsh
@@ -166,7 +167,14 @@ jobs:
           }
           $androidBraidTarget = Join-Path $bundle 'braid\android-arm64'
           New-Item -ItemType Directory -Path $androidBraidTarget -Force | Out-Null
-          Copy-Item -LiteralPath (Join-Path $outputRoot 'braid-pass-a\aarch64-linux-android\release\libdeep_mlkem_braid.so') -Destination $androidBraidTarget
+          $androidBraid = Join-Path $outputRoot 'braid-pass-a\aarch64-linux-android\release\libdeep_mlkem_braid.so'
+          $approvedAndroidBraid = Join-Path $PWD 'src\Deep.Protocol\runtimes\android-arm64\native\libdeep_mlkem_braid.so'
+          if ((Get-Item -LiteralPath $approvedAndroidBraid).Length -ne (Get-Item -LiteralPath $androidBraid).Length -or
+              (Get-FileHash -LiteralPath $approvedAndroidBraid -Algorithm SHA256).Hash -cne
+              (Get-FileHash -LiteralPath $androidBraid -Algorithm SHA256).Hash) {
+            throw 'The reproduced Deep Braid android-arm64 runtime differs from the approved packaged asset.'
+          }
+          Copy-Item -LiteralPath $androidBraid -Destination $androidBraidTarget
           git rev-parse HEAD | Set-Content -LiteralPath (Join-Path $bundle 'source-commit.txt') -Encoding ascii
           Get-ChildItem -LiteralPath $bundle -File -Recurse |
             Sort-Object FullName |

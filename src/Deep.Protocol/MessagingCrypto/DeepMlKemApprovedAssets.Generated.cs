@@ -27,6 +27,13 @@ internal static class DeepMlKemApprovedAssets
         "cd27e3c716a1b3cf4123f909e7d03861423becd8799a4abceb37f7f359d092f7",
         ManifestProviderIdentifier);
 
+    internal static DeepMlKemApprovedAsset AndroidArm64 { get; } = new(
+        "android-arm64",
+        "runtimes/android-arm64/native/libdeep_mlkem.so",
+        67576,
+        "5528f0ff05cbda00bdcd648ef72dcc870c3dde3535aa5f77457b554e93261fa5",
+        ManifestProviderIdentifier);
+
     internal static DeepMlKemApprovedAsset ForCurrentProcess()
     {
         if (OperatingSystem.IsWindows() &&
@@ -38,6 +45,11 @@ internal static class DeepMlKemApprovedAssets
             System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture ==
             System.Runtime.InteropServices.Architecture.Arm64)
             return WindowsArm64;
+
+        if (OperatingSystem.IsAndroid() &&
+            System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture ==
+            System.Runtime.InteropServices.Architecture.Arm64)
+            return AndroidArm64;
 
         throw new PlatformNotSupportedException(
             "No release-approved Deep ML-KEM asset exists for the current process RID.");

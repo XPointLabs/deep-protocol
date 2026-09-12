@@ -40,7 +40,7 @@
     <GetFileHash Files="$(DeepMlKemAndroidAsset)" Algorithm="SHA256" HashEncoding="hex">
       <Output TaskParameter="Items" ItemName="_DeepMlKemAndroidAssetHash" />
     </GetFileHash>
-    <Error Condition="'%(_DeepMlKemAndroidAssetHash.FileHash)' != '7799b36b8c522905f655af518124cdd74b97224c4ee42beb2f8142065392cd87'"
+    <Error Condition="'%(_DeepMlKemAndroidAssetHash.FileHash)' != '5528f0ff05cbda00bdcd648ef72dcc870c3dde3535aa5f77457b554e93261fa5'"
            Text="The packaged Deep ML-KEM Android asset digest is not probe-approved." />
   </Target>
 

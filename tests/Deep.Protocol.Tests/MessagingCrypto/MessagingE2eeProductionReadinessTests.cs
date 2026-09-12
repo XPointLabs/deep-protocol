@@ -13,9 +13,12 @@ public sealed class MessagingE2eeProductionReadinessTests
 
         Assert.Equal(0x0201, report.Suite);
         Assert.False(report.CanActivate);
-        var approvedWindowsRuntime = OperatingSystem.IsWindows() &&
-            RuntimeInformation.ProcessArchitecture is Architecture.X64 or Architecture.Arm64;
-        if (approvedWindowsRuntime)
+        var approvedRuntime =
+            (OperatingSystem.IsWindows() &&
+             RuntimeInformation.ProcessArchitecture is Architecture.X64 or Architecture.Arm64) ||
+            (OperatingSystem.IsAndroid() &&
+             RuntimeInformation.ProcessArchitecture == Architecture.Arm64);
+        if (approvedRuntime)
             Assert.DoesNotContain(
                 MessagingE2eeActivationBlocker.ApprovedMlKemAssetUnavailableForRuntime,
                 report.Blockers);
@@ -30,19 +33,7 @@ public sealed class MessagingE2eeProductionReadinessTests
             MessagingE2eeActivationBlocker.DurableRatchetStateCodecUnavailable,
             report.Blockers);
         Assert.Contains(
-            MessagingE2eeActivationBlocker.ProductionRatchetPersistenceAuthorityUnavailable,
-            report.Blockers);
-        Assert.DoesNotContain(
-            report.Blockers,
-            blocker => (int)blocker == 5);
-        Assert.Contains(
-            MessagingE2eeActivationBlocker.IssuedDeviceAgreementAuthorityUnavailable,
-            report.Blockers);
-        Assert.Contains(
-            MessagingE2eeActivationBlocker.DurableHybridPreKeySecretAuthorityUnavailable,
-            report.Blockers);
-        Assert.Contains(
-            MessagingE2eeActivationBlocker.AtomicInitialSessionPersistenceAuthorityUnavailable,
+            MessagingE2eeActivationBlocker.ProductionHostCompositionAuthorityUnavailable,
             report.Blockers);
         Assert.Throws<NotSupportedException>(() =>
             ((IList)report.Blockers).Add(
@@ -61,10 +52,11 @@ public sealed class MessagingE2eeProductionReadinessTests
     [Fact]
     public void RuntimeRequiresBothWholeKemAndIncrementalBraidApproval()
     {
-        Assert.True(MessagingE2eeProductionReadiness.IsApprovedRuntime(true, Architecture.X64));
-        Assert.True(MessagingE2eeProductionReadiness.IsApprovedRuntime(true, Architecture.Arm64));
-        Assert.False(MessagingE2eeProductionReadiness.IsApprovedRuntime(false, Architecture.X64));
-        Assert.False(MessagingE2eeProductionReadiness.IsApprovedRuntime(false, Architecture.Arm64));
+        Assert.True(MessagingE2eeProductionReadiness.IsApprovedRuntime(true, false, Architecture.X64));
+        Assert.True(MessagingE2eeProductionReadiness.IsApprovedRuntime(true, false, Architecture.Arm64));
+        Assert.True(MessagingE2eeProductionReadiness.IsApprovedRuntime(false, true, Architecture.Arm64));
+        Assert.False(MessagingE2eeProductionReadiness.IsApprovedRuntime(false, true, Architecture.X64));
+        Assert.False(MessagingE2eeProductionReadiness.IsApprovedRuntime(false, false, Architecture.Arm64));
         Assert.DoesNotContain(
             typeof(MessagingE2eeProductionReadiness).GetMethods(),
             static method => method.IsPublic && method.GetParameters().Any(static parameter =>
@@ -73,7 +65,7 @@ public sealed class MessagingE2eeProductionReadinessTests
     }
 
     [Fact]
-    public void ApprovedWindowsRuntimeCanOpenOpaquePrerequisiteOnly()
+    public void ApprovedDesktopRuntimeCanOpenOpaquePrerequisiteOnly()
     {
         if (!OperatingSystem.IsWindows() ||
             RuntimeInformation.ProcessArchitecture is not (Architecture.X64 or Architecture.Arm64))

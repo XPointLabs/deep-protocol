@@ -59,6 +59,16 @@
              CopyToPublishDirectory="PreserveNewest"
              Pack="true"
              PackagePath="runtimes/win-arm64/native" />
+    <Content Include="runtimes\android-arm64\native\libdeep_mlkem.so"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest"
+             Pack="true"
+             PackagePath="runtimes/android-arm64/native" />
+    <Content Include="runtimes\android-arm64\native\libdeep_mlkem_braid.so"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest"
+             Pack="true"
+             PackagePath="runtimes/android-arm64/native" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(RecoveryTestSeam)' == 'true'">

@@ -13,10 +13,7 @@ public enum MessagingE2eeActivationBlocker
     ApprovedMlKemAssetUnavailableForRuntime = 1,
     TripleRatchetComponentProviderUnavailable = 2,
     DurableRatchetStateCodecUnavailable = 3,
-    ProductionRatchetPersistenceAuthorityUnavailable = 4,
-    IssuedDeviceAgreementAuthorityUnavailable = 6,
-    DurableHybridPreKeySecretAuthorityUnavailable = 7,
-    AtomicInitialSessionPersistenceAuthorityUnavailable = 8,
+    ProductionHostCompositionAuthorityUnavailable = 9,
 }
 
 /// <summary>
@@ -139,14 +136,12 @@ public static class MessagingE2eeProductionReadiness
     {
         var approvedAsset = IsApprovedRuntime(
             OperatingSystem.IsWindows(),
+            OperatingSystem.IsAndroid(),
             RuntimeInformation.ProcessArchitecture);
         var blockers = new List<MessagingE2eeActivationBlocker>();
         if (!approvedAsset)
             blockers.Add(MessagingE2eeActivationBlocker.ApprovedMlKemAssetUnavailableForRuntime);
-        blockers.Add(MessagingE2eeActivationBlocker.ProductionRatchetPersistenceAuthorityUnavailable);
-        blockers.Add(MessagingE2eeActivationBlocker.IssuedDeviceAgreementAuthorityUnavailable);
-        blockers.Add(MessagingE2eeActivationBlocker.DurableHybridPreKeySecretAuthorityUnavailable);
-        blockers.Add(MessagingE2eeActivationBlocker.AtomicInitialSessionPersistenceAuthorityUnavailable);
+        blockers.Add(MessagingE2eeActivationBlocker.ProductionHostCompositionAuthorityUnavailable);
         return new MessagingE2eeActivationReport(
             RuntimeInformation.RuntimeIdentifier,
             approvedAsset,
@@ -173,16 +168,27 @@ public static class MessagingE2eeProductionReadiness
     public static void EnsureFullEngineAvailable() =>
         throw new MessagingE2eeActivationUnavailableException(InspectCurrentProcess());
 
-    internal static bool IsApprovedRuntime(bool isWindows, Architecture architecture) =>
-        IsWholeKemApprovedRuntime(isWindows, architecture) &&
-        HasApprovedIncrementalBraidRuntime(isWindows, architecture);
+    internal static bool IsApprovedRuntime(
+        bool isWindows,
+        bool isAndroid,
+        Architecture architecture) =>
+        IsWholeKemApprovedRuntime(isWindows, isAndroid, architecture) &&
+        HasApprovedIncrementalBraidRuntime(isWindows, isAndroid, architecture);
 
-    private static bool IsWholeKemApprovedRuntime(bool isWindows, Architecture architecture) =>
-        isWindows && architecture is Architecture.X64 or Architecture.Arm64;
+    private static bool IsWholeKemApprovedRuntime(
+        bool isWindows,
+        bool isAndroid,
+        Architecture architecture) =>
+        (isWindows && architecture is Architecture.X64 or Architecture.Arm64) ||
+        (isAndroid && architecture == Architecture.Arm64);
 
     // The whole-KEM handshake library and the incremental Braid library are
-    // both required by suite 0x0201 and are approved only for the two reviewed
-    // Windows runtime identifiers.
-    private static bool HasApprovedIncrementalBraidRuntime(bool isWindows, Architecture architecture)
-        => isWindows && architecture is Architecture.X64 or Architecture.Arm64;
+    // both required by suite 0x0201 and are approved only for the reviewed
+    // Windows and Android runtime identifiers.
+    private static bool HasApprovedIncrementalBraidRuntime(
+        bool isWindows,
+        bool isAndroid,
+        Architecture architecture) =>
+        (isWindows && architecture is Architecture.X64 or Architecture.Arm64) ||
+        (isAndroid && architecture == Architecture.Arm64);
 }

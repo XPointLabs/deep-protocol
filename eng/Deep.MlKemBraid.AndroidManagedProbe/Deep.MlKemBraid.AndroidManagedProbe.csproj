@@ -40,7 +40,7 @@
     <GetFileHash Files="$(DeepMlKemBraidAndroidAsset)" Algorithm="SHA256" HashEncoding="hex">
       <Output TaskParameter="Items" ItemName="_DeepMlKemBraidAndroidAssetHash" />
     </GetFileHash>
-    <Error Condition="'%(_DeepMlKemBraidAndroidAssetHash.FileHash)' != 'fa287d90ffff2c6e5b199c7f8ec487e16d989f75e39c2620b07c26e1dccbdf0d'"
+    <Error Condition="'%(_DeepMlKemBraidAndroidAssetHash.FileHash)' != 'dd51b21ddd836c84a978616596a749c34bf6258532e2ae2f931f235a124cacff'"
            Text="The packaged incremental ML-KEM Braid Android asset digest is not probe-approved." />
   </Target>
 </Project>

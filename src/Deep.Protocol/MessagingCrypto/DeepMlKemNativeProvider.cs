@@ -113,11 +113,7 @@ internal sealed class DeepMlKemNativeProvider : IMlKem768Provider, IDisposable
 
     internal static DeepMlKemNativeProvider LoadApprovedForCurrentProcess()
     {
-#if DEEP_MLKEM_ANDROID_PROBE
-        var approved = DeepMlKemAndroidProbeApprovedAssets.ForCurrentProcess();
-#else
         var approved = DeepMlKemApprovedAssets.ForCurrentProcess();
-#endif
         ValidateApprovedAssetIdentity(approved);
         var applicationRoot = Path.GetFullPath(AppContext.BaseDirectory)
             .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);

@@ -11,7 +11,9 @@ param(
 
     [switch]$AllowIncompleteEvidence,
 
-    [string]$WindowsArm64AcceptancePath
+    [string]$WindowsArm64AcceptancePath,
+
+    [string]$AndroidArm64AcceptancePath
 )
 
 Set-StrictMode -Version Latest
@@ -59,6 +61,13 @@ $targetMap = [ordered]@{
         property = 'WindowsArm64'
         rid = 'win-arm64'
         relativePath = 'runtimes/win-arm64/native/deep_mlkem.dll'
+    }
+}
+if (-not [string]::IsNullOrWhiteSpace($AndroidArm64AcceptancePath)) {
+    $targetMap['android-arm64'] = [ordered]@{
+        property = 'AndroidArm64'
+        rid = 'android-arm64'
+        relativePath = 'runtimes/android-arm64/native/libdeep_mlkem.so'
     }
 }
 
@@ -127,6 +136,35 @@ foreach ($target in $targetMap.Keys) {
             throw 'Windows arm64 supplemental physical acceptance evidence is incomplete or does not bind the official artifact.'
         }
     }
+    if ($target -ceq 'android-arm64') {
+        $acceptancePath = (Resolve-Path -LiteralPath $AndroidArm64AcceptancePath -ErrorAction Stop).Path
+        $acceptance = Get-Content -LiteralPath $acceptancePath -Raw | ConvertFrom-Json
+        $acceptedManifestPath = Join-Path (Split-Path -Parent $acceptancePath) 'build-manifest.v1.json'
+        $acceptedManifestPath = (Resolve-Path -LiteralPath $acceptedManifestPath -ErrorAction Stop).Path
+        $acceptedManifestSha256 = (Get-FileHash -LiteralPath $acceptedManifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        $acceptedManifest = Get-Content -LiteralPath $acceptedManifestPath -Raw | ConvertFrom-Json
+        $acceptedArtifacts = @($acceptedManifest.artifacts | Where-Object {
+                [string]$_.target -ceq 'android-arm64' -and
+                [string]$_.role -ceq 'shared-runtime'
+            })
+        if ([string]$acceptance.schema -cne 'deep/android-arm64-mlkem-acceptance/v1' -or
+            [string]$acceptance.authority -cne 'Mr. X' -or
+            [string]$acceptance.buildManifestSha256 -cne $acceptedManifestSha256 -or
+            [string]$acceptance.sourceCommit -cne [string]$acceptedManifest.deepSources.repositoryCommit -or
+            $acceptedArtifacts.Count -ne 1 -or
+            [string]$acceptedArtifacts[0].sha256 -cne $sha256 -or
+            [long]$acceptedArtifacts[0].bytes -ne $bytes -or
+            -not [bool]$acceptedArtifacts[0].cleanDistinctPathRebuildMatched -or
+            -not [bool]$acceptedArtifacts[0].exactExportSurface -or
+            -not [bool]$acceptedArtifacts[0].finalRuntimeHardening -or
+            [string]$acceptance.runtimeSha256 -cne $sha256 -or
+            [long]$acceptance.runtimeBytes -ne $bytes -or
+            [string]$acceptance.processRid -cne 'android-arm64' -or
+            [string]$acceptance.gates.managedAbiKat -cne 'passed' -or
+            [string]$acceptance.gates.productionWrapperProbe -cne 'passed') {
+            throw 'Android arm64 supplemental physical acceptance evidence is incomplete or does not bind the official artifact.'
+        }
+    }
     $approved += [ordered]@{
         target = $target
         property = $targetMap[$target].property
@@ -177,6 +215,13 @@ $lines.Add('            System.Runtime.InteropServices.RuntimeInformation.Proces
 $lines.Add('            System.Runtime.InteropServices.Architecture.Arm64)')
 $lines.Add('            return WindowsArm64;')
 $lines.Add('')
+if (@($approved | Where-Object { $_.target -ceq 'android-arm64' }).Count -eq 1) {
+    $lines.Add('        if (OperatingSystem.IsAndroid() &&')
+    $lines.Add('            System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture ==')
+    $lines.Add('            System.Runtime.InteropServices.Architecture.Arm64)')
+    $lines.Add('            return AndroidArm64;')
+    $lines.Add('')
+}
 $lines.Add('        throw new PlatformNotSupportedException(')
 $lines.Add('            "No release-approved Deep ML-KEM asset exists for the current process RID.");')
 $lines.Add('    }')

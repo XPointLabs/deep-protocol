@@ -1,15 +1,14 @@
 # Incremental ML-KEM Braid Android managed-wrapper probe
 
 This isolated `org.deep.protocol.mlkembraidprobe` application packages the
-pinned Android arm64 candidate as an APK asset and exercises the managed ABI,
-ownership, fail-closed allowlist, roundtrip, disposal, and concurrent
-single-consumer behavior. It does not approve the candidate for production and
-does not emit key material.
+pinned release-approved Android arm64 asset as an APK asset and exercises the
+production allowlist, managed ABI, ownership, roundtrip, disposal, and
+concurrent single-consumer behavior. It does not emit key material.
 
 Build from the repository root:
 
 ```powershell
-$asset = Resolve-Path .\native\Deep.MlKemBraid\target\aarch64-linux-android\release\libdeep_mlkem_braid.so
+$asset = '<absolute-path-to-official-bundle>\braid\android-arm64\libdeep_mlkem_braid.so'
 $sdk = 'C:\Program Files (x86)\Android\android-sdk'
 dotnet restore .\eng\Deep.MlKemBraid.AndroidManagedProbe\Deep.MlKemBraid.AndroidManagedProbe.csproj `
   "-p:DeepMlKemBraidAndroidAsset=$asset" "-p:AndroidSdkDirectory=$sdk"

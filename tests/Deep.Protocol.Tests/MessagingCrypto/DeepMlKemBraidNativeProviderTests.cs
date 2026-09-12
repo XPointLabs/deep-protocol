@@ -72,14 +72,24 @@ public sealed class DeepMlKemBraidNativeProviderTests
         DeepMlKemBraidNativeProvider.ValidateApprovedAssetIdentity(
             DeepMlKemBraidApprovedAssets.WindowsArm64,
             requireProductionApproval: true);
+        DeepMlKemBraidNativeProvider.ValidateApprovedAssetIdentity(
+            DeepMlKemBraidApprovedAssets.AndroidArm64,
+            requireProductionApproval: true);
+        Assert.Equal(612376, DeepMlKemBraidApprovedAssets.AndroidArm64.Bytes);
+        Assert.Equal(
+            "dd51b21ddd836c84a978616596a749c34bf6258532e2ae2f931f235a124cacff",
+            DeepMlKemBraidApprovedAssets.AndroidArm64.Sha256);
         Assert.True(DeepMlKemBraidApprovedAssets.WindowsX64.ApprovedForProduction);
         Assert.True(DeepMlKemBraidApprovedAssets.WindowsArm64.ApprovedForProduction);
+        Assert.True(DeepMlKemBraidApprovedAssets.AndroidArm64.ApprovedForProduction);
         Assert.Throws<CryptographicException>(() =>
             DeepMlKemBraidNativeProvider.ValidateApprovedAssetIdentity(
                 DeepMlKemBraidApprovedAssets.WindowsX64Candidate,
                 requireProductionApproval: true));
-        if (OperatingSystem.IsWindows() &&
-            RuntimeInformation.ProcessArchitecture is Architecture.X64 or Architecture.Arm64)
+        if ((OperatingSystem.IsWindows() &&
+             RuntimeInformation.ProcessArchitecture is Architecture.X64 or Architecture.Arm64) ||
+            (OperatingSystem.IsAndroid() &&
+             RuntimeInformation.ProcessArchitecture == Architecture.Arm64))
         {
             Assert.True(DeepMlKemBraidApprovedAssets.ForCurrentProcess().ApprovedForProduction);
         }

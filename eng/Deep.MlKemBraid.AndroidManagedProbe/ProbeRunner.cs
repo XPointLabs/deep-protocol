@@ -19,23 +19,13 @@ internal static class ProbeRunner
         try
         {
             ArgumentNullException.ThrowIfNull(assets);
-            var candidate = DeepMlKemBraidApprovedAssets.AndroidArm64ProbeCandidate;
-            Stage(assets, candidate);
+            var approved = DeepMlKemBraidApprovedAssets.AndroidArm64;
+            Stage(assets, approved);
             checks.AssetDigestValidated = true;
 
-            error = "production_allowlist_not_closed";
-            try
-            {
-                using var unexpected = DeepMlKemBraidNativeProvider.LoadApprovedForCurrentProcess();
-                throw new CryptographicException("Candidate unexpectedly entered the production allowlist.");
-            }
-            catch (PlatformNotSupportedException)
-            {
-                checks.ProductionAllowlistClosed = true;
-            }
-
-            error = "candidate_load_failed";
-            using var provider = DeepMlKemBraidNativeProvider.LoadAndroidArm64CandidateForProbe();
+            error = "production_approved_load_failed";
+            using var provider = DeepMlKemBraidNativeProvider.LoadApprovedForCurrentProcess();
+            checks.ProductionApprovalLoaded = true;
             checks.AbiLoaded = true;
 
             error = "roundtrip_failed";
@@ -199,11 +189,11 @@ internal static class ProbeRunner
         return Math.Round(stopwatch.Elapsed.TotalMilliseconds, 3);
     }
 
-    private static void Stage(AssetManager assets, DeepMlKemBraidApprovedAsset candidate)
+    private static void Stage(AssetManager assets, DeepMlKemBraidApprovedAsset approved)
     {
         var destination = Path.Combine(
             AppContext.BaseDirectory,
-            candidate.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+            approved.RelativePath.Replace('/', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
         var temporary = destination + ".staging";
         var buffer = new byte[16 * 1024];
@@ -225,10 +215,10 @@ internal static class ProbeRunner
                     bytes = checked(bytes + read);
                 }
                 output.Flush(flushToDisk: true);
-                if (bytes != candidate.Bytes) throw new CryptographicException("Asset size mismatch.");
+                if (bytes != approved.Bytes) throw new CryptographicException("Asset size mismatch.");
             }
             actual = hash.GetHashAndReset();
-            var expected = Convert.FromHexString(candidate.Sha256);
+            var expected = Convert.FromHexString(approved.Sha256);
             try
             {
                 if (!CryptographicOperations.FixedTimeEquals(actual, expected))
@@ -274,7 +264,7 @@ internal static class ProbeRunner
 internal sealed class ProbeChecks
 {
     public bool AssetDigestValidated { get; set; }
-    public bool ProductionAllowlistClosed { get; set; }
+    public bool ProductionApprovalLoaded { get; set; }
     public bool AbiLoaded { get; set; }
     public bool RoundTrip { get; set; }
     public bool Ciphertext1NonZero { get; set; }
