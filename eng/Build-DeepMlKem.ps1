@@ -209,9 +209,12 @@ function Build-ManagedEvidenceProject {
         Remove-Item -LiteralPath $ArtifactsDirectory -Recurse -Force
     }
     New-Item -ItemType Directory -Path $ArtifactsDirectory -Force | Out-Null
-    Invoke-Checked -Command $script:DotnetPath -Arguments @(
+    # The official evidence lane is explicitly x64 and its locked graph records
+    # that RID for every transitive project. Use the independently verified x64
+    # host even when the producer itself runs on Windows ARM64.
+    Invoke-Checked -Command $script:DotnetX64Path -Arguments @(
         'restore', $Project, '--locked-mode', '-r', 'win-x64', '--artifacts-path', $ArtifactsDirectory)
-    Invoke-Checked -Command $script:DotnetPath -Arguments @(
+    Invoke-Checked -Command $script:DotnetX64Path -Arguments @(
         'build', $Project, '-c', 'Release', '--no-restore', '-r', 'win-x64', '--artifacts-path', $ArtifactsDirectory)
     $binRoot = Require-Directory (Join-Path $ArtifactsDirectory 'bin')
     $matches = @(Get-ChildItem -LiteralPath $binRoot -Filter $AssemblyName -File -Recurse)
