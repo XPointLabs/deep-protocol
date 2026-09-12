@@ -39,6 +39,7 @@ public sealed class MessagingCryptoSurfaceTests
                 nameof(Dpk2PreKeySecretCapability),
                 nameof(IExactDpe2DurableTransactionAuthority),
                 nameof(InitiatorDph2ClaimPreparation),
+                nameof(InitiatorDph2PreKeyClaim),
                 nameof(InitiatorInitialSessionAtomicStorePayload),
                 nameof(InitiatorInitialSessionCommitCapability),
                 nameof(ManagedInitiatorInitialSessionFactory),
@@ -90,6 +91,7 @@ public sealed class MessagingCryptoSurfaceTests
         Assert.Empty(typeof(Dpk2PreKeyPersistenceBlob).GetConstructors());
         Assert.Empty(typeof(RestoredDpk2PreKeySecretCapability).GetConstructors());
         Assert.Empty(typeof(InitiatorDph2ClaimPreparation).GetConstructors());
+        Assert.Empty(typeof(InitiatorDph2PreKeyClaim).GetConstructors());
         Assert.Empty(typeof(InitiatorInitialSessionAtomicStorePayload).GetConstructors());
         Assert.Empty(typeof(InitiatorInitialSessionCommitCapability).GetConstructors());
         Assert.DoesNotContain(
@@ -101,6 +103,11 @@ public sealed class MessagingCryptoSurfaceTests
                 typeof(Delegate).IsAssignableFrom(parameter.ParameterType)));
         Assert.DoesNotContain(
             typeof(Dpk2PreKeySecretCapability).GetProperties(BindingFlags.Public | BindingFlags.Instance),
+            static property => property.Name.Contains("Private", StringComparison.OrdinalIgnoreCase) ||
+                property.Name.Contains("Secret", StringComparison.OrdinalIgnoreCase) ||
+                property.PropertyType == typeof(byte[]));
+        Assert.DoesNotContain(
+            typeof(InitiatorDph2PreKeyClaim).GetProperties(BindingFlags.Public | BindingFlags.Instance),
             static property => property.Name.Contains("Private", StringComparison.OrdinalIgnoreCase) ||
                 property.Name.Contains("Secret", StringComparison.OrdinalIgnoreCase) ||
                 property.PropertyType == typeof(byte[]));
