@@ -17,6 +17,36 @@ namespace Deep.Protocol.Tests.ContactV1;
 public sealed class ContactNetworkAuthorityVerifierTests
 {
     [Fact]
+    public async Task ProposalAuthority_DoesNotTrustSelectionUntilThresholdPmsIsBound()
+    {
+        var fixture = Fixture.Create();
+
+        var proposal = await fixture.VerifyProposalAsync();
+        var bound = await ContactNetworkAuthorityVerifier.BindSelectionAsync(
+            proposal, fixture.Pms.CanonicalBytes, default);
+
+        Assert.Equal(fixture.Network, proposal.NetworkId.ToArray());
+        Assert.Equal(ContactCodec.ArtifactReference("PMT2", fixture.Pmt).CanonicalBytes.ToArray(),
+            proposal.Pmt2ArtifactReference.ToArray());
+        Assert.Equal(fixture.Identity.VerifiedRecipient.Certificate.DeviceId.ToArray(),
+            proposal.RecipientDeviceId.ToArray());
+        Assert.Equal(fixture.Pms.ArtifactHash.ToArray(), bound.Pms2ArtifactHash.ToArray());
+    }
+
+    [Fact]
+    public async Task ProposalAuthority_ExpiredFreshnessFailsBeforeRouteProposal()
+    {
+        var fixture = Fixture.Create();
+        var clock = new CountingClock(new OnionMonotonicReading(
+            fixture.BootId, fixture.Freshness.FreshnessDeadlineMonotonicSeconds));
+
+        var error = await Assert.ThrowsAsync<ContactNetworkAuthorityVerificationException>(() =>
+            fixture.VerifyProposalAsync(clock: clock).AsTask());
+
+        Assert.Equal("FreshnessExpired", error.Code);
+    }
+
+    [Fact]
     public async Task ExactVerifiedClosure_MintsDefensivePublicCapability()
     {
         var fixture = Fixture.Create();
@@ -41,12 +71,20 @@ public sealed class ContactNetworkAuthorityVerifierTests
     }
 
     [Fact]
-    public void PublicSurface_HasOneSafeProducerAndNoForgeableConstructor()
+    public void PublicSurface_HasStagedSafeProducersAndNoForgeableConstructor()
     {
         Assert.Empty(typeof(VerifiedContactNetworkAuthority).GetConstructors());
-        var method = Assert.Single(typeof(ContactNetworkAuthorityVerifier).GetMethods(
-            BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly));
-        Assert.Equal(nameof(ContactNetworkAuthorityVerifier.VerifyAsync), method.Name);
+        Assert.Empty(typeof(VerifiedContactRouteProposalAuthority).GetConstructors());
+        var methods = typeof(ContactNetworkAuthorityVerifier).GetMethods(
+            BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
+        Assert.Equal(
+            [nameof(ContactNetworkAuthorityVerifier.BindSelectionAsync),
+             nameof(ContactNetworkAuthorityVerifier.VerifyAsync),
+             nameof(ContactNetworkAuthorityVerifier.VerifyProposalAsync)],
+            methods.Select(static method => method.Name)
+                .OrderBy(static name => name, StringComparer.Ordinal).ToArray());
+        var method = Assert.Single(methods,
+            static candidate => candidate.Name == nameof(ContactNetworkAuthorityVerifier.VerifyAsync));
         Assert.Equal(
             [typeof(VerifiedXPointNetworkAuthority), typeof(VerifiedOnionNetworkContext),
              typeof(VerifiedAccountDirectoryFreshness), typeof(VerifiedDevice),
@@ -55,11 +93,14 @@ public sealed class ContactNetworkAuthorityVerifierTests
              typeof(ReadOnlyMemory<byte>), typeof(ReadOnlyMemory<byte>),
              typeof(OnionTrustedTimeAuthority), typeof(CancellationToken)],
             method.GetParameters().Select(static parameter => parameter.ParameterType).ToArray());
-        Assert.DoesNotContain(method.GetParameters(), static parameter =>
-            parameter.Name?.Contains("key", StringComparison.OrdinalIgnoreCase) == true ||
-            parameter.Name?.Contains("threshold", StringComparison.OrdinalIgnoreCase) == true ||
-            parameter.ParameterType == typeof(bool) ||
-            typeof(Delegate).IsAssignableFrom(parameter.ParameterType));
+        foreach (var candidate in methods)
+        {
+            Assert.DoesNotContain(candidate.GetParameters(), static parameter =>
+                parameter.Name?.Contains("key", StringComparison.OrdinalIgnoreCase) == true ||
+                parameter.Name?.Contains("threshold", StringComparison.OrdinalIgnoreCase) == true ||
+                parameter.ParameterType == typeof(bool) ||
+                typeof(Delegate).IsAssignableFrom(parameter.ParameterType));
+        }
     }
 
     [Fact]
@@ -225,6 +266,17 @@ public sealed class ContactNetworkAuthorityVerifierTests
                 Authority, CurrentNetwork, Freshness, Identity.VerifiedRecipient, Identity.Authorization,
                 exactXnv1 ?? ExactXnv, ExactXnh, Freshness.ExactAdh1, Pmt.CanonicalBytes,
                 exactPms2 ?? Pms.CanonicalBytes,
+                new OnionTrustedTimeAuthority(clock ?? new CountingClock(
+                    new OnionMonotonicReading(BootId, 1_003))), default);
+
+        internal ValueTask<VerifiedContactRouteProposalAuthority> VerifyProposalAsync(
+            ReadOnlyMemory<byte>? exactXnv1 = null,
+            ReadOnlyMemory<byte>? exactPmt2 = null,
+            CountingClock? clock = null) =>
+            ContactNetworkAuthorityVerifier.VerifyProposalAsync(
+                Authority, CurrentNetwork, Freshness, Identity.VerifiedRecipient,
+                Identity.Authorization, exactXnv1 ?? ExactXnv, ExactXnh,
+                Freshness.ExactAdh1, exactPmt2 ?? Pmt.CanonicalBytes,
                 new OnionTrustedTimeAuthority(clock ?? new CountingClock(
                     new OnionMonotonicReading(BootId, 1_003))), default);
 

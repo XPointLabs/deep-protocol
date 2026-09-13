@@ -12,6 +12,9 @@ public enum ContactDeviceSignaturePurpose : byte
 {
     PreKeyService = 1,
     ContactBundle = 2,
+    RouteAdvertisement = 3,
+    RouteReachability = 4,
+    InviteRoute = 5,
 }
 
 public sealed class ContactPublicationAuthoringException : CryptographicException

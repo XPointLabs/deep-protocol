@@ -23,6 +23,32 @@ public sealed class ContactNetworkAuthorityVerificationException : Cryptographic
 /// </summary>
 public static class ContactNetworkAuthorityVerifier
 {
+    public static ValueTask<VerifiedContactRouteProposalAuthority> VerifyProposalAsync(
+        VerifiedXPointNetworkAuthority authority,
+        VerifiedOnionNetworkContext currentNetwork,
+        VerifiedAccountDirectoryFreshness freshness,
+        VerifiedDevice recipientDevice,
+        CurrentlyAuthoritativeDca1 recipientAuthorization,
+        ReadOnlyMemory<byte> exactXnv1,
+        ReadOnlyMemory<byte> exactXnh1,
+        ReadOnlyMemory<byte> exactAdh1,
+        ReadOnlyMemory<byte> exactPmt2,
+        OnionTrustedTimeAuthority trustedTimeAuthority,
+        CancellationToken cancellationToken) =>
+        VerifiedContactNetworkAuthority.VerifyProposalAsync(
+            authority, currentNetwork, freshness, recipientDevice, recipientAuthorization,
+            exactXnv1, exactXnh1, exactAdh1, exactPmt2,
+            trustedTimeAuthority, cancellationToken);
+
+    public static ValueTask<VerifiedContactNetworkAuthority> BindSelectionAsync(
+        VerifiedContactRouteProposalAuthority proposal,
+        ReadOnlyMemory<byte> exactPms2,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(proposal);
+        return proposal.BindSelectionAsync(exactPms2, cancellationToken);
+    }
+
     public static ValueTask<VerifiedContactNetworkAuthority> VerifyAsync(
         VerifiedXPointNetworkAuthority authority,
         VerifiedOnionNetworkContext currentNetwork,
@@ -35,6 +61,109 @@ public static class ContactNetworkAuthorityVerifier
         ReadOnlyMemory<byte> exactPmt2,
         ReadOnlyMemory<byte> exactPms2,
         OnionTrustedTimeAuthority trustedTimeAuthority,
+        CancellationToken cancellationToken) =>
+        VerifiedContactNetworkAuthority.VerifyAsync(
+            authority, currentNetwork, freshness, recipientDevice, recipientAuthorization,
+            exactXnv1, exactXnh1, exactAdh1, exactPmt2, exactPms2,
+            trustedTimeAuthority, cancellationToken);
+}
+
+/// <summary>
+/// Non-forgeable current account/device/network capability used only to author
+/// the device-signed XRA1 proposal. It contains no route selection or replica
+/// authority; exact PMS2 must subsequently be threshold-bound.
+/// </summary>
+public sealed class VerifiedContactRouteProposalAuthority
+{
+    private readonly byte[] networkId;
+    private readonly byte[] pmt2ArtifactReference;
+    private readonly byte[] xnv1CoreReference;
+    private readonly byte[] xnh1CoreReference;
+    private readonly byte[] adh1CoreReference;
+    private readonly byte[] recipientDeviceId;
+    private readonly byte[] recipientDevicePublicKey;
+    private readonly byte[] recipientAccountId;
+    private readonly byte[] recipientDpd1Reference;
+    private readonly byte[] dca1Reference;
+    private readonly VerifiedXPointNetworkAuthority authority;
+    private readonly VerifiedOnionNetworkContext currentNetwork;
+    private readonly VerifiedAccountDirectoryFreshness freshness;
+    private readonly VerifiedDevice recipientDevice;
+    private readonly CurrentlyAuthoritativeDca1 recipientAuthorization;
+    private readonly byte[] exactXnv1;
+    private readonly byte[] exactXnh1;
+    private readonly byte[] exactAdh1;
+    private readonly byte[] exactPmt2;
+    private readonly OnionTrustedTimeAuthority trustedTimeAuthority;
+
+    internal VerifiedContactRouteProposalAuthority(
+        VerifiedXPointNetworkAuthority authority,
+        VerifiedOnionNetworkContext currentNetwork,
+        VerifiedAccountDirectoryFreshness freshness,
+        VerifiedDevice recipientDevice,
+        CurrentlyAuthoritativeDca1 recipientAuthorization,
+        ReadOnlySpan<byte> exactXnv1,
+        ReadOnlySpan<byte> exactXnh1,
+        ReadOnlySpan<byte> exactAdh1,
+        ReadOnlySpan<byte> exactPmt2,
+        OnionTrustedTimeAuthority trustedTimeAuthority,
+        ReadOnlySpan<byte> pmt2ArtifactReference,
+        ReadOnlySpan<byte> xnv1CoreReference,
+        ReadOnlySpan<byte> xnh1CoreReference,
+        ReadOnlySpan<byte> adh1CoreReference,
+        ReadOnlySpan<byte> recipientDpd1Reference,
+        ReadOnlySpan<byte> dca1Reference,
+        ulong trustedLowerUnixSeconds,
+        ulong trustedUpperUnixSeconds,
+        ulong notBeforeUnixSeconds,
+        ulong expiresAtUnixSeconds)
+    {
+        this.authority = authority;
+        this.currentNetwork = currentNetwork;
+        this.freshness = freshness;
+        this.recipientDevice = recipientDevice;
+        this.recipientAuthorization = recipientAuthorization;
+        this.exactXnv1 = exactXnv1.ToArray();
+        this.exactXnh1 = exactXnh1.ToArray();
+        this.exactAdh1 = exactAdh1.ToArray();
+        this.exactPmt2 = exactPmt2.ToArray();
+        this.trustedTimeAuthority = trustedTimeAuthority;
+        networkId = authority.NetworkId.ToArray();
+        this.pmt2ArtifactReference = pmt2ArtifactReference.ToArray();
+        this.xnv1CoreReference = xnv1CoreReference.ToArray();
+        this.xnh1CoreReference = xnh1CoreReference.ToArray();
+        this.adh1CoreReference = adh1CoreReference.ToArray();
+        recipientDeviceId = recipientDevice.Certificate.DeviceId.ToArray();
+        recipientDevicePublicKey = recipientDevice.Certificate.DeviceEd25519PublicKey.ToArray();
+        recipientAccountId = recipientDevice.Certificate.AccountHash.ToArray();
+        this.recipientDpd1Reference = recipientDpd1Reference.ToArray();
+        this.dca1Reference = dca1Reference.ToArray();
+        TrustedLowerUnixSeconds = trustedLowerUnixSeconds;
+        TrustedUpperUnixSeconds = trustedUpperUnixSeconds;
+        NotBeforeUnixSeconds = notBeforeUnixSeconds;
+        ExpiresAtUnixSeconds = expiresAtUnixSeconds;
+    }
+
+    public ReadOnlyMemory<byte> NetworkId => networkId.ToArray();
+    public ReadOnlyMemory<byte> Pmt2ArtifactReference => pmt2ArtifactReference.ToArray();
+    public ReadOnlyMemory<byte> Xnv1CoreReference => xnv1CoreReference.ToArray();
+    public ReadOnlyMemory<byte> Xnh1CoreReference => xnh1CoreReference.ToArray();
+    public ReadOnlyMemory<byte> Adh1CoreReference => adh1CoreReference.ToArray();
+    public ReadOnlyMemory<byte> RecipientDeviceId => recipientDeviceId.ToArray();
+    public ReadOnlyMemory<byte> RecipientDevicePublicKey => recipientDevicePublicKey.ToArray();
+    public ReadOnlyMemory<byte> RecipientDpd1Reference => recipientDpd1Reference.ToArray();
+    public ReadOnlyMemory<byte> Dca1Reference => dca1Reference.ToArray();
+    public ulong TrustedLowerUnixSeconds { get; }
+    public ulong TrustedUpperUnixSeconds { get; }
+    public ulong NotBeforeUnixSeconds { get; }
+    public ulong ExpiresAtUnixSeconds { get; }
+
+    internal ReadOnlySpan<byte> RecipientAccountIdSpan => recipientAccountId;
+    internal VerifiedXPointNetworkAuthority NetworkAuthority => authority;
+    internal ReadOnlySpan<byte> ExactPmt2Span => exactPmt2;
+
+    internal ValueTask<VerifiedContactNetworkAuthority> BindSelectionAsync(
+        ReadOnlyMemory<byte> exactPms2,
         CancellationToken cancellationToken) =>
         VerifiedContactNetworkAuthority.VerifyAsync(
             authority, currentNetwork, freshness, recipientDevice, recipientAuthorization,
@@ -255,6 +384,130 @@ public sealed partial class VerifiedContactNetworkAuthority
             CryptographicOperations.ZeroMemory(adhBytes);
             CryptographicOperations.ZeroMemory(pmtBytes);
             CryptographicOperations.ZeroMemory(pmsBytes);
+        }
+    }
+
+    internal static async ValueTask<VerifiedContactRouteProposalAuthority> VerifyProposalAsync(
+        VerifiedXPointNetworkAuthority authority,
+        VerifiedOnionNetworkContext currentNetwork,
+        VerifiedAccountDirectoryFreshness freshness,
+        VerifiedDevice recipientDevice,
+        CurrentlyAuthoritativeDca1 recipientAuthorization,
+        ReadOnlyMemory<byte> exactXnv1,
+        ReadOnlyMemory<byte> exactXnh1,
+        ReadOnlyMemory<byte> exactAdh1,
+        ReadOnlyMemory<byte> exactPmt2,
+        OnionTrustedTimeAuthority trustedTimeAuthority,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(authority);
+        ArgumentNullException.ThrowIfNull(currentNetwork);
+        ArgumentNullException.ThrowIfNull(freshness);
+        ArgumentNullException.ThrowIfNull(recipientDevice);
+        ArgumentNullException.ThrowIfNull(recipientAuthorization);
+        ArgumentNullException.ThrowIfNull(trustedTimeAuthority);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var xnvBytes = Own(exactXnv1, XPointNetworkRegistry.Xnv1.MinimumBytes,
+            XPointNetworkRegistry.Xnv1.MaximumBytes, ProtocolMagic.XNV1);
+        var xnhBytes = Own(exactXnh1, XPointNetworkRegistry.Xnh1.MinimumBytes,
+            XPointNetworkRegistry.Xnh1.MaximumBytes, ProtocolMagic.XNH1);
+        var adhBytes = Own(exactAdh1, 1, MaximumRecordBytes, ProtocolMagic.ADH1);
+        var pmtBytes = Own(exactPmt2, 842, 11_066, ProtocolMagic.PMT2);
+        try
+        {
+            currentNetwork.EnsureCurrent();
+            var closure = currentNetwork.Closure ??
+                throw Error("NetworkContextIncomplete",
+                    "The current network context has no verified XPoint closure.");
+            var protectedLkg = currentNetwork.ProtectedLkg ??
+                throw Error("NetworkContextIncomplete",
+                    "The current network context has no protected XPoint tuple.");
+            VerifyExactContext(authority, currentNetwork, freshness, closure, protectedLkg,
+                xnvBytes, xnhBytes, adhBytes, pmtBytes);
+
+            var monotonic = await trustedTimeAuthority.ReadCurrentAsync(cancellationToken)
+                .ConfigureAwait(false);
+            if (!CryptographicOperations.FixedTimeEquals(
+                    monotonic.BootId.Span, closure.FreshnessBootId) ||
+                !freshness.IsCurrentAtMonotonic(
+                    monotonic.BootId.Span, monotonic.SampleSeconds))
+                throw Error("FreshnessExpired",
+                    "The protected monotonic reading no longer keeps the exact directory closure current.");
+
+            VerifyRecipient(authority, freshness, recipientDevice, recipientAuthorization);
+            var low = freshness.TrustedLowerUnixSeconds;
+            var high = freshness.TrustedUpperUnixSeconds;
+            var recipient = recipientDevice.Certificate;
+            var dca = recipientAuthorization.Verified.Record;
+            if (low > high ||
+                !Covers(authority.NotBefore, authority.ExpiresAt, low, high) ||
+                !Covers(closure.View.NotBefore, closure.View.ExpiresAt, low, high) ||
+                !Covers(closure.Head.ValidFrom, closure.Head.ValidUntil, low, high) ||
+                !Covers(freshness.ValidFromUnixSeconds, freshness.ExpiresAtUnixSeconds, low, high) ||
+                !Covers(BinaryPrimitives.ReadUInt64BigEndian(closure.Pmt.FieldSpan(11)),
+                    BinaryPrimitives.ReadUInt64BigEndian(closure.Pmt.FieldSpan(12)), low, high) ||
+                !Covers(recipient.IssuedAtUnixSeconds, recipient.ExpiresAtUnixSeconds, low, high) ||
+                !Covers(dca.NotBeforeUnixSeconds, dca.ExpiresAtUnixSeconds, low, high))
+                throw Error("TrustedTimeIntervalNotCovered",
+                    "The authenticated trusted-time interval is not covered by the route-proposal authority.");
+
+            var pmtReference = ContactCodec.ArtifactReference(
+                ProtocolMagic.PMT2, closure.Pmt).CanonicalBytes.ToArray();
+            var xnvReference = XPointNetworkCodec.EncodeCoreReference(
+                ProtocolMagic.XNV1, closure.View.CoreHash.Span);
+            var xnhReference = XPointNetworkCodec.EncodeCoreReference(
+                ProtocolMagic.XNH1, closure.Head.CoreHash.Span);
+            var dpdReference = ArtifactReference(
+                ProtocolMagic.DPD1, recipient.CanonicalHash.Span);
+            var dcaReference = ArtifactReference(
+                ProtocolMagic.DCA1, dca.RecordHash.Span);
+            var notBefore = new[]
+            {
+                authority.NotBefore, closure.View.NotBefore, closure.Head.ValidFrom,
+                freshness.ValidFromUnixSeconds,
+                BinaryPrimitives.ReadUInt64BigEndian(closure.Pmt.FieldSpan(11)),
+                recipient.IssuedAtUnixSeconds, dca.NotBeforeUnixSeconds,
+            }.Max();
+            var expiresAt = new[]
+            {
+                authority.ExpiresAt, closure.View.ExpiresAt, closure.Head.ValidUntil,
+                freshness.ExpiresAtUnixSeconds,
+                BinaryPrimitives.ReadUInt64BigEndian(closure.Pmt.FieldSpan(12)),
+                recipient.ExpiresAtUnixSeconds, dca.ExpiresAtUnixSeconds,
+            }.Min();
+            return new VerifiedContactRouteProposalAuthority(
+                authority, currentNetwork, freshness, recipientDevice, recipientAuthorization,
+                xnvBytes, xnhBytes, adhBytes, pmtBytes, trustedTimeAuthority,
+                pmtReference, xnvReference, xnhReference,
+                freshness.ExactAdh1CoreReference.Span,
+                dpdReference, dcaReference, low, high, notBefore, expiresAt);
+        }
+        catch (ContactNetworkAuthorityVerificationException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (OnionBoundaryException exception)
+        {
+            throw Error("NetworkContextInvalid",
+                "The verified XPoint network context is no longer usable.", exception);
+        }
+        catch (Exception exception) when (exception is FormatException or ArgumentException or
+            CryptographicException or OverflowException)
+        {
+            throw Error("MalformedClosure",
+                "The exact Contact route-proposal authority closure is malformed.", exception);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(xnvBytes);
+            CryptographicOperations.ZeroMemory(xnhBytes);
+            CryptographicOperations.ZeroMemory(adhBytes);
+            CryptographicOperations.ZeroMemory(pmtBytes);
         }
     }
 
