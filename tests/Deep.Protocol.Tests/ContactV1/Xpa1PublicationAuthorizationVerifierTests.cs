@@ -206,9 +206,10 @@ public sealed class Xpa1PublicationAuthorizationVerifierTests
             var xir = Bytes(32, 0xc1);
             var predecessor = new byte[32];
             var ciphertext = Bytes(64, 0xc2);
+            var route = RouteClosure();
             var bodyHash = Xpu1Codec.ComputeAuthorizedBodyHash(
                 network, operation, viewHash, placementHash, 195, 240,
-                LocatorHash, xir, 0, predecessor, ciphertext, 0, 250);
+                LocatorHash, xir, 0, predecessor, ciphertext, 0, 250, route);
             var xpa = CreateXpa1(
                 network, operation, LocatorHash, xir, predecessor,
                 SHA256.HashData(ciphertext), bodyHash,
@@ -216,7 +217,29 @@ public sealed class Xpa1PublicationAuthorizationVerifierTests
                 signers, tamperSignature);
             return Xpu1Codec.Decode(Xpu1Codec.Encode(
                 network, operation, viewHash, placementHash, 195, 240,
-                LocatorHash, xir, 0, predecessor, ciphertext, 0, 250, xpa));
+                LocatorHash, xir, 0, predecessor, ciphertext, 0, 250, route, xpa));
+        }
+
+        private static byte[] RouteClosure()
+        {
+            var closure = ContactCodecTests.Records.RouteClosure;
+            var records = new[]
+            {
+                closure.Xrr, closure.Xra, closure.Xrc,
+                closure.Xss, closure.Pmt, closure.Pms,
+            };
+            var result = new byte[1 + records.Sum(record => 4 + record.CanonicalBytes.Length)];
+            result[0] = 6;
+            var offset = 1;
+            foreach (var record in records)
+            {
+                BinaryPrimitives.WriteUInt32BigEndian(
+                    result.AsSpan(offset), checked((uint)record.CanonicalBytes.Length));
+                offset += 4;
+                record.CanonicalBytes.Span.CopyTo(result.AsSpan(offset));
+                offset += record.CanonicalBytes.Length;
+            }
+            return result;
         }
 
         internal VerifiedAccountDirectoryFreshness CreateFreshness(byte[]? policyOverride = null)

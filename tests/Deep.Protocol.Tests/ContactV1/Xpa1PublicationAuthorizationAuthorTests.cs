@@ -11,10 +11,10 @@ public sealed class Xpa1PublicationAuthorizationAuthorTests
     [Fact]
     public async Task PermanentPublication_AuthorsExactThresholdAuthorizationAndReverifiesIt()
     {
-        var fixture = Fixture.Create();
+        var fixture = await Fixture.CreateAsync();
 
         var authored = await Xpa1PublicationAuthorizationAuthor.AuthorPermanentAsync(
-            fixture.Request, fixture.Contact, fixture.Core.NetworkAuthority, fixture.Placement,
+            fixture.Request, fixture.Contact, fixture.Route, fixture.Core.NetworkAuthority, fixture.Placement,
             fixture.Clock, fixture.Signers, default);
 
         Assert.Equal(authored.ExactXpa1.ToArray(), authored.Request.ExactXpa1.ToArray());
@@ -32,14 +32,14 @@ public sealed class Xpa1PublicationAuthorizationAuthorTests
     [Fact]
     public async Task PublisherSignatureFromAnotherDevice_IsRejected()
     {
-        var fixture = Fixture.Create();
+        var fixture = await Fixture.CreateAsync();
         var foreign = PublicKeyAuth.GenerateKeyPair(TestBytes(32, 0xe1));
         var signature = PublicKeyAuth.SignDetached(fixture.PublisherInput, foreign.PrivateKey);
         var request = fixture.WithPublisherSignature(signature);
 
         var error = await Assert.ThrowsAsync<Xpa1PublicationAuthorizationAuthoringException>(() =>
             Xpa1PublicationAuthorizationAuthor.AuthorPermanentAsync(
-                request, fixture.Contact, fixture.Core.NetworkAuthority, fixture.Placement,
+                request, fixture.Contact, fixture.Route, fixture.Core.NetworkAuthority, fixture.Placement,
                 fixture.Clock, fixture.Signers, default).AsTask());
 
         Assert.Equal("PublisherSignatureInvalid", error.Code);
@@ -48,11 +48,11 @@ public sealed class Xpa1PublicationAuthorizationAuthorTests
     [Fact]
     public async Task BelowCurrentWitnessThreshold_IsRejected()
     {
-        var fixture = Fixture.Create();
+        var fixture = await Fixture.CreateAsync();
 
         var error = await Assert.ThrowsAsync<Xpa1PublicationAuthorizationAuthoringException>(() =>
             Xpa1PublicationAuthorizationAuthor.AuthorPermanentAsync(
-                fixture.Request, fixture.Contact, fixture.Core.NetworkAuthority, fixture.Placement,
+                fixture.Request, fixture.Contact, fixture.Route, fixture.Core.NetworkAuthority, fixture.Placement,
                 fixture.Clock, fixture.Signers.Take(1).ToArray(), default).AsTask());
 
         Assert.Equal("InsufficientSigners", error.Code);
@@ -63,6 +63,7 @@ public sealed class Xpa1PublicationAuthorizationAuthorTests
         private Fixture(
             ContactCodecSecurityTests.CryptoDcrFixture core,
             VerifiedContactBundleClosure contact,
+            VerifiedContactRouteClosure route,
             VerifiedContactServicePlacement placement,
             OnionTrustedTimeAuthority clock,
             byte[] locator,
@@ -72,6 +73,7 @@ public sealed class Xpa1PublicationAuthorizationAuthorTests
         {
             Core = core;
             Contact = contact;
+            Route = route;
             Placement = placement;
             Clock = clock;
             Locator = locator;
@@ -82,6 +84,7 @@ public sealed class Xpa1PublicationAuthorizationAuthorTests
 
         internal ContactCodecSecurityTests.CryptoDcrFixture Core { get; }
         internal VerifiedContactBundleClosure Contact { get; }
+        internal VerifiedContactRouteClosure Route { get; }
         internal VerifiedContactServicePlacement Placement { get; }
         internal OnionTrustedTimeAuthority Clock { get; }
         internal byte[] Locator { get; }
@@ -89,10 +92,19 @@ public sealed class Xpa1PublicationAuthorizationAuthorTests
         internal PermanentAddressPublicationAuthorizationRequest Request { get; }
         internal IXpa1PublicationAuthorizationWitnessSigner[] Signers { get; }
 
-        internal static Fixture Create()
+        internal static async Task<Fixture> CreateAsync()
         {
-            var core = ContactCodecSecurityTests.CryptoDcrFixture.Create();
-            var contact = core.Promote(core.Dcr);
+            var routeFixture = await ContactPublicationAuthorTests.Fixture.CreateAsync();
+            var core = routeFixture.Identity;
+            var contactSigner = new ContactSigner(core.Device, core.VerifiedRecipient);
+            var preKey = await ContactPublicationAuthor.AuthorPreKeyServiceAsync(
+                new ContactPreKeyServiceAuthoringRequest(
+                    core.VerifiedRecipient, core.Authorization, 32, 8, 20, 80),
+                contactSigner);
+            var contact = (await ContactPublicationAuthor.AuthorPermanentAsync(
+                new ContactBundleAuthoringRequest(
+                    core.Authorization, core.Freshness, routeFixture.Route, [preKey],
+                    20, 80, core.BootId, core.CurrentMonotonicSample), contactSigner)).Verified;
             using var derived = PermanentContactResolutionDerivation.Derive(
                 core.NetworkAuthority.NetworkId.Span, contact.Binding.DeepId);
             var locator = derived.LocatorHash.ToArray();
@@ -113,11 +125,12 @@ public sealed class Xpa1PublicationAuthorizationAuthorTests
             var operation = TestBytes(32, 0xc3);
             var ciphertext = TestBytes(64, 0xc4);
             var ciphertextHash = SHA256.HashData(ciphertext);
+            var routeHash = SHA256.HashData(ContactRouteClosureCodec.Encode(routeFixture.Route));
             var predecessor = new byte[32];
             var expiresAt = checked(core.Freshness.TrustedUpperUnixSeconds + 10);
             var publisherInput = Xpa1PublicationAuthorizationAuthor.CreatePublisherSigningInput(
                 locator, contact.ResolverResponse.ArtifactHash.Span, ciphertextHash,
-                0, predecessor, expiresAt);
+                routeHash, 0, predecessor, expiresAt);
             var signature = PublicKeyAuth.SignDetached(publisherInput, core.Device.PrivateKey);
             var request = new PermanentAddressPublicationAuthorizationRequest(
                 operation, 0, predecessor, ciphertext,
@@ -129,13 +142,33 @@ public sealed class Xpa1PublicationAuthorizationAuthorTests
                 .ToArray();
             var clock = new OnionTrustedTimeAuthority(new FixedClock(
                 new OnionMonotonicReading(core.BootId, core.CurrentMonotonicSample)));
-            return new Fixture(core, contact, placement, clock, locator, publisherInput, request, signers);
+            return new Fixture(core, contact, routeFixture.Route, placement, clock, locator, publisherInput, request, signers);
         }
 
         internal PermanentAddressPublicationAuthorizationRequest WithPublisherSignature(byte[] signature) =>
             new(Request.OperationId.Span, Request.Generation, Request.PredecessorObjectHash.Span,
                 Request.ObjectCiphertext.Span, Request.IssuedAtUnixSeconds, Request.ExpiresAtUnixSeconds,
                 Request.EffectiveExpiresAtUnixSeconds, signature);
+    }
+
+    private sealed class ContactSigner(KeyPair key, Deep.Protocol.DeepNative.VerifiedDevice device)
+        : IContactDeviceCustodySigner
+    {
+        public ReadOnlyMemory<byte> DeviceId => device.Certificate.DeviceId;
+        public ReadOnlyMemory<byte> Ed25519PublicKey => key.PublicKey;
+        public ReadOnlyMemory<byte> CustodyDomainHash => TestBytes(32, 0xce);
+
+        public ValueTask<int> SignAsync(
+            ContactDeviceSigningRequest request,
+            Memory<byte> signature64,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var signature = PublicKeyAuth.SignDetached(
+                request.SigningInput.ToArray(), key.PrivateKey);
+            signature.CopyTo(signature64);
+            return ValueTask.FromResult(signature.Length);
+        }
     }
 
     private sealed class Signer(byte[] id, KeyPair key) : IXpa1PublicationAuthorizationWitnessSigner

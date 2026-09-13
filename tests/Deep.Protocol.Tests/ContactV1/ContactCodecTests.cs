@@ -16,7 +16,9 @@ public sealed class ContactCodecTests
     public void FrozenMachinePrimitivesExecuteAgainstExactFixtureBytes()
     {
         var manifest = File.ReadAllBytes(FindSpec("contact-codec-v1.vectors.json"));
-        Assert.Equal("6330a8f5d0d2345ac04a6a1a3109fdd28511e9bbf254fe240203f8f49d7c1386", Convert.ToHexString(SHA256.HashData(manifest)).ToLowerInvariant());
+        var canonicalManifest = System.Text.Encoding.UTF8.GetBytes(
+            System.Text.Encoding.UTF8.GetString(manifest).Replace("\r\n", "\n", StringComparison.Ordinal));
+        Assert.Equal("6330a8f5d0d2345ac04a6a1a3109fdd28511e9bbf254fe240203f8f49d7c1386", Convert.ToHexString(SHA256.HashData(canonicalManifest)).ToLowerInvariant());
         using var anchor = JsonDocument.Parse(File.ReadAllBytes(FindSpec("contact-codec-v1.vectors.anchor.json")));
         Assert.Equal("6330a8f5d0d2345ac04a6a1a3109fdd28511e9bbf254fe240203f8f49d7c1386", anchor.RootElement.GetProperty("sha256").GetString());
         using var document = JsonDocument.Parse(manifest);

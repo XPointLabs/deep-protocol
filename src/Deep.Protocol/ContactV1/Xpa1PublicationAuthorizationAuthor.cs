@@ -127,6 +127,7 @@ public static class Xpa1PublicationAuthorizationAuthor
         ReadOnlySpan<byte> locatorHash,
         ReadOnlySpan<byte> exactDcr1Hash,
         ReadOnlySpan<byte> objectCiphertextHash,
+        ReadOnlySpan<byte> routeClosureHash,
         ulong generation,
         ReadOnlySpan<byte> predecessorObjectHash,
         ulong effectiveExpiresAtUnixSeconds)
@@ -134,16 +135,18 @@ public static class Xpa1PublicationAuthorizationAuthor
         Require(locatorHash, 32, nameof(locatorHash), nonzero: true);
         Require(exactDcr1Hash, 32, nameof(exactDcr1Hash), nonzero: true);
         Require(objectCiphertextHash, 32, nameof(objectCiphertextHash), nonzero: true);
+        Require(routeClosureHash, 32, nameof(routeClosureHash), nonzero: true);
         Require(predecessorObjectHash, 32, nameof(predecessorObjectHash), nonzero: generation != 0);
         if ((generation == 0) != IsZero(predecessorObjectHash) || effectiveExpiresAtUnixSeconds == 0)
             throw new ArgumentException("The publication generation, predecessor, or expiry is invalid.");
-        var tuple = new byte[144];
+        var tuple = new byte[176];
         locatorHash.CopyTo(tuple);
         exactDcr1Hash.CopyTo(tuple.AsSpan(32));
         objectCiphertextHash.CopyTo(tuple.AsSpan(64));
-        BinaryPrimitives.WriteUInt64BigEndian(tuple.AsSpan(96), generation);
-        predecessorObjectHash.CopyTo(tuple.AsSpan(104));
-        BinaryPrimitives.WriteUInt64BigEndian(tuple.AsSpan(136), effectiveExpiresAtUnixSeconds);
+        routeClosureHash.CopyTo(tuple.AsSpan(96));
+        BinaryPrimitives.WriteUInt64BigEndian(tuple.AsSpan(128), generation);
+        predecessorObjectHash.CopyTo(tuple.AsSpan(136));
+        BinaryPrimitives.WriteUInt64BigEndian(tuple.AsSpan(168), effectiveExpiresAtUnixSeconds);
         try
         {
             return ContactCodec.SignatureInput(PublisherDomain, tuple);
@@ -157,6 +160,7 @@ public static class Xpa1PublicationAuthorizationAuthor
     public static async ValueTask<AuthoredPermanentAddressPublication> AuthorPermanentAsync(
         PermanentAddressPublicationAuthorizationRequest request,
         VerifiedContactBundleClosure contact,
+        VerifiedContactRouteClosure route,
         VerifiedXPointNetworkAuthority authority,
         VerifiedContactServicePlacement placement,
         OnionTrustedTimeAuthority trustedTimeAuthority,
@@ -165,6 +169,7 @@ public static class Xpa1PublicationAuthorizationAuthor
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(contact);
+        ArgumentNullException.ThrowIfNull(route);
         ArgumentNullException.ThrowIfNull(authority);
         ArgumentNullException.ThrowIfNull(placement);
         ArgumentNullException.ThrowIfNull(trustedTimeAuthority);
@@ -194,11 +199,28 @@ public static class Xpa1PublicationAuthorizationAuthor
             if (descriptor.Length != 651)
                 Fail("ContactDescriptorMismatch", "The verified DCB1 reachability descriptor has an invalid shape.");
             var xirHash = descriptor.AsSpan(4, 32).ToArray();
+            var exactRouteClosure = ContactRouteClosureCodec.Encode(route);
+            var routeClosureHash = SHA256.HashData(exactRouteClosure);
+            var embeddedInvite = ContactCodec.Decode(
+                ProtocolMagic.XIR1, descriptor.AsSpan(40, 611));
+            if (!Fixed(route.Invite.CanonicalBytes.Span, embeddedInvite.CanonicalBytes.Span) ||
+                !Fixed(route.Invite.ArtifactHash.Span, xirHash) ||
+                !Fixed(route.Authority.NetworkId.Span, authority.NetworkId.Span) ||
+                !Fixed(route.Authority.AuthorityCoreReference.Span,
+                    authority.AuthorityCoreReference.Span) ||
+                !Fixed(route.Authority.WitnessPolicyHash.Span,
+                    authority.DirectoryWitnessPolicyHash.Span) ||
+                !Fixed(route.Authority.RecipientDeviceId.Span, contact.Bundle.Field(10).Span) ||
+                !Fixed(route.Authority.Dca1Reference.Span,
+                    ContactReference(ProtocolMagic.DCA1,
+                        contact.Authorization.Verified.Record.RecordHash.Span)))
+                Fail("RouteClosureMismatch", "The verified route closure does not belong to the exact DCB1 publisher.");
             var ciphertextHash = SHA256.HashData(request.ObjectCiphertext.Span);
             var publisherInput = CreatePublisherSigningInput(
                 locator,
                 dcrHash,
                 ciphertextHash,
+                routeClosureHash,
                 request.Generation,
                 request.PredecessorObjectHash.Span,
                 request.EffectiveExpiresAtUnixSeconds);
@@ -234,7 +256,8 @@ public static class Xpa1PublicationAuthorizationAuthor
                 request.PredecessorObjectHash.Span,
                 request.ObjectCiphertext.Span,
                 0,
-                request.EffectiveExpiresAtUnixSeconds);
+                request.EffectiveExpiresAtUnixSeconds,
+                exactRouteClosure);
             var authorizationId = ContactCodec.Sha256Domain(
                 AuthorizationIdDomain,
                 Join(request.OperationId.ToArray(), bodyHash, freshness.ExactAdh1CoreHash.ToArray()));
@@ -298,6 +321,7 @@ public static class Xpa1PublicationAuthorizationAuthor
                 request.ObjectCiphertext.Span,
                 0,
                 request.EffectiveExpiresAtUnixSeconds,
+                exactRouteClosure,
                 xpa);
             var xpu = Xpu1Codec.Decode(exactXpu);
             var verified = await Xpa1PublicationAuthorizationVerifier.VerifyAsync(
@@ -366,6 +390,15 @@ public static class Xpa1PublicationAuthorizationAuthor
             offset += value.Length;
         }
         return result;
+    }
+
+    private static byte[] ContactReference(string magic, ReadOnlySpan<byte> hash)
+    {
+        var value = new byte[38];
+        System.Text.Encoding.ASCII.GetBytes(magic).CopyTo(value, 0);
+        BinaryPrimitives.WriteUInt16BigEndian(value.AsSpan(4), 1);
+        hash.CopyTo(value.AsSpan(6));
+        return value;
     }
 
     private static byte[] U32(uint value)

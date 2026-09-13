@@ -64,7 +64,7 @@ public sealed class ContactPublicationAuthorTests
         Assert.Equal(0, signer.CallCount);
     }
 
-    private sealed class Fixture
+    internal sealed class Fixture
     {
         private Fixture(
             ContactNetworkAuthorityVerifierTests.Fixture core,
