@@ -89,6 +89,162 @@ public sealed class AccountDirectoryHeadAuthorTests
         Assert.Equal("JournalSuccessorMismatch", error.Code);
     }
 
+    [Fact]
+    public async Task CurrentAndAbsentQueriesReceiveVerifiableSparseAndAppendProofs()
+    {
+        var network = ContactNetworkAuthorityVerifierTests.Fixture.Create();
+        var alice = AccountDirectoryAdc1VerificationTests.Fixture.Create(0x21, network.Network);
+        var bob = AccountDirectoryAdc1VerificationTests.Fixture.Create(0x31, network.Network);
+        ReadOnlyMemory<byte>[] revoked = [];
+        var aliceCheckpoint = AccountDirectoryAdc1Verifier.Verify(
+            alice.CreateCheckpoint(revoked), alice.Binding, alice.Directory, revoked, 1);
+        var bobCheckpoint = AccountDirectoryAdc1Verifier.Verify(
+            bob.CreateCheckpoint(revoked), bob.Binding, bob.Directory, revoked, 1);
+        var genesis = GenesisHead(network);
+        var signers = network.Witnesses.Take(2).Select(static value =>
+            (IAccountDirectoryAdh1WitnessSigner)new Signer(value)).ToArray();
+        var authored = await AccountDirectoryHeadAuthor.AdvanceAsync(
+            network.Authority,
+            genesis,
+            new AccountDirectoryHeadMutationRequest(
+                [], [], [bobCheckpoint, aliceCheckpoint], 30, 60, 1),
+            signers);
+
+        var present = AccountDirectoryProofMaterialAuthor.Create(
+            authored.ProtectedHead,
+            authored.ExactAllTransitions,
+            [aliceCheckpoint, bobCheckpoint],
+            aliceCheckpoint.Checkpoint.DirectoryLeafKey.Span,
+            genesis);
+        var reference = AccountDirectoryCrypto.CreateReference(
+            "ADC1"u8, 1,
+            SHA256.HashData(AccountDirectoryAdc1Codec.Encode(aliceCheckpoint.Checkpoint)));
+        Assert.Equal(
+            authored.ProtectedHead.CurrentValueMapRoot.ToArray(),
+            AccountDirectorySparseMap.ComputePresentRoot(
+                aliceCheckpoint.Checkpoint.DirectoryLeafKey.Span,
+                reference,
+                present.SparseMapBitmap.Span,
+                Join(present.SparseMapSiblings)).ToArray());
+        var transitionCommitment = AccountDirectoryCrypto.Sha256Domain(
+            "Deep/AccountDirectory/V1/transition", present.ExactTransition.Span);
+        var leaf = AccountDirectoryRfc6962.ComputeLeafHash(transitionCommitment);
+        Assert.True(AccountDirectoryRfc6962.VerifyInclusion(
+            leaf,
+            present.AppendLogIndex,
+            authored.ProtectedHead.TreeSize,
+            Join(present.InclusionProofNodes),
+            authored.ProtectedHead.AppendLogMerkleRoot.Span));
+
+        var missingKey = Enumerable.Repeat((byte)0xe1, 32).ToArray();
+        var absent = AccountDirectoryProofMaterialAuthor.Create(
+            authored.ProtectedHead,
+            authored.ExactAllTransitions,
+            [aliceCheckpoint, bobCheckpoint],
+            missingKey,
+            genesis);
+        Assert.Equal(AccountDirectoryAdp1ResultKind.NonMembership, absent.ResultKind);
+        Assert.Equal(
+            authored.ProtectedHead.CurrentValueMapRoot.ToArray(),
+            AccountDirectorySparseMap.ComputeNonMembershipRoot(
+                missingKey,
+                absent.SparseMapBitmap.Span,
+                Join(absent.SparseMapSiblings)));
+    }
+
+    [Fact]
+    public async Task SuccessorHeadReceivesVerifiableConsistencyProofFromPriorLkg()
+    {
+        var network = ContactNetworkAuthorityVerifierTests.Fixture.Create();
+        var alice = AccountDirectoryAdc1VerificationTests.Fixture.Create(0x21, network.Network);
+        var bob = AccountDirectoryAdc1VerificationTests.Fixture.Create(0x31, network.Network);
+        ReadOnlyMemory<byte>[] revoked = [];
+        var aliceCheckpoint = AccountDirectoryAdc1Verifier.Verify(
+            alice.CreateCheckpoint(revoked), alice.Binding, alice.Directory, revoked, 1);
+        var bobCheckpoint = AccountDirectoryAdc1Verifier.Verify(
+            bob.CreateCheckpoint(revoked), bob.Binding, bob.Directory, revoked, 1);
+        var signers = network.Witnesses.Take(2).Select(static value =>
+            (IAccountDirectoryAdh1WitnessSigner)new Signer(value)).ToArray();
+        var first = await AccountDirectoryHeadAuthor.AdvanceAsync(
+            network.Authority,
+            GenesisHead(network),
+            new AccountDirectoryHeadMutationRequest([], [], [aliceCheckpoint], 30, 60, 1),
+            signers);
+        var second = await AccountDirectoryHeadAuthor.AdvanceAsync(
+            network.Authority,
+            first.ProtectedHead,
+            new AccountDirectoryHeadMutationRequest(
+                first.ExactAllTransitions, [aliceCheckpoint], [bobCheckpoint], 31, 61, 1),
+            signers);
+
+        var proof = AccountDirectoryProofMaterialAuthor.Create(
+            second.ProtectedHead,
+            second.ExactAllTransitions,
+            [aliceCheckpoint, bobCheckpoint],
+            bobCheckpoint.Checkpoint.DirectoryLeafKey.Span,
+            first.ProtectedHead);
+
+        Assert.NotEmpty(proof.ConsistencyProofNodes);
+        Assert.True(AccountDirectoryRfc6962.VerifyConsistency(
+            first.ProtectedHead.TreeSize,
+            second.ProtectedHead.TreeSize,
+            first.ProtectedHead.AppendLogMerkleRoot.Span,
+            second.ProtectedHead.AppendLogMerkleRoot.Span,
+            Join(proof.ConsistencyProofNodes)));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
+    [InlineData(7)]
+    [InlineData(8)]
+    public async Task ConsistencyProofCoversBalancedAndUnbalancedTreeSizes(int priorCount)
+    {
+        const int total = 9;
+        var network = ContactNetworkAuthorityVerifierTests.Fixture.Create();
+        ReadOnlyMemory<byte>[] revoked = [];
+        var checkpoints = Enumerable.Range(0, total)
+            .Select(index => AccountDirectoryAdc1VerificationTests.Fixture.Create(
+                checked((byte)(0x20 + index)), network.Network))
+            .Select(value => AccountDirectoryAdc1Verifier.Verify(
+                value.CreateCheckpoint(revoked), value.Binding, value.Directory, revoked, 1))
+            .ToArray();
+        var signers = network.Witnesses.Take(2).Select(static value =>
+            (IAccountDirectoryAdh1WitnessSigner)new Signer(value)).ToArray();
+        var first = await AccountDirectoryHeadAuthor.AdvanceAsync(
+            network.Authority,
+            GenesisHead(network),
+            new AccountDirectoryHeadMutationRequest(
+                [], [], checkpoints.Take(priorCount).ToArray(), 30, 60, 1),
+            signers);
+        var second = await AccountDirectoryHeadAuthor.AdvanceAsync(
+            network.Authority,
+            first.ProtectedHead,
+            new AccountDirectoryHeadMutationRequest(
+                first.ExactAllTransitions,
+                checkpoints.Take(priorCount).ToArray(),
+                checkpoints.Skip(priorCount).ToArray(),
+                31, 61, 1),
+            signers);
+
+        var proof = AccountDirectoryProofMaterialAuthor.Create(
+            second.ProtectedHead,
+            second.ExactAllTransitions,
+            checkpoints,
+            checkpoints[^1].Checkpoint.DirectoryLeafKey.Span,
+            first.ProtectedHead);
+
+        Assert.True(AccountDirectoryRfc6962.VerifyConsistency(
+            first.ProtectedHead.TreeSize,
+            second.ProtectedHead.TreeSize,
+            first.ProtectedHead.AppendLogMerkleRoot.Span,
+            second.ProtectedHead.AppendLogMerkleRoot.Span,
+            Join(proof.ConsistencyProofNodes)));
+    }
+
     private static AccountDirectoryProtectedLkg GenesisHead(
         ContactNetworkAuthorityVerifierTests.Fixture fixture)
     {
@@ -145,4 +301,7 @@ public sealed class AccountDirectoryHeadAuthorTests
                 PublicKeyAuth.SignDetached(signingInput.ToArray(), witness.Key.PrivateKey));
         }
     }
+
+    private static byte[] Join(IEnumerable<ReadOnlyMemory<byte>> values) =>
+        values.SelectMany(static value => value.ToArray()).ToArray();
 }
