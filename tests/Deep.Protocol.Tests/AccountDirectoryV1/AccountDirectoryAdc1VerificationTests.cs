@@ -11,6 +11,65 @@ namespace Deep.Protocol.Tests.AccountDirectoryV1;
 public sealed class AccountDirectoryAdc1VerificationTests
 {
     [Fact]
+    public void GenesisAdmission_ReverifiesExactPublicClosure()
+    {
+        var fixture = Fixture.Create();
+        var checkpoint = fixture.CreateCheckpoint([]);
+        var request = fixture.CreateGenesisAdmission(checkpoint);
+
+        var verified = AccountDirectoryGenesisAdmissionVerifier.Verify(
+            request,
+            trustedUnixSeconds: 1_700_000_123,
+            deploymentProfileId: 7,
+            supportedReader: 1);
+
+        Assert.Equal(
+            AccountDirectoryAdc1Codec.Encode(checkpoint),
+            AccountDirectoryAdc1Codec.Encode(verified.Checkpoint));
+        Assert.Equal(fixture.DeepId.CanonicalBytes.ToArray(),
+            verified.Binding.DeepId.CanonicalBytes.ToArray());
+    }
+
+    [Fact]
+    public void GenesisAdmission_RejectsChangedDeviceCertificate()
+    {
+        var fixture = Fixture.Create();
+        var checkpoint = fixture.CreateCheckpoint([]);
+        var request = fixture.CreateGenesisAdmission(checkpoint);
+        var changed = request.ExactDpd1.Single().ToArray();
+        changed[^1] ^= 1;
+        var hostile = new AccountDirectoryGenesisAdmissionRequest(
+            request.ExactDpa1.Span,
+            request.ExactDrs1.Span,
+            [changed],
+            request.ExactDid1.Span,
+            request.ExactDab1.Span,
+            request.ExactDmd1.Span,
+            request.ExactAdc1.Span,
+            request.RevokedDcaAuthorizationIds);
+
+        var exception = Assert.Throws<AccountDirectoryGenesisAdmissionException>(() =>
+            AccountDirectoryGenesisAdmissionVerifier.Verify(
+                hostile, 1_700_000_123, 7, 1));
+
+        Assert.Equal("AdmissionRejected", exception.Code);
+    }
+
+    [Fact]
+    public void GenesisAdmission_RejectsFutureDatedCheckpoint()
+    {
+        var fixture = Fixture.Create();
+        var checkpoint = fixture.CreateCheckpoint([]);
+        var request = fixture.CreateGenesisAdmission(checkpoint);
+
+        var exception = Assert.Throws<AccountDirectoryGenesisAdmissionException>(() =>
+            AccountDirectoryGenesisAdmissionVerifier.Verify(
+                request, 1_700_000_122, 7, 1));
+
+        Assert.Equal("FutureDated", exception.Code);
+    }
+
+    [Fact]
     public void Capability_IsNonForgeable_AndVerifierHasNoCallerSignatureCallback()
     {
         Assert.Empty(typeof(VerifiedAccountDirectoryCheckpoint).GetConstructors());
@@ -191,7 +250,6 @@ public sealed class AccountDirectoryAdc1VerificationTests
             var network = exactNetwork?.ToArray() ?? Bytes(16, 0x11);
             if (network.Length != 16 || network.AsSpan().IndexOfAnyExcept((byte)0) < 0)
                 throw new ArgumentException("The fixture network must be 16 nonzero bytes.", nameof(exactNetwork));
-            var accountId = Bytes(32, accountValue);
             var deviceId = Bytes(32, 0x33);
             var addressKey = PublicKeyAuth.GenerateKeyPair();
             var accountKey = PublicKeyAuth.GenerateKeyPair();
@@ -211,11 +269,45 @@ public sealed class AccountDirectoryAdc1VerificationTests
             dpaFields[9] = U64(100);
             dpaFields[10] = U64(1);
             dpaFields[11] = U16(ArtifactRegistry.IdentityAuthV1Ed25519);
-            var certificate = IdentityCodec.DecodeAccountCertificate(
-                CanonicalGrammar.Encode(RecordDefinitions.Dpa1, dpaFields));
-            var account = new VerifiedAccount(certificate, accountId);
-            var drs = ApplicationCoreFixture.Revocations(network, accountId);
-            var revocations = new VerifiedRevocationState(account, drs, new RevocationCatalog([]));
+            var unsignedDpa = CanonicalGrammar.DecodeOwned(
+                CanonicalGrammar.Encode(RecordDefinitions.Dpa1, dpaFields),
+                RecordDefinitions.Dpa1);
+            var dpaSigning = CanonicalGrammar.GetSigningBytes(
+                unsignedDpa, "Deep/IdentityAuth/V1/account-certificate");
+            dpaFields[12] = PublicKeyAuth.SignDetached(dpaSigning, accountKey.PrivateKey);
+            dpaFields[13] = PublicKeyAuth.SignDetached(dpaSigning, deviceIssuerKey.PrivateKey);
+            dpaFields[14] = PublicKeyAuth.SignDetached(dpaSigning, revocationKey.PrivateKey);
+            dpaFields[15] = PublicKeyAuth.SignDetached(dpaSigning, resetKey.PrivateKey);
+            var exactDpa = CanonicalGrammar.Encode(RecordDefinitions.Dpa1, dpaFields);
+            var account = IdentityVerifier.VerifyAccountCertificate(exactDpa);
+            var accountId = account.DeepAccountIdHash.ToArray();
+
+            var drsFields = MinimumFields(RecordDefinitions.Drs1);
+            drsFields[0] = network;
+            drsFields[1] = accountId;
+            drsFields[2] = U64(1);
+            drsFields[3] = U64(1);
+            drsFields[4] = U64(100);
+            drsFields[5] = U64(0);
+            drsFields[6] = new byte[38];
+            drsFields[7] = IdentityAuthorityVerifier.ComputeKeyHash(
+                network, KeyScope.AccountRevocation, accountId, 1,
+                revocationKey.PublicKey);
+            drsFields[8] = U16(0);
+            drsFields[9] = ReadOnlyMemory<byte>.Empty;
+            drsFields[10] = new byte[32];
+            var unsignedDrs = CanonicalGrammar.DecodeOwned(
+                CanonicalGrammar.Encode(RecordDefinitions.Drs1, drsFields),
+                RecordDefinitions.Drs1);
+            drsFields[11] = PublicKeyAuth.SignDetached(
+                CanonicalGrammar.GetSigningBytes(
+                    unsignedDrs, "Deep/IdentityAuth/V1/revocation-snapshot"),
+                revocationKey.PrivateKey);
+            var exactDrs = CanonicalGrammar.Encode(RecordDefinitions.Drs1, drsFields);
+            var identityVerifier = new IdentityRelativeVerifier();
+            var relativeIdentity = identityVerifier.VerifyGenesis(
+                exactDpa, exactDrs, [], 100);
+            var revocations = relativeIdentity.Revocations;
 
             var deviceEd = PublicKeyAuth.GenerateKeyPair();
             var dpdFields = MinimumFields(RecordDefinitions.Dpd1);
@@ -227,22 +319,35 @@ public sealed class AccountDirectoryAdc1VerificationTests
             dpdFields[5] = deviceEd.PublicKey;
             dpdFields[6] = Bytes(32, 0x51);
             dpdFields[7] = Bytes(32, 0x52);
-            dpdFields[8] = U64(1);
+            dpdFields[8] = U64(0);
             dpdFields[10] = Bytes(32, 0x53);
-            dpdFields[11] = U64(drs.Revision);
-            dpdFields[12] = Ref(drs).CanonicalBytes;
-            dpdFields[13] = U64(drs.EntryCount);
-            dpdFields[14] = drs.CurrentHead;
+            dpdFields[11] = U64(revocations.Snapshot.Revision);
+            dpdFields[12] = Ref(revocations.Snapshot).CanonicalBytes;
+            dpdFields[13] = U64(revocations.Snapshot.EntryCount);
+            dpdFields[14] = revocations.Snapshot.CurrentHead;
             dpdFields[15] = U64(100);
-            dpdFields[16] = U64(1_000);
+            dpdFields[16] = U64(2_000_000_000);
             dpdFields[17] = U64((ulong)DeviceCapabilities.MailboxRoleIssuer);
             dpdFields[18] = U16(ArtifactRegistry.IdentityAuthV1Ed25519);
             dpdFields[20] = Bytes(32, 0x55);
-            var deviceCertificate = IdentityCodec.DecodeDeviceCertificate(
-                CanonicalGrammar.Encode(RecordDefinitions.Dpd1, dpdFields));
-            var device = new VerifiedDevice(deviceCertificate, revocations,
-                new X25519Possession(X25519PossessionRole.Device, dpdFields[20].Span));
-            var identity = ApplicationCoreVerifier.CreateIdentityClosure(account, revocations, [device]);
+            dpdFields[9] = new byte[38];
+            dpdFields[10] = IdentityAuthorityVerifier.ComputeKeyHash(
+                network, KeyScope.DeviceCertificateIssuer, accountId, 1,
+                deviceIssuerKey.PublicKey);
+            dpdFields[20] = Bytes(32, 0x55);
+            var unsignedDpd = CanonicalGrammar.DecodeOwned(
+                CanonicalGrammar.Encode(RecordDefinitions.Dpd1, dpdFields),
+                RecordDefinitions.Dpd1);
+            var dpdSigning = CanonicalGrammar.GetSigningBytes(
+                unsignedDpd, "Deep/IdentityAuth/V1/device-certificate");
+            dpdFields[21] = PublicKeyAuth.SignDetached(dpdSigning, deviceEd.PrivateKey);
+            dpdFields[22] = PublicKeyAuth.SignDetached(dpdSigning, deviceIssuerKey.PrivateKey);
+            var exactDpd = CanonicalGrammar.Encode(RecordDefinitions.Dpd1, dpdFields);
+            var device = identityVerifier.RestoreDeviceFromRecovery(
+                relativeIdentity, exactDpd, 100);
+            var identity = ApplicationCoreVerifier.CreateIdentityClosure(
+                relativeIdentity, [device]);
+            var deviceCertificate = device.Certificate;
             var deepId = ApplicationCoreCodec.AuthorDid1(addressKey.PublicKey, Bytes(16, 0x66));
             var fixture = new Fixture(network, accountId, addressKey, accountKey, deviceIssuerKey,
                 account, revocations, identity, deepId, null!, null!);
@@ -311,6 +416,18 @@ public sealed class AccountDirectoryAdc1VerificationTests
                 unsigned.RevokedDcaAuthorizationIdsHash.Span, unsigned.IssuedAt,
                 unsigned.MinimumReader, signature);
         }
+
+        internal AccountDirectoryGenesisAdmissionRequest CreateGenesisAdmission(
+            AccountDirectoryAdc1 checkpoint) => new(
+            Account.Certificate.CanonicalBytes.Span,
+            Revocations.Snapshot.CanonicalBytes.Span,
+            Identity.ActiveDevices.Select(static device =>
+                device.Certificate.CanonicalBytes).ToArray(),
+            DeepId.CanonicalBytes.Span,
+            Binding.Record.CanonicalBytes.Span,
+            Directory.Record.CanonicalBytes.Span,
+            AccountDirectoryAdc1Codec.Encode(checkpoint),
+            []);
 
         internal byte[] ExactDpaReference() =>
             AccountDirectoryCrypto.CreateReference("DPA1"u8, 1,
