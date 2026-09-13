@@ -1062,6 +1062,119 @@ public sealed class VerifiedContactBundleClosure
     public VerifiedDmd1 Directory { get; }
     public CurrentlyAuthoritativeDca1 Authorization { get; }
     public VerifiedAccountDirectoryFreshness Freshness { get; }
+
+    /// <summary>
+    /// Selects the exact XPS1 authorized for the recipient device already
+    /// bound into the current network authority. The returned value is a
+    /// non-forgeable projection of this verified DCB1 closure and is suitable
+    /// for authoring a subsequent XPK1 claim.
+    /// </summary>
+    public VerifiedContactPreKeyServiceClosure GetAuthorizedPreKeyService(
+        VerifiedContactNetworkAuthority authority)
+    {
+        ArgumentNullException.ThrowIfNull(authority);
+        if (!CryptographicOperations.FixedTimeEquals(
+                Bundle.FieldSpan(1), authority.NetworkId.Span))
+        {
+            throw new CryptographicException(
+                "The contact pre-key authority belongs to another network.");
+        }
+
+        var list = Bundle.FieldSpan(12);
+        if (list.IsEmpty)
+        {
+            throw new CryptographicException(
+                "The verified DCB1 contains no pre-key service list.");
+        }
+        var count = list[0];
+        var offset = 1;
+        ContactCodec.Xps1Record? selected = null;
+        for (var index = 0; index < count; index++)
+        {
+            if (list.Length - offset < sizeof(uint))
+            {
+                throw new CryptographicException(
+                    "The verified DCB1 pre-key service list is truncated.");
+            }
+            var length = checked((int)BinaryPrimitives.ReadUInt32BigEndian(
+                list.Slice(offset, sizeof(uint))));
+            offset += sizeof(uint);
+            if (length <= 0 || list.Length - offset < length)
+            {
+                throw new CryptographicException(
+                    "The verified DCB1 pre-key service entry is truncated.");
+            }
+            var candidate = ContactCodec.DecodeXps1(list.Slice(offset, length));
+            offset += length;
+            if (!CryptographicOperations.FixedTimeEquals(
+                    candidate.DeviceId, authority.RecipientDeviceId.Span))
+            {
+                continue;
+            }
+            if (selected is not null)
+            {
+                throw new CryptographicException(
+                    "The verified DCB1 contains duplicate pre-key services for the authorized device.");
+            }
+            selected = candidate;
+        }
+        if (offset != list.Length || selected is null ||
+            !CryptographicOperations.FixedTimeEquals(
+                selected.NetworkId, authority.NetworkId.Span) ||
+            !CryptographicOperations.FixedTimeEquals(
+                selected.Dpd1Reference, authority.RecipientDpd1Reference.Span))
+        {
+            throw new CryptographicException(
+                "The verified DCB1 has no exact pre-key service for the authorized device.");
+        }
+        return new VerifiedContactPreKeyServiceClosure(
+            Bundle.ArtifactHash.Span,
+            selected);
+    }
+}
+
+public sealed class VerifiedContactPreKeyServiceClosure
+{
+    private readonly byte[] dcb1Hash;
+    private readonly byte[] exactXps1;
+    private readonly byte[] xps1Hash;
+    private readonly byte[] networkId;
+    private readonly byte[] serviceCapability;
+    private readonly byte[] deviceId;
+    private readonly byte[] dpd1Reference;
+
+    internal VerifiedContactPreKeyServiceClosure(
+        ReadOnlySpan<byte> verifiedDcb1Hash,
+        ContactCodec.Xps1Record service)
+    {
+        dcb1Hash = verifiedDcb1Hash.ToArray();
+        exactXps1 = service.CanonicalBytes.ToArray();
+        xps1Hash = SHA256.HashData(exactXps1);
+        networkId = service.NetworkId.ToArray();
+        serviceCapability = service.ServiceCapability.ToArray();
+        deviceId = service.DeviceId.ToArray();
+        dpd1Reference = service.Dpd1Reference.ToArray();
+        ServiceGeneration = service.ServiceGeneration;
+        SupportedSuite = service.SupportedSuite;
+        MinimumOneTimeInventory = service.MinimumOneTimeInventory;
+        LastResortReuseLimit = service.LastResortReuseLimit;
+        IssuedAtUnixSeconds = service.IssuedAtUnixSeconds;
+        ExpiresAtUnixSeconds = service.ExpiresAtUnixSeconds;
+    }
+
+    public ReadOnlyMemory<byte> Dcb1Hash => dcb1Hash.ToArray();
+    public ReadOnlyMemory<byte> ExactXps1 => exactXps1.ToArray();
+    public ReadOnlyMemory<byte> Xps1Hash => xps1Hash.ToArray();
+    public ReadOnlyMemory<byte> NetworkId => networkId.ToArray();
+    public ReadOnlyMemory<byte> ServiceCapability => serviceCapability.ToArray();
+    public ReadOnlyMemory<byte> DeviceId => deviceId.ToArray();
+    public ReadOnlyMemory<byte> Dpd1Reference => dpd1Reference.ToArray();
+    public ulong ServiceGeneration { get; }
+    public ushort SupportedSuite { get; }
+    public ushort MinimumOneTimeInventory { get; }
+    public ushort LastResortReuseLimit { get; }
+    public ulong IssuedAtUnixSeconds { get; }
+    public ulong ExpiresAtUnixSeconds { get; }
 }
 
 /// <summary>

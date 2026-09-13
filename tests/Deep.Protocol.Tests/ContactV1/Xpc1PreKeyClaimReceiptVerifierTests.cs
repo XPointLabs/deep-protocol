@@ -37,6 +37,29 @@ public sealed class Xpc1PreKeyClaimReceiptVerifierTests
     }
 
     [Fact]
+    public async Task VerifiedBundleProjectsOnlyTheNetworkAuthorizedPreKeyService()
+    {
+        var fixture = await Fixture.CreateAsync();
+
+        var service = fixture.Bundle.GetAuthorizedPreKeyService(fixture.Authority);
+
+        Assert.Equal(fixture.Bundle.Bundle.ArtifactHash.ToArray(),
+            service.Dcb1Hash.ToArray());
+        Assert.Equal(fixture.Xps1.CanonicalBytes, service.ExactXps1.ToArray());
+        Assert.Equal(SHA256.HashData(fixture.Xps1.CanonicalBytes),
+            service.Xps1Hash.ToArray());
+        Assert.Equal(fixture.Xps1.ServiceCapability,
+            service.ServiceCapability.ToArray());
+        Assert.Equal(fixture.Authority.RecipientDeviceId.ToArray(),
+            service.DeviceId.ToArray());
+        Assert.Empty(typeof(VerifiedContactPreKeyServiceClosure).GetConstructors());
+
+        var copy = service.ServiceCapability.ToArray();
+        copy[0] ^= 0xff;
+        Assert.NotEqual(copy, service.ServiceCapability.ToArray());
+    }
+
+    [Fact]
     public async Task PublicSurfaceHasOneCapabilityProducerAndNoRawTrustInputs()
     {
         var method = Assert.Single(typeof(Xpc1PreKeyClaimReceiptVerifier)
