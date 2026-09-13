@@ -143,7 +143,6 @@ public static class ContactRouteThresholdVerifier
             ContactCodec.ValidateThresholdRouteGraph(advertisement.Record, xrc, xss, pmt, pms);
 
             if (!Fixed(pmt.Field(5).Span, authority.Xnv1CoreReference.Span) ||
-                !Fixed(pmt.Field(14).Span, authority.Adh1CoreReference.Span) ||
                 !Fixed(pms.ArtifactHash.Span, authority.Pms2ArtifactHash.Span) ||
                 !Fixed(xrc.Field(8).Span, authority.Xnv1CoreReference.Span) ||
                 !Fixed(xrc.Field(9).Span, authority.Xnh1CoreReference.Span) ||

@@ -86,6 +86,17 @@ public sealed class XPointOnionCapabilityProducerTests
     }
 
     [Fact]
+    public async Task PlacementManifestDirectoryAnchor_DoesNotHaveToEqualTheLatestDirectoryHead()
+    {
+        var fixture = Fixture.Create();
+
+        var context = await fixture.VerifyWithPmtDirectoryAnchorAsync(0xde);
+
+        context.EnsureCurrent();
+        Assert.NotNull(context.Closure);
+    }
+
+    [Fact]
     public async Task ExactGenesisHead_RehydratesOnlyAnIdenticalProtectedLkg()
     {
         var fixture = Fixture.Create();
@@ -528,6 +539,25 @@ public sealed class XPointOnionCapabilityProducerTests
                 _nodes.Select(static value => (ReadOnlyMemory<byte>)value).ToArray(),
                 new ReadOnlyMemory<byte>[] { _pmt }, previous,
                 new OnionTrustedTimeAuthority(new FixedClock(Bytes(16, 0xc1), _clockSample)), default);
+
+        internal ValueTask<VerifiedOnionNetworkContext> VerifyWithPmtDirectoryAnchorAsync(byte marker)
+        {
+            var pmt = ContactCodec.Decode("PMT2", _pmt);
+            var fields = Enumerable.Range(1, 16)
+                .Select(tag => (ReadOnlyMemory<byte>)pmt.FieldSpan(tag).ToArray()).ToArray();
+            fields[13] = XPointNetworkCodec.EncodeCoreReference("ADH1", Bytes(32, marker));
+            var provisional = ContactCodec.AuthorForValidation("PMT2", fields);
+            var input = provisional.SignatureInput.ToArray();
+            fields[15] = SignatureRows(_witnesses.Take(2).Select(value =>
+                (value.Id, PublicKeyAuth.SignDetached(input, value.Pair.PrivateKey))).ToArray());
+            var anchoredPmt = ContactCodec.AuthorForValidation("PMT2", fields).CanonicalBytes.ToArray();
+            return OnionNetworkContextVerifier.VerifyAsync(
+                _authority, _freshness, new ReadOnlyMemory<byte>[] { _xvp },
+                new ReadOnlyMemory<byte>[] { _xnv }, new ReadOnlyMemory<byte>[] { _xnh },
+                _nodes.Select(static value => (ReadOnlyMemory<byte>)value).ToArray(),
+                new ReadOnlyMemory<byte>[] { anchoredPmt }, null,
+                new OnionTrustedTimeAuthority(new FixedClock(Bytes(16, 0xc1), _clockSample)), default);
+        }
 
         internal ValueTask<VerifiedOnionNetworkContext> RehydrateAsync(XPointNetworkProtectedLkg protectedCurrent) =>
             OnionNetworkContextVerifier.VerifyRehydratedCurrentAsync(

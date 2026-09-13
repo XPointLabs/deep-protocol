@@ -554,10 +554,11 @@ internal static class XPointOnionCapabilityProducer
         ContactRecord pmt,
         IReadOnlyList<Xnd1Record> nodes)
     {
-        if (!pmt.FieldSpan(14).SequenceEqual(freshness.ExactAdh1CoreReference.Span) ||
-            BinaryPrimitives.ReadUInt64BigEndian(pmt.FieldSpan(11)) > freshness.TrustedLowerUnixSeconds ||
+        // PMT2 tag 14 is the signed directory-head audit anchor from issuance,
+        // not a pin to the independently advancing current ADH1.
+        if (BinaryPrimitives.ReadUInt64BigEndian(pmt.FieldSpan(11)) > freshness.TrustedLowerUnixSeconds ||
             freshness.TrustedUpperUnixSeconds >= BinaryPrimitives.ReadUInt64BigEndian(pmt.FieldSpan(12)))
-            Fail("pmt-binding-invalid", "The terminal PMT2 does not bind the exact current ADH1 freshness interval.");
+            Fail("pmt-binding-invalid", "The terminal PMT2 does not cover the authenticated directory freshness interval.");
 
         var mailboxNodes = nodes.Where(static node => (node.RoleMask & (1 << 2)) != 0)
             .OrderBy(static node => node.NodeId.ToArray(), ByteArrayComparer.Instance).ToArray();

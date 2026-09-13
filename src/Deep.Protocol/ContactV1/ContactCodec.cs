@@ -338,7 +338,6 @@ public static class ContactCodec
         RequireReference(xrc1, 5, xra1); RequireReference(xrc1, 6, pmt2);
         RequireHash(xrc1, 7, pms2);
         if (!xrc1.FieldSpan(8).SequenceEqual(pmt2.FieldSpan(5)) ||
-            !xrc1.FieldSpan(19).SequenceEqual(pmt2.FieldSpan(14)) ||
             !xrc1.FieldSpan(11).SequenceEqual(xra1.FieldSpan(10)) ||
             !xrc1.FieldSpan(12).SequenceEqual(xra1.FieldSpan(11)))
             Reject(ContactValidationStage.Closure, "Xrc1AuthorityBindingMismatch");
@@ -395,8 +394,9 @@ public static class ContactCodec
             !xir1.FieldSpan(16).SequenceEqual(authority.Dca1Reference.Span))
             Reject(ContactValidationStage.Closure, "InviteRouteAuthorityMismatch");
 
+        // PMT2 tag 14 is an issuance-time audit anchor; XRC1/XSS1 carry the
+        // exact current directory authority for this route closure.
         if (!pmt2.FieldSpan(5).SequenceEqual(authority.Xnv1CoreReference.Span) ||
-            !pmt2.FieldSpan(14).SequenceEqual(authority.Adh1CoreReference.Span) ||
             !ContactCodec.ArtifactReference(ProtocolMagic.PMT2, pmt2).CanonicalBytes.Span.SequenceEqual(authority.Pmt2ArtifactReference.Span) ||
             !pms2.ArtifactHash.Span.SequenceEqual(authority.Pms2ArtifactHash.Span) ||
             !xrc1.FieldSpan(8).SequenceEqual(authority.Xnv1CoreReference.Span) ||

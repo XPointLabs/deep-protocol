@@ -577,10 +577,11 @@ public sealed partial class VerifiedContactNetworkAuthority
             closure.Head.LatestViewGeneration != closure.View.ViewGeneration ||
             !Fixed(xnvReference, protectedLkg.ViewCoreReference.Span) ||
             !Fixed(xnhReference, protectedLkg.HeadCoreReference.Span) ||
-            !Fixed(closure.Pmt.FieldSpan(5), xnvReference) ||
-            !Fixed(closure.Pmt.FieldSpan(14), freshness.ExactAdh1CoreReference.Span))
-            throw Error("CoreReferenceMismatch", "The verified XNV1/XNH1/ADH1/PMT2 CoreRefs are not exact.");
+            !Fixed(closure.Pmt.FieldSpan(5), xnvReference))
+            throw Error("CoreReferenceMismatch", "The verified XNV1/XNH1/PMT2 network references are not exact.");
 
+        // PMT2 tag 14 remains its issuance-time audit anchor. Current directory
+        // freshness is authenticated by the exact ADH1/DTT1 closure below.
         if (!Fixed(closure.Adh1CoreReference, freshness.ExactAdh1CoreReference.Span) ||
             !Fixed(closure.Dtt1CoreHash, freshness.ExactDtt1CoreHash.Span) ||
             !Fixed(closure.FreshnessBootId, freshness.BootId.Span) ||
