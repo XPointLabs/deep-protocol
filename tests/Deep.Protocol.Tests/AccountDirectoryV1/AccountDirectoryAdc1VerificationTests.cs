@@ -186,9 +186,11 @@ public sealed class AccountDirectoryAdc1VerificationTests
         internal VerifiedDab1 Binding { get; }
         internal VerifiedDmd1 Directory { get; }
 
-        internal static Fixture Create(byte accountValue = 0x22)
+        internal static Fixture Create(byte accountValue = 0x22, byte[]? exactNetwork = null)
         {
-            var network = Bytes(16, 0x11);
+            var network = exactNetwork?.ToArray() ?? Bytes(16, 0x11);
+            if (network.Length != 16 || network.AsSpan().IndexOfAnyExcept((byte)0) < 0)
+                throw new ArgumentException("The fixture network must be 16 nonzero bytes.", nameof(exactNetwork));
             var accountId = Bytes(32, accountValue);
             var deviceId = Bytes(32, 0x33);
             var addressKey = PublicKeyAuth.GenerateKeyPair();
