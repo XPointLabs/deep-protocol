@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using Deep.Protocol.AccountDirectoryV1;
 using Deep.Protocol.ApplicationCore;
 using Deep.Protocol.DeepNative;
 using Deep.Protocol.Identity;
@@ -580,6 +581,30 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
         Assert.Equal(1UL, currentDirectory.Head.Record.DirectoryGeneration);
         Assert.Equal(issued.Verified.Certificate.DeviceId.ToArray(),
             Assert.Single(currentDirectory.Head.Record.ActiveDevices).DeviceId.ToArray());
+        var addressBinding = recovery.AuthorGenesisDab1(closure, deploymentProfileId: 1);
+        Assert.False(addressBinding.ForkLatched);
+        Assert.Equal(0UL, addressBinding.Head.Record.BindingGeneration);
+        Assert.Equal(account.Identity.Account.DeepAccountIdHash.ToArray(),
+            addressBinding.Head.Record.DeepAccountId.ToArray());
+        var contactAuthorization = recovery.AuthorGenesisDca1(
+            addressBinding,
+            currentDirectory,
+            issued.Verified,
+            trustedUnixSeconds: 1_900_000_300);
+        Assert.Equal(issued.Verified.Certificate.DeviceId.ToArray(),
+            contactAuthorization.Verified.Record.PublisherDeviceId.ToArray());
+        Assert.Equal(0x03, contactAuthorization.Verified.Record.AllowedInviteKindMask);
+        var directoryCheckpoint = recovery.AuthorGenesisAdc1(
+            addressBinding,
+            currentDirectory,
+            issuedAtUnixSeconds: 1_900_000_300);
+        Assert.Equal(addressBinding.Head.Record.RecordHash.ToArray(),
+            directoryCheckpoint.Checkpoint.ExactDab1Hash.ToArray());
+        Assert.Equal(currentDirectory.Head.Record.RecordHash.ToArray(),
+            directoryCheckpoint.Checkpoint.ExactDmd1Hash.ToArray());
+        Assert.Equal(AccountDirectoryAdc1Verifier.ComputeDirectoryLeafKey(
+                Network, addressBinding.Head.DeepId.CanonicalBytes.Span),
+            directoryCheckpoint.Checkpoint.DirectoryLeafKey.ToArray());
         using var dpk2Authority = device.CreateDpk2AuthoringAuthority(issued.Verified);
         var dpk2Context = new Dpk2AuthoringContext(
             currentDirectory, 1, 1, 1,
@@ -591,6 +616,19 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
         using var wrongRecovery = Recovery(wrongNetwork);
         Assert.Throws<RecordException>(() =>
             wrongRecovery.AuthorGenesisDmd1(closure, 1_900_000_200));
+        Assert.Throws<RecordException>(() =>
+            wrongRecovery.AuthorGenesisDab1(closure, deploymentProfileId: 1));
+        Assert.Throws<RecordException>(() =>
+            wrongRecovery.AuthorGenesisDca1(
+                addressBinding,
+                currentDirectory,
+                issued.Verified,
+                trustedUnixSeconds: 1_900_000_300));
+        Assert.Throws<RecordException>(() =>
+            wrongRecovery.AuthorGenesisAdc1(
+                addressBinding,
+                currentDirectory,
+                issuedAtUnixSeconds: 1_900_000_300));
         Assert.Empty(typeof(VerifiedIdentityRelative).GetConstructors());
         Assert.Empty(typeof(VerifiedDeviceRelative).GetConstructors());
     }

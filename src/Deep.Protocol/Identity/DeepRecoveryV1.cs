@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using Deep.Protocol.AccountDirectoryV1;
 using Deep.Protocol.ApplicationCore;
 using Deep.Protocol.DeepNative;
 
@@ -544,6 +545,8 @@ public delegate void DeepRecoveryCanonicalUtf8Consumer(
 public sealed class DeepRecoveryAccountCapabilities : IDisposable
 {
     private const int MaxCanonicalSigningBytes = 64 * 1024;
+    private const ulong ContactPublicationLifetimeSeconds = 400UL * 24 * 60 * 60;
+    private const ulong MaximumGenesisContactBundleGeneration = 4096;
     private readonly object sync = new();
     private readonly byte[] networkId;
     private readonly byte[] accountSigningSeed;
@@ -647,6 +650,245 @@ public sealed class DeepRecoveryAccountCapabilities : IDisposable
             {
                 ThrowIfDisposed();
                 return addressReadCapability.ToArray();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Authors and verifies the generation-zero address binding for this recovery
+    /// authority. Neither the address signing seed nor the account signing seed
+    /// leaves this capability.
+    /// </summary>
+    public Dab1LineageState AuthorGenesisDab1(
+        VerifiedApplicationIdentityClosure identity,
+        ushort deploymentProfileId)
+    {
+        ArgumentNullException.ThrowIfNull(identity);
+        if (deploymentProfileId == 0)
+            throw new ArgumentOutOfRangeException(nameof(deploymentProfileId));
+
+        lock (sync)
+        {
+            ThrowIfDisposed();
+            EnsureIdentityAuthority(identity);
+            byte[]? addressPublic = null;
+            byte[]? readCapability = null;
+            byte[]? addressSignature = null;
+            byte[]? accountSignature = null;
+            try
+            {
+                addressPublic = DeepIdentityCrypto.DeriveEd25519PublicKey(addressSigningSeed);
+                readCapability = addressReadCapability.ToArray();
+                var did = ApplicationCoreCodec.AuthorDid1(addressPublic, readCapability);
+                var realm = ApplicationCoreCodec.DeriveIdentityRealmId(
+                    networkId, deploymentProfileId);
+                var dpaReference = ApplicationCoreCodec.CreateArtifactReference(
+                    (ushort)ArtifactType.Dpa1,
+                    checked((uint)identity.Account.Certificate.CanonicalBytes.Length),
+                    identity.Account.Certificate.CanonicalHash.Span);
+                var unsigned = ApplicationCoreCodec.AuthorDab1(
+                    did.RecordHash.Span,
+                    realm.Span,
+                    bindingGeneration: 0,
+                    new byte[32],
+                    identity.Account.DeepAccountIdHash.Span,
+                    AccountGeneration,
+                    dpaReference,
+                    new byte[64],
+                    new byte[64]);
+                addressSignature = SignBytes(
+                    unsigned.AddressSignatureInput.Span, addressSigningSeed);
+                accountSignature = SignBytes(
+                    unsigned.AccountSignatureInput.Span, accountSigningSeed);
+                var authored = ApplicationCoreCodec.AuthorDab1(
+                    did.RecordHash.Span,
+                    realm.Span,
+                    bindingGeneration: 0,
+                    new byte[32],
+                    identity.Account.DeepAccountIdHash.Span,
+                    AccountGeneration,
+                    dpaReference,
+                    addressSignature,
+                    accountSignature);
+                var verified = ApplicationCoreVerifier.VerifyDab1(
+                    authored, did, identity, deploymentProfileId);
+                return ApplicationCoreVerifier.StartDab1Lineage(verified).Next;
+            }
+            finally
+            {
+                ZeroOwned(addressPublic);
+                ZeroOwned(readCapability);
+                ZeroOwned(addressSignature);
+                ZeroOwned(accountSignature);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Issues the initial recovery-authorized contact-publication delegation to
+    /// one verified active device. The authorization ID is generated internally.
+    /// </summary>
+    public CurrentlyAuthoritativeDca1 AuthorGenesisDca1(
+        Dab1LineageState binding,
+        Dmd1LineageState directory,
+        VerifiedDeviceRelative publisherDevice,
+        ulong trustedUnixSeconds)
+    {
+        ArgumentNullException.ThrowIfNull(binding);
+        ArgumentNullException.ThrowIfNull(directory);
+        ArgumentNullException.ThrowIfNull(publisherDevice);
+        if (trustedUnixSeconds == 0 ||
+            trustedUnixSeconds > ulong.MaxValue - ContactPublicationLifetimeSeconds)
+            throw new ArgumentOutOfRangeException(nameof(trustedUnixSeconds));
+
+        lock (sync)
+        {
+            ThrowIfDisposed();
+            EnsureIdentityAuthority(binding.Head.Identity);
+            if (!ReferenceEquals(binding.Head.Identity, directory.Head.Identity) ||
+                !ReferenceEquals(publisherDevice.Identity.Account, directory.Head.Identity.Account) ||
+                !directory.Head.Record.ActiveDevices.Any(entry =>
+                    entry.DeviceId.Span.SequenceEqual(publisherDevice.Certificate.DeviceId.Span)))
+                throw new RecordException(
+                    RecordError.InvalidTransition,
+                    "Genesis DCA1 requires the exact active publisher in the DAB1/DMD1 identity closure.");
+
+            byte[]? authorizationId = null;
+            byte[]? signature = null;
+            try
+            {
+                authorizationId = RandomNonzero(32);
+                var account = directory.Head.Identity.Account;
+                var dpaReference = ApplicationCoreCodec.CreateArtifactReference(
+                    (ushort)ArtifactType.Dpa1,
+                    checked((uint)account.Certificate.CanonicalBytes.Length),
+                    account.Certificate.CanonicalHash.Span);
+                var dabReference = ApplicationCoreCodec.CreateArtifactReference(
+                    ApplicationCoreCodec.Dab1ArtifactTypeCode,
+                    checked((uint)binding.Head.Record.CanonicalBytes.Length),
+                    binding.Head.Record.RecordHash.Span);
+                var expiresAt = checked(trustedUnixSeconds + ContactPublicationLifetimeSeconds);
+                var unsigned = ApplicationCoreCodec.AuthorDca1(
+                    networkId,
+                    account.DeepAccountIdHash.Span,
+                    dpaReference,
+                    directory.Head.Record.DirectoryGeneration,
+                    directory.Head.Record.RecordHash.Span,
+                    authorizationId,
+                    publisherDevice.Certificate.DeviceId.Span,
+                    allowedInviteKindMask: 0x03,
+                    maximumBundleGeneration: MaximumGenesisContactBundleGeneration,
+                    trustedUnixSeconds,
+                    expiresAt,
+                    new byte[64],
+                    binding.Head.DeepId.RecordHash.Span,
+                    dabReference);
+                signature = SignBytes(unsigned.SignatureInput.Span, accountSigningSeed);
+                var authored = ApplicationCoreCodec.AuthorDca1(
+                    networkId,
+                    account.DeepAccountIdHash.Span,
+                    dpaReference,
+                    directory.Head.Record.DirectoryGeneration,
+                    directory.Head.Record.RecordHash.Span,
+                    authorizationId,
+                    publisherDevice.Certificate.DeviceId.Span,
+                    allowedInviteKindMask: 0x03,
+                    maximumBundleGeneration: MaximumGenesisContactBundleGeneration,
+                    trustedUnixSeconds,
+                    expiresAt,
+                    signature,
+                    binding.Head.DeepId.RecordHash.Span,
+                    dabReference);
+                var verified = ApplicationCoreVerifier.VerifyDca1(
+                    authored, binding.Head, directory.Head);
+                return ApplicationCoreVerifier.RequireDca1CurrentlyAuthoritative(
+                    verified, trustedUnixSeconds);
+            }
+            finally
+            {
+                ZeroOwned(authorizationId);
+                ZeroOwned(signature);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Authors and verifies the account-owned generation-zero ADC1 leaf. The
+    /// global ADH1 tree and witness receipts remain directory-authority work.
+    /// </summary>
+    public VerifiedAccountDirectoryCheckpoint AuthorGenesisAdc1(
+        Dab1LineageState binding,
+        Dmd1LineageState directory,
+        ulong issuedAtUnixSeconds,
+        ushort minimumReader = 1)
+    {
+        ArgumentNullException.ThrowIfNull(binding);
+        ArgumentNullException.ThrowIfNull(directory);
+        if (issuedAtUnixSeconds == 0)
+            throw new ArgumentOutOfRangeException(nameof(issuedAtUnixSeconds));
+        if (minimumReader == 0)
+            throw new ArgumentOutOfRangeException(nameof(minimumReader));
+
+        lock (sync)
+        {
+            ThrowIfDisposed();
+            EnsureIdentityAuthority(binding.Head.Identity);
+            if (!ReferenceEquals(binding.Head.Identity, directory.Head.Identity))
+                throw new RecordException(
+                    RecordError.InvalidTransition,
+                    "Genesis ADC1 requires one exact DAB1/DMD1 identity closure.");
+
+            byte[]? revokedHash = null;
+            byte[]? signingInput = null;
+            byte[]? signature = null;
+            try
+            {
+                var account = directory.Head.Identity.Account;
+                var leafKey = AccountDirectoryAdc1Verifier.ComputeDirectoryLeafKey(
+                    networkId, binding.Head.DeepId.CanonicalBytes.Span);
+                revokedHash = AccountDirectoryAdc1Verifier
+                    .ComputeRevokedDcaAuthorizationIdsHash([]);
+                var dpaReference = AccountDirectoryCrypto.CreateReference(
+                    ProtocolMagicBytes.DPA1, 1, account.Certificate.CanonicalHash.Span);
+                var drsReference = AccountDirectoryCrypto.CreateReference(
+                    ProtocolMagicBytes.DRS1, 1,
+                    directory.Head.Identity.Revocations.Snapshot.CanonicalHash.Span);
+                signingInput = AccountDirectoryAdc1Codec.CreateDeviceIssuerSigningInput(
+                    networkId,
+                    leafKey,
+                    AccountGeneration,
+                    checkpointGeneration: 0,
+                    new byte[32],
+                    dpaReference,
+                    drsReference,
+                    directory.Head.Record.RecordHash.Span,
+                    binding.Head.Record.RecordHash.Span,
+                    revokedHash,
+                    issuedAtUnixSeconds,
+                    minimumReader);
+                signature = SignBytes(signingInput, deviceIssuerSigningSeed);
+                var authored = new AccountDirectoryAdc1(
+                    networkId,
+                    leafKey,
+                    AccountGeneration,
+                    checkpointGeneration: 0,
+                    new byte[32],
+                    dpaReference,
+                    drsReference,
+                    directory.Head.Record.RecordHash.Span,
+                    binding.Head.Record.RecordHash.Span,
+                    revokedHash,
+                    issuedAtUnixSeconds,
+                    minimumReader,
+                    signature);
+                return AccountDirectoryAdc1Verifier.Verify(
+                    authored, binding.Head, directory.Head, [], minimumReader);
+            }
+            finally
+            {
+                ZeroOwned(revokedHash);
+                ZeroOwned(signingInput);
+                ZeroOwned(signature);
             }
         }
     }
@@ -875,6 +1117,57 @@ public sealed class DeepRecoveryAccountCapabilities : IDisposable
                 ZeroOwned(signature);
             }
         }
+    }
+
+    private byte[] SignBytes(ReadOnlySpan<byte> message, byte[] seed)
+    {
+        if (message.Length is < 1 or > MaxCanonicalSigningBytes)
+            throw new RecordException(
+                RecordError.InvalidLength,
+                "Identity signing projection is outside its bound.");
+        var signature = new byte[OwnedSodiumEd25519.SignatureSize];
+        Span<byte> temporaryPublicKey = stackalloc byte[OwnedSodiumEd25519.PublicKeySize];
+        Span<byte> temporarySecretKey = stackalloc byte[OwnedSodiumEd25519.SecretKeySize];
+        OwnedSodiumEd25519.SignDetached(
+            seed, message, signature, temporaryPublicKey, temporarySecretKey);
+        return signature;
+    }
+
+    private void EnsureIdentityAuthority(VerifiedApplicationIdentityClosure identity)
+    {
+        var certificate = identity.Account.Certificate;
+        byte[]? accountPublic = null;
+        byte[]? issuerPublic = null;
+        try
+        {
+            accountPublic = DeepIdentityCrypto.DeriveEd25519PublicKey(accountSigningSeed);
+            issuerPublic = DeepIdentityCrypto.DeriveEd25519PublicKey(deviceIssuerSigningSeed);
+            if (AccountGeneration != certificate.AccountGeneration ||
+                !networkId.AsSpan().SequenceEqual(certificate.NetworkId.Span) ||
+                !accountPublic.AsSpan().SequenceEqual(
+                    certificate.AccountEd25519PublicKey.Span) ||
+                !issuerPublic.AsSpan().SequenceEqual(
+                    certificate.DeviceIssuerEd25519PublicKey.Span))
+                throw new RecordException(
+                    RecordError.InvalidTransition,
+                    "The verified identity does not belong to this recovery authority.");
+        }
+        finally
+        {
+            ZeroOwned(accountPublic);
+            ZeroOwned(issuerPublic);
+        }
+    }
+
+    private static byte[] RandomNonzero(int length)
+    {
+        byte[] value;
+        do
+        {
+            value = RandomNumberGenerator.GetBytes(length);
+        }
+        while (value.AsSpan().IndexOfAnyExcept((byte)0) < 0);
+        return value;
     }
 
 
