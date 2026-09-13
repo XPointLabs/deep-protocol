@@ -75,6 +75,64 @@ public sealed class AuthoredContactRouteAdvertisement
 }
 
 /// <summary>
+/// Rehydrates the device-authored XRA1 capability at a remote threshold-authority
+/// boundary. Raw XRA1 bytes become usable only after they match the exact current
+/// proposal capability and their device signature verifies.
+/// </summary>
+public static class ContactRouteAdvertisementVerifier
+{
+    public static AuthoredContactRouteAdvertisement VerifyExact(
+        VerifiedContactRouteProposalAuthority authority,
+        ReadOnlyMemory<byte> exactXra1)
+    {
+        ArgumentNullException.ThrowIfNull(authority);
+        if (exactXra1.Length != 550)
+            throw new ContactPublicationAuthoringException(
+                "InvalidRouteAdvertisementSize",
+                "The exact XRA1 proposal must be exactly 550 bytes.");
+        try
+        {
+            var record = ContactCodec.Decode(ProtocolMagic.XRA1, exactXra1.Span);
+            Validate(authority, record);
+            return new AuthoredContactRouteAdvertisement(record, record.Field(6).Span);
+        }
+        catch (ContactPublicationAuthoringException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is ArgumentException or FormatException or
+            CryptographicException or OverflowException)
+        {
+            throw new ContactPublicationAuthoringException(
+                "InvalidRouteAdvertisementInput",
+                "The exact XRA1 proposal is malformed or unauthorized.", exception);
+        }
+    }
+
+    internal static void Validate(
+        VerifiedContactRouteProposalAuthority authority,
+        ContactRecord record)
+    {
+        if (!StringComparer.Ordinal.Equals(record.Magic, ProtocolMagic.XRA1) ||
+            !Fixed(record.Field(1).Span, authority.NetworkId.Span) ||
+            !Fixed(record.Field(5).Span, authority.Pmt2ArtifactReference.Span) ||
+            !Fixed(record.Field(14).Span, authority.RecipientDeviceId.Span) ||
+            !Fixed(record.Field(15).Span, authority.RecipientDpd1Reference.Span) ||
+            BinaryPrimitives.ReadUInt64BigEndian(record.Field(12).Span) >
+                authority.TrustedLowerUnixSeconds ||
+            BinaryPrimitives.ReadUInt64BigEndian(record.Field(13).Span) <=
+                authority.TrustedUpperUnixSeconds)
+            throw new ContactPublicationAuthoringException(
+                "RouteAdvertisementMismatch",
+                "The XRA1 proposal does not bind the exact current proposal authority.");
+        ContactCodec.VerifyDeviceSignature(record, authority.RecipientDevicePublicKey.Span);
+    }
+
+    private static bool Fixed(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right) =>
+        left.Length == right.Length && CryptographicOperations.FixedTimeEquals(left, right);
+}
+
+/// <summary>
 /// Authors only the device-owned XRA1 proposal. Selection, replica and live
 /// route authority remain absent until the directory threshold returns PMS2,
 /// XRC1 and XSS1 for these exact bytes.

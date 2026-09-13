@@ -114,6 +114,89 @@ public sealed class AuthoredContactRouteThresholdClosure
 }
 
 /// <summary>
+/// Rehydrates a remote threshold-authority response only after all exact
+/// PMS2/XRC1/XSS1 bindings, validity windows and witness thresholds verify.
+/// No device-custody callback is required by this verifier.
+/// </summary>
+public static class ContactRouteThresholdVerifier
+{
+    public static async ValueTask<AuthoredContactRouteThresholdClosure> VerifyExactAsync(
+        VerifiedContactRouteProposalAuthority proposal,
+        AuthoredContactRouteAdvertisement advertisement,
+        ReadOnlyMemory<byte> exactPms2,
+        ReadOnlyMemory<byte> exactXrc1,
+        ReadOnlyMemory<byte> exactXss1,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(proposal);
+        ArgumentNullException.ThrowIfNull(advertisement);
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            ContactRouteAdvertisementVerifier.Validate(proposal, advertisement.Record);
+            var pmt = ContactCodec.Decode(ProtocolMagic.PMT2, proposal.ExactPmt2Span);
+            var pms = ContactCodec.Decode(ProtocolMagic.PMS2, exactPms2.Span);
+            var xrc = ContactCodec.Decode(ProtocolMagic.XRC1, exactXrc1.Span);
+            var xss = ContactCodec.Decode(ProtocolMagic.XSS1, exactXss1.Span);
+            var authority = await ContactNetworkAuthorityVerifier.BindSelectionAsync(
+                proposal, exactPms2, cancellationToken).ConfigureAwait(false);
+            ContactCodec.ValidateThresholdRouteGraph(advertisement.Record, xrc, xss, pmt, pms);
+
+            if (!Fixed(pmt.Field(5).Span, authority.Xnv1CoreReference.Span) ||
+                !Fixed(pmt.Field(14).Span, authority.Adh1CoreReference.Span) ||
+                !Fixed(pms.ArtifactHash.Span, authority.Pms2ArtifactHash.Span) ||
+                !Fixed(xrc.Field(8).Span, authority.Xnv1CoreReference.Span) ||
+                !Fixed(xrc.Field(9).Span, authority.Xnh1CoreReference.Span) ||
+                !Fixed(xrc.Field(19).Span, authority.Adh1CoreReference.Span) ||
+                !Fixed(xss.Field(8).Span, authority.Xnv1CoreReference.Span) ||
+                !Fixed(xss.Field(12).Span, authority.Adh1CoreReference.Span))
+                throw new ContactPublicationAuthoringException(
+                    "RouteThresholdAuthorityMismatch",
+                    "The threshold route records do not bind the verified network/directory authority.");
+
+            var trusted = authority.TrustedUnixSeconds;
+            if (!authority.IsCurrentAt(trusted) ||
+                !CurrentAt(advertisement.Record, 12, 13, trusted) ||
+                !CurrentAt(pmt, 11, 12, trusted) ||
+                !CurrentAt(pms, 8, 9, trusted) ||
+                !CurrentAt(xrc, 17, 18, trusted) ||
+                !CurrentAt(xss, 10, 11, trusted))
+                throw new ContactPublicationAuthoringException(
+                    "RouteThresholdExpired",
+                    "The threshold route response is not current at the authenticated instant.");
+
+            authority.VerifyWitnessThreshold(pmt, 16);
+            authority.VerifyWitnessThreshold(pms, 11);
+            authority.VerifyWitnessThreshold(xrc, 21);
+            authority.VerifyWitnessThreshold(xss, 14);
+            return new AuthoredContactRouteThresholdClosure(authority, pms, xrc, xss);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (ContactPublicationAuthoringException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is ArgumentException or FormatException or
+            CryptographicException or OverflowException or InvalidOperationException)
+        {
+            throw new ContactPublicationAuthoringException(
+                "InvalidRouteThresholdResponse",
+                "The exact PMS2/XRC1/XSS1 response failed closed.", exception);
+        }
+    }
+
+    private static bool CurrentAt(ContactRecord record, int fromTag, int untilTag, ulong trusted) =>
+        BinaryPrimitives.ReadUInt64BigEndian(record.Field(fromTag).Span) <= trusted &&
+        trusted < BinaryPrimitives.ReadUInt64BigEndian(record.Field(untilTag).Span);
+
+    private static bool Fixed(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right) =>
+        left.Length == right.Length && CryptographicOperations.FixedTimeEquals(left, right);
+}
+
+/// <summary>
 /// Authors the threshold-owned PMS2/XRC1/XSS1 half only after verifying the
 /// exact active-device XRA1 proposal and current proposal authority.
 /// </summary>
@@ -322,22 +405,7 @@ public static class ContactRouteThresholdAuthor
 
     private static void ValidateAdvertisement(
         VerifiedContactRouteProposalAuthority proposal,
-        ContactRecord xra)
-    {
-        if (!StringComparer.Ordinal.Equals(xra.Magic, ProtocolMagic.XRA1) ||
-            !Fixed(xra.Field(1).Span, proposal.NetworkId.Span) ||
-            !Fixed(xra.Field(5).Span, proposal.Pmt2ArtifactReference.Span) ||
-            !Fixed(xra.Field(14).Span, proposal.RecipientDeviceId.Span) ||
-            !Fixed(xra.Field(15).Span, proposal.RecipientDpd1Reference.Span) ||
-            BinaryPrimitives.ReadUInt64BigEndian(xra.Field(12).Span) >
-                proposal.TrustedLowerUnixSeconds ||
-            BinaryPrimitives.ReadUInt64BigEndian(xra.Field(13).Span) <=
-                proposal.TrustedUpperUnixSeconds)
-            throw new ContactPublicationAuthoringException(
-                "RouteAdvertisementMismatch",
-                "The XRA1 proposal does not bind the exact current proposal authority.");
-        ContactCodec.VerifyDeviceSignature(xra, proposal.RecipientDevicePublicKey.Span);
-    }
+        ContactRecord xra) => ContactRouteAdvertisementVerifier.Validate(proposal, xra);
 
     private static SignerBinding[] ValidateSigners(
         VerifiedXPointNetworkAuthority authority,

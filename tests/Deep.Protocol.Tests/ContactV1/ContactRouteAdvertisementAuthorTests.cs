@@ -64,6 +64,28 @@ public sealed class ContactRouteAdvertisementAuthorTests
         Assert.Equal("InvalidCustodySignature", error.Code);
     }
 
+    [Fact]
+    public async Task ExactAdvertisement_RehydratesOnlyAgainstItsVerifiedProposal()
+    {
+        var fixture = ContactNetworkAuthorityVerifierTests.Fixture.Create();
+        var proposal = await fixture.VerifyProposalAsync();
+        var authored = await ContactRouteAdvertisementAuthor.AuthorGenesisAsync(
+            Request(proposal),
+            new Signer(fixture.Identity.Device, fixture.Identity.VerifiedRecipient));
+
+        var rehydrated = ContactRouteAdvertisementVerifier.VerifyExact(
+            proposal, authored.ExactXra1);
+
+        Assert.Equal(authored.ExactXra1.ToArray(), rehydrated.ExactXra1.ToArray());
+        Assert.Equal(authored.PlacementInput.ToArray(), rehydrated.PlacementInput.ToArray());
+
+        var changed = authored.ExactXra1.ToArray();
+        changed[^1] ^= 1;
+        var error = Assert.Throws<ContactPublicationAuthoringException>(() =>
+            ContactRouteAdvertisementVerifier.VerifyExact(proposal, changed));
+        Assert.Equal("InvalidRouteAdvertisementInput", error.Code);
+    }
+
     private static ContactRouteAdvertisementAuthoringRequest Request(
         VerifiedContactRouteProposalAuthority proposal) =>
         new(proposal, 100, Bytes(32, 0xa1), Bytes(32, 0xa2), Bytes(32, 0xa3),

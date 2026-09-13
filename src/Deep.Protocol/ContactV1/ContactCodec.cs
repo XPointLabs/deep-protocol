@@ -298,19 +298,37 @@ public static class ContactCodec
         ContactRecord xss1, ContactRecord pmt2, ContactRecord pms2)
     {
         ArgumentNullException.ThrowIfNull(xrr1); ArgumentNullException.ThrowIfNull(xra1);
-        ArgumentNullException.ThrowIfNull(xrc1); ArgumentNullException.ThrowIfNull(xss1);
-        ArgumentNullException.ThrowIfNull(pmt2); ArgumentNullException.ThrowIfNull(pms2);
-        RequireRecord(xrr1, ProtocolMagic.XRR1); RequireRecord(xra1, ProtocolMagic.XRA1); RequireRecord(xrc1, ProtocolMagic.XRC1);
-        RequireRecord(xss1, ProtocolMagic.XSS1); RequireRecord(pmt2, ProtocolMagic.PMT2); RequireRecord(pms2, ProtocolMagic.PMS2);
-
-        var network = xrr1.FieldSpan(1);
-        foreach (var record in new[] { xra1, xrc1, xss1, pmt2, pms2 })
-            if (!record.FieldSpan(1).SequenceEqual(network)) Reject(ContactValidationStage.Closure, "ClosureNetworkMismatch");
-
-        RequireReference(xra1, 5, pmt2);
+        RequireRecord(xrr1, ProtocolMagic.XRR1);
+        ValidateThresholdRouteGraph(xra1, xrc1, xss1, pmt2, pms2);
+        if (!xrr1.FieldSpan(1).SequenceEqual(xra1.FieldSpan(1)))
+            Reject(ContactValidationStage.Closure, "ClosureNetworkMismatch");
         RequireReference(xrr1, 5, xra1); RequireReference(xrr1, 6, xrc1);
         RequireReference(xrr1, 7, xss1); RequireReference(xrr1, 8, pmt2);
         RequireHash(xrr1, 9, pms2);
+
+        if (!xrr1.FieldSpan(18).SequenceEqual(xra1.FieldSpan(15)) ||
+            U64(xrr1.FieldSpan(16)) < U64(xrc1.FieldSpan(17)) ||
+            U64(xrr1.FieldSpan(17)) > U64(xrc1.FieldSpan(18)))
+            Reject(ContactValidationStage.Closure, "RouteValidityIntersectionMismatch");
+    }
+
+    internal static void ValidateThresholdRouteGraph(
+        ContactRecord xra1, ContactRecord xrc1,
+        ContactRecord xss1, ContactRecord pmt2, ContactRecord pms2)
+    {
+        ArgumentNullException.ThrowIfNull(xra1); ArgumentNullException.ThrowIfNull(xrc1);
+        ArgumentNullException.ThrowIfNull(xss1); ArgumentNullException.ThrowIfNull(pmt2);
+        ArgumentNullException.ThrowIfNull(pms2);
+        RequireRecord(xra1, ProtocolMagic.XRA1); RequireRecord(xrc1, ProtocolMagic.XRC1);
+        RequireRecord(xss1, ProtocolMagic.XSS1); RequireRecord(pmt2, ProtocolMagic.PMT2);
+        RequireRecord(pms2, ProtocolMagic.PMS2);
+
+        var network = xra1.FieldSpan(1);
+        foreach (var record in new[] { xrc1, xss1, pmt2, pms2 })
+            if (!record.FieldSpan(1).SequenceEqual(network))
+                Reject(ContactValidationStage.Closure, "ClosureNetworkMismatch");
+
+        RequireReference(xra1, 5, pmt2);
 
         ValidatePmsSelection(pms2, pmt2);
         if (!pms2.FieldSpan(3).SequenceEqual(xra1.FieldSpan(6)) ||
@@ -338,10 +356,7 @@ public static class ContactCodec
         if (U64(xrc1.FieldSpan(17)) < U64(xra1.FieldSpan(12)) ||
             U64(xrc1.FieldSpan(18)) > U64(xra1.FieldSpan(13)) ||
             U64(xrc1.FieldSpan(17)) < U64(pmt2.FieldSpan(11)) ||
-            U64(xrc1.FieldSpan(18)) > U64(pmt2.FieldSpan(12)) ||
-            !xrr1.FieldSpan(18).SequenceEqual(xra1.FieldSpan(15)) ||
-            U64(xrr1.FieldSpan(16)) < U64(xrc1.FieldSpan(17)) ||
-            U64(xrr1.FieldSpan(17)) > U64(xrc1.FieldSpan(18)))
+            U64(xrc1.FieldSpan(18)) > U64(pmt2.FieldSpan(12)))
             Reject(ContactValidationStage.Closure, "RouteValidityIntersectionMismatch");
     }
 

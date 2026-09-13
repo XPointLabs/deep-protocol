@@ -1,4 +1,5 @@
 using Deep.Protocol.ContactV1;
+using Deep.Protocol.AccountDirectoryV1;
 using Deep.Protocol.DeepNative;
 using Sodium;
 
@@ -22,9 +23,30 @@ public sealed class ContactRouteThresholdAuthorTests
 
         var authored = await ContactRouteThresholdAuthor.AuthorAsync(
             new ContactRouteThresholdAuthoringRequest(proposal, xra, 29, 60), signers);
+        var remoteAdvertisement = ContactRouteAdvertisementVerifier.VerifyExact(
+            proposal, xra.ExactXra1);
+        var remoteThreshold = await ContactRouteThresholdVerifier.VerifyExactAsync(
+            proposal, remoteAdvertisement, authored.ExactPms2,
+            authored.ExactXrc1, authored.ExactXss1);
         var completed = await ContactRouteCompletionAuthor.AuthorAsync(
-            new ContactRouteCompletionAuthoringRequest(proposal, xra, authored),
+            new ContactRouteCompletionAuthoringRequest(
+                proposal, remoteAdvertisement, remoteThreshold),
             deviceSigner);
+
+        var adl = AccountDirectoryAdl1Codec.Decode(fixture.Identity.Bundle.Field(20).Span);
+        var wireRequest = new ContactRouteAuthorityWireRequest(
+            fixture.Network, Bytes(32, 0xd1), adl.DirectoryLookupKey.Span,
+            fixture.Freshness.AdhGeneration, fixture.Freshness.ExactAdh1CoreHash.Span,
+            fixture.Identity.Authorization.Verified.Record.CanonicalBytes.Span,
+            xra.ExactXra1.Span);
+        var decodedRequest = ContactRouteAuthorityWireCodec.DecodeRequest(
+            ContactRouteAuthorityWireCodec.EncodeRequest(wireRequest));
+        var wireResponse = new ContactRouteAuthorityWireResponse(
+            fixture.Network, wireRequest.RequestNonce.Span,
+            authored.ExactPms2.Span, authored.ExactXrc1.Span, authored.ExactXss1.Span);
+        var decodedResponse = ContactRouteAuthorityWireCodec.DecodeResponse(
+            decodedRequest,
+            ContactRouteAuthorityWireCodec.EncodeResponse(decodedRequest, wireResponse));
 
         Assert.Equal(fixture.Pmt.Field(7).Span[0], authored.Selection.Field(5).Span[0]);
         Assert.Equal(xra.PlacementInput.ToArray(), authored.Selection.Field(3).ToArray());
@@ -38,6 +60,9 @@ public sealed class ContactRouteThresholdAuthorTests
             completed.Verified.Invite.CanonicalBytes.ToArray());
         Assert.Equal(completed.ExactRouteClosure.ToArray(),
             ContactRouteClosureCodec.Encode(completed.Verified));
+        Assert.Equal(authored.ExactPms2.ToArray(), decodedResponse.ExactPms2.ToArray());
+        Assert.Equal(authored.ExactXrc1.ToArray(), decodedResponse.ExactXrc1.ToArray());
+        Assert.Equal(authored.ExactXss1.ToArray(), decodedResponse.ExactXss1.ToArray());
         Assert.Equal(
             [ContactDeviceSignaturePurpose.RouteAdvertisement,
              ContactDeviceSignaturePurpose.RouteReachability,
