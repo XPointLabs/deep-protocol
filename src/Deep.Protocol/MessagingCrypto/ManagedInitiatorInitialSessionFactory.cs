@@ -110,47 +110,6 @@ public sealed class ManagedInitiatorInitialSessionFactory
         }
     }
 
-    /// <summary>
-    /// Consumes one operation-bound device-agreement lease and owns fresh
-    /// initiator ephemeral/tag-18 keys. The returned commitment is the only
-    /// public value that must be placed in XPK1.
-    /// </summary>
-    public InitiatorDph2ClaimPreparation PrepareClaim(
-        VerifiedDpk2Offering verifiedOffering,
-        LocalDeviceX25519AgreementLease deviceAgreementLease)
-    {
-        ArgumentNullException.ThrowIfNull(verifiedOffering);
-        ArgumentNullException.ThrowIfNull(deviceAgreementLease);
-        if (deviceAgreementLease.Purpose != LocalDeviceX25519AgreementPurpose.Dph2InitiatorDh1)
-            throw new CryptographicException("The local device agreement lease has the wrong DPH2 purpose.");
-
-        DeepMlKemNativeProvider? mlKem = null;
-        DeepMlKemBraidProductionRuntime? braid = null;
-        try
-        {
-            // Both assets are opened before the lease is spent or XPK1 is sent.
-            // Candidate-only or absent assets therefore fail closed.
-            mlKem = DeepMlKemNativeProvider.LoadApprovedForCurrentProcess();
-            braid = DeepMlKemBraidProductionRuntime.CreateApprovedForCurrentProcess();
-            var result = PrepareWithLease(
-                verifiedOffering,
-                deviceAgreementLease,
-                mlKem,
-                mlKem,
-                braid,
-                stateFactory: null,
-                FillProductionEntropy);
-            mlKem = null;
-            braid = null;
-            return result;
-        }
-        finally
-        {
-            mlKem?.Dispose();
-            braid?.Dispose();
-        }
-    }
-
 #if DEEP_PROTOCOL_RECOVERY_TEST_SEAM
     internal InitiatorDph2ClaimPreparation PrepareClaimForTests(
         VerifiedDpk2Offering verifiedOffering,
@@ -202,46 +161,6 @@ public sealed class ManagedInitiatorInitialSessionFactory
         }
     }
 #endif
-
-    private InitiatorDph2ClaimPreparation PrepareWithLease(
-        VerifiedDpk2Offering verifiedOffering,
-        LocalDeviceX25519AgreementLease lease,
-        IMlKem768Provider mlKem,
-        IDisposable mlKemOwner,
-        DeepMlKemBraidProductionRuntime braidRuntime,
-#if DEEP_PROTOCOL_RECOVERY_TEST_SEAM
-        InitiatorInitialRatchetStateFactory? stateFactory,
-#else
-        object? stateFactory,
-#endif
-        InitiatorInitialSessionEntropyCore entropy)
-    {
-        var facts = InitiatorAgreementFacts.FromLease(lease);
-        try
-        {
-            return PrepareCore(
-                verifiedOffering,
-                facts,
-                mlKem,
-                mlKemOwner,
-                braidRuntime,
-                stateFactory,
-                entropy,
-                (ephemeralPrivate, offering) => HybridPreKeyHandshake.PrepareInitiation(
-                    lease,
-                    facts.OperationBinding,
-                    ephemeralPrivate,
-                    offering.DeviceAgreementPublicKeySpan,
-                    offering.SignedX25519PrekeyPublicSpan,
-                    offering.OneTimeX25519PrekeyPublicSpan,
-                    offering.MlKem768EncapsulationKeySpan,
-                    mlKem));
-        }
-        finally
-        {
-            lease.Dispose();
-        }
-    }
 
     private InitiatorDph2ClaimPreparation PrepareStartedWithLease(
         InitiatorDph2PreKeyClaimMaterial material,

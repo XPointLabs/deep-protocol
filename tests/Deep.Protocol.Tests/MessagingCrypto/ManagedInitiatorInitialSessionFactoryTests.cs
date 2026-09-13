@@ -217,13 +217,20 @@ public sealed class ManagedInitiatorInitialSessionFactoryTests
     [Fact]
     public void PublicSurfaceHasNoProviderTrustOrRawLongLivedPrivateKeySeam()
     {
-        var prepare = Assert.Single(
-            typeof(ManagedInitiatorInitialSessionFactory)
-                .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
-            static method => method.Name == nameof(ManagedInitiatorInitialSessionFactory.PrepareClaim));
+        var methods = typeof(ManagedInitiatorInitialSessionFactory)
+            .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+        Assert.DoesNotContain(methods, static method => method.Name == "PrepareClaim");
+        var begin = Assert.Single(methods,
+            static method => method.Name == nameof(ManagedInitiatorInitialSessionFactory.BeginClaim));
+        var complete = Assert.Single(methods,
+            static method => method.Name == nameof(ManagedInitiatorInitialSessionFactory.CompleteClaim));
         Assert.Equal(
-            [typeof(VerifiedDpk2Offering), typeof(LocalDeviceX25519AgreementLease)],
-            prepare.GetParameters().Select(static parameter => parameter.ParameterType).ToArray());
+            [typeof(LocalDeviceX25519AgreementAuthority), typeof(Dmd1LineageState)],
+            begin.GetParameters().Select(static parameter => parameter.ParameterType).ToArray());
+        Assert.Equal(
+            [typeof(InitiatorDph2PreKeyClaim), typeof(VerifiedDpk2Offering),
+                typeof(LocalDeviceX25519AgreementLease)],
+            complete.GetParameters().Select(static parameter => parameter.ParameterType).ToArray());
         Assert.Empty(typeof(InitiatorDph2ClaimPreparation).GetConstructors());
         Assert.Empty(typeof(InitiatorInitialSessionCommitCapability).GetConstructors());
         Assert.Empty(typeof(InitiatorInitialSessionAtomicStorePayload).GetConstructors());
