@@ -50,7 +50,7 @@ public sealed class AccountDirectoryHeadMutationRequest
         ArgumentNullException.ThrowIfNull(exactPriorTransitions);
         ArgumentNullException.ThrowIfNull(currentCheckpoints);
         ArgumentNullException.ThrowIfNull(successors);
-        if (successors.Count is < 1 or > 4096)
+        if (successors.Count > 4096)
             throw new ArgumentOutOfRangeException(nameof(successors));
         if (validUntilUnixSeconds <= validFromUnixSeconds ||
             validUntilUnixSeconds - validFromUnixSeconds > 86_400)

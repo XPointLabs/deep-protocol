@@ -9,6 +9,32 @@ namespace Deep.Protocol.Tests.AccountDirectoryV1;
 public sealed class AccountDirectoryHeadAuthorTests
 {
     [Fact]
+    public async Task EmptyBatchRefreshesValidityWithoutChangingCommittedRoots()
+    {
+        var network = ContactNetworkAuthorityVerifierTests.Fixture.Create();
+        var predecessor = GenesisHead(network);
+        var signers = network.Witnesses.Take(2).Select(static value =>
+            (IAccountDirectoryAdh1WitnessSigner)new Signer(value)).ToArray();
+
+        var authored = await AccountDirectoryHeadAuthor.AdvanceAsync(
+            network.Authority,
+            predecessor,
+            new AccountDirectoryHeadMutationRequest([], [], [], 30, 70, 1),
+            signers);
+
+        Assert.Equal<ulong>(1, authored.ProtectedHead.LogGeneration);
+        Assert.Equal(predecessor.TreeSize, authored.ProtectedHead.TreeSize);
+        Assert.Equal(predecessor.AppendLogMerkleRoot.ToArray(),
+            authored.ProtectedHead.AppendLogMerkleRoot.ToArray());
+        Assert.Equal(predecessor.CurrentValueMapRoot.ToArray(),
+            authored.ProtectedHead.CurrentValueMapRoot.ToArray());
+        Assert.Equal(predecessor.CoreHash.ToArray(),
+            authored.ProtectedHead.Head.PredecessorAdh1CoreHash.ToArray());
+        Assert.Empty(authored.ExactTransitions);
+        Assert.Empty(authored.ExactAllTransitions);
+    }
+
+    [Fact]
     public async Task TwoGenesisAdmissionsAdvanceOneThresholdVerifiedHead()
     {
         var network = ContactNetworkAuthorityVerifierTests.Fixture.Create();
