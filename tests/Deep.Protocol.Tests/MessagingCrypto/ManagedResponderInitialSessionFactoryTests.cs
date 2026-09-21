@@ -1,9 +1,11 @@
 using System.Buffers.Binary;
 using System.Reflection;
 using System.Security.Cryptography;
+using Deep.Protocol.ApplicationCore;
 using Deep.Protocol.ContactV1;
 using Deep.Protocol.MessagingCrypto;
 using Deep.Protocol.MessagingWire;
+using Deep.Protocol.Tests.ApplicationCore;
 using Sodium;
 
 namespace Deep.Protocol.Tests.MessagingCrypto;
@@ -103,6 +105,74 @@ public sealed class ManagedResponderInitialSessionFactoryTests
         {
             CryptographicOperations.ZeroMemory(exactTrs1);
         }
+    }
+
+    [Theory]
+    [InlineData(Dpk2PrekeyKind.OneTime)]
+    [InlineData(Dpk2PrekeyKind.LastResort)]
+    public void PreClaimPreviewCopiesOnlyExactRestoredPrekeyAndBurnsTheCopy(
+        Dpk2PrekeyKind kind)
+    {
+        using var fixture = Fixture.Create(kind);
+        using var restored = fixture.CreateRestoredCapability();
+        var preClaim = Dph2VerificationPlan
+            .Create(fixture.Initiation.Record, fixture.Initiation.Offering)
+            .Prevalidate(new Dph2ResolvedInitiator(
+                fixture.Initiation.Record.InitiatorDeviceAgreementPublicKey.Span,
+                fixture.InitiatorDirectoryHead));
+
+        using var material = restored.ConsumeForPreClaimPreview(preClaim);
+        Assert.Equal(fixture.Offering.SignedX25519PrekeyPublic.ToArray(),
+            ScalarMult.Base(material.SignedPrivate));
+        Assert.Equal(kind == Dpk2PrekeyKind.OneTime, material.OneTimePrivate is not null);
+        Assert.NotEmpty(material.MlKemSecret);
+        Assert.Throws<InvalidOperationException>(() =>
+            restored.ConsumeForPreClaimPreview(preClaim));
+    }
+
+    [Fact]
+    public void PreClaimPreviewRejectsForeignDpk2BeforeSecretMaterialEscapes()
+    {
+        using var fixture = Fixture.Create();
+        using var foreign = Fixture.Create(Dpk2PrekeyKind.LastResort);
+        using var restored = fixture.CreateRestoredCapability();
+        var preClaim = Dph2VerificationPlan
+            .Create(foreign.Initiation.Record, foreign.Initiation.Offering)
+            .Prevalidate(new Dph2ResolvedInitiator(
+                foreign.Initiation.Record.InitiatorDeviceAgreementPublicKey.Span,
+                foreign.InitiatorDirectoryHead));
+
+        Assert.Throws<CryptographicException>(() =>
+            restored.ConsumeForPreClaimPreview(preClaim));
+        Assert.Throws<InvalidOperationException>(() =>
+            restored.ConsumeForPreClaimPreview(preClaim));
+    }
+
+    [Fact]
+    public void ResponderPreviewRejectsForkedInitiatorDirectoryBeforeOpeningPrekey()
+    {
+        using var fixture = Fixture.Create();
+        using var restored = fixture.CreateRestoredCapability();
+        using var factory = fixture.CreateOpaqueFactory();
+        var parsed = ApplicationCoreFixture.Directory(
+            fixture.Initiation.Record.NetworkId.ToArray(),
+            fixture.Initiation.Record.InitiatorAccountId.ToArray(),
+            fixture.Initiation.Record.InitiatorDeviceId.ToArray());
+        var closure = new VerifiedApplicationIdentityClosure(null!, null!, []);
+        var verified = new VerifiedDmd1(parsed, closure);
+        var forked = new Dmd1LineageState(verified, forkLatched: true);
+
+        Assert.Throws<MessagingCryptoException>(() => factory.PreviewInitialClaimCore(
+            fixture.Initiation.Record, fixture.Initiation.Offering,
+            forked, restored, fixture.MlKem));
+
+        var header = Dph2VerificationPlan
+            .Create(fixture.Initiation.Record, fixture.Initiation.Offering)
+            .Prevalidate(new Dph2ResolvedInitiator(
+                fixture.Initiation.Record.InitiatorDeviceAgreementPublicKey.Span,
+                fixture.InitiatorDirectoryHead));
+        using var stillAvailable = restored.ConsumeForPreClaimPreview(header);
+        Assert.NotEmpty(stillAvailable.MlKemSecret);
     }
 
     [Fact]
@@ -253,6 +323,7 @@ public sealed class ManagedResponderInitialSessionFactoryTests
 
         internal Dpk2Record Offering { get; }
         internal VerifiedDph2Initiation Initiation { get; }
+        internal IMlKem768Provider MlKem => _mlKem;
         internal byte[] InitiatorDirectoryHead { get; }
         internal Dpk2PrekeyKind Kind { get; }
 
@@ -494,6 +565,8 @@ public sealed class ManagedResponderInitialSessionFactoryTests
                 Bytes(32, 0x22),
                 17,
                 Bytes(38, 0x32),
+                ApplicationCoreCodec.AuthorDid1(
+                    Bytes(32, 0x33), Bytes(16, 0x34)).CanonicalBytes.Span,
                 offering.ResponderAccountId.Span,
                 offering.ResponderDeviceId.Span,
                 offering.ResponderDeviceGeneration,

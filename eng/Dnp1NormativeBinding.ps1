@@ -1,6 +1,6 @@
 Set-StrictMode -Version Latest
 
-$script:Dnp1ApprovedNormativeCommit = '2651599913bf92c021d36b6a53395499b6a091fb'
+$script:Dnp1ApprovedNormativeCommit = 'a8456987efe031388ca2eb9006886fb78f31e06c'
 $script:Dnp1NormativeRelativeRoot = 'docs/survival-program/releases/v3.0.0/specs'
 
 function Get-Dnp1ApprovedNormativeBinding {

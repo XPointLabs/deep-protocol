@@ -50,19 +50,19 @@
       "id": "protocol-registry-v1",
       "kind": "normative-document",
       "path": "docs/architecture/PROTOCOL-REGISTRY-V1.md",
-      "normalizedSha256": "c95ebe46d559da07cd8f97f1b78c7422c7fefb9649bb30534b70432b7202f933"
+      "normalizedSha256": "760574c49e39b32422db6ceabf63a026b2e42fdfd81063fba92f54b3d3c363b1"
     },
     {
       "id": "dnp1-frozen",
       "kind": "approved-git-blob",
       "path": "docs/survival-program/releases/v3.0.0/specs/dnp1-classical-v1.registry.json",
-      "normalizedSha256": "31482ef7b8e6f89e3677701fbcb2cc2248df4e51e5315ee48b5f37198b68f1c4"
+      "normalizedSha256": "e036a0b6acb260e05e18ac536a723b0b8561d2ba1d813429304505b0e7a7da7b"
     },
     {
       "id": "deep-crypto-v1",
       "kind": "normative-document",
       "path": "docs/survival-program/releases/v3.0.0/specs/DEEP-CRYPTO-V1-DRAFT.md",
-      "normalizedSha256": "283522a5e2881dd91a07537cb67e1a83d6b1d0e6264ead28ec48f17770c3bbb5"
+      "normalizedSha256": "c3d01c1434e685de6b3ca481e50064939f9e631343feb79dbfaf025875ac966b"
     },
     {
       "id": "privacy-routing-v1",
@@ -74,25 +74,25 @@
       "id": "contact-group-v1",
       "kind": "normative-document",
       "path": "docs/architecture/CONTACT-AND-GROUP-PROTOCOL-V1.md",
-      "normalizedSha256": "10d0c40d5242cdba9d99937829662b7313f0fc926170b04b8b3b3566cba69eda"
+      "normalizedSha256": "317dff18ac8627c9e814a0280d71d9c1e291c905001d74a54f97b53f206934af"
     },
     {
       "id": "account-directory-v1",
       "kind": "normative-document",
       "path": "docs/architecture/ACCOUNT-DIRECTORY-TRANSPARENCY-V1.md",
-      "normalizedSha256": "c00672069679e3c9cb6b0e8ea1a3322a1c53303a45cece8fdf0c48e53bce9a89"
+      "normalizedSha256": "e545f52b3b4cea897222b162c9a040e810142fa6009fea76a46401ad056bafaa"
     },
     {
       "id": "xpoint-network-v1",
       "kind": "normative-document",
       "path": "docs/architecture/XPOINT-NETWORK-V1.md",
-      "normalizedSha256": "935ad8bd6cdcbed8638b6f83a29dee3f5dfefdb40fc874da64c57ffbcf1078c2"
+      "normalizedSha256": "d7a1de094f7acc8d020e38adf53580f7336214c316c2e118c0e6d6763aadb7f1"
     },
     {
       "id": "contact-resolver-v1",
       "kind": "normative-document",
       "path": "docs/architecture/CONTACT-RESOLVER-V1.md",
-      "normalizedSha256": "534f1cd571a074b0c4e82b387e2f1fd05196980c5c432ad0a20ed787992dc78a"
+      "normalizedSha256": "458ce3e6b647c6d89c20c5b1c6437c5582e12be8b79d896fc670c4b6de4640e2"
     },
     {
       "id": "carriers-v1",
@@ -122,7 +122,7 @@
       "id": "production-wire-source",
       "kind": "production-source-scan",
       "path": "deep-protocol/src",
-      "normalizedSha256": "01d12340e054ddef92156105156d208c8792a10d75546a5fc3e18df72c7a6dd1"
+      "normalizedSha256": "f2b97bf27e6c179ac5e2459284c4620f1f9a94a1bed513864d4da74ee4a5a000"
     }
   ],
   "productionInventory": {
@@ -144,11 +144,11 @@
       "id": "dnp1-classical-v1",
       "sourceId": "dnp1-frozen",
       "mode": "exact-approved-git-blob",
-      "approvedCommit": "2651599913bf92c021d36b6a53395499b6a091fb",
+    "approvedCommit": "a8456987efe031388ca2eb9006886fb78f31e06c",
       "registry": {
         "path": "dnp1-classical-v1.registry.json",
-        "gitBlob": "d2455f59b78f43fd56fcf1e7bbccf9bec3f700e9",
-        "sha256": "31482ef7b8e6f89e3677701fbcb2cc2248df4e51e5315ee48b5f37198b68f1c4"
+      "gitBlob": "23f7bb55deb13a95babca07797c23b3b0b3fc593",
+      "sha256": "e036a0b6acb260e05e18ac536a723b0b8561d2ba1d813429304505b0e7a7da7b"
       },
       "schema": {
         "path": "dnp1-classical-v1.registry.schema.json",
@@ -1348,6 +1348,46 @@
       }
     },
     {
+      "value": "DGA1",
+      "symbol": "DGA1",
+      "meaning": "first account-directory genesis admission request",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "account-directory-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.4 Account-directory transparency records",
+        "startLine": 335,
+        "endLine": 335,
+        "normalizedSha256": "b566eaad1a649a047a97d4db5ed1fc6f22485b6af98647eca2e53d17d5c1a9b3",
+        "ownerSourceId": "account-directory-v1",
+        "scope": "magic",
+        "id": "DGA1",
+        "name": "DGA1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": ["DGA1", "TARGET_UNFROZEN"]
+      }
+    },
+    {
+      "value": "DGR1",
+      "symbol": "DGR1",
+      "meaning": "account-directory genesis admission receipt",
+      "lifecycle": "TARGET_UNFROZEN",
+      "sourceId": "account-directory-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.4 Account-directory transparency records",
+        "startLine": 336,
+        "endLine": 336,
+        "normalizedSha256": "40c8c0e9efb1460c05d10258ba6486025daa49e4f92aee73a7e1d7622f1d6eaa",
+        "ownerSourceId": "account-directory-v1",
+        "scope": "magic",
+        "id": "DGR1",
+        "name": "DGR1",
+        "lifecycle": "TARGET_UNFROZEN",
+        "evidenceTokens": ["DGR1", "TARGET_UNFROZEN"]
+      }
+    },
+    {
       "value": "XNA1",
       "symbol": "XNA1",
       "meaning": "network root authority lineage",
@@ -1356,8 +1396,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.5 XPoint network and contact reachability records",
-        "startLine": 347,
-        "endLine": 347,
+        "startLine": 349,
+        "endLine": 349,
         "normalizedSha256": "8a060542e0649824501126cbe3923fedd710c0ff4b8bd4ffc1c8f4c42c89bf37",
         "ownerSourceId": "xpoint-network-v1",
         "scope": "magic",
@@ -1379,8 +1419,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.5 XPoint network and contact reachability records",
-        "startLine": 348,
-        "endLine": 348,
+        "startLine": 350,
+        "endLine": 350,
         "normalizedSha256": "6eb100c9ef56f13c4ecc90fd824b080ab4ddec797850a5cd7a32b577cdbea29a",
         "ownerSourceId": "xpoint-network-v1",
         "scope": "magic",
@@ -1402,8 +1442,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.5 XPoint network and contact reachability records",
-        "startLine": 349,
-        "endLine": 349,
+        "startLine": 351,
+        "endLine": 351,
         "normalizedSha256": "9cfd0c817235ae24709c9e5eaab431197004dedd1e751fa492ee9462c33ba7c0",
         "ownerSourceId": "xpoint-network-v1",
         "scope": "magic",
@@ -1425,8 +1465,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.5 XPoint network and contact reachability records",
-        "startLine": 350,
-        "endLine": 350,
+        "startLine": 352,
+        "endLine": 352,
         "normalizedSha256": "a5e01c5f68b88e7336faba3958857e68b715399b279a8d60df23d307a813d2cc",
         "ownerSourceId": "xpoint-network-v1",
         "scope": "magic",
@@ -1448,8 +1488,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.5 XPoint network and contact reachability records",
-        "startLine": 351,
-        "endLine": 351,
+        "startLine": 353,
+        "endLine": 353,
         "normalizedSha256": "5d4529461aa63e80c5db6c942a901fb1ca2b591f1e2615ffa20509ef25121638",
         "ownerSourceId": "xpoint-network-v1",
         "scope": "magic",
@@ -1471,8 +1511,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.5 XPoint network and contact reachability records",
-        "startLine": 352,
-        "endLine": 352,
+        "startLine": 354,
+        "endLine": 354,
         "normalizedSha256": "eede9e8e38464df64ed3ce6f8576549e59cedbc0b1649866e57e5f7ad14f2a9e",
         "ownerSourceId": "xpoint-network-v1",
         "scope": "magic",
@@ -1494,8 +1534,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.5 XPoint network and contact reachability records",
-        "startLine": 353,
-        "endLine": 353,
+        "startLine": 355,
+        "endLine": 355,
         "normalizedSha256": "6a7d4f53e2ab751c32ed832ad0482d90b97a2f2f0f04dd217b9ad434da35d026",
         "ownerSourceId": "xpoint-network-v1",
         "scope": "magic",
@@ -1517,8 +1557,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.5 XPoint network and contact reachability records",
-        "startLine": 354,
-        "endLine": 354,
+        "startLine": 356,
+        "endLine": 356,
         "normalizedSha256": "fafbab9c4298e22ad458b0aaf8d75a1a7817a45121fbbf7c83e0781430a855ae",
         "ownerSourceId": "xpoint-network-v1",
         "scope": "magic",
@@ -1540,8 +1580,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.5 XPoint network and contact reachability records",
-        "startLine": 355,
-        "endLine": 355,
+        "startLine": 357,
+        "endLine": 357,
         "normalizedSha256": "62c0c98720c6c4148d653ba15e50618812a64fc1075622b5bed6742bfcd47c1f",
         "ownerSourceId": "contact-resolver-v1",
         "scope": "magic",
@@ -1563,8 +1603,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.5 XPoint network and contact reachability records",
-        "startLine": 356,
-        "endLine": 356,
+        "startLine": 358,
+        "endLine": 358,
         "normalizedSha256": "1d3d6a0ef0122921f5eb9bf6e3fc06cf15b01956b5f0ebc4bf119d4079dacea9",
         "ownerSourceId": "xpoint-network-v1",
         "scope": "magic",
@@ -1578,6 +1618,52 @@
       }
     },
     {
+      "value": "XMG1",
+      "symbol": "XMG1",
+      "meaning": "XRR1-bound mailbox grant request",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+      "sourceId": "contact-resolver-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.5 XPoint network and contact reachability records",
+        "startLine": 359,
+        "endLine": 359,
+        "normalizedSha256": "07b3bc25805751bde539c11089f4ba5771fe8e48d201262df02ab8f5a8782c8a",
+        "ownerSourceId": "contact-resolver-v1",
+        "scope": "magic",
+        "id": "XMG1",
+        "name": "XMG1",
+        "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+        "evidenceTokens": [
+          "XMG1",
+          "FROZEN_TARGET_NOT_ACTIVE"
+        ]
+      }
+    },
+    {
+      "value": "XMC1",
+      "symbol": "XMC1",
+      "meaning": "closed mailbox grant acquisition result",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+      "sourceId": "contact-resolver-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.5 XPoint network and contact reachability records",
+        "startLine": 360,
+        "endLine": 360,
+        "normalizedSha256": "ad9393829aa1ee5701585fa711ed9d0745a671f72862f6380e7d9b3c383f6761",
+        "ownerSourceId": "contact-resolver-v1",
+        "scope": "magic",
+        "id": "XMC1",
+        "name": "XMC1",
+        "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+        "evidenceTokens": [
+          "XMC1",
+          "FROZEN_TARGET_NOT_ACTIVE"
+        ]
+      }
+    },
+    {
       "value": "XUR1",
       "symbol": "XUR1",
       "meaning": "established-contact update rendezvous",
@@ -1586,8 +1672,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.5 XPoint network and contact reachability records",
-        "startLine": 357,
-        "endLine": 357,
+        "startLine": 361,
+        "endLine": 361,
         "normalizedSha256": "3ecb4070e91fe082eee03610a63f62eadf87e0a118074c0de236c72066829c2a",
         "ownerSourceId": "contact-resolver-v1",
         "scope": "magic",
@@ -1609,8 +1695,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.5 XPoint network and contact reachability records",
-        "startLine": 358,
-        "endLine": 358,
+        "startLine": 362,
+        "endLine": 362,
         "normalizedSha256": "b11ad910b40b6985ceee54638827decd8e3d32fe2aaa66b5b9ca6d686306bf26",
         "ownerSourceId": "xpoint-network-v1",
         "scope": "magic",
@@ -1632,8 +1718,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.5 XPoint network and contact reachability records",
-        "startLine": 359,
-        "endLine": 359,
+        "startLine": 363,
+        "endLine": 363,
         "normalizedSha256": "d11cfd7704c46f9cb35a3cb190b06d5fff9694739b3a2b7ccd586ae7acdd82db",
         "ownerSourceId": "xpoint-network-v1",
         "scope": "magic",
@@ -1655,8 +1741,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.5 XPoint network and contact reachability records",
-        "startLine": 360,
-        "endLine": 360,
+        "startLine": 364,
+        "endLine": 364,
         "normalizedSha256": "8e1192c0ed6232dde70e264e2df362f80fb36408f77fd3b5276de0653848e42b",
         "ownerSourceId": "xpoint-network-v1",
         "scope": "magic",
@@ -1678,8 +1764,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.5 XPoint network and contact reachability records",
-        "startLine": 361,
-        "endLine": 361,
+        "startLine": 365,
+        "endLine": 365,
         "normalizedSha256": "f499c084b0d8b0a922a61f08245490b1fc38ce9ac5b10abee428ba01cd50c4bb",
         "ownerSourceId": "xpoint-network-v1",
         "scope": "magic",
@@ -1701,8 +1787,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.5 XPoint network and contact reachability records",
-        "startLine": 362,
-        "endLine": 362,
+        "startLine": 366,
+        "endLine": 366,
         "normalizedSha256": "cf672850bc1a2afe1ce99ecaff5391e0a51a05af27b9d3a02de1ca8a0cc1cabd",
         "ownerSourceId": "xpoint-network-v1",
         "scope": "magic",
@@ -1724,8 +1810,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.9 Mailbox/continuity records",
-        "startLine": 454,
-        "endLine": 454,
+        "startLine": 458,
+        "endLine": 458,
         "normalizedSha256": "3e6f692635c27809ef5905d6f33c20261b33e8b0545de236a3930e0aa1756737",
         "ownerSourceId": "xpoint-network-v1",
         "scope": "magic",
@@ -1747,8 +1833,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.9 Mailbox/continuity records",
-        "startLine": 454,
-        "endLine": 454,
+        "startLine": 458,
+        "endLine": 458,
         "normalizedSha256": "3e6f692635c27809ef5905d6f33c20261b33e8b0545de236a3930e0aa1756737",
         "ownerSourceId": "xpoint-network-v1",
         "scope": "magic",
@@ -1770,8 +1856,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.9 Mailbox/continuity records",
-        "startLine": 454,
-        "endLine": 454,
+        "startLine": 458,
+        "endLine": 458,
         "normalizedSha256": "3e6f692635c27809ef5905d6f33c20261b33e8b0545de236a3930e0aa1756737",
         "ownerSourceId": "xpoint-network-v1",
         "scope": "magic",
@@ -1793,8 +1879,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.6 Contact resolver and prekey service records",
-        "startLine": 390,
-        "endLine": 390,
+        "startLine": 394,
+        "endLine": 394,
         "normalizedSha256": "053c9512628c6ef2adfa6f3b65144c09cbe9d86241b4f37cf3eec22fbc3ee61e",
         "ownerSourceId": "contact-resolver-v1",
         "scope": "magic",
@@ -1816,8 +1902,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.6 Contact resolver and prekey service records",
-        "startLine": 391,
-        "endLine": 391,
+        "startLine": 395,
+        "endLine": 395,
         "normalizedSha256": "7195377ddf7bfb337a6992d9a0720ad056e84613e420fb15c07fbd3e75c5a457",
         "ownerSourceId": "contact-resolver-v1",
         "scope": "magic",
@@ -1839,8 +1925,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.6 Contact resolver and prekey service records",
-        "startLine": 392,
-        "endLine": 392,
+        "startLine": 396,
+        "endLine": 396,
         "normalizedSha256": "ab6476f2098358e2b5e2e731e0ac0c1a0da48735bd587051631b724f4675135d",
         "ownerSourceId": "contact-resolver-v1",
         "scope": "magic",
@@ -1862,8 +1948,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.6 Contact resolver and prekey service records",
-        "startLine": 393,
-        "endLine": 393,
+        "startLine": 397,
+        "endLine": 397,
         "normalizedSha256": "87edddb3a171958d95a10a8dd5ae06305d36d49eb3aa5aeb980ddacd204c4a4f",
         "ownerSourceId": "contact-resolver-v1",
         "scope": "magic",
@@ -1885,8 +1971,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.6 Contact resolver and prekey service records",
-        "startLine": 394,
-        "endLine": 394,
+        "startLine": 398,
+        "endLine": 398,
         "normalizedSha256": "14d1e83488d1fe5bedb9bbedf375dec4503a59162b3080ab873363a1e315f6fc",
         "ownerSourceId": "contact-resolver-v1",
         "scope": "magic",
@@ -1908,8 +1994,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.6 Contact resolver and prekey service records",
-        "startLine": 395,
-        "endLine": 395,
+        "startLine": 399,
+        "endLine": 399,
         "normalizedSha256": "d338570d20fe2d4a6fc24780ba64f646b26f922c6db30b0f32ca13818340f169",
         "ownerSourceId": "contact-resolver-v1",
         "scope": "magic",
@@ -1931,8 +2017,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.6 Contact resolver and prekey service records",
-        "startLine": 396,
-        "endLine": 396,
+        "startLine": 400,
+        "endLine": 400,
         "normalizedSha256": "fa9feacb5347ec57924652dcc9a5a9adb72d7a1d6d1cf5a3af2def633f0b7799",
         "ownerSourceId": "contact-resolver-v1",
         "scope": "magic",
@@ -1954,8 +2040,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.6 Contact resolver and prekey service records",
-        "startLine": 397,
-        "endLine": 397,
+        "startLine": 401,
+        "endLine": 401,
         "normalizedSha256": "c18653b357f3c47e50674aafe501177dd4c24fb7158764d6f785ac38e77988eb",
         "ownerSourceId": "contact-resolver-v1",
         "scope": "magic",
@@ -1977,8 +2063,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.6 Contact resolver and prekey service records",
-        "startLine": 398,
-        "endLine": 398,
+        "startLine": 402,
+        "endLine": 402,
         "normalizedSha256": "242b0a298ff09e154c49c488a6a6918627854eaa805e252d149ece5310c9348f",
         "ownerSourceId": "contact-resolver-v1",
         "scope": "magic",
@@ -2000,8 +2086,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.6 Contact resolver and prekey service records",
-        "startLine": 399,
-        "endLine": 399,
+        "startLine": 403,
+        "endLine": 403,
         "normalizedSha256": "51c5abd1eea940ac39130bd319f965ca87edb03c0f4bc2abd012965259b731f9",
         "ownerSourceId": "contact-resolver-v1",
         "scope": "magic",
@@ -2023,8 +2109,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.6 Contact resolver and prekey service records",
-        "startLine": 400,
-        "endLine": 400,
+        "startLine": 404,
+        "endLine": 404,
         "normalizedSha256": "65e4dc35f4635af005fe55120f5d91b05a0057310574b5985220999cef1aa9a7",
         "ownerSourceId": "contact-resolver-v1",
         "scope": "magic",
@@ -2046,8 +2132,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.6 Contact resolver and prekey service records",
-        "startLine": 401,
-        "endLine": 401,
+        "startLine": 405,
+        "endLine": 405,
         "normalizedSha256": "4839a29e75d3790c0e6f85da8e0d39d092804dd554bd571860c89ec7c9c3edb1",
         "ownerSourceId": "contact-resolver-v1",
         "scope": "magic",
@@ -2069,8 +2155,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.6 Contact resolver and prekey service records",
-        "startLine": 402,
-        "endLine": 402,
+        "startLine": 406,
+        "endLine": 406,
         "normalizedSha256": "892439ac1b0efcaacf7c72245b4ca6d0ac403861c6cff34605aed452a8518346",
         "ownerSourceId": "contact-resolver-v1",
         "scope": "magic",
@@ -2092,8 +2178,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.6 Contact resolver and prekey service records",
-        "startLine": 403,
-        "endLine": 403,
+        "startLine": 407,
+        "endLine": 407,
         "normalizedSha256": "3e633f15250363dea3ec7a4c77e9ac0edef2e3d91ec2b8608a5562729291604c",
         "ownerSourceId": "contact-resolver-v1",
         "scope": "magic",
@@ -2115,8 +2201,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.7 Carrier records",
-        "startLine": 416,
-        "endLine": 416,
+        "startLine": 420,
+        "endLine": 420,
         "normalizedSha256": "d6661a9c8178c40f682ac661bab77233ea88280c29b3afe80511160e5fd41e19",
         "ownerSourceId": "carriers-v1",
         "scope": "magic",
@@ -2138,8 +2224,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.7 Carrier records",
-        "startLine": 417,
-        "endLine": 417,
+        "startLine": 421,
+        "endLine": 421,
         "normalizedSha256": "b509e92708cb862f0bfb13ed168ac539031179749785d5a0fdfd5223c6f3cf69",
         "ownerSourceId": "carriers-v1",
         "scope": "magic",
@@ -2161,8 +2247,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.7 Carrier records",
-        "startLine": 418,
-        "endLine": 418,
+        "startLine": 422,
+        "endLine": 422,
         "normalizedSha256": "ad0fc6650762b57877ecb9aa6bcc885c5cd7815b2d0883842416699c8e418bce",
         "ownerSourceId": "carriers-v1",
         "scope": "magic",
@@ -2184,8 +2270,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.7 Carrier records",
-        "startLine": 419,
-        "endLine": 419,
+        "startLine": 423,
+        "endLine": 423,
         "normalizedSha256": "1519061f55ef699d2026672f18bae01dfcb91a78b388c2bd4dd3c13222ca2cac",
         "ownerSourceId": "carriers-v1",
         "scope": "magic",
@@ -2207,8 +2293,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.7 Carrier records",
-        "startLine": 420,
-        "endLine": 420,
+        "startLine": 424,
+        "endLine": 424,
         "normalizedSha256": "cbfe8761543d068f1fddd2885a4d2ed43a97b01944af151f1a57e0c9fe60825d",
         "ownerSourceId": "carriers-v1",
         "scope": "magic",
@@ -2230,8 +2316,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.7 Carrier records",
-        "startLine": 421,
-        "endLine": 421,
+        "startLine": 425,
+        "endLine": 425,
         "normalizedSha256": "39abe506cefeab8c7f54ba5999b5a6b80bb148c1969b96f5f5285635eed8656a",
         "ownerSourceId": "carriers-v1",
         "scope": "magic",
@@ -2253,8 +2339,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.7 Carrier records",
-        "startLine": 422,
-        "endLine": 422,
+        "startLine": 426,
+        "endLine": 426,
         "normalizedSha256": "760b6f88f8a4e8bb88833caceb55b16a4dc5a21457244f974699b04217dcfa14",
         "ownerSourceId": "carriers-v1",
         "scope": "magic",
@@ -2276,8 +2362,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.7 Carrier records",
-        "startLine": 423,
-        "endLine": 423,
+        "startLine": 427,
+        "endLine": 427,
         "normalizedSha256": "ef91c09dc31c3cea86f58247995fbc12b6105dffc4dc0d849974656182de9aad",
         "ownerSourceId": "carriers-v1",
         "scope": "magic",
@@ -2299,8 +2385,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.7 Carrier records",
-        "startLine": 424,
-        "endLine": 424,
+        "startLine": 428,
+        "endLine": 428,
         "normalizedSha256": "8991d284c76894818cb644b419cdc75a8544fcbbad95ea6e0ff6fdb1e7daa005",
         "ownerSourceId": "carriers-v1",
         "scope": "magic",
@@ -2322,8 +2408,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.7 Carrier records",
-        "startLine": 425,
-        "endLine": 425,
+        "startLine": 429,
+        "endLine": 429,
         "normalizedSha256": "86692d8b84e6e2129c40c5b88ad052e5c36b1f80aa3e012e415220e250ba79e5",
         "ownerSourceId": "carriers-v1",
         "scope": "magic",
@@ -2345,8 +2431,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.7 Carrier records",
-        "startLine": 426,
-        "endLine": 426,
+        "startLine": 430,
+        "endLine": 430,
         "normalizedSha256": "e0a59333d86781ce87e02d7858dd5a1bcf44004f5cfc6683ebf904f3537ec7d1",
         "ownerSourceId": "carriers-v1",
         "scope": "magic",
@@ -2368,8 +2454,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.8 Call records",
-        "startLine": 437,
-        "endLine": 437,
+        "startLine": 441,
+        "endLine": 441,
         "normalizedSha256": "6d8cd779917ea46eef5002b3760b295923bcd9ef74919306cd16984227d25490",
         "ownerSourceId": "call-session-v1",
         "scope": "magic",
@@ -2391,8 +2477,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.8 Call records",
-        "startLine": 438,
-        "endLine": 438,
+        "startLine": 442,
+        "endLine": 442,
         "normalizedSha256": "7d827f52c250e587ed0e897eea008cf4d0cf82ec41592ac8c6c4d4d6ced3ff58",
         "ownerSourceId": "call-session-v1",
         "scope": "magic",
@@ -2414,8 +2500,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.8 Call records",
-        "startLine": 439,
-        "endLine": 439,
+        "startLine": 443,
+        "endLine": 443,
         "normalizedSha256": "ab551e025eb04bf082258fbead7da2c3606a48e63944c3ecd8acf872cdc6883f",
         "ownerSourceId": "call-session-v1",
         "scope": "magic",
@@ -2437,8 +2523,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.8 Call records",
-        "startLine": 440,
-        "endLine": 440,
+        "startLine": 444,
+        "endLine": 444,
         "normalizedSha256": "66c8b8eabeb47d1516d84041d79c5cec03de329f8746465f7c455257004d1872",
         "ownerSourceId": "call-session-v1",
         "scope": "magic",
@@ -2460,8 +2546,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.8 Call records",
-        "startLine": 441,
-        "endLine": 441,
+        "startLine": 445,
+        "endLine": 445,
         "normalizedSha256": "b2f49093698e4ca44c80024d23f7a6ac006cb64ffc38310f70d675c52569f714",
         "ownerSourceId": "call-session-v1",
         "scope": "magic",
@@ -2483,8 +2569,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.8 Call records",
-        "startLine": 442,
-        "endLine": 442,
+        "startLine": 446,
+        "endLine": 446,
         "normalizedSha256": "b8798fa134f470c972a3736cb08cc26826198d4a5c8eeb3191ae82cb5386de17",
         "ownerSourceId": "call-session-v1",
         "scope": "magic",
@@ -2647,9 +2733,22 @@
     {
       "value": "MAU2",
       "symbol": "MAU2",
-      "meaning": "current production wire allocation MAU2",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "sourceId": "production-wire-source"
+      "meaning": "canonical identity-free mailbox request",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+      "sourceId": "contact-resolver-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.9 Mailbox/continuity records",
+        "startLine": 461,
+        "endLine": 461,
+        "normalizedSha256": "cdd9cdcca11f281feaa48674d1ab4535b5789f65b66646fd8d56efdbc7716dba",
+        "ownerSourceId": "contact-resolver-v1",
+        "scope": "magic",
+        "id": "MAU2",
+        "name": "MAU2",
+        "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+        "evidenceTokens": ["MAU2", "FROZEN_TARGET_NOT_ACTIVE"]
+      }
     },
     {
       "value": "MBA2",
@@ -2682,9 +2781,22 @@
     {
       "value": "MCG2",
       "symbol": "MCG2",
-      "meaning": "current production wire allocation MCG2",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "sourceId": "production-wire-source"
+      "meaning": "short-lived reachability-scoped mailbox grant",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+      "sourceId": "contact-resolver-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.9 Mailbox/continuity records",
+        "startLine": 461,
+        "endLine": 461,
+        "normalizedSha256": "cdd9cdcca11f281feaa48674d1ab4535b5789f65b66646fd8d56efdbc7716dba",
+        "ownerSourceId": "contact-resolver-v1",
+        "scope": "magic",
+        "id": "MCG2",
+        "name": "MCG2",
+        "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+        "evidenceTokens": ["MCG2", "FROZEN_TARGET_NOT_ACTIVE"]
+      }
     },
     {
       "value": "MCP1",
@@ -2696,9 +2808,22 @@
     {
       "value": "MCP2",
       "symbol": "MCP2",
-      "meaning": "current production wire allocation MCP2",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "sourceId": "production-wire-source"
+      "meaning": "reachability-scoped mailbox holder presentation",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+      "sourceId": "contact-resolver-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.9 Mailbox/continuity records",
+        "startLine": 461,
+        "endLine": 461,
+        "normalizedSha256": "cdd9cdcca11f281feaa48674d1ab4535b5789f65b66646fd8d56efdbc7716dba",
+        "ownerSourceId": "contact-resolver-v1",
+        "scope": "magic",
+        "id": "MCP2",
+        "name": "MCP2",
+        "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+        "evidenceTokens": ["MCP2", "FROZEN_TARGET_NOT_ACTIVE"]
+      }
     },
     {
       "value": "MEO1",
@@ -3173,8 +3298,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.9 Mailbox/continuity records",
-        "startLine": 452,
-        "endLine": 452,
+        "startLine": 456,
+        "endLine": 456,
         "normalizedSha256": "4b991256478c2a8a54af78f04db8f0d93269c4a067febd4192548701d24ecd56",
         "ownerSourceId": "protocol-registry-v1",
         "scope": "magic",
@@ -3196,8 +3321,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.9 Mailbox/continuity records",
-        "startLine": 452,
-        "endLine": 452,
+        "startLine": 456,
+        "endLine": 456,
         "normalizedSha256": "4b991256478c2a8a54af78f04db8f0d93269c4a067febd4192548701d24ecd56",
         "ownerSourceId": "protocol-registry-v1",
         "scope": "magic",
@@ -3219,8 +3344,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.9 Mailbox/continuity records",
-        "startLine": 453,
-        "endLine": 453,
+        "startLine": 457,
+        "endLine": 457,
         "normalizedSha256": "6f1ef66f0d4d47123415697aac9cf81b7ed395d8b386eab7ca245dc80ffdc1cc",
         "ownerSourceId": "protocol-registry-v1",
         "scope": "magic",
@@ -3243,8 +3368,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.9 Mailbox/continuity records",
-        "startLine": 453,
-        "endLine": 453,
+        "startLine": 457,
+        "endLine": 457,
         "normalizedSha256": "6f1ef66f0d4d47123415697aac9cf81b7ed395d8b386eab7ca245dc80ffdc1cc",
         "ownerSourceId": "protocol-registry-v1",
         "scope": "magic",
@@ -3267,8 +3392,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.9 Mailbox/continuity records",
-        "startLine": 453,
-        "endLine": 453,
+        "startLine": 457,
+        "endLine": 457,
         "normalizedSha256": "6f1ef66f0d4d47123415697aac9cf81b7ed395d8b386eab7ca245dc80ffdc1cc",
         "ownerSourceId": "protocol-registry-v1",
         "scope": "magic",
@@ -3291,8 +3416,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.9 Mailbox/continuity records",
-        "startLine": 453,
-        "endLine": 453,
+        "startLine": 457,
+        "endLine": 457,
         "normalizedSha256": "6f1ef66f0d4d47123415697aac9cf81b7ed395d8b386eab7ca245dc80ffdc1cc",
         "ownerSourceId": "protocol-registry-v1",
         "scope": "magic",
@@ -3315,8 +3440,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.9 Mailbox/continuity records",
-        "startLine": 453,
-        "endLine": 453,
+        "startLine": 457,
+        "endLine": 457,
         "normalizedSha256": "6f1ef66f0d4d47123415697aac9cf81b7ed395d8b386eab7ca245dc80ffdc1cc",
         "ownerSourceId": "protocol-registry-v1",
         "scope": "magic",
@@ -3339,8 +3464,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.9 Mailbox/continuity records",
-        "startLine": 453,
-        "endLine": 453,
+        "startLine": 457,
+        "endLine": 457,
         "normalizedSha256": "6f1ef66f0d4d47123415697aac9cf81b7ed395d8b386eab7ca245dc80ffdc1cc",
         "ownerSourceId": "protocol-registry-v1",
         "scope": "magic",
@@ -3363,8 +3488,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.9 Mailbox/continuity records",
-        "startLine": 453,
-        "endLine": 453,
+        "startLine": 457,
+        "endLine": 457,
         "normalizedSha256": "6f1ef66f0d4d47123415697aac9cf81b7ed395d8b386eab7ca245dc80ffdc1cc",
         "ownerSourceId": "protocol-registry-v1",
         "scope": "magic",
@@ -3387,8 +3512,8 @@
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.9 Mailbox/continuity records",
-        "startLine": 453,
-        "endLine": 453,
+        "startLine": 457,
+        "endLine": 457,
         "normalizedSha256": "6f1ef66f0d4d47123415697aac9cf81b7ed395d8b386eab7ca245dc80ffdc1cc",
         "ownerSourceId": "protocol-registry-v1",
         "scope": "magic",

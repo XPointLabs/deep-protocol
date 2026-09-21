@@ -27,6 +27,26 @@ public static class ContactNetworkAuthorityVerifier
         VerifiedXPointNetworkAuthority authority,
         VerifiedOnionNetworkContext currentNetwork,
         VerifiedAccountDirectoryFreshness freshness,
+        VerifiedDeviceRelative recipientDevice,
+        CurrentlyAuthoritativeDca1 recipientAuthorization,
+        ReadOnlyMemory<byte> exactXnv1,
+        ReadOnlyMemory<byte> exactXnh1,
+        ReadOnlyMemory<byte> exactAdh1,
+        ReadOnlyMemory<byte> exactPmt2,
+        OnionTrustedTimeAuthority trustedTimeAuthority,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(recipientDevice);
+        return VerifiedContactNetworkAuthority.VerifyProposalAsync(
+            authority, currentNetwork, freshness, recipientDevice.Device,
+            recipientAuthorization, exactXnv1, exactXnh1, exactAdh1, exactPmt2,
+            trustedTimeAuthority, cancellationToken);
+    }
+
+    public static ValueTask<VerifiedContactRouteProposalAuthority> VerifyProposalAsync(
+        VerifiedXPointNetworkAuthority authority,
+        VerifiedOnionNetworkContext currentNetwork,
+        VerifiedAccountDirectoryFreshness freshness,
         VerifiedDevice recipientDevice,
         CurrentlyAuthoritativeDca1 recipientAuthorization,
         ReadOnlyMemory<byte> exactXnv1,
@@ -150,6 +170,7 @@ public sealed class VerifiedContactRouteProposalAuthority
     public ReadOnlyMemory<byte> Xnh1CoreReference => xnh1CoreReference.ToArray();
     public ReadOnlyMemory<byte> Adh1CoreReference => adh1CoreReference.ToArray();
     public ReadOnlyMemory<byte> RecipientDeviceId => recipientDeviceId.ToArray();
+    public ReadOnlyMemory<byte> RecipientAccountId => recipientAccountId.ToArray();
     public ReadOnlyMemory<byte> RecipientDevicePublicKey => recipientDevicePublicKey.ToArray();
     public ReadOnlyMemory<byte> RecipientDpd1Reference => recipientDpd1Reference.ToArray();
     public ReadOnlyMemory<byte> Dca1Reference => dca1Reference.ToArray();
@@ -157,6 +178,84 @@ public sealed class VerifiedContactRouteProposalAuthority
     public ulong TrustedUpperUnixSeconds { get; }
     public ulong NotBeforeUnixSeconds { get; }
     public ulong ExpiresAtUnixSeconds { get; }
+
+    /// <summary>
+    /// Creates the only route-authority wire request that may be derived from
+    /// this verified current proposal. The directory lookup rollback floor and
+    /// exact DCA1 are copied from the same nonce-fresh authority; callers
+    /// cannot cross-source them from another account or directory head.
+    /// </summary>
+    public ContactRouteAuthorityWireRequest CreateThresholdRequest(
+        AuthoredContactRouteAdvertisement advertisement,
+        ReadOnlySpan<byte> requestNonce)
+    {
+        ArgumentNullException.ThrowIfNull(advertisement);
+        ContactRouteAdvertisementVerifier.Validate(this, advertisement.Record);
+        return new ContactRouteAuthorityWireRequest(
+            networkId,
+            requestNonce,
+            freshness.DirectoryLeafKey.Span,
+            freshness.AdhGeneration,
+            freshness.ExactAdh1CoreHash.Span,
+            recipientAuthorization.Verified.Record.CanonicalBytes.Span,
+            advertisement.ExactXra1.Span);
+    }
+
+    /// <summary>
+    /// Authors a device-owned XPS1 only for the exact device and directory
+    /// authority already proven by this route proposal.
+    /// </summary>
+    public ValueTask<VerifiedContactPreKeyService> AuthorPreKeyServiceAsync(
+        ushort minimumOneTimeInventory,
+        ushort lastResortReuseLimit,
+        ulong issuedAtUnixSeconds,
+        ulong expiresAtUnixSeconds,
+        IContactDeviceCustodySigner signer,
+        CancellationToken cancellationToken = default) =>
+        ContactPublicationAuthor.AuthorPreKeyServiceAsync(
+            new ContactPreKeyServiceAuthoringRequest(
+                recipientDevice,
+                recipientAuthorization,
+                minimumOneTimeInventory,
+                lastResortReuseLimit,
+                issuedAtUnixSeconds,
+                expiresAtUnixSeconds),
+            signer,
+            cancellationToken);
+
+    /// <summary>
+    /// Authors a generation-zero DCB1/DCR1 closure from this proposal's exact
+    /// current DCA1/freshness state and a completed route. Freshness boot and
+    /// monotonic values are not accepted from UI or configuration callers.
+    /// </summary>
+    public ValueTask<AuthoredPermanentContactPublication>
+        AuthorGenesisContactPublicationAsync(
+            AuthoredPermanentContactRoute route,
+            VerifiedContactPreKeyService preKeyService,
+            ulong issuedAtUnixSeconds,
+            ulong expiresAtUnixSeconds,
+            IContactDeviceCustodySigner signer,
+            string profileName = "",
+            uint unsolicitedPolicy = 0x0000000b,
+            CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(route);
+        ArgumentNullException.ThrowIfNull(preKeyService);
+        return ContactPublicationAuthor.AuthorPermanentAsync(
+            new ContactBundleAuthoringRequest(
+                recipientAuthorization,
+                freshness,
+                route.Verified,
+                [preKeyService],
+                issuedAtUnixSeconds,
+                expiresAtUnixSeconds,
+                freshness.BootId.Span,
+                freshness.MonotonicSample,
+                profileName,
+                unsolicitedPolicy),
+            signer,
+            cancellationToken);
+    }
 
     internal ReadOnlySpan<byte> RecipientAccountIdSpan => recipientAccountId;
     internal VerifiedXPointNetworkAuthority NetworkAuthority => authority;
@@ -192,9 +291,16 @@ public sealed partial class VerifiedContactNetworkAuthority
     private readonly byte[] dca1Reference;
     private readonly byte[] monotonicBootId;
     private readonly Dictionary<string, WitnessMaterial> witnessKeys;
+    private readonly VerifiedXPointNetworkAuthority sourceAuthority;
+    private readonly VerifiedOnionNetworkContext sourceNetwork;
+    private readonly VerifiedAccountDirectoryFreshness sourceFreshness;
+    private readonly OnionTrustedTimeAuthority sourceTrustedTimeAuthority;
 
     private VerifiedContactNetworkAuthority(
         VerifiedXPointNetworkAuthority authority,
+        VerifiedOnionNetworkContext currentNetwork,
+        VerifiedAccountDirectoryFreshness freshness,
+        OnionTrustedTimeAuthority trustedTimeAuthority,
         ReadOnlySpan<byte> xnv1Reference,
         ReadOnlySpan<byte> xnh1Reference,
         ReadOnlySpan<byte> adh1Reference,
@@ -211,6 +317,10 @@ public sealed partial class VerifiedContactNetworkAuthority
         OnionMonotonicReading monotonic,
         ulong freshnessDeadlineMonotonicSeconds)
     {
+        sourceAuthority = authority;
+        sourceNetwork = currentNetwork;
+        sourceFreshness = freshness;
+        sourceTrustedTimeAuthority = trustedTimeAuthority;
         networkId = authority.NetworkId.ToArray();
         authorityCoreReference = authority.AuthorityCoreReference.ToArray();
         witnessPolicyHash = authority.DirectoryWitnessPolicyHash.ToArray();
@@ -255,6 +365,7 @@ public sealed partial class VerifiedContactNetworkAuthority
     public ReadOnlyMemory<byte> Pmt2ArtifactReference => pmt2ArtifactReference.ToArray();
     public ReadOnlyMemory<byte> Pms2ArtifactHash => pms2ArtifactHash.ToArray();
     public ReadOnlyMemory<byte> RecipientDeviceId => recipientDeviceId.ToArray();
+    public ReadOnlyMemory<byte> RecipientAccountId => recipientAccountId.ToArray();
     public ulong RecipientDeviceGeneration { get; }
     public ReadOnlyMemory<byte> RecipientDpd1Reference => recipientDpd1Reference.ToArray();
     public ReadOnlyMemory<byte> RecipientDevicePublicKey => recipientDevicePublicKey.ToArray();
@@ -275,6 +386,68 @@ public sealed partial class VerifiedContactNetworkAuthority
     internal ReadOnlySpan<byte> MonotonicBootIdSpan => monotonicBootId;
     internal ulong VerifiedAtMonotonicSeconds { get; }
     internal ulong FreshnessDeadlineMonotonicSeconds { get; }
+    internal VerifiedXPointNetworkAuthority SourceAuthority => sourceAuthority;
+    internal VerifiedOnionNetworkContext SourceNetwork => sourceNetwork;
+    internal VerifiedAccountDirectoryFreshness SourceFreshness => sourceFreshness;
+    internal OnionTrustedTimeAuthority SourceTrustedTimeAuthority => sourceTrustedTimeAuthority;
+
+    /// <summary>
+    /// Derives the exact pre-key inventory placement only when the authored
+    /// XPS1 belongs to this authority's current recipient device. Callers do
+    /// not receive the underlying network context and cannot substitute an
+    /// arbitrary shard key or request kind.
+    /// </summary>
+    public VerifiedContactServicePlacement CreatePreKeyInventoryPlacement(
+        VerifiedContactPreKeyService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        var parsed = ContactCodec.DecodeXps1(service.ExactXps1.Span);
+        if (!CryptographicOperations.FixedTimeEquals(
+                parsed.CanonicalBytes, service.ExactXps1.Span) ||
+            !CryptographicOperations.FixedTimeEquals(
+                parsed.NetworkId, networkId) ||
+            !CryptographicOperations.FixedTimeEquals(
+                parsed.ServiceCapability, service.ServiceCapability.Span) ||
+            !CryptographicOperations.FixedTimeEquals(
+                parsed.DeviceId, recipientDeviceId) ||
+            !CryptographicOperations.FixedTimeEquals(
+                parsed.Dpd1Reference, recipientDpd1Reference) ||
+            parsed.ServiceGeneration != service.Generation ||
+            parsed.IssuedAtUnixSeconds != service.IssuedAtUnixSeconds ||
+            parsed.ExpiresAtUnixSeconds != service.ExpiresAtUnixSeconds)
+        {
+            throw new CryptographicException(
+                "The XPS1 service does not belong to this verified recipient authority.");
+        }
+
+        return ContactServicePlacementFactory.Create(
+            sourceNetwork,
+            ContactServiceRequestKind.PublishPreKeyInventory,
+            service.ServiceCapability);
+    }
+
+    /// <summary>
+    /// Verifies a bounded XPP1 quorum result with the same trusted-time and
+    /// network authority retained by this recipient capability. Transport
+    /// callers cannot inject a different clock or network root.
+    /// </summary>
+    public ValueTask<VerifiedPreKeyInventoryPublication>
+        VerifyBoundedPreKeyInventoryAsync(
+            BoundedPreKeyInventoryPublication publication,
+            IReadOnlyList<Xic1BoundedReceipt> commitReceipts,
+            VerifiedContactServicePlacement placement,
+            VerifiedContactBundleClosure recipientBundle,
+            VerifiedPreKeyInventoryPublication? predecessor,
+            CancellationToken cancellationToken = default) =>
+        PreKeyInventoryPublicationVerifier.VerifyBoundedAsync(
+            publication,
+            commitReceipts,
+            placement,
+            this,
+            recipientBundle,
+            sourceTrustedTimeAuthority,
+            predecessor,
+            cancellationToken);
 
     internal static async ValueTask<VerifiedContactNetworkAuthority> VerifyAsync(
         VerifiedXPointNetworkAuthority authority,
@@ -356,7 +529,8 @@ public sealed partial class VerifiedContactNetworkAuthority
             }.Min();
 
             return new VerifiedContactNetworkAuthority(
-                authority, xnvReference, xnhReference, freshness.ExactAdh1CoreReference.Span,
+                authority, currentNetwork, freshness, trustedTimeAuthority,
+                xnvReference, xnhReference, freshness.ExactAdh1CoreReference.Span,
                 pmtReference, pms.ArtifactHash.Span, recipientDevice.Certificate,
                 recipientAuthorization, dpdReference, dcaReference, low, high, notBefore, expiresAt,
                 monotonic, freshness.FreshnessDeadlineMonotonicSeconds);

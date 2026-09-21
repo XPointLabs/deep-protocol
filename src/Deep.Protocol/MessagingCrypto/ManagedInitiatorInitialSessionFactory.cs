@@ -47,19 +47,30 @@ public sealed class ManagedInitiatorInitialSessionFactory
     /// </summary>
     public InitiatorDph2PreKeyClaim BeginClaim(
         LocalDeviceX25519AgreementAuthority localAuthority,
-        Dmd1LineageState exactCurrentDirectory)
+        Dmd1LineageState exactCurrentDirectory,
+        Dab1LineageState exactCurrentAddressBinding)
     {
         ArgumentNullException.ThrowIfNull(localAuthority);
         ArgumentNullException.ThrowIfNull(exactCurrentDirectory);
+        ArgumentNullException.ThrowIfNull(exactCurrentAddressBinding);
         var directory = localAuthority
             .RequireActiveDirectoryForProtocolOperation(exactCurrentDirectory)
             .Record;
+        if (exactCurrentAddressBinding.ForkLatched ||
+            !ReferenceEquals(
+                exactCurrentAddressBinding.Head.Identity,
+                exactCurrentDirectory.Head.Identity))
+        {
+            throw new CryptographicException(
+                "The current DID1 address binding and DMD1 directory do not share exact authority.");
+        }
         var operationId = RandomNonzero32();
         return BeginClaimCore(
             InitiatorAgreementFacts.FromAuthority(
                 localAuthority,
                 directory.DirectoryGeneration,
                 directory.RecordHash.Span,
+                exactCurrentAddressBinding.Head.DeepId.CanonicalBytes.Span,
                 operationId),
             FillProductionEntropy);
     }
@@ -182,7 +193,8 @@ public sealed class ManagedInitiatorInitialSessionFactory
         byte[]? ratchetPrivate = null;
         try
         {
-            var leased = InitiatorAgreementFacts.FromLease(lease);
+            var leased = InitiatorAgreementFacts.FromLease(
+                lease, material.Local.ExactDid1);
             material.Local.RequireSame(leased);
             RequireOfferingAndLocalBinding(verifiedOffering, verifiedOffering.Record, leased);
             ephemeralPrivate = material.CopyEphemeralPrivate();
@@ -249,6 +261,7 @@ public sealed class ManagedInitiatorInitialSessionFactory
                 local.AccountId,
                 local.DeviceId,
                 Dpd1Reference(local.ExactDpd1Hash),
+                local.ExactDid1,
                 local.AgreementPublicKey,
                 ephemeralPublic,
                 ratchetPublic);
@@ -307,6 +320,7 @@ public sealed class ManagedInitiatorInitialSessionFactory
                 local.AccountId,
                 local.DeviceId,
                 Dpd1Reference(local.ExactDpd1Hash),
+                local.ExactDid1,
                 local.AgreementPublicKey,
                 ephemeralPublic,
                 ratchetPublic);
@@ -384,7 +398,7 @@ public sealed class ManagedInitiatorInitialSessionFactory
     {
         MessagingCryptoValidation.NonZeroExact(hash, 32, nameof(hash));
         var reference = new byte[38];
-        "DPD1"u8.CopyTo(reference);
+        ProtocolMagicBytes.DPD1.CopyTo(reference);
         BinaryPrimitives.WriteUInt16BigEndian(reference.AsSpan(4), 1);
         hash.CopyTo(reference.AsSpan(6));
         return reference;
@@ -436,10 +450,14 @@ public sealed class ManagedInitiatorInitialSessionFactory
         {
             var privateCopy = agreementPrivateScalar.ToArray();
             byte[]? publicKey = null;
+            byte[]? exactDid1 = null;
             try
             {
                 MessagingCryptoValidation.NonZeroExact(privateCopy, 32, nameof(agreementPrivateScalar));
                 publicKey = ScalarMult.Base(privateCopy);
+                exactDid1 = ApplicationCoreCodec.AuthorDid1(
+                    exactDirectoryHash,
+                    exactDpd1Hash[..16]).CanonicalBytes.ToArray();
                 var facts = new InitiatorAgreementFacts(
                     networkId,
                     accountId,
@@ -448,6 +466,7 @@ public sealed class ManagedInitiatorInitialSessionFactory
                     exactDpd1Hash,
                     directoryGeneration,
                     exactDirectoryHash,
+                    exactDid1,
                     publicKey,
                     operationBinding);
                 return new TestAgreement(
@@ -458,6 +477,7 @@ public sealed class ManagedInitiatorInitialSessionFactory
             {
                 Zero(privateCopy);
                 Zero(publicKey);
+                Zero(exactDid1);
             }
         }
 
@@ -734,7 +754,8 @@ public sealed class InitiatorDph2ClaimPreparation : IDisposable
     {
         RequireClaimPublicBinding(claim);
         var sessionInit = ValidateInitialDmc2(exactSessionInitDmc2, exactFirstApplicationDmc2);
-        var payload = EncodeInitialPayload(exactSessionInitDmc2, exactFirstApplicationDmc2, _entropy);
+        byte[]? payload = null;
+        byte[]? claimPrefix = null;
         byte[]? nonce = null;
         byte[]? mlKemCiphertext = null;
         byte[]? zeroCiphertext = null;
@@ -750,6 +771,10 @@ public sealed class InitiatorDph2ClaimPreparation : IDisposable
             nonce = new byte[24];
             _entropy(nonce);
             mlKemCiphertext = _prepared!.Ciphertext.ToArray();
+            var preview = CreateRecord(claim, nonce, mlKemCiphertext, new byte[4112]);
+            claimPrefix = EncodeClaimPrefix(claim, preview);
+            payload = EncodeInitialPayload(
+                claimPrefix, exactSessionInitDmc2, exactFirstApplicationDmc2, _entropy);
             zeroCiphertext = new byte[payload.Length + 16];
             var provisional = CreateRecord(claim, nonce, mlKemCiphertext, zeroCiphertext);
             var callbacks = new InitiatorVerificationCallbacks(_local, claim);
@@ -769,7 +794,7 @@ public sealed class InitiatorDph2ClaimPreparation : IDisposable
             decrypted = DecryptInitialPayload(finalRecord, handshake);
             if (!Fixed(payload, decrypted))
                 throw new CryptographicException("The self-verified DPH2 initial payload changed during encryption.");
-            VerifyDecodedInitialPayload(decrypted, sessionInit);
+            VerifyDecodedInitialPayload(decrypted, sessionInit, finalRecord, claimPrefix.Length != 0);
 
             initialPrivate = _initialRatchetPrivate!.Copy();
             using var seed = VerifiedTripleRatchetSeedCapability.FromVerifiedHandshake(handshake);
@@ -803,6 +828,7 @@ public sealed class InitiatorDph2ClaimPreparation : IDisposable
             ratchet?.Dispose();
             handshake?.Dispose();
             Zero(payload);
+            Zero(claimPrefix);
             Zero(nonce);
             Zero(mlKemCiphertext);
             Zero(zeroCiphertext);
@@ -892,6 +918,7 @@ public sealed class InitiatorDph2ClaimPreparation : IDisposable
             _local.DeviceId,
             _local.DeviceGeneration,
             Dpd1Reference(_local.ExactDpd1Hash),
+            _local.ExactDid1,
             offering.ResponderAccountIdSpan,
             offering.ResponderDeviceIdSpan,
             offering.ResponderDeviceGeneration,
@@ -987,12 +1014,35 @@ public sealed class InitiatorDph2ClaimPreparation : IDisposable
         }
     }
 
+    private static byte[] EncodeClaimPrefix(
+        VerifiedXpc1PreKeyClaimReceipt claim,
+        Dph2Record preview)
+    {
+#if DEEP_PROTOCOL_RECOVERY_TEST_SEAM
+        // Recovery fault-injection fixtures predate the signed XPC1 service
+        // transcript. This branch is absent from production assemblies.
+        if (!claim.HasExactClaimTranscriptForTests)
+            return [];
+#endif
+        var (xpk1, xpc1Wire) = claim.CopyEncryptedInitialClaimTranscript();
+        try
+        {
+            return Dph2InitialClaimTranscriptCodec.Encode(xpk1, xpc1Wire, preview);
+        }
+        finally
+        {
+            Zero(xpk1);
+            Zero(xpc1Wire);
+        }
+    }
+
     private static byte[] EncodeInitialPayload(
+        ReadOnlySpan<byte> claimPrefix,
         ReadOnlySpan<byte> sessionInit,
         ReadOnlySpan<byte> firstApplication,
         InitiatorInitialSessionEntropyCore entropy)
     {
-        var unpaddedLength = checked(1 + 4 + sessionInit.Length +
+        var unpaddedLength = checked(claimPrefix.Length + 1 + 4 + sessionInit.Length +
             (firstApplication.IsEmpty ? 0 : 4 + firstApplication.Length));
         var bucket = new[] { 4096, 16384, 32768 }
             .FirstOrDefault(candidate => unpaddedLength + 4 <= candidate);
@@ -1001,6 +1051,8 @@ public sealed class InitiatorDph2ClaimPreparation : IDisposable
         var output = new byte[bucket];
         entropy(output);
         var offset = 0;
+        claimPrefix.CopyTo(output);
+        offset += claimPrefix.Length;
         output[offset++] = firstApplication.IsEmpty ? (byte)1 : (byte)2;
         BinaryPrimitives.WriteUInt32BigEndian(output.AsSpan(offset), checked((uint)sessionInit.Length));
         offset += 4;
@@ -1019,7 +1071,11 @@ public sealed class InitiatorDph2ClaimPreparation : IDisposable
         return output;
     }
 
-    private static void VerifyDecodedInitialPayload(ReadOnlySpan<byte> padded, ParsedDmc2 expectedSession)
+    private static void VerifyDecodedInitialPayload(
+        ReadOnlySpan<byte> padded,
+        ParsedDmc2 expectedSession,
+        Dph2Record dph2,
+        bool hasClaimTranscript)
     {
         if (padded.Length is not (4096 or 16384 or 32768))
             throw new CryptographicException("The decrypted DPH2 payload has an invalid bucket.");
@@ -1027,10 +1083,13 @@ public sealed class InitiatorDph2ClaimPreparation : IDisposable
         if (unpaddedLength is < 1 or > 32764 || unpaddedLength > padded.Length - 4)
             throw new CryptographicException("The decrypted DPH2 payload length is invalid.");
         var body = padded[..unpaddedLength];
-        var count = body[0];
+        var offset = hasClaimTranscript
+            ? Dph2InitialClaimTranscriptCodec.DecodePrefix(body, dph2).Consumed
+            : 0;
+        var count = body[offset];
         if (count is not (1 or 2))
             throw new CryptographicException("The decrypted DPH2 event count is invalid.");
-        var offset = 1;
+        offset++;
         var decodedSession = DecodeLp32Dmc2(body, ref offset);
         if (decodedSession.ContentKind != Dmc2ContentKind.SessionInit ||
             !decodedSession.CanonicalBytes.Span.SequenceEqual(expectedSession.CanonicalBytes.Span))
@@ -1122,7 +1181,7 @@ public sealed class InitiatorDph2ClaimPreparation : IDisposable
     private static byte[] Dpd1Reference(ReadOnlySpan<byte> hash)
     {
         var reference = new byte[38];
-        "DPD1"u8.CopyTo(reference);
+        ProtocolMagicBytes.DPD1.CopyTo(reference);
         BinaryPrimitives.WriteUInt16BigEndian(reference.AsSpan(4), 1);
         hash.CopyTo(reference.AsSpan(6));
         return reference;
@@ -1276,6 +1335,7 @@ internal sealed class InitiatorAgreementFacts
         ReadOnlySpan<byte> exactDpd1Hash,
         ulong directoryGeneration,
         ReadOnlySpan<byte> exactDirectoryHash,
+        ReadOnlySpan<byte> exactDid1,
         ReadOnlySpan<byte> agreementPublicKey,
         ReadOnlySpan<byte> operationBinding)
     {
@@ -1284,6 +1344,7 @@ internal sealed class InitiatorAgreementFacts
         MessagingCryptoValidation.NonZeroExact(deviceId, 32, nameof(deviceId));
         MessagingCryptoValidation.NonZeroExact(exactDpd1Hash, 32, nameof(exactDpd1Hash));
         MessagingCryptoValidation.NonZeroExact(exactDirectoryHash, 32, nameof(exactDirectoryHash));
+        _ = ApplicationCoreCodec.DecodeDid1(exactDid1);
         MessagingCryptoValidation.NonZeroExact(agreementPublicKey, 32, nameof(agreementPublicKey));
         MessagingCryptoValidation.NonZeroExact(operationBinding, 32, nameof(operationBinding));
         if (deviceGeneration == 0 || directoryGeneration == 0)
@@ -1295,6 +1356,7 @@ internal sealed class InitiatorAgreementFacts
         ExactDpd1Hash = exactDpd1Hash.ToArray();
         DirectoryGeneration = directoryGeneration;
         ExactDirectoryHash = exactDirectoryHash.ToArray();
+        ExactDid1 = exactDid1.ToArray();
         AgreementPublicKey = agreementPublicKey.ToArray();
         OperationBinding = operationBinding.ToArray();
     }
@@ -1306,6 +1368,7 @@ internal sealed class InitiatorAgreementFacts
     internal byte[] ExactDpd1Hash { get; }
     internal ulong DirectoryGeneration { get; }
     internal byte[] ExactDirectoryHash { get; }
+    internal byte[] ExactDid1 { get; }
     internal byte[] AgreementPublicKey { get; }
     internal byte[] OperationBinding { get; }
 
@@ -1313,6 +1376,7 @@ internal sealed class InitiatorAgreementFacts
         LocalDeviceX25519AgreementAuthority authority,
         ulong directoryGeneration,
         ReadOnlySpan<byte> exactDirectoryHash,
+        ReadOnlySpan<byte> exactDid1,
         ReadOnlySpan<byte> operationBinding)
     {
         ArgumentNullException.ThrowIfNull(authority);
@@ -1324,11 +1388,14 @@ internal sealed class InitiatorAgreementFacts
             authority.ExactDpd1Hash.Span,
             directoryGeneration,
             exactDirectoryHash,
+            exactDid1,
             authority.AgreementPublicKey.Span,
             operationBinding);
     }
 
-    internal static InitiatorAgreementFacts FromLease(LocalDeviceX25519AgreementLease lease) =>
+    internal static InitiatorAgreementFacts FromLease(
+        LocalDeviceX25519AgreementLease lease,
+        ReadOnlySpan<byte> exactDid1) =>
         new(
             lease.NetworkId.Span,
             lease.AccountId.Span,
@@ -1337,6 +1404,7 @@ internal sealed class InitiatorAgreementFacts
             lease.ExactDpd1Hash.Span,
             lease.DirectoryGeneration,
             lease.ExactDirectoryHash.Span,
+            exactDid1,
             lease.AgreementPublicKey.Span,
             lease.OperationBinding.Span);
 
@@ -1350,6 +1418,7 @@ internal sealed class InitiatorAgreementFacts
             !Fixed(DeviceId, other.DeviceId) ||
             !Fixed(ExactDpd1Hash, other.ExactDpd1Hash) ||
             !Fixed(ExactDirectoryHash, other.ExactDirectoryHash) ||
+            !Fixed(ExactDid1, other.ExactDid1) ||
             !Fixed(AgreementPublicKey, other.AgreementPublicKey) ||
             !Fixed(OperationBinding, other.OperationBinding))
         {

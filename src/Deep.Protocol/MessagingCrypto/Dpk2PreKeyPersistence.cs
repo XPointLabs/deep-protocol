@@ -33,7 +33,7 @@ public sealed class Dpk2PreKeyPersistenceScope
         if (accountGeneration == 0) throw new ArgumentOutOfRangeException(nameof(accountGeneration));
         if (deviceGeneration == 0) throw new ArgumentOutOfRangeException(nameof(deviceGeneration));
         if (exactDpd1Reference38.Length != 38 ||
-            !exactDpd1Reference38[..4].SequenceEqual("DPD1"u8) ||
+            !exactDpd1Reference38[..4].SequenceEqual(ProtocolMagicBytes.DPD1) ||
             BinaryPrimitives.ReadUInt16BigEndian(exactDpd1Reference38[4..6]) != 1 ||
             exactDpd1Reference38[6..].IndexOfAnyExcept((byte)0) < 0)
             throw new ArgumentException("The exact DPD1 reference must be canonical v1.", nameof(exactDpd1Reference38));
@@ -284,6 +284,56 @@ public sealed class RestoredDpk2PreKeySecretCapability : IDisposable
         }
     }
 
+    /// <summary>
+    /// Opens one restored local secret copy for a bounded, read-only DPH2
+    /// AEAD preview. This does not consume a device-wide prekey inventory row
+    /// or authorize a ratchet/session commit; the store must restore a new
+    /// capability after independent XPC1 verification for that transaction.
+    /// </summary>
+    internal OwnedDpk2PreKeyMaterial ConsumeForPreClaimPreview(Dph2PreClaimHeader header)
+    {
+        ArgumentNullException.ThrowIfNull(header);
+        if (Interlocked.CompareExchange(ref _consumed, 1, 0) != 0)
+            throw new InvalidOperationException("The restored DPK2 secret capability is no longer available.");
+
+        byte[]? signed = null;
+        byte[]? oneTime = null;
+        byte[]? mlKem = null;
+        try
+        {
+            var dph2 = header.Record;
+            var offering = header.Offering.Record;
+            if (Kind != offering.MlKemKind || Kind != dph2.SelectedPrekey.Kind ||
+                !Dpk2PreKeyPersistenceScope.Fixed(_exactDpk2Hash, header.Offering.ExactHash.Span) ||
+                !Dpk2PreKeyPersistenceScope.Fixed(_exactDpk2Hash, dph2.ExactDpk2Hash.Span) ||
+                !Dpk2PreKeyPersistenceScope.Fixed(_signedPreKeyId,
+                    dph2.SelectedPrekey.SignedX25519PrekeyId.Span) ||
+                !Dpk2PreKeyPersistenceScope.Fixed(_oneTimePreKeyId,
+                    offering.OneTimeX25519PrekeyId.Span) ||
+                !Dpk2PreKeyPersistenceScope.Fixed(_mlKemPreKeyId,
+                    dph2.SelectedPrekey.MlKemPrekeyId.Span))
+                throw new CryptographicException(
+                    "The restored DPK2 secrets do not match the pre-claim DPH2 header.");
+
+            signed = _signedPrivate!.Copy();
+            oneTime = _oneTimePrivate?.Copy();
+            mlKem = _mlKemSecret!.Copy();
+            var result = new OwnedDpk2PreKeyMaterial(signed, oneTime, mlKem);
+            signed = null;
+            oneTime = null;
+            mlKem = null;
+            return result;
+        }
+        finally
+        {
+            if (signed is not null) CryptographicOperations.ZeroMemory(signed);
+            if (oneTime is not null) CryptographicOperations.ZeroMemory(oneTime);
+            if (mlKem is not null) CryptographicOperations.ZeroMemory(mlKem);
+            DisposeSecrets();
+            GC.SuppressFinalize(this);
+        }
+    }
+
     public void Dispose()
     {
         Interlocked.Exchange(ref _consumed, 1);
@@ -468,7 +518,7 @@ internal static class Dpk2PreKeyPersistenceCodec
             BinaryPrimitives.ReadUInt64BigEndian(canonical.Slice(AccountGenerationOffset, 8)) == 0 ||
             canonical.Slice(DeviceOffset, 32).IndexOfAnyExcept((byte)0) < 0 ||
             BinaryPrimitives.ReadUInt64BigEndian(canonical.Slice(DeviceGenerationOffset, 8)) == 0 ||
-            !canonical.Slice(Dpd1ReferenceOffset, 4).SequenceEqual("DPD1"u8) ||
+            !canonical.Slice(Dpd1ReferenceOffset, 4).SequenceEqual(ProtocolMagicBytes.DPD1) ||
             BinaryPrimitives.ReadUInt16BigEndian(canonical.Slice(Dpd1ReferenceOffset + 4, 2)) != 1 ||
             canonical.Slice(Dpd1ReferenceOffset + 6, 32).IndexOfAnyExcept((byte)0) < 0 ||
             canonical.Slice(ExactDpk2HashOffset, 32).IndexOfAnyExcept((byte)0) < 0 ||

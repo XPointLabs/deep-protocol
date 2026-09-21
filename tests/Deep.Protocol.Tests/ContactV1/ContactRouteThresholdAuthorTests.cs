@@ -1,5 +1,4 @@
 using Deep.Protocol.ContactV1;
-using Deep.Protocol.AccountDirectoryV1;
 using Deep.Protocol.DeepNative;
 using Sodium;
 
@@ -33,12 +32,7 @@ public sealed class ContactRouteThresholdAuthorTests
                 proposal, remoteAdvertisement, remoteThreshold),
             deviceSigner);
 
-        var adl = AccountDirectoryAdl1Codec.Decode(fixture.Identity.Bundle.Field(20).Span);
-        var wireRequest = new ContactRouteAuthorityWireRequest(
-            fixture.Network, Bytes(32, 0xd1), adl.DirectoryLookupKey.Span,
-            fixture.Freshness.AdhGeneration, fixture.Freshness.ExactAdh1CoreHash.Span,
-            fixture.Identity.Authorization.Verified.Record.CanonicalBytes.Span,
-            xra.ExactXra1.Span);
+        var wireRequest = proposal.CreateThresholdRequest(xra, Bytes(32, 0xd1));
         var decodedRequest = ContactRouteAuthorityWireCodec.DecodeRequest(
             ContactRouteAuthorityWireCodec.EncodeRequest(wireRequest));
         var wireResponse = new ContactRouteAuthorityWireResponse(
@@ -63,6 +57,14 @@ public sealed class ContactRouteThresholdAuthorTests
         Assert.Equal(authored.ExactPms2.ToArray(), decodedResponse.ExactPms2.ToArray());
         Assert.Equal(authored.ExactXrc1.ToArray(), decodedResponse.ExactXrc1.ToArray());
         Assert.Equal(authored.ExactXss1.ToArray(), decodedResponse.ExactXss1.ToArray());
+        Assert.Equal(fixture.Freshness.DirectoryLeafKey.ToArray(),
+            decodedRequest.DirectoryLookupKey.ToArray());
+        Assert.Equal(fixture.Freshness.AdhGeneration,
+            decodedRequest.MinimumAdh1Generation);
+        Assert.Equal(fixture.Freshness.ExactAdh1CoreHash.ToArray(),
+            decodedRequest.MinimumAdh1CoreHash.ToArray());
+        Assert.Equal(fixture.Identity.Authorization.Verified.Record.CanonicalBytes.ToArray(),
+            decodedRequest.ExactDca1.ToArray());
         Assert.Equal(
             [ContactDeviceSignaturePurpose.RouteAdvertisement,
              ContactDeviceSignaturePurpose.RouteReachability,

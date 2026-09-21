@@ -225,6 +225,18 @@ internal sealed class ExactDpe2ReceiveTransitionPlan : IDisposable
     internal bool MessageKeyDeletedAfterEnvelopeCrypto => _ratchetPlan.MessageKeyDeletedAfterEnvelopeCrypto;
 
     internal byte[] CopyExactEnvelopeForPersistence() => _exactEnvelope.ToArray();
+    internal byte[] CopyAuthenticatedDmc2ForPersistence()
+    {
+        lock (_lifecycleSync)
+        {
+            if (Outcome == RatchetPlanOutcome.ExactReplay ||
+                _consumed != 0 || _authenticatedMessage is null)
+                throw new MessagingCryptoException(
+                    MessagingCryptoError.TransitionRejected,
+                    "Only a fresh authenticated DPE2 may stage its DMC2 for durable application recovery.");
+            return _authenticatedMessage.ToArray();
+        }
+    }
     internal byte[] ExportProposedDurableState() => _ratchetPlan.ExportProposedDurableState();
 
     internal static ExactDpe2ReceiveTransitionPlan Prepare(

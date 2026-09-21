@@ -37,6 +37,8 @@ public sealed class VerifiedXpc1PreKeyClaimReceipt
     private readonly byte[] _mlKemPrekeyId;
     private readonly byte[] _senderEphemeralCommitment;
     private readonly byte[] _fullExactReplayHash;
+    private readonly byte[] _exactXpk1;
+    private readonly byte[] _exactXpc1Wire;
     private readonly byte[][] _replicaNodeIds;
     private int _handshakeConsumed;
 
@@ -63,6 +65,8 @@ public sealed class VerifiedXpc1PreKeyClaimReceipt
         _mlKemPrekeyId = dpk2.MlKemPrekeyId.ToArray();
         _senderEphemeralCommitment = request.SenderEphemeralCommitment.ToArray();
         _fullExactReplayHash = fullExactReplayHash.ToArray();
+        _exactXpk1 = request.CanonicalBytes.ToArray();
+        _exactXpc1Wire = result.WireBytes.ToArray();
         PrekeyKind = dpk2.MlKemKind;
         ServiceGeneration = ServiceWire.U64(result.FieldSpan(21));
         PrekeyExpiresAtUnixSeconds = ServiceWire.U64(result.FieldSpan(22));
@@ -129,6 +133,8 @@ public sealed class VerifiedXpc1PreKeyClaimReceipt
         _mlKemPrekeyId = dpk2.MlKemPrekeyId.ToArray();
         _senderEphemeralCommitment = senderEphemeralCommitment.ToArray();
         _fullExactReplayHash = SHA256.HashData(claimReceiptHash);
+        _exactXpk1 = [];
+        _exactXpc1Wire = [];
         PrekeyKind = dpk2.MlKemKind;
         ServiceGeneration = dpk2.PrekeyServiceGeneration;
         PrekeyExpiresAtUnixSeconds = dpk2.ExpiresAt;
@@ -171,6 +177,22 @@ public sealed class VerifiedXpc1PreKeyClaimReceipt
     public Xpc1Status Status { get; }
     public IReadOnlyList<ReadOnlyMemory<byte>> ReplicaNodeIds =>
         Array.AsReadOnly(_replicaNodeIds.Select(static value => (ReadOnlyMemory<byte>)value.ToArray()).ToArray());
+
+    /// <summary>
+    /// Exact transport evidence for the encrypted DPH2 initial payload. The
+    /// recovery-test seam has no signed service transcript and must not be
+    /// usable for production authoring of that payload.
+    /// </summary>
+    internal (byte[] Xpk1, byte[] Xpc1Wire) CopyEncryptedInitialClaimTranscript()
+    {
+        if (_exactXpk1.Length == 0 || _exactXpc1Wire.Length == 0)
+            throw new CryptographicException("The verified claim has no exact XPK1/XPC1 wire transcript.");
+        return (_exactXpk1.ToArray(), _exactXpc1Wire.ToArray());
+    }
+
+#if DEEP_PROTOCOL_RECOVERY_TEST_SEAM
+    internal bool HasExactClaimTranscriptForTests => _exactXpk1.Length != 0 && _exactXpc1Wire.Length != 0;
+#endif
 
     /// <summary>
     /// Binds this witnessed claim to the exact verified responder-side DPH2 and

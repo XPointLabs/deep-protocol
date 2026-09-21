@@ -84,6 +84,8 @@ public sealed class XPointNetworkOperationalGenesisAuthorTests
             Hash("xcc"),
             Hash("xcb"),
             Hash("pma"),
+            PublicKeyAuth.GenerateKeyPair(Bytes(32, 0x31)).PublicKey,
+            PublicKeyAuth.GenerateKeyPair(Bytes(32, 0x32)).PublicKey,
             990,
             1_000,
             1_500,
@@ -104,7 +106,11 @@ public sealed class XPointNetworkOperationalGenesisAuthorTests
         Assert.Equal("ADH1", ContactMagic(authored.ExactAdh1.Span));
         Assert.Equal("DTT1", ContactMagic(authored.ExactDtt1.Span));
         Assert.Equal("ADP1", ContactMagic(authored.ExactAdp1.Span));
+        Assert.Equal("PMA2", ContactCodec.Decode("PMA2", authored.ExactPma2.Span).Magic);
         Assert.Equal("PMT2", ContactCodec.Decode("PMT2", authored.ExactPmt2.Span).Magic);
+        var mailboxAuthority = MailboxAuthorityV2Verifier.Verify(
+            bootstrap.Authority, authored.ExactPma2.Span, 1_095, 1_105);
+        Assert.True(mailboxAuthority.BindsProjection(authored.ExactPmt2.Span));
         authored.VerifiedNetwork.EnsureCurrent();
     }
 

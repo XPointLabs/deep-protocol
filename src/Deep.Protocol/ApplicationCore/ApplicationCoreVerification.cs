@@ -1,5 +1,7 @@
 using System.Buffers.Binary;
+using System.Security.Cryptography;
 using Deep.Protocol.DeepNative;
+using Deep.Protocol.ContactV1;
 using Deep.Protocol.MessagingWire;
 using Sodium;
 
@@ -252,6 +254,128 @@ public static class ApplicationCoreVerifier
         VerifySignature(parsed.AccountSignature.Span, parsed.AccountSignatureInput.Span,
             account.Certificate.AccountEd25519PublicKey.Span, "DAB1 account signature");
         return new VerifiedDab1(parsed, deepId, identity);
+    }
+
+    /// <summary>
+    /// Derives the exact ContactHello safety-number hash from two non-forked,
+    /// verified account bindings. Device-directory changes do not enter this
+    /// value; a destructive account-generation replacement does.
+    /// </summary>
+    public static byte[] ComputeContactSafetyNumber(
+        Dab1LineageState first,
+        Dab1LineageState second)
+    {
+        ArgumentNullException.ThrowIfNull(first);
+        ArgumentNullException.ThrowIfNull(second);
+        if (first.ForkLatched || second.ForkLatched)
+            Reject("A forked account binding cannot authorize a contact safety number.");
+        var left = first.Head.Identity.Account;
+        var right = second.Head.Identity.Account;
+        var network = left.Certificate.NetworkId.Span;
+        var leftHash = left.Certificate.CanonicalHash.Span;
+        var rightHash = right.Certificate.CanonicalHash.Span;
+        if (!network.SequenceEqual(right.Certificate.NetworkId.Span) ||
+            left.DeepAccountIdHash.Span.SequenceEqual(right.DeepAccountIdHash.Span) ||
+            leftHash.SequenceEqual(rightHash))
+            Reject("A contact safety number requires two distinct verified accounts on one network.");
+
+        var lower = leftHash.SequenceCompareTo(rightHash) < 0 ? left : right;
+        var upper = ReferenceEquals(lower, left) ? right : left;
+        Span<byte> material = stackalloc byte[96];
+        network.CopyTo(material);
+        lower.Certificate.CanonicalHash.Span.CopyTo(material[16..48]);
+        BinaryPrimitives.WriteUInt64BigEndian(material[48..56],
+            lower.Certificate.AccountGeneration);
+        upper.Certificate.CanonicalHash.Span.CopyTo(material[56..88]);
+        BinaryPrimitives.WriteUInt64BigEndian(material[88..96],
+            upper.Certificate.AccountGeneration);
+        return ApplicationCoreFormat.Sha256Domain(
+            "Deep/Application/V1/contact-safety-number", material);
+    }
+
+    /// <summary>
+    /// Checks the identity-bound ContactHello fields and embedded XUR1 using
+    /// independently verified account/device closures. The caller must still
+    /// prove that this DMC2 came from the authenticated initial DPH2 stage,
+    /// verify the XUR1 placement closure, and commit contact/inbox state before
+    /// acknowledging a mailbox deposit.
+    /// </summary>
+    public static void RequireContactHelloEndpointBindings(
+        ParsedDmc2 hello,
+        Dab1LineageState initiatorBinding,
+        Dmd1LineageState initiatorDirectory,
+        Dab1LineageState recipientBinding)
+    {
+        ArgumentNullException.ThrowIfNull(hello);
+        ArgumentNullException.ThrowIfNull(initiatorBinding);
+        ArgumentNullException.ThrowIfNull(initiatorDirectory);
+        ArgumentNullException.ThrowIfNull(recipientBinding);
+        if (hello.ParsedPayload is not ContactHelloDmc2Payload)
+            Reject("The authenticated initial event is not ContactHello.");
+        var payload = (ContactHelloDmc2Payload)hello.ParsedPayload;
+        if (initiatorBinding.ForkLatched || initiatorDirectory.ForkLatched ||
+            recipientBinding.ForkLatched)
+            Reject("A forked account or device lineage cannot authorize ContactHello.");
+
+        var initiator = initiatorBinding.Head.Identity;
+        var directory = initiatorDirectory.Head;
+        var recipient = recipientBinding.Head.Identity;
+        var network = hello.NetworkId.Span;
+        if (!network.SequenceEqual(initiator.Account.Certificate.NetworkId.Span) ||
+            !network.SequenceEqual(recipient.Account.Certificate.NetworkId.Span) ||
+            !network.SequenceEqual(directory.Record.NetworkId.Span) ||
+            !hello.SenderAccountId.Span.SequenceEqual(
+                initiator.Account.DeepAccountIdHash.Span) ||
+            !directory.Record.DeepAccountId.Span.SequenceEqual(
+                initiator.Account.DeepAccountIdHash.Span) ||
+            !initiator.Account.Certificate.CanonicalHash.Span.SequenceEqual(
+                directory.Identity.Account.Certificate.CanonicalHash.Span) ||
+            !initiator.Revocations.Snapshot.CanonicalHash.Span.SequenceEqual(
+                directory.Identity.Revocations.Snapshot.CanonicalHash.Span))
+            Reject("ContactHello differs from the verified account/directory closure.");
+
+        var device = directory.Identity.ActiveDevices.SingleOrDefault(candidate =>
+            candidate.Certificate.DeviceId.Span.SequenceEqual(hello.SenderDeviceId.Span)) ??
+            throw ApplicationCoreFormat.Error(
+                ApplicationCoreValidationStage.CryptographicVerification,
+                ApplicationCoreRejection.VerificationFailed,
+                "ContactHello sender is not an active verified initiator device.");
+        if (!directory.Record.ActiveDevices.Any(candidate =>
+                candidate.DeviceId.Span.SequenceEqual(hello.SenderDeviceId.Span)))
+            Reject("ContactHello sender is not an active verified initiator device.");
+
+        var expectedDab1 = new ContactArtifactReference(
+            ProtocolMagic.DAB1, 1, initiatorBinding.Head.Record.RecordHash.Span);
+        var expectedSafety = ComputeContactSafetyNumber(
+            initiatorBinding, recipientBinding);
+        try
+        {
+            if (!payload.InitiatorDab1Reference.Span.SequenceEqual(
+                    expectedDab1.CanonicalBytes.Span) ||
+                !CryptographicOperations.FixedTimeEquals(
+                    payload.InitiatorDmd1Hash.Span,
+                    directory.Record.RecordHash.Span) ||
+                !CryptographicOperations.FixedTimeEquals(
+                    payload.SafetyNumberHash.Span, expectedSafety))
+                Reject("ContactHello DAB1, DMD1, or safety number differs from verified authority.");
+        }
+        finally { CryptographicOperations.ZeroMemory(expectedSafety); }
+
+        var xur1 = ContactCodec.Decode(ProtocolMagic.XUR1, payload.InboundXur1.Span);
+        var dpd1Reference = ContactCodec.DecodeArtifactReference(
+            xur1.FieldSpan(14), ProtocolMagic.DPD1);
+        var createdAtSeconds = hello.CreatedAtUnixMilliseconds / 1_000;
+        if (!xur1.FieldSpan(1).SequenceEqual(network) ||
+            !xur1.FieldSpan(13).SequenceEqual(hello.SenderDeviceId.Span) ||
+            !dpd1Reference.Hash.Span.SequenceEqual(device.Certificate.CanonicalHash.Span) ||
+            BinaryPrimitives.ReadUInt16BigEndian(xur1.FieldSpan(10)) != 0x0007 ||
+            BinaryPrimitives.ReadUInt64BigEndian(xur1.FieldSpan(11)) > createdAtSeconds ||
+            BinaryPrimitives.ReadUInt64BigEndian(xur1.FieldSpan(12)) <= createdAtSeconds ||
+            device.Certificate.IssuedAtUnixSeconds > createdAtSeconds ||
+            device.Certificate.ExpiresAtUnixSeconds <= createdAtSeconds)
+            Reject("ContactHello XUR1 is outside its verified author/device/time scope.");
+        ContactCodec.VerifyDeviceSignature(
+            xur1, device.Certificate.DeviceEd25519PublicKey.Span);
     }
 
     public static VerifiedDmd1 VerifyDmd1(

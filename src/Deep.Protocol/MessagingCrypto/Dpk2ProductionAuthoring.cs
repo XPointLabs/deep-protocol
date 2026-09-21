@@ -24,8 +24,6 @@ public sealed class Dpk2AuthoringContext
         ulong expiresAtUnixSeconds)
     {
         CurrentDirectory = currentDirectory ?? throw new ArgumentNullException(nameof(currentDirectory));
-        if (prekeyServiceGeneration == 0)
-            throw new ArgumentOutOfRangeException(nameof(prekeyServiceGeneration));
         if (inventoryEpoch == 0)
             throw new ArgumentOutOfRangeException(nameof(inventoryEpoch));
         if (policyGeneration == 0)
@@ -290,7 +288,7 @@ public sealed class Dpk2AuthoringAuthority : IDisposable
     private static byte[] Dpd1Reference(ReadOnlySpan<byte> hash)
     {
         var result = new byte[38];
-        Encoding.ASCII.GetBytes("DPD1").CopyTo(result, 0);
+        ProtocolMagicBytes.DPD1.CopyTo(result);
         BinaryPrimitives.WriteUInt16BigEndian(result.AsSpan(4), 1);
         hash.CopyTo(result.AsSpan(6));
         return result;

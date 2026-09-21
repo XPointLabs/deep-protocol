@@ -75,6 +75,8 @@ internal static class MessagingWireFixtures
             Bytes(32, 0x22),
             17,
             Bytes(38, 0x32),
+            Deep.Protocol.ApplicationCore.ApplicationCoreCodec.AuthorDid1(
+                Bytes(32, 0x33), Bytes(16, 0x34)).CanonicalBytes.Span,
             offering.ResponderAccountId.Span,
             offering.ResponderDeviceId.Span,
             offering.ResponderDeviceGeneration,
@@ -233,7 +235,8 @@ internal static class ManualMessagingWire
             (17, record.ActualMlKem768Ciphertext.ToArray()),
             (18, record.InitiatorInitialRatchetX25519PublicKey.ToArray()),
             (19, record.InitialPayloadNonce.ToArray()),
-            (20, ciphertext),
+            (20, record.InitiatorDid1.ToArray()),
+            (21, ciphertext),
         ];
     }
 

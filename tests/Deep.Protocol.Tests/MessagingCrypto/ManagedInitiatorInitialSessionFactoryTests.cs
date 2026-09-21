@@ -14,6 +14,93 @@ namespace Deep.Protocol.Tests.MessagingCrypto;
 public sealed class ManagedInitiatorInitialSessionFactoryTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ResponderRecoversExactAuthenticatedInitialEvents(bool includeFirstApplication)
+    {
+        using var fixture = new Fixture();
+        using var preparation = fixture.Prepare();
+        using var commit = preparation.Complete(
+            fixture.Claim(preparation),
+            fixture.SessionInit.CanonicalBytes.Span,
+            includeFirstApplication ? fixture.FirstMessage.CanonicalBytes.Span : ReadOnlySpan<byte>.Empty);
+        using var outbound = commit.ConsumeForAtomicStore();
+        var exactDph2 = outbound.ExactDph2.ToArray();
+        try
+        {
+            var dph2 = Dph2Codec.Decode(exactDph2);
+            using var claim = fixture.ResponderClaim(dph2);
+            using var responder = fixture.ResponderFactory();
+            using var material = fixture.RecoverInitial(responder, claim);
+            Assert.Equal(fixture.SessionInit.CanonicalBytes.ToArray(), material.SessionInitDmc2.ToArray());
+            Assert.Equal(
+                includeFirstApplication ? fixture.FirstMessage.CanonicalBytes.ToArray() : Array.Empty<byte>(),
+                material.FirstApplicationDmc2.ToArray());
+            using var state = TripleRatchetDurableStateCodec.Decode(material.ExactTrs1.Span);
+            Assert.Equal(dph2.SessionId.ToArray(), state.Binding.SessionId.ToArray());
+            Assert.Equal(dph2.ResponderDeviceId.ToArray(), state.Binding.LocalDeviceId.ToArray());
+            Assert.Throws<ObjectDisposedException>(() =>
+            {
+                material.Dispose();
+                _ = material.SessionInitDmc2;
+            });
+        }
+        finally { CryptographicOperations.ZeroMemory(exactDph2); }
+    }
+
+    [Fact]
+    public void ResponderRejectsTamperedInitialCiphertextBeforeTrs1Escapes()
+    {
+        using var fixture = new Fixture();
+        using var preparation = fixture.Prepare();
+        using var commit = preparation.Complete(
+            fixture.Claim(preparation), fixture.SessionInit.CanonicalBytes.Span);
+        using var outbound = commit.ConsumeForAtomicStore();
+        var exactDph2 = outbound.ExactDph2.ToArray();
+        try
+        {
+            exactDph2[^1] ^= 0x01;
+            var dph2 = Dph2Codec.Decode(exactDph2);
+            using var claim = fixture.ResponderClaim(dph2);
+            using var responder = fixture.ResponderFactory();
+            Assert.ThrowsAny<CryptographicException>(() => fixture.RecoverInitial(responder, claim));
+        }
+        finally { CryptographicOperations.ZeroMemory(exactDph2); }
+    }
+
+    [Theory]
+    [InlineData(Dpk2PrekeyKind.OneTime)]
+    [InlineData(Dpk2PrekeyKind.LastResort)]
+    public void PreClaimPreviewDerivesOnlyTheMatchingInitialAeadKey(
+        Dpk2PrekeyKind kind)
+    {
+        using var fixture = new Fixture(kind);
+        using var preparation = fixture.Prepare();
+        using var commit = preparation.Complete(
+            fixture.Claim(preparation), fixture.SessionInit.CanonicalBytes.Span);
+        using var outbound = commit.ConsumeForAtomicStore();
+        var exactDph2 = outbound.ExactDph2.ToArray();
+        byte[]? padded = null;
+        try
+        {
+            var dph2 = Dph2Codec.Decode(exactDph2);
+            padded = fixture.PreviewPaddedInitialPayload(dph2);
+            Assert.Equal(4096, padded.Length);
+            // This synthetic recovery fixture has an event-only body only in
+            // the test-seam assembly; production authors a claim prefix.
+            Assert.Equal((byte)1, padded[0]);
+            exactDph2[^1] ^= 1;
+            Assert.ThrowsAny<CryptographicException>(() =>
+                fixture.PreviewPaddedInitialPayload(Dph2Codec.Decode(exactDph2)));
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(exactDph2);
+            if (padded is not null) CryptographicOperations.ZeroMemory(padded);
+        }
+    }
+
+    [Theory]
     [InlineData(Dpk2PrekeyKind.OneTime, 0)]
     [InlineData(Dpk2PrekeyKind.LastResort, 7)]
     public void ExactDph2AndInitialTrs1AreProducedAsOneSingleUseCommit(
@@ -225,7 +312,8 @@ public sealed class ManagedInitiatorInitialSessionFactoryTests
         var complete = Assert.Single(methods,
             static method => method.Name == nameof(ManagedInitiatorInitialSessionFactory.CompleteClaim));
         Assert.Equal(
-            [typeof(LocalDeviceX25519AgreementAuthority), typeof(Dmd1LineageState)],
+            [typeof(LocalDeviceX25519AgreementAuthority), typeof(Dmd1LineageState),
+             typeof(Dab1LineageState)],
             begin.GetParameters().Select(static parameter => parameter.ParameterType).ToArray());
         Assert.Equal(
             [typeof(InitiatorDph2PreKeyClaim), typeof(VerifiedDpk2Offering),
@@ -310,6 +398,74 @@ public sealed class ManagedInitiatorInitialSessionFactoryTests
         internal VerifiedDpk2Offering Offering { get; }
         internal ParsedDmc2 SessionInit { get; }
         internal ParsedDmc2 FirstMessage { get; }
+
+        internal ManagedResponderInitialSessionFactory ResponderFactory() =>
+            new(_responderIdentityPrivate, _responderSignedPrivate, 128);
+
+        internal byte[] PreviewPaddedInitialPayload(Dph2Record dph2)
+        {
+            var header = Dph2VerificationPlan.Create(dph2, Offering).Prevalidate(
+                new Dph2ResolvedInitiator(
+                    dph2.InitiatorDeviceAgreementPublicKey.Span,
+                    Directory.RecordHash.Span));
+            using var responder = HybridResponderStaticKeyMaterial.Import(
+                _responderIdentityPrivate, _responderSignedPrivate);
+            var previewKeys = new OwnedDpk2PreKeyMaterial(
+                _responderSignedPrivate.ToArray(),
+                Kind == Dpk2PrekeyKind.OneTime ? _responderOneTimePrivate.ToArray() : null,
+                SyntheticMlKemProvider.PublicKey.ToArray());
+            using var preview = HybridPreKeyHandshake.PreviewInitialAeadKey(
+                responder, previewKeys, header, _mlKem);
+            byte[]? key = null;
+            byte[]? ciphertext = null;
+            byte[]? aad = null;
+            byte[]? nonce = null;
+            try
+            {
+                preview.Use(secret => key = secret.ToArray());
+                ciphertext = new byte[dph2.InitialCiphertext.Length];
+                dph2.InitialCiphertext.CopyCiphertextTo(ciphertext);
+                aad = MessagingWireCryptographicInputs.GetDph2InitialAeadAssociatedData(
+                    OfferingRecord, dph2);
+                nonce = dph2.InitialPayloadNonce.ToArray();
+                return SecretAeadXChaCha20Poly1305.Decrypt(
+                    ciphertext, nonce, key!, aad);
+            }
+            finally
+            {
+                if (key is not null) CryptographicOperations.ZeroMemory(key);
+                if (ciphertext is not null) CryptographicOperations.ZeroMemory(ciphertext);
+                if (aad is not null) CryptographicOperations.ZeroMemory(aad);
+                if (nonce is not null) CryptographicOperations.ZeroMemory(nonce);
+            }
+        }
+
+        internal VerifiedInitialSessionPreKeyClaim ResponderClaim(Dph2Record dph2)
+        {
+            var initiation = new VerifiedDph2Initiation(
+                dph2, Offering,
+                MessagingWireCryptographicInputs.ComputeDph2TranscriptHash(OfferingRecord, dph2),
+                MessagingWireCryptographicInputs.ComputeDph2FullReplayHash(dph2),
+                MessagingWireCryptographicInputs.ComputeDph2ClaimBinding(dph2),
+                Directory.RecordHash.Span);
+            return new VerifiedInitialSessionPreKeyClaim(
+                Kind, dph2.LastResortUseCounter, dph2.ClaimOperationId.Span,
+                dph2.SessionId.Span,
+                MessagingWireCryptographicInputs.ComputeExactDpk2Hash(OfferingRecord),
+                Bytes(32, 0x53), initiation.FullReplayHash.Span,
+                Kind == Dpk2PrekeyKind.OneTime ? OfferingRecord.OneTimeX25519PrekeyId.Span : [],
+                OfferingRecord.MlKemPrekeyId.Span, initiation);
+        }
+
+        internal ResponderInitialSessionMaterial RecoverInitial(
+            ManagedResponderInitialSessionFactory responder,
+            VerifiedInitialSessionPreKeyClaim claim) =>
+            responder.CreateAuthenticatedInitialSessionForTests(
+                claim,
+                Kind == Dpk2PrekeyKind.OneTime ? _responderOneTimePrivate : [],
+                SyntheticMlKemProvider.PublicKey,
+                _mlKem,
+                CreateResponderTestState);
 
         internal InitiatorDph2ClaimPreparation Prepare()
         {
@@ -490,6 +646,15 @@ public sealed class ManagedInitiatorInitialSessionFactoryTests
             if (send is not null) CryptographicOperations.ZeroMemory(send);
         }
     }
+
+    private static TripleRatchetState CreateResponderTestState(
+        VerifiedTripleRatchetSeedCapability seed,
+        ReadOnlySpan<byte> signedPreKeyPrivate,
+        ReadOnlySpan<byte> signedPreKeyPublic,
+        ReadOnlySpan<byte> initiatorInitialRatchetPublic,
+        int maximumMessagesWithoutPqInjection) =>
+        CreateTestState(seed, signedPreKeyPrivate, initiatorInitialRatchetPublic,
+            signedPreKeyPublic, maximumMessagesWithoutPqInjection);
 
     private static byte[] Reference(byte fill)
     {

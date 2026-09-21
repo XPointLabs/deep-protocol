@@ -304,7 +304,7 @@ public static class AccountDirectoryProofMaterialAuthor
 
     private static byte[] CheckpointReference(AccountDirectoryAdc1 checkpoint) =>
         AccountDirectoryCrypto.CreateReference(
-            "ADC1"u8, 1, SHA256.HashData(AccountDirectoryAdc1Codec.Encode(checkpoint)));
+            ProtocolMagicBytes.ADC1, 1, SHA256.HashData(AccountDirectoryAdc1Codec.Encode(checkpoint)));
 
     private static byte[] PresentLeaf(ReadOnlySpan<byte> key, ReadOnlySpan<byte> reference)
     {

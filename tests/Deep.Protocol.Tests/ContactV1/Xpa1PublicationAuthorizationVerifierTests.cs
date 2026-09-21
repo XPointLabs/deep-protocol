@@ -207,9 +207,11 @@ public sealed class Xpa1PublicationAuthorizationVerifierTests
             var predecessor = new byte[32];
             var ciphertext = Bytes(64, 0xc2);
             var route = RouteClosure();
+            var ownerCapability = Bytes(32, 0xc3);
             var bodyHash = Xpu1Codec.ComputeAuthorizedBodyHash(
                 network, operation, viewHash, placementHash, 195, 240,
-                LocatorHash, xir, 0, predecessor, ciphertext, 0, 250, route);
+                LocatorHash, xir, 0, predecessor, ciphertext, 0, 250, route,
+                ownerCapability);
             var xpa = CreateXpa1(
                 network, operation, LocatorHash, xir, predecessor,
                 SHA256.HashData(ciphertext), bodyHash,
@@ -217,7 +219,8 @@ public sealed class Xpa1PublicationAuthorizationVerifierTests
                 signers, tamperSignature);
             return Xpu1Codec.Decode(Xpu1Codec.Encode(
                 network, operation, viewHash, placementHash, 195, 240,
-                LocatorHash, xir, 0, predecessor, ciphertext, 0, 250, route, xpa));
+                LocatorHash, xir, 0, predecessor, ciphertext, 0, 250, route, xpa,
+                ownerCapability));
         }
 
         private static byte[] RouteClosure()

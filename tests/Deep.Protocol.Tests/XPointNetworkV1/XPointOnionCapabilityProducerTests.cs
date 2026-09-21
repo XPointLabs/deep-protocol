@@ -31,13 +31,22 @@ public sealed class XPointOnionCapabilityProducerTests
             context, ContactServiceRequestKind.PublishInvite, shard);
         var resolve = ContactServicePlacementFactory.Create(
             context, ContactServiceRequestKind.ResolveInvite, shard);
+        var grant = ContactServicePlacementFactory.Create(
+            context, ContactServiceRequestKind.AcquireMailboxGrant, shard);
 
         Assert.Equal(fixture.ViewCoreHash, resolve.ViewHash.ToArray());
         Assert.Equal(publish.PlacementHash.ToArray(), resolve.PlacementHash.ToArray());
+        Assert.Equal(resolve.PlacementHash.ToArray(), grant.PlacementHash.ToArray());
         Assert.Equal(
             publish.RankedReplicaNodeIds.Select(static value => value.ToArray()),
             resolve.RankedReplicaNodeIds.Select(static value => value.ToArray()));
         Assert.Equal(ContactServiceClass.InviteResolver, resolve.ServiceClass);
+        Assert.Equal(ContactServiceClass.InviteResolver, grant.ServiceClass);
+        Assert.True(grant.Binds(ContactServiceRequestKind.AcquireMailboxGrant, shard));
+        var pmt = ContactCodec.Decode("PMT2", fixture.Pmt);
+        Assert.True(context.BindsProjection(
+            ContactCodec.ArtifactReference("PMT2", pmt).CanonicalBytes));
+        Assert.False(context.BindsProjection(Bytes(38, 0xa3)));
         Assert.True(resolve.Binds(ContactServiceRequestKind.ResolveInvite, shard));
         Assert.False(resolve.Binds(ContactServiceRequestKind.PublishInvite, shard));
         Assert.False(resolve.Binds(ContactServiceRequestKind.ResolveInvite, Bytes(32, 0xa2)));
@@ -443,6 +452,8 @@ public sealed class XPointOnionCapabilityProducerTests
         private readonly byte[] _xnv;
         private readonly byte[] _xnh;
         private readonly byte[] _pmt;
+
+        internal byte[] Pmt => _pmt.ToArray();
         private readonly VerifiedXPointNetworkAuthority _authority;
         private readonly VerifiedAccountDirectoryFreshness _freshness;
 

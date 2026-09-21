@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using Deep.Protocol.ApplicationCore;
 using Deep.Protocol.ContactV1;
 using Deep.Protocol.MessagingWire;
 using Sodium;
@@ -129,6 +130,141 @@ public sealed class ManagedResponderInitialSessionFactory : IDisposable
             testStateFactory: null);
     }
 
+    /// <summary>
+    /// Opens the authenticated DPH2 SessionInit and optional first application
+    /// event while the handshake key is still live. The result must be
+    /// committed atomically with TRS1 before any transport ACK is granted.
+    /// </summary>
+    public ResponderInitialSessionMaterial CreateAuthenticatedInitialSession(
+        VerifiedInitialSessionPreKeyClaim verifiedClaim,
+        RestoredDpk2PreKeySecretCapability restoredPreKeys)
+    {
+        ArgumentNullException.ThrowIfNull(restoredPreKeys);
+        return CreateAuthenticatedInitialSessionCore(
+            verifiedClaim, ReadOnlySpan<byte>.Empty, ReadOnlySpan<byte>.Empty,
+            restoredPreKeys, testMlKem: null, testStateFactory: null);
+    }
+
+    /// <summary>
+    /// Opens only the exact XPK1/XPC1 prefix of an initial DPH2 using a
+    /// read-only restored prekey copy. The result is unverified evidence:
+    /// the caller must verify XPC1 independently before reserving a prekey,
+    /// creating TRS1, storing a message, or acknowledging transport.
+    /// The initiator directory must be a current, non-forked verified head.
+    /// </summary>
+    public Dph2InitialClaimPreview PreviewInitialClaim(
+        Dph2Record dph2,
+        VerifiedDpk2Offering offering,
+        Dmd1LineageState initiatorDirectory,
+        RestoredDpk2PreKeySecretCapability restoredPreKeys)
+    {
+        using var mlKem = DeepMlKemNativeProvider.LoadApprovedForCurrentProcess();
+        return PreviewInitialClaimCore(
+            dph2, offering, initiatorDirectory, restoredPreKeys, mlKem);
+    }
+
+    internal Dph2InitialClaimPreview PreviewInitialClaimCore(
+        Dph2Record dph2,
+        VerifiedDpk2Offering offering,
+        Dmd1LineageState initiatorDirectory,
+        RestoredDpk2PreKeySecretCapability restoredPreKeys,
+        IMlKem768Provider mlKem)
+    {
+        ArgumentNullException.ThrowIfNull(dph2);
+        ArgumentNullException.ThrowIfNull(offering);
+        ArgumentNullException.ThrowIfNull(initiatorDirectory);
+        ArgumentNullException.ThrowIfNull(restoredPreKeys);
+        ArgumentNullException.ThrowIfNull(mlKem);
+        var header = Dph2VerificationPlan.Create(dph2, offering)
+            .Prevalidate(ResolvePreviewInitiator(dph2, initiatorDirectory));
+        byte[]? identity = null;
+        byte[]? signed = null;
+        try
+        {
+            identity = CopyIdentitySecret();
+            RequirePrivateMatchesPublic(identity,
+                offering.Record.DeviceAgreementPublicKeySpan,
+                "The responder identity scalar differs from the verified DPK2.");
+            using var material = restoredPreKeys.ConsumeForPreClaimPreview(header);
+            signed = material.SignedPrivate.ToArray();
+            RequirePrivateMatchesPublic(signed,
+                offering.Record.SignedX25519PrekeyPublicSpan,
+                "The responder signed-prekey scalar differs from the verified DPK2.");
+            using var responder = HybridResponderStaticKeyMaterial.Import(identity, signed);
+            using var key = HybridPreKeyHandshake.PreviewInitialAeadKey(
+                responder, material, header, mlKem);
+            var (request, result) = Dph2InitialPayloadReader.PreviewClaimTranscript(header, key);
+            return new Dph2InitialClaimPreview(header, request, result);
+        }
+        finally
+        {
+            Zero(identity);
+            Zero(signed);
+        }
+    }
+
+    private static Dph2ResolvedInitiator ResolvePreviewInitiator(
+        Dph2Record dph2, Dmd1LineageState directory)
+    {
+        if (directory.ForkLatched)
+            throw Conflict("The initiator directory has a latched fork.");
+        var head = directory.Head;
+        if (!Fixed(head.Record.NetworkId.Span, dph2.NetworkId.Span) ||
+            !Fixed(head.Record.DeepAccountId.Span, dph2.InitiatorAccountId.Span))
+            throw Conflict("The initiator directory is outside the DPH2 account scope.");
+        var entry = head.Record.ActiveDevices.SingleOrDefault(candidate =>
+            Fixed(candidate.DeviceId.Span, dph2.InitiatorDeviceId.Span));
+        if (entry is null ||
+            !Fixed(entry.Dpd1Reference.CanonicalBytes.Span,
+                dph2.InitiatorDpd1Ref.Span) ||
+            !head.Identity.TryGetDevice(dph2.InitiatorDeviceId.Span, out var verified) ||
+            verified is null ||
+            verified.Certificate.DeviceGeneration != dph2.InitiatorDeviceGeneration ||
+            verified.Certificate.AccountGeneration != head.Record.AccountGeneration ||
+            !Fixed(verified.Certificate.CanonicalHash.Span,
+                entry.Dpd1Reference.CanonicalHash.Span))
+            throw Conflict("The initiator is not an active verified directory device.");
+        return new Dph2ResolvedInitiator(
+            verified.Certificate.DeviceX25519PublicKey.Span,
+            head.Record.RecordHash.Span);
+    }
+
+    private ResponderInitialSessionMaterial CreateAuthenticatedInitialSessionCore(
+        VerifiedInitialSessionPreKeyClaim verifiedClaim,
+        ReadOnlySpan<byte> claimedOneTimeX25519PrivateScalar,
+        ReadOnlySpan<byte> claimedMlKemDecapsulationSecret,
+        RestoredDpk2PreKeySecretCapability? restoredPreKeys,
+        IMlKem768Provider? testMlKem,
+#if DEEP_PROTOCOL_RECOVERY_TEST_SEAM
+        ResponderInitialRatchetStateFactory? testStateFactory)
+#else
+        object? testStateFactory)
+#endif
+    {
+        byte[]? exactTrs1 = null;
+        byte[]? sessionInit = null;
+        byte[]? firstApplication = null;
+        try
+        {
+            exactTrs1 = CreateExactTrs1Core(
+                verifiedClaim, claimedOneTimeX25519PrivateScalar,
+                claimedMlKemDecapsulationSecret,
+                restoredPreKeys, testMlKem, testStateFactory,
+                (handshake, initiation) =>
+                {
+                    (sessionInit, firstApplication) = Dph2InitialPayloadReader.Open(initiation, handshake);
+                });
+            if (sessionInit is null)
+                throw new CryptographicException("The authenticated DPH2 SessionInit was not recovered.");
+            return new ResponderInitialSessionMaterial(
+                exactTrs1, sessionInit, firstApplication ?? []);
+        }
+        finally
+        {
+            Zero(exactTrs1); Zero(sessionInit); Zero(firstApplication);
+        }
+    }
+
 #if DEEP_PROTOCOL_RECOVERY_TEST_SEAM
     internal byte[] CreateExactTrs1ForTests(
         VerifiedInitialSessionPreKeyClaim verifiedClaim,
@@ -143,6 +279,18 @@ public sealed class ManagedResponderInitialSessionFactory : IDisposable
             restoredPreKeys: null,
             mlKem ?? throw new ArgumentNullException(nameof(mlKem)),
             stateFactory ?? throw new ArgumentNullException(nameof(stateFactory)));
+
+    internal ResponderInitialSessionMaterial CreateAuthenticatedInitialSessionForTests(
+        VerifiedInitialSessionPreKeyClaim verifiedClaim,
+        ReadOnlySpan<byte> claimedOneTimeX25519PrivateScalar,
+        ReadOnlySpan<byte> claimedMlKemDecapsulationSecret,
+        IMlKem768Provider mlKem,
+        ResponderInitialRatchetStateFactory stateFactory) =>
+        CreateAuthenticatedInitialSessionCore(
+            verifiedClaim, claimedOneTimeX25519PrivateScalar,
+            claimedMlKemDecapsulationSecret, restoredPreKeys: null,
+            testMlKem: mlKem ?? throw new ArgumentNullException(nameof(mlKem)),
+            testStateFactory: stateFactory ?? throw new ArgumentNullException(nameof(stateFactory)));
 
     internal byte[] CreateExactTrs1ForTests(
         VerifiedInitialSessionPreKeyClaim verifiedClaim,
@@ -168,9 +316,11 @@ public sealed class ManagedResponderInitialSessionFactory : IDisposable
         RestoredDpk2PreKeySecretCapability? restoredPreKeys,
         IMlKem768Provider? testMlKem,
 #if DEEP_PROTOCOL_RECOVERY_TEST_SEAM
-        ResponderInitialRatchetStateFactory? testStateFactory)
+        ResponderInitialRatchetStateFactory? testStateFactory,
+        Action<HybridHandshakeSecrets, VerifiedDph2Initiation>? onAuthenticatedHandshake = null)
 #else
-        object? testStateFactory)
+        object? testStateFactory,
+        Action<HybridHandshakeSecrets, VerifiedDph2Initiation>? onAuthenticatedHandshake = null)
 #endif
     {
         ArgumentNullException.ThrowIfNull(verifiedClaim);
@@ -279,6 +429,7 @@ public sealed class ManagedResponderInitialSessionFactory : IDisposable
                 dph2.InitiatorEphemeralX25519PublicKeySpan,
                 transcript,
                 mlKem);
+            onAuthenticatedHandshake?.Invoke(handshake, initiation);
             using var seed = VerifiedTripleRatchetSeedCapability.FromVerifiedHandshake(handshake);
 #if DEEP_PROTOCOL_RECOVERY_TEST_SEAM
             using var state = testStateFactory is null

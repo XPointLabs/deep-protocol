@@ -57,6 +57,7 @@ public static class MessagingWireCryptographicInputs
             record.InitiatorAccountIdSpan,
             record.InitiatorDeviceIdSpan,
             record.InitiatorDpd1RefSpan,
+            record.InitiatorDid1Span,
             record.InitiatorDeviceAgreementPublicKeySpan,
             record.InitiatorEphemeralX25519PublicKeySpan,
             record.InitiatorInitialRatchetX25519PublicKeySpan);
@@ -67,6 +68,7 @@ public static class MessagingWireCryptographicInputs
         ReadOnlySpan<byte> initiatorAccountId,
         ReadOnlySpan<byte> initiatorDeviceId,
         ReadOnlySpan<byte> initiatorDpd1Reference,
+        ReadOnlySpan<byte> initiatorDid1,
         ReadOnlySpan<byte> initiatorDeviceAgreementPublicKey,
         ReadOnlySpan<byte> initiatorEphemeralPublicKey,
         ReadOnlySpan<byte> initiatorInitialRatchetPublicKey) =>
@@ -75,6 +77,7 @@ public static class MessagingWireCryptographicInputs
             initiatorAccountId,
             initiatorDeviceId,
             initiatorDpd1Reference,
+            initiatorDid1,
             initiatorDeviceAgreementPublicKey,
             initiatorEphemeralPublicKey,
             initiatorInitialRatchetPublicKey);
@@ -84,16 +87,18 @@ public static class MessagingWireCryptographicInputs
         ReadOnlySpan<byte> initiatorAccountId,
         ReadOnlySpan<byte> initiatorDeviceId,
         ReadOnlySpan<byte> initiatorDpd1Reference,
+        ReadOnlySpan<byte> initiatorDid1,
         ReadOnlySpan<byte> initiatorDeviceAgreementPublicKey,
         ReadOnlySpan<byte> initiatorEphemeralPublicKey,
         ReadOnlySpan<byte> initiatorInitialRatchetPublicKey)
     {
-        var value = new byte[16 + 32 + 32 + 38 + 32 + 32 + 32];
+        var value = new byte[16 + 32 + 32 + 38 + 76 + 32 + 32 + 32];
         var offset = 0;
         networkId.CopyTo(value.AsSpan(offset)); offset += 16;
         initiatorAccountId.CopyTo(value.AsSpan(offset)); offset += 32;
         initiatorDeviceId.CopyTo(value.AsSpan(offset)); offset += 32;
         initiatorDpd1Reference.CopyTo(value.AsSpan(offset)); offset += 38;
+        initiatorDid1.CopyTo(value.AsSpan(offset)); offset += 76;
         initiatorDeviceAgreementPublicKey.CopyTo(value.AsSpan(offset)); offset += 32;
         initiatorEphemeralPublicKey.CopyTo(value.AsSpan(offset)); offset += 32;
         initiatorInitialRatchetPublicKey.CopyTo(value.AsSpan(offset));

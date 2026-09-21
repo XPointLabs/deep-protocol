@@ -18,7 +18,7 @@ public sealed class ContactServiceWireCodecTests
         Assert.Equal("57BD87E718469C2E743F55C6CD858B1A9CE9E6B6ADC3F8F742E5B180A71D75B1",HexHash(xpk));
         Assert.Equal("2D075C84CA1989F078B2774AC34A18CA22CBA012FE29AA7DB8E893DAC5F79EA0",HexHash(xuw));
         Assert.Equal("0AF80D459A450D2813812C87A84819C9B7034FF09C1DEA019A0A83E7CA2E9B4C",HexHash(xuq));
-        Assert.Equal("843E2FD6ABE1B6328EB5E0C44023CE48A167E50E4D2882BA5BD3B625B0E20E54",HexHash(xpu));
+        Assert.Equal("6581849AAA5FB406218241DBAB02055E19489BC99B7995EA6F53A3D20FA78387",HexHash(xpu));
         Assert.True(new ushort[]{1,2,3,4,5,6,16,17,18,19,20,21}.SequenceEqual(Tags(xiq)));
         Assert.True(new ushort[]{1,2,3,4,5,6,16,17,18,19,20,21,22}.SequenceEqual(Tags(xuw)));
     }
@@ -47,7 +47,7 @@ public sealed class ContactServiceWireCodecTests
             decoded.IssuedAtUnixSeconds,decoded.ExpiresAtUnixSeconds,decoded.LocatorHash.Span,decoded.Xir1Hash.Span,
             decoded.Generation,decoded.PredecessorObjectHash.Span,decoded.ObjectCiphertext.Span,
             decoded.UsageLimit,decoded.EffectiveExpiresAtUnixSeconds,
-            decoded.ExactRouteClosure.Span));
+            decoded.ExactRouteClosure.Span,decoded.OwnerRetrieveCapability.Span));
         Assert.Equal(SHA256.HashData(decoded.ExactRouteClosure.Span),decoded.RouteClosureHash.ToArray());
 
         var changed=Xpu();changed[FieldOffset(changed,21)+3]^=1;
@@ -116,7 +116,7 @@ public sealed class ContactServiceWireCodecTests
         Assert.Equal("UnknownRequestedSuite",Assert.Throws<ContactFormatException>(()=>Xpk1Codec.Decode(bytes)).Code);
 
         Assert.Throws<ContactFormatException>(()=>Xuw1Codec.Encode(B(16,1),B(32,2),B(32,3),B(32,4),10,100,B(32,5),B(32,6),0,new byte[32],new byte[32769],80));
-        Assert.Throws<ContactFormatException>(()=>Xpu1Codec.Encode(B(16,1),B(32,2),B(32,3),B(32,4),10,100,B(32,5),B(32,6),0,new byte[32],B(65500,7),0,80,RouteClosure(),B(12,8)));
+        Assert.Throws<ContactFormatException>(()=>Xpu1Codec.Encode(B(16,1),B(32,2),B(32,3),B(32,4),10,100,B(32,5),B(32,6),0,new byte[32],B(65500,7),0,80,RouteClosure(),B(12,8),B(32,9)));
     }
 
     [Fact]
@@ -177,7 +177,7 @@ public sealed class ContactServiceWireCodecTests
     public void XpuAndXisAcceptOnlyTheirExactExpandedBounds()
     {
         var maximumXpu=Xpu(65_575,32,maximumRoute:true);
-        Assert.Equal(92_992,maximumXpu.Length);
+        Assert.Equal(93_032,maximumXpu.Length);
         Assert.Equal(3_666,Xpu1Codec.Decode(maximumXpu).ExactXpa1.Length);
         Assert.Equal("RecordLengthOutOfRange",Assert.Throws<ContactFormatException>(()=>Xpu1Codec.Decode(Xpu(65_576,32,maximumRoute:true))).Code);
 
@@ -238,11 +238,11 @@ public sealed class ContactServiceWireCodecTests
     private static byte[] Xpu(int cipherLength=40,int witnessCount=2,bool maximumRoute=false)
     {
         var common=new (ushort,byte[])[]{(1,B(16,1)),(2,B(32,2)),(3,B(32,3)),(4,B(32,4)),(5,U64(10)),(6,U64(100))};var cipher=B(cipherLength,31);var route=RouteClosure(maximumRoute);
-        var body=common.Concat(new (ushort,byte[])[]{(16,B(32,5)),(17,B(32,6)),(18,U64(0)),(19,new byte[32]),(20,SHA256.HashData(cipher)),(21,cipher),(22,U32(0)),(23,U64(80)),(24,SHA256.HashData(route)),(25,route)}).ToArray();
+        var ownerCapability=B(32,30);var body=common.Concat(new (ushort,byte[])[]{(16,B(32,5)),(17,B(32,6)),(18,U64(0)),(19,new byte[32]),(20,SHA256.HashData(cipher)),(21,cipher),(22,U32(0)),(23,U64(80)),(24,SHA256.HashData(route)),(25,route),(27,ownerCapability)}).ToArray();
         var bodyHash=ContactCodec.Sha256Domain("Deep/ContactResolver/V1/XPU-authorized-body",Write("XPU1",body));
         var witnesses=Witnesses(witnessCount);
         var xpa=Write("XPA1",[(1,B(16,1)),(2,B(32,40)),(3,B(32,2)),(4,B(32,5)),(5,new byte[]{1}),(6,B(32,41)),(7,B(32,42)),(8,B(32,6)),(9,U64(0)),(10,new byte[32]),(11,SHA256.HashData(cipher)),(12,U32(0)),(13,U64(80)),(14,B(32,43)),(15,U64(5)),(16,U64(10)),(17,U64(90)),(18,B(32,44)),(19,bodyHash),(20,new byte[]{checked((byte)witnessCount)}),(21,witnesses)]);
-        return Write("XPU1",body.Append(((ushort)26,xpa)).ToArray());
+        return Write("XPU1",body.Where(static field=>field.Item1<26).Append(((ushort)26,xpa)).Append(((ushort)27,ownerCapability)).ToArray());
     }
 
     private static byte[] Event(ulong generation,byte[] predecessor,byte[] cipher,ulong expires){var b=new byte[84+cipher.Length];BinaryPrimitives.WriteUInt64BigEndian(b,generation);predecessor.CopyTo(b,8);SHA256.HashData(cipher).CopyTo(b,40);BinaryPrimitives.WriteUInt64BigEndian(b.AsSpan(72),expires);BinaryPrimitives.WriteUInt32BigEndian(b.AsSpan(80),checked((uint)cipher.Length));cipher.CopyTo(b,84);return b;}

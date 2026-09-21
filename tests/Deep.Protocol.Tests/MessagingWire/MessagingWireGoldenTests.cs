@@ -74,7 +74,7 @@ public sealed class MessagingWireGoldenTests
         var record = MessagingWireFixtures.Dph2(offering, 4112);
         var dpk2 = ManualMessagingWire.Record("DPK2", ManualMessagingWire.Dpk2Fields(offering));
         var fields = ManualMessagingWire.Dph2Fields(record);
-        var header = ManualMessagingWire.Record("DPH2", fields[..19]);
+        var header = ManualMessagingWire.Record("DPH2", fields[..20]);
         var exact = ManualMessagingWire.Record("DPH2", fields);
         var sessionValue = ManualMessagingWire.Concat(
             fields[0].Value,
@@ -82,6 +82,7 @@ public sealed class MessagingWireGoldenTests
             fields[2].Value,
             fields[3].Value,
             fields[4].Value,
+            fields[19].Value,
             fields[5].Value,
             fields[6].Value,
             fields[7].Value,
@@ -110,6 +111,7 @@ public sealed class MessagingWireGoldenTests
                 fields[1].Value,
                 fields[2].Value,
                 fields[4].Value,
+                fields[19].Value,
                 fields[13].Value,
                 fields[14].Value,
                 fields[17].Value));
@@ -284,7 +286,7 @@ public sealed class MessagingWireGoldenTests
 
         Assert.Equal(
             "822840758e93aa2e9d735eb33ed2958aa23b812c50085a14ce53fbdbe89b189c:" +
-            "8e330f48c86d675224f897a2822b7e194d1ea53626820c5a9bfca29f000f65ed:" +
+            "324d6ace684f0dd153f3a1d2561daf939b45b5f443ea11f387b6040bc529f961:" +
             "9f8db23191cf78c31cfd2dba5747f9b59d9ea60ed9d8442d22140b1a8a9a12b3:" +
             "bf9d9aa5058683b1ae64a352ccefd03d9416e7166d8685e53ccb2f909ce33e24",
             actual);

@@ -4,6 +4,7 @@ using System.Text;
 using Deep.Protocol.AccountDirectoryV1;
 using Deep.Protocol.ApplicationCore;
 using Deep.Protocol.DeepNative;
+using Deep.Protocol.DeepExtension.MailboxCapabilities;
 using Sodium;
 
 namespace Deep.Protocol.ContactV1;
@@ -36,6 +37,8 @@ public static class ContactCodec
                 "Deep/Application/V1/contact-update-rendezvous", null, [1,2,3,4,5,6,7,8,9,10,11,12,13,14]),
             [ProtocolMagic.XRA1] = new(ProtocolMagic.XRA1, [16, 32, 8, 32, 38, 32, 2, 4, 32, 32, 32, 8, 8, 32, 38, 64], 550, 550,
                 "Deep/XPoint/V1/XRA1", "Deep/XPoint/V1/XRA1/core", [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]),
+            [ProtocolMagic.PMA2] = new(ProtocolMagic.PMA2, [16, 8, 32, 32, 32, 32, 8, 4, 2, 8, 8, 8, 38, 32, 1, -96], 497, 1_169,
+                "Deep/XPoint/V1/PMA2/root", "Deep/XPoint/V1/PMA2/core", [1,2,3,4,5,6,7,8,9,10,11,12,13,14]),
             [ProtocolMagic.PMT2] = new(ProtocolMagic.PMT2, [16, 8, 32, 38, 38, 8, 1, 2, -136, 8, 8, 8, 32, 38, 1, -96], 842, 11_066,
                 "Deep/XPoint/V1/PMT2", "Deep/XPoint/V1/PMT2/core", [1,2,3,4,5,6,7,8,9,10,11,12,13,14]),
             [ProtocolMagic.PMS2] = new(ProtocolMagic.PMS2, [16, 38, 32, 8, 1, -32, 32, 8, 8, 1, -96], 500, 3_476,
@@ -46,6 +49,10 @@ public static class ContactCodec
                 "Deep/XPoint/V1/XSS1", "Deep/XPoint/V1/XSS1/core", [1,2,3,4,5,6,7,8,9,10,11,12]),
             [ProtocolMagic.XRR1] = new(ProtocolMagic.XRR1, [16, 32, 8, 32, 38, 38, 38, 38, 32, 32, 32, 1, 4, 2, 8, 8, 8, 38, 64, 2], 643, 643,
                 "Deep/XPoint/V1/XRR1", "Deep/XPoint/V1/XRR1/core", [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,20]),
+            [ProtocolMagic.XMG1] = new(ProtocolMagic.XMG1, [16, 32, 32, 32, 32, 1, 38, 32, 8, 8, 32, 64], 435, 435,
+                "Deep/ContactResolver/V1/XMG1", null, [1,2,3,4,5,6,7,8,9,10,11]),
+            [ProtocolMagic.XMC1] = new(ProtocolMagic.XMC1, [16, 32, 2, 8, 32, 8, 32, -1], 206, 478,
+                null, null, []),
         };
 
     public static ContactRecord Decode(ReadOnlySpan<byte> canonical)
@@ -167,6 +174,66 @@ public static class ContactCodec
         if (signatureTag == 0) throw new InvalidOperationException("This record has no device signature field.");
         if (!VerifyEd25519(publicKey32, record.SignatureInput.Span, record.FieldSpan(signatureTag)))
             Reject(ContactValidationStage.Signature, "SignatureVerificationFailed");
+    }
+
+    /// <summary>Verifies the reachability-scoped XMG1 holder proof of possession.</summary>
+    public static void VerifyMailboxGrantHolderSignature(ContactRecord xmg1)
+    {
+        ArgumentNullException.ThrowIfNull(xmg1);
+        RequireRecord(xmg1, ProtocolMagic.XMG1);
+        if (!VerifyEd25519(xmg1.FieldSpan(5), xmg1.SignatureInput.Span, xmg1.FieldSpan(12)))
+            Reject(ContactValidationStage.Signature, "MailboxGrantHolderSignatureVerificationFailed");
+    }
+
+    /// <summary>
+    /// Validates the closed XMG1/XMC1 binding. Issuer authority and route-closure
+    /// freshness remain mandatory checks for the higher-level verifier.
+    /// </summary>
+    public static void ValidateMailboxGrantResultBinding(ContactRecord xmg1, ContactRecord xmc1)
+    {
+        ArgumentNullException.ThrowIfNull(xmg1);
+        ArgumentNullException.ThrowIfNull(xmc1);
+        RequireRecord(xmg1, ProtocolMagic.XMG1);
+        RequireRecord(xmc1, ProtocolMagic.XMC1);
+        if (!CryptographicOperations.FixedTimeEquals(xmc1.FieldSpan(1), xmg1.FieldSpan(1)) ||
+            !CryptographicOperations.FixedTimeEquals(xmc1.FieldSpan(2), xmg1.FieldSpan(2)) ||
+            !CryptographicOperations.FixedTimeEquals(xmc1.FieldSpan(5), SHA256.HashData(xmg1.CanonicalBytes.Span)))
+            Reject(ContactValidationStage.Closure, "MailboxGrantResultRequestMismatch");
+
+        if (U16(xmc1.FieldSpan(3)) != 1) return;
+        var current = MailboxAuthenticatedCapabilityCodec.DecodeGrant(xmc1.FieldSpan(8));
+        var requestedDomain = (MailboxCapabilityDomain)xmg1.FieldSpan(6)[0];
+        if (current.Domain != requestedDomain ||
+            !CryptographicOperations.FixedTimeEquals(current.NetworkId.Span, xmg1.FieldSpan(1)) ||
+            !CryptographicOperations.FixedTimeEquals(current.HolderPublicKey.Span, xmg1.FieldSpan(5)))
+            Reject(ContactValidationStage.Closure, "MailboxGrantAuthorityBindingMismatch");
+    }
+
+    /// <summary>
+    /// Binds a successful XMC1 to the exact verified route. Placement is always
+    /// derived from public XRR1 tag 10; XMG1 tag 4 is an authorization secret
+    /// and is deliberately not overloaded as a placement identifier.
+    /// </summary>
+    public static void ValidateMailboxGrantResultRouteBinding(
+        ContactRecord xmc1,
+        ParsedContactRouteClosure route)
+    {
+        ArgumentNullException.ThrowIfNull(xmc1);
+        ArgumentNullException.ThrowIfNull(route);
+        RequireRecord(xmc1, ProtocolMagic.XMC1);
+        if (U16(xmc1.FieldSpan(3)) != 1)
+            Reject(ContactValidationStage.Closure, "MailboxGrantSuccessRequired");
+        if (!CryptographicOperations.FixedTimeEquals(xmc1.FieldSpan(7), route.ExactHash.Span))
+            Reject(ContactValidationStage.Closure, "MailboxGrantRouteClosureHashMismatch");
+
+        var expectedPlacement = MailboxPlacementCommitment.Compute(
+            new BlindedPlacementId(route.Reachability.FieldSpan(10)));
+        var expectedEpoch = U64(route.Selection.FieldSpan(4));
+        var current = MailboxAuthenticatedCapabilityCodec.DecodeGrant(xmc1.FieldSpan(8));
+        if (!CryptographicOperations.FixedTimeEquals(current.PlacementCommitment.Span, expectedPlacement))
+            Reject(ContactValidationStage.Closure, "MailboxGrantRouteAuthorityBindingMismatch");
+        if (current.Epoch != expectedEpoch)
+            Reject(ContactValidationStage.Closure, "MailboxGrantRouteEpochMismatch");
     }
 
     /// <summary>
@@ -484,6 +551,10 @@ public static class ContactCodec
                 if (lengths[1] is < 1 or > 57_344 || lengths[3] is < 1 or > 16_384 || canonicalLength(62, lengths[1], lengths[3]) != bytes.Length)
                     Reject(ContactValidationStage.Bounds, "InvalidResolverClosureLength");
                 break;
+            case ProtocolMagic.PMA2:
+                RequireCount(bytes, offsets, lengths, 15, 1, 8);
+                RequireList(lengths[15], Scalar(bytes, offsets, lengths, 15), 96);
+                break;
             case ProtocolMagic.PMT2:
                 RequireCount(bytes, offsets, lengths, 7, 2, 5); RequireCount(bytes, offsets, lengths, 8, 2, 56);
                 RequireList(lengths[8], Scalar(bytes, offsets, lengths, 8), 136); RequireCount(bytes, offsets, lengths, 15, 2, 32);
@@ -496,6 +567,10 @@ public static class ContactCodec
                 RequireCount(bytes, offsets, lengths, 20, 2, 32); RequireList(lengths[20], Scalar(bytes, offsets, lengths, 20), 96); break;
             case ProtocolMagic.XSS1:
                 RequireCount(bytes, offsets, lengths, 13, 2, 32); RequireList(lengths[13], Scalar(bytes, offsets, lengths, 13), 96); break;
+            case ProtocolMagic.XMC1:
+                if (lengths[7] is not (0 or MailboxAuthenticatedCapabilityLimits.GrantLength))
+                    Reject(ContactValidationStage.Bounds, "InvalidMailboxGrantLength");
+                break;
         }
     }
 
@@ -543,6 +618,12 @@ public static class ContactCodec
                 NonZero(f(2)); GenPredecessor(f(3), f(4)); Reference(f(5), ProtocolMagic.PMT2); NonZero(f(6));
                 if (U16(f(7)) != 1 || U32(f(8)) is < 1 or > 65_535 || !ValidWindow(U64(f(12)), U64(f(13)), 2_592_000)) Reject(ContactValidationStage.Scalar, "InvalidReachabilityAuthorization");
                 NonZero(f(9)); NonZero(f(10)); NonZero(f(11)); NonZero(f(14)); Reference(f(15), ProtocolMagic.DPD1); NonZero(f(16)); break;
+            case ProtocolMagic.PMA2:
+                GenPredecessor(f(2), f(3)); NonZero(f(4)); NonZero(f(5)); NonZero(f(6));
+                if (f(5).SequenceEqual(f(6)) || U64(f(7)) == 0 || U32(f(8)) is < 60 or > 86_400 ||
+                    U16(f(9)) != 1 || !ValidWindowWithNotBefore(U64(f(10)), U64(f(11)), U64(f(12)), 1_209_600))
+                    Reject(ContactValidationStage.Scalar, "InvalidMailboxAuthority");
+                Reference(f(13), ProtocolMagic.XNA1); NonZero(f(14)); SortedRows(f(16), 96); break;
             case ProtocolMagic.PMT2:
                 GenPredecessor(f(2), f(3)); Reference(f(4), ProtocolMagic.PMA2); Reference(f(5), ProtocolMagic.XNV1);
                 if (!ValidWindowWithNotBefore(U64(f(10)), U64(f(11)), U64(f(12)), 1_209_600)) Reject(ContactValidationStage.Scalar, "InvalidProjectionWindow");
@@ -560,6 +641,37 @@ public static class ContactCodec
                 NonZero(f(2)); GenPredecessor(f(3), f(4)); Reference(f(5), ProtocolMagic.XRA1); Reference(f(6), ProtocolMagic.XRC1); Reference(f(7), ProtocolMagic.XSS1); Reference(f(8), ProtocolMagic.PMT2); NonZero(f(9)); NonZero(f(10)); NonZero(f(11));
                 var policy = f(12)[0]; var maximum = U32(f(13)); if (policy is < 1 or > 3 || U16(f(14)) == 0 || (policy == 1 && maximum != 1) || (policy == 2 && (maximum < 2 || maximum > 65_535)) || (policy == 3 && (maximum < 1 || maximum > 65_535)) || !ValidWindowWithNotBefore(U64(f(15)), U64(f(16)), U64(f(17)), ulong.MaxValue)) Reject(ContactValidationStage.Scalar, "InvalidReachabilityPolicy");
                 Reference(f(18), ProtocolMagic.DPD1); NonZero(f(19)); if (!IsZero(f(20))) Reject(ContactValidationStage.Scalar, "ReservedMustBeZero"); break;
+            case ProtocolMagic.XMG1:
+                NonZero(f(2)); NonZero(f(3)); NonZero(f(4)); NonZero(f(5));
+                if (f(6)[0] != (byte)MailboxCapabilityDomain.Deposit &&
+                    f(6)[0] != (byte)MailboxCapabilityDomain.Retrieve ||
+                    !ValidWindow(U64(f(9)), U64(f(10)), 300))
+                    Reject(ContactValidationStage.Scalar, "InvalidMailboxGrantRequest");
+                Reference(f(7), ProtocolMagic.PMT2); NonZero(f(8)); NonZero(f(11)); NonZero(f(12));
+                break;
+            case ProtocolMagic.XMC1:
+                NonZero(f(2));
+                var result = U16(f(3));
+                if (result is < 1 or > 5 || U64(f(4)) == 0 || IsZero(f(5)) ||
+                    !ValidWindow(U64(f(4)), U64(f(6)), 300))
+                    Reject(ContactValidationStage.Scalar, "InvalidMailboxGrantResult");
+                if (result == 1)
+                {
+                    NonZero(f(7));
+                    if (f(8).Length != MailboxAuthenticatedCapabilityLimits.GrantLength)
+                        Reject(ContactValidationStage.Bounds, "MailboxGrantSuccessRequiresGrant");
+                    try
+                    {
+                        _ = MailboxAuthenticatedCapabilityCodec.DecodeGrant(f(8));
+                    }
+                    catch (MailboxAuthenticatedCapabilityException)
+                    {
+                        Reject(ContactValidationStage.Derived, "EmbeddedMailboxGrantRejected");
+                    }
+                }
+                else if (!IsZero(f(7)) || !f(8).IsEmpty)
+                    Reject(ContactValidationStage.Scalar, "MailboxGrantFailureCarriesAuthority");
+                break;
         }
     }
 

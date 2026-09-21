@@ -436,6 +436,18 @@ internal static class PrivacyRoutingPayloadVerifier
 
         try
         {
+            if (ReadMagic(request) == ProtocolMagic.XMG1)
+            {
+                var grantRequest = ContactCodec.Decode(ProtocolMagic.XMG1, request);
+                ContactCodec.VerifyMailboxGrantHolderSignature(grantRequest);
+                if (!CryptographicOperations.FixedTimeEquals(grantRequest.Field(1).Span, networkId) ||
+                    !grantRequest.CanonicalBytes.Span.SequenceEqual(request))
+                    throw PrivacyRoutingWire.Error(
+                        PrivacyRoutingProtocolError.InvalidKeyBinding,
+                        "Mailbox grant request is not bound to the ONION-01 network or exact canonical bytes.");
+                return;
+            }
+
             if (ReadMagic(request) == ProtocolMagic.XPP1)
             {
                 var publication = Xpp1BoundedCodec.Decode(request);
@@ -561,6 +573,18 @@ internal static class PrivacyRoutingPayloadVerifier
 
         try
         {
+            if (ReadMagic(exactRequest) == ProtocolMagic.XMG1)
+            {
+                var request = ContactCodec.Decode(ProtocolMagic.XMG1, exactRequest);
+                var grantResult = ContactCodec.Decode(ProtocolMagic.XMC1, body);
+                ContactCodec.ValidateMailboxGrantResultBinding(request, grantResult);
+                if (!grantResult.CanonicalBytes.Span.SequenceEqual(body))
+                    throw PrivacyRoutingWire.Error(
+                        PrivacyRoutingProtocolError.InvalidOperation,
+                        "XMC1 response has non-canonical trailing bytes.");
+                return;
+            }
+
             if (ReadMagic(exactRequest) == ProtocolMagic.XPP1)
             {
                 var request = Xpp1BoundedCodec.Decode(exactRequest);

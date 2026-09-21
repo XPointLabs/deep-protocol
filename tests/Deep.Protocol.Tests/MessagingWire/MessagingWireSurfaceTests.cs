@@ -137,7 +137,7 @@ public sealed class MessagingWireSurfaceTests
         Assert.Equal("FROZEN_CLEAN_BREAK", MessagingWireActivation.CodecStatus);
         Assert.False(MessagingWireActivation.ProductionActive);
         Assert.Equal([1973, 2037], Dpk2Codec.AllowedTotalSizes.ToArray());
-        Assert.Equal([5917, 18205, 34589], Dph2Codec.AllowedTotalSizes.ToArray());
+        Assert.Equal([6001, 18289, 34673], Dph2Codec.AllowedTotalSizes.ToArray());
         Assert.Equal([189, 285, 349, 1149, 1341], Dtr2Codec.AllowedTotalSizes.ToArray());
         Assert.Equal(
             [4513, 4609, 4673, 5473, 5665, 16801, 16897, 16961, 17761, 17953,
@@ -174,7 +174,7 @@ public sealed class MessagingWireSurfaceTests
     }
 
     [Fact]
-    public void Did1CannotBeSubstitutedIntoMessagingWireSchemaByApiShape()
+    public void InitialHandshakeCarriesExactDid1ButNoRawPermanentIdAuthority()
     {
         var publicMembers = typeof(Dpk2Record).Assembly.GetExportedTypes()
             .Where(type => type.Namespace == typeof(Dpk2Record).Namespace)
@@ -183,6 +183,6 @@ public sealed class MessagingWireSurfaceTests
             .ToArray();
 
         Assert.DoesNotContain(publicMembers, name => name.Contains("PermanentId", StringComparison.Ordinal));
-        Assert.DoesNotContain(publicMembers, name => name.Contains("Did1", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(nameof(Dph2Record.InitiatorDid1), publicMembers);
     }
 }

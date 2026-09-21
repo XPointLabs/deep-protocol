@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Security.Cryptography;
 using Deep.Protocol.ContactV1;
 using Deep.Protocol.DeepNative;
 using Deep.Protocol.GroupV1;
@@ -190,6 +191,79 @@ public static partial class ApplicationCoreCodec
         EnsureContactEmissionAllowed();
         return CreateContactHelloPayloadCore(relationshipId32, initiatorDab1Reference38, initiatorDmd1Hash32,
             safetyNumberHash32, policy, exactInitiatorInboundXur1);
+    }
+
+    /// <summary>
+    /// Capability-based production author for the first ContactHello.  The raw
+    /// CONTACT-CODEC emission gate remains closed; this method consumes a
+    /// device-signed XUR1 and two verified, non-forked DAB1 lineages.
+    /// </summary>
+    public static AuthoredVerifiedContactHello AuthorVerifiedContactHello(
+        VerifiedContactUpdateRendezvous inboundRendezvous,
+        Dab1LineageState recipientBinding,
+        ReadOnlySpan<byte> relationshipId32,
+        ReadOnlySpan<byte> logicalMessageId32,
+        ReadOnlySpan<byte> conversationId32,
+        ulong createdAtUnixMilliseconds,
+        ulong expiresAtUnixMilliseconds,
+        ContactPolicy policy = ContactPolicy.AllowRouteUpdates)
+    {
+        ArgumentNullException.ThrowIfNull(inboundRendezvous);
+        ArgumentNullException.ThrowIfNull(recipientBinding);
+        var initiatorBinding = inboundRendezvous.AddressBinding;
+        var directory = inboundRendezvous.Directory;
+        if (initiatorBinding.ForkLatched || directory.ForkLatched ||
+            recipientBinding.ForkLatched)
+            throw new CryptographicException(
+                "A forked authority cannot author ContactHello.");
+        var account = initiatorBinding.Head.Identity.Account;
+        var network = account.Certificate.NetworkId.Span;
+        var senderAccount = account.DeepAccountIdHash.Span;
+        var senderDevice = inboundRendezvous.Record.Field(13);
+        var activeDevice = directory.Head.Identity.ActiveDevices.SingleOrDefault(candidate =>
+            candidate.Certificate.DeviceId.Span.SequenceEqual(senderDevice.Span));
+        if (activeDevice is null ||
+            !directory.Head.Record.NetworkId.Span.SequenceEqual(network) ||
+            !directory.Head.Record.DeepAccountId.Span.SequenceEqual(senderAccount) ||
+            !directory.Head.Record.ActiveDevices.Any(candidate =>
+                candidate.DeviceId.Span.SequenceEqual(senderDevice.Span)) ||
+            !inboundRendezvous.Record.Field(1).Span.SequenceEqual(network))
+            throw new CryptographicException(
+                "The ContactHello XUR1 differs from its current sender directory.");
+
+        var safety = ApplicationCoreVerifier.ComputeContactSafetyNumber(
+            initiatorBinding, recipientBinding);
+        try
+        {
+            var dab1Reference = new ContactArtifactReference(
+                ProtocolMagic.DAB1,
+                1,
+                initiatorBinding.Head.Record.RecordHash.Span);
+            var payload = CreateContactHelloPayloadCore(
+                relationshipId32,
+                dab1Reference.CanonicalBytes.Span,
+                directory.Head.Record.RecordHash.Span,
+                safety,
+                policy,
+                inboundRendezvous.ExactXur1.Span);
+            var record = AuthorDmc2Core(
+                network,
+                logicalMessageId32,
+                conversationId32,
+                senderAccount,
+                senderDevice.Span,
+                senderClientSequence: 2,
+                createdAtUnixMilliseconds,
+                expiresAtUnixMilliseconds,
+                Dmc2Flags.None,
+                ReadOnlySpan<byte>.Empty,
+                payload);
+            return new AuthoredVerifiedContactHello(record);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(safety);
+        }
     }
 
 #if DEEP_PROTOCOL_RECOVERY_TEST_SEAM

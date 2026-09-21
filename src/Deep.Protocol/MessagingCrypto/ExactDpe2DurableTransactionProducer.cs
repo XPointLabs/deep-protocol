@@ -120,6 +120,7 @@ public sealed class ExactDpe2DurablePersistencePlan : IDisposable
     private byte[]? _deduplicationMutationCommitment;
     private byte[]? _pqFenceMutationCommitment;
     private byte[]? _terminalStateCommitment;
+    private byte[]? _authenticatedDmc2;
 
     internal ExactDpe2DurablePersistencePlan(
         ExactDpe2DurableDirection direction,
@@ -144,7 +145,8 @@ public sealed class ExactDpe2DurablePersistencePlan : IDisposable
         ReadOnlySpan<byte> pqFenceMutationCommitment,
         ReadOnlySpan<byte> terminalStateCommitment,
         bool messageKeyDeletedAfterAuthenticatedEnvelopeOperation,
-        bool hasStateMutation)
+        bool hasStateMutation,
+        ReadOnlySpan<byte> authenticatedDmc2)
     {
         if (!Enum.IsDefined(direction)) throw new ArgumentOutOfRangeException(nameof(direction));
         NonZero32(operationId, nameof(operationId));
@@ -158,6 +160,15 @@ public sealed class ExactDpe2DurablePersistencePlan : IDisposable
         ValidateBoundedTrs1(priorTrs1, nameof(priorTrs1));
         if (exactEnvelope.Length is < 4_513 or > 50_705)
             throw new ArgumentOutOfRangeException(nameof(exactEnvelope));
+        if (direction == ExactDpe2DurableDirection.Receive && hasStateMutation)
+        {
+            if (authenticatedDmc2.Length is < 282 or > 33_082)
+                throw new ArgumentOutOfRangeException(nameof(authenticatedDmc2));
+        }
+        else if (!authenticatedDmc2.IsEmpty)
+            throw new ArgumentException(
+                "Only a fresh authenticated receive can stage DMC2.",
+                nameof(authenticatedDmc2));
 
         if (hasStateMutation)
         {
@@ -205,6 +216,7 @@ public sealed class ExactDpe2DurablePersistencePlan : IDisposable
         _deduplicationMutationCommitment = deduplicationMutationCommitment.ToArray();
         _pqFenceMutationCommitment = pqFenceMutationCommitment.ToArray();
         _terminalStateCommitment = terminalStateCommitment.ToArray();
+        _authenticatedDmc2 = authenticatedDmc2.ToArray();
     }
 
     public ExactDpe2DurableDirection Direction { get; }
@@ -231,6 +243,13 @@ public sealed class ExactDpe2DurablePersistencePlan : IDisposable
     public ReadOnlyMemory<byte> DeduplicationMutationCommitment => Copy(_deduplicationMutationCommitment);
     public ReadOnlyMemory<byte> PqFenceMutationCommitment => Copy(_pqFenceMutationCommitment);
     public ReadOnlyMemory<byte> TerminalStateCommitment => Copy(_terminalStateCommitment);
+    /// <summary>
+    /// Canonical authenticated plaintext for a fresh receive, available only
+    /// to the trusted durable authority while committing the ratchet and its
+    /// recoverable application handoff in one transaction. Empty otherwise.
+    /// The caller owns a defensive copy and must clear it after the commit.
+    /// </summary>
+    public ReadOnlyMemory<byte> AuthenticatedDmc2 => Copy(_authenticatedDmc2);
 
     public void Dispose()
     {
@@ -244,6 +263,7 @@ public sealed class ExactDpe2DurablePersistencePlan : IDisposable
             Zero(ref _messageKeyDeletionEvidence); Zero(ref _replayEvidenceCommitment);
             Zero(ref _deduplicationMutationCommitment); Zero(ref _pqFenceMutationCommitment);
             Zero(ref _terminalStateCommitment);
+            Zero(ref _authenticatedDmc2);
         }
     }
 
@@ -826,7 +846,8 @@ public static class ExactDpe2DurableTransactionProducer
                 transition.PqFenceMutationCommitment.Span,
                 transition.TerminalStateCommitment.Span,
                 messageKeyDeleted: true,
-                hasStateMutation: true);
+                hasStateMutation: true,
+                authenticatedDmc2: []);
             var prepared = new ExactDpe2PreparedSend(transition, persistence);
             transition = null;
             persistence = null;
@@ -854,6 +875,7 @@ public static class ExactDpe2DurableTransactionProducer
         ExactDpe2DurablePersistencePlan? persistence = null;
         byte[]? nextTrs1 = null;
         byte[]? exactEnvelope = null;
+        byte[]? authenticatedDmc2 = null;
         try
         {
             transition = ExactDpe2ReceiveTransitionPlan.Prepare(
@@ -874,6 +896,7 @@ public static class ExactDpe2DurableTransactionProducer
                 RequireFreshDeletionEvidence(transition.MessageKeyDeletedAfterEnvelopeCrypto,
                     transition.DeletionObligations);
                 nextTrs1 = transition.ExportProposedDurableState();
+                authenticatedDmc2 = transition.CopyAuthenticatedDmc2ForPersistence();
             }
 
             persistence = CreatePersistencePlan(
@@ -894,7 +917,8 @@ public static class ExactDpe2DurableTransactionProducer
                 transition.PqFenceMutationCommitment.Span,
                 transition.TerminalStateCommitment.Span,
                 messageKeyDeleted: hasMutation,
-                hasStateMutation: hasMutation);
+                hasStateMutation: hasMutation,
+                authenticatedDmc2: authenticatedDmc2 ?? []);
             var prepared = new ExactDpe2PreparedReceive(transition, persistence);
             transition = null;
             persistence = null;
@@ -906,6 +930,8 @@ public static class ExactDpe2DurableTransactionProducer
             persistence?.Dispose();
             if (nextTrs1 is not null) CryptographicOperations.ZeroMemory(nextTrs1);
             if (exactEnvelope is not null) CryptographicOperations.ZeroMemory(exactEnvelope);
+            if (authenticatedDmc2 is not null)
+                CryptographicOperations.ZeroMemory(authenticatedDmc2);
         }
     }
 
@@ -934,7 +960,8 @@ public static class ExactDpe2DurableTransactionProducer
         ReadOnlySpan<byte> pqFenceMutation,
         ReadOnlySpan<byte> terminalCommitment,
         bool messageKeyDeleted,
-        bool hasStateMutation) =>
+        bool hasStateMutation,
+        ReadOnlySpan<byte> authenticatedDmc2) =>
         new(
             direction,
             priorGeneration,
@@ -958,7 +985,8 @@ public static class ExactDpe2DurableTransactionProducer
             pqFenceMutation,
             terminalCommitment,
             messageKeyDeleted,
-            hasStateMutation);
+            hasStateMutation,
+            authenticatedDmc2);
 
     private static void ValidatePriorState(
         ReadOnlySpan<byte> exactPriorTrs1,

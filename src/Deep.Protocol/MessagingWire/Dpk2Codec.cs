@@ -190,7 +190,6 @@ public sealed class Dpk2Record
         Exact(responderDpd1Ref, 38, nameof(responderDpd1Ref));
         Generation(deviceDirectoryGeneration, nameof(deviceDirectoryGeneration));
         NonZeroExact(deviceDirectoryHeadHash, 32, nameof(deviceDirectoryHeadHash));
-        Generation(prekeyServiceGeneration, nameof(prekeyServiceGeneration));
         Generation(inventoryEpoch, nameof(inventoryEpoch));
         NonZeroExact(bundleId, 32, nameof(bundleId));
         Generation(policyGeneration, nameof(policyGeneration));
@@ -332,7 +331,6 @@ public static class Dpk2Codec
         RequireGeneration(encoded, fields, 4, "responderDeviceGeneration");
         RequireGeneration(encoded, fields, 6, "deviceDirectoryGeneration");
         RequireNonZero(encoded, fields, 7, "deviceDirectoryHeadHash");
-        RequireGeneration(encoded, fields, 8, "prekeyServiceGeneration");
         RequireGeneration(encoded, fields, 9, "inventoryEpoch");
         RequireNonZero(encoded, fields, 10, "bundleId");
         RequireGeneration(encoded, fields, 11, "policyGeneration");

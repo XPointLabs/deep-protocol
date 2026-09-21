@@ -60,29 +60,40 @@ public sealed record MailboxEpochWindow
     public required ulong CurrentExpiresAtUnixSeconds { get; init; }
     public required ulong NextExpiresAtUnixSeconds { get; init; }
 
+    /// <summary>
+    /// Clean XMG1/XMC1 grants intentionally authorize only the current epoch.
+    /// A zeroed next tuple means the client must reacquire before rollover.
+    /// </summary>
+    public bool IsCurrentOnly => NextEpoch == 0;
+
     public bool Accepts(ulong epoch, ulong nowUnixSeconds)
     {
         Validate();
         return epoch == CurrentEpoch
             ? nowUnixSeconds >= CurrentNotBeforeUnixSeconds &&
               nowUnixSeconds <= CurrentExpiresAtUnixSeconds
-            : epoch == NextEpoch &&
+            : !IsCurrentOnly && epoch == NextEpoch &&
               nowUnixSeconds >= NextNotBeforeUnixSeconds &&
               nowUnixSeconds <= NextExpiresAtUnixSeconds;
     }
 
     public void Validate()
     {
-        if (CurrentEpoch == 0 ||
-            CurrentEpoch == ulong.MaxValue ||
-            NextEpoch != CurrentEpoch + 1 ||
-            CurrentNotBeforeUnixSeconds >= NextNotBeforeUnixSeconds ||
-            NextNotBeforeUnixSeconds > CurrentExpiresAtUnixSeconds ||
-            CurrentExpiresAtUnixSeconds >= NextExpiresAtUnixSeconds)
+        var currentInvalid = CurrentEpoch == 0 ||
+            CurrentNotBeforeUnixSeconds >= CurrentExpiresAtUnixSeconds;
+        var currentOnlyInvalid = IsCurrentOnly &&
+            (NextNotBeforeUnixSeconds != 0 || NextExpiresAtUnixSeconds != 0);
+        var overlapInvalid = !IsCurrentOnly &&
+            (CurrentEpoch == ulong.MaxValue ||
+             NextEpoch != CurrentEpoch + 1 ||
+             CurrentNotBeforeUnixSeconds >= NextNotBeforeUnixSeconds ||
+             NextNotBeforeUnixSeconds > CurrentExpiresAtUnixSeconds ||
+             CurrentExpiresAtUnixSeconds >= NextExpiresAtUnixSeconds);
+        if (currentInvalid || currentOnlyInvalid || overlapInvalid)
         {
             throw new MailboxClientException(
                 MailboxClientError.InvalidEpochWindow,
-                "Only the bounded overlapping E/E+1 epoch window is canonical.");
+                "Only an exact current epoch or bounded overlapping E/E+1 window is canonical.");
         }
     }
 }

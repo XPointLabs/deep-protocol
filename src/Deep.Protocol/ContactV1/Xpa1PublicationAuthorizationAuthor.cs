@@ -31,6 +31,7 @@ public sealed class PermanentAddressPublicationAuthorizationRequest
     private readonly byte[] operationId;
     private readonly byte[] predecessorObjectHash;
     private readonly byte[] objectCiphertext;
+    private readonly byte[] ownerRetrieveCapability;
     private readonly byte[] publisherSignature;
 
     public PermanentAddressPublicationAuthorizationRequest(
@@ -41,6 +42,7 @@ public sealed class PermanentAddressPublicationAuthorizationRequest
         ulong issuedAtUnixSeconds,
         ulong expiresAtUnixSeconds,
         ulong effectiveExpiresAtUnixSeconds,
+        ReadOnlySpan<byte> ownerRetrieveCapability,
         ReadOnlySpan<byte> publisherSignature)
     {
         this.operationId = Required(operationId, 32, nameof(operationId));
@@ -52,6 +54,8 @@ public sealed class PermanentAddressPublicationAuthorizationRequest
         if (objectCiphertext.Length is < 40 or > 65_575)
             throw new ArgumentOutOfRangeException(nameof(objectCiphertext));
         this.objectCiphertext = objectCiphertext.ToArray();
+        this.ownerRetrieveCapability = Required(
+            ownerRetrieveCapability, 32, nameof(ownerRetrieveCapability));
         if (issuedAtUnixSeconds == 0 || expiresAtUnixSeconds <= issuedAtUnixSeconds ||
             effectiveExpiresAtUnixSeconds < expiresAtUnixSeconds)
             throw new ArgumentOutOfRangeException(nameof(expiresAtUnixSeconds));
@@ -69,6 +73,7 @@ public sealed class PermanentAddressPublicationAuthorizationRequest
     public ulong IssuedAtUnixSeconds { get; }
     public ulong ExpiresAtUnixSeconds { get; }
     public ulong EffectiveExpiresAtUnixSeconds { get; }
+    public ReadOnlyMemory<byte> OwnerRetrieveCapability => ownerRetrieveCapability.ToArray();
     public ReadOnlyMemory<byte> PublisherSignature => publisherSignature.ToArray();
 
     private static byte[] Required(ReadOnlySpan<byte> value, int length, string name)
@@ -93,20 +98,24 @@ public sealed class AuthoredPermanentAddressPublication
 {
     private readonly byte[] exactXpa1;
     private readonly byte[] exactXpu1;
+    private readonly byte[] recipientAccountId;
 
     internal AuthoredPermanentAddressPublication(
         ReadOnlySpan<byte> exactXpa1,
         Xpu1Request request,
-        VerifiedXpa1PublicationAuthorization authorization)
+        VerifiedXpa1PublicationAuthorization authorization,
+        ReadOnlySpan<byte> recipientAccountId)
     {
         this.exactXpa1 = exactXpa1.ToArray();
         exactXpu1 = request.CanonicalBytes.ToArray();
+        this.recipientAccountId = recipientAccountId.ToArray();
         Request = request;
         Authorization = authorization;
     }
 
     public ReadOnlyMemory<byte> ExactXpa1 => exactXpa1.ToArray();
     public ReadOnlyMemory<byte> ExactXpu1 => exactXpu1.ToArray();
+    public ReadOnlyMemory<byte> RecipientAccountId => recipientAccountId.ToArray();
     public Xpu1Request Request { get; }
     public VerifiedXpa1PublicationAuthorization Authorization { get; }
 }
@@ -130,16 +139,18 @@ public static class Xpa1PublicationAuthorizationAuthor
         ReadOnlySpan<byte> routeClosureHash,
         ulong generation,
         ReadOnlySpan<byte> predecessorObjectHash,
-        ulong effectiveExpiresAtUnixSeconds)
+        ulong effectiveExpiresAtUnixSeconds,
+        ReadOnlySpan<byte> ownerRetrieveCapability)
     {
         Require(locatorHash, 32, nameof(locatorHash), nonzero: true);
         Require(exactDcr1Hash, 32, nameof(exactDcr1Hash), nonzero: true);
         Require(objectCiphertextHash, 32, nameof(objectCiphertextHash), nonzero: true);
         Require(routeClosureHash, 32, nameof(routeClosureHash), nonzero: true);
         Require(predecessorObjectHash, 32, nameof(predecessorObjectHash), nonzero: generation != 0);
+        Require(ownerRetrieveCapability, 32, nameof(ownerRetrieveCapability), nonzero: true);
         if ((generation == 0) != IsZero(predecessorObjectHash) || effectiveExpiresAtUnixSeconds == 0)
             throw new ArgumentException("The publication generation, predecessor, or expiry is invalid.");
-        var tuple = new byte[176];
+        var tuple = new byte[208];
         locatorHash.CopyTo(tuple);
         exactDcr1Hash.CopyTo(tuple.AsSpan(32));
         objectCiphertextHash.CopyTo(tuple.AsSpan(64));
@@ -147,6 +158,7 @@ public static class Xpa1PublicationAuthorizationAuthor
         BinaryPrimitives.WriteUInt64BigEndian(tuple.AsSpan(128), generation);
         predecessorObjectHash.CopyTo(tuple.AsSpan(136));
         BinaryPrimitives.WriteUInt64BigEndian(tuple.AsSpan(168), effectiveExpiresAtUnixSeconds);
+        ownerRetrieveCapability.CopyTo(tuple.AsSpan(176));
         try
         {
             return ContactCodec.SignatureInput(PublisherDomain, tuple);
@@ -223,7 +235,8 @@ public static class Xpa1PublicationAuthorizationAuthor
                 routeClosureHash,
                 request.Generation,
                 request.PredecessorObjectHash.Span,
-                request.EffectiveExpiresAtUnixSeconds);
+                request.EffectiveExpiresAtUnixSeconds,
+                request.OwnerRetrieveCapability.Span);
             try
             {
                 var publisherDeviceId = contact.Bundle.Field(10).ToArray();
@@ -257,7 +270,8 @@ public static class Xpa1PublicationAuthorizationAuthor
                 request.ObjectCiphertext.Span,
                 0,
                 request.EffectiveExpiresAtUnixSeconds,
-                exactRouteClosure);
+                exactRouteClosure,
+                request.OwnerRetrieveCapability.Span);
             var authorizationId = ContactCodec.Sha256Domain(
                 AuthorizationIdDomain,
                 Join(request.OperationId.ToArray(), bodyHash, freshness.ExactAdh1CoreHash.ToArray()));
@@ -322,7 +336,8 @@ public static class Xpa1PublicationAuthorizationAuthor
                 0,
                 request.EffectiveExpiresAtUnixSeconds,
                 exactRouteClosure,
-                xpa);
+                xpa,
+                request.OwnerRetrieveCapability.Span);
             var xpu = Xpu1Codec.Decode(exactXpu);
             var verified = await Xpa1PublicationAuthorizationVerifier.VerifyAsync(
                 xpu,
@@ -331,7 +346,11 @@ public static class Xpa1PublicationAuthorizationAuthor
                 placement,
                 trustedTimeAuthority,
                 cancellationToken).ConfigureAwait(false);
-            return new AuthoredPermanentAddressPublication(xpa, xpu, verified);
+            return new AuthoredPermanentAddressPublication(
+                xpa,
+                xpu,
+                verified,
+                contact.Directory.Record.DeepAccountId.Span);
         }
         catch (OperationCanceledException)
         {

@@ -58,6 +58,90 @@ public sealed class Xpa1PublicationAuthorizationAuthorTests
         Assert.Equal("InsufficientSigners", error.Code);
     }
 
+    [Fact]
+    public async Task PublicationAuthorityWire_RoundTripsExactNonceBoundRequestAndResponse()
+    {
+        var fixture = await Fixture.CreateAsync();
+        var authored = await Xpa1PublicationAuthorizationAuthor.AuthorPermanentAsync(
+            fixture.Request, fixture.Contact, fixture.Route, fixture.Core.NetworkAuthority,
+            fixture.Placement, fixture.Clock, fixture.Signers, default);
+        var nonce = TestBytes(32, 0xd1);
+        var freshness = fixture.Contact.Freshness;
+        var wireRequest = new ContactPublicationAuthorityWireRequest(
+            fixture.Core.NetworkAuthority.NetworkId.Span,
+            nonce,
+            freshness.DirectoryLeafKey.Span,
+            freshness.AdhGeneration,
+            freshness.ExactAdh1CoreHash.Span,
+            fixture.Contact.Authorization.Verified.Record.CanonicalBytes.Span,
+            fixture.Contact.ResolverResponse.CanonicalBytes.Span,
+            ContactRouteClosureCodec.Encode(fixture.Route),
+            fixture.Request.OperationId.Span,
+            fixture.Request.Generation,
+            fixture.Request.PredecessorObjectHash.Span,
+            fixture.Request.ObjectCiphertext.Span,
+            fixture.Request.IssuedAtUnixSeconds,
+            fixture.Request.ExpiresAtUnixSeconds,
+            fixture.Request.EffectiveExpiresAtUnixSeconds,
+            fixture.Request.OwnerRetrieveCapability.Span,
+            fixture.Request.PublisherSignature.Span);
+
+        var encodedRequest = ContactPublicationAuthorityWireCodec.EncodeRequest(wireRequest);
+        var decodedRequest = ContactPublicationAuthorityWireCodec.DecodeRequest(encodedRequest);
+        Assert.Equal(encodedRequest,
+            ContactPublicationAuthorityWireCodec.EncodeRequest(decodedRequest));
+        Assert.Equal(nonce, decodedRequest.RequestNonce.ToArray());
+
+        var response = new ContactPublicationAuthorityWireResponse(
+            decodedRequest.NetworkId.Span,
+            decodedRequest.RequestNonce.Span,
+            authored.ExactXpu1.Span);
+        var encodedResponse = ContactPublicationAuthorityWireCodec.EncodeResponse(
+            decodedRequest, response);
+        var decodedResponse = ContactPublicationAuthorityWireCodec.DecodeResponse(
+            decodedRequest, encodedResponse);
+
+        Assert.Equal(authored.ExactXpu1.ToArray(), decodedResponse.ExactXpu1.ToArray());
+        Assert.Equal(encodedResponse,
+            ContactPublicationAuthorityWireCodec.EncodeResponse(decodedRequest, decodedResponse));
+    }
+
+    [Fact]
+    public async Task DeviceCustody_AuthorsExactPermanentPublicationRequest()
+    {
+        var fixture = await Fixture.CreateAsync();
+        var publication = new AuthoredPermanentContactPublication(
+            fixture.Contact,
+            fixture.Request.ObjectCiphertext.Span,
+            fixture.Locator);
+        var route = new AuthoredPermanentContactRoute(
+            fixture.Route,
+            fixture.Route.Reachability,
+            fixture.Route.Invite);
+        var signer = new ContactSigner(
+            fixture.Core.Device,
+            fixture.Core.VerifiedRecipient);
+
+        var authored = await ContactPublicationAuthorityAuthor.AuthorAsync(
+            publication,
+            route,
+            signer,
+            TestBytes(32, 0xd2),
+            fixture.Request.OperationId,
+            fixture.Request.PredecessorObjectHash,
+            fixture.Request.IssuedAtUnixSeconds,
+            fixture.Request.ExpiresAtUnixSeconds,
+            fixture.Request.EffectiveExpiresAtUnixSeconds,
+            fixture.Request.OwnerRetrieveCapability);
+
+        Assert.Equal(fixture.Request.PublisherSignature.ToArray(),
+            authored.WireRequest.PublisherSignature.ToArray());
+        Assert.Equal(publication.ProtectedDcr1.ToArray(),
+            authored.WireRequest.ObjectCiphertext.ToArray());
+        Assert.Equal(ContactDeviceSignaturePurpose.PermanentAddressPublication,
+            signer.LastPurpose);
+    }
+
     private sealed class Fixture
     {
         private Fixture(
@@ -127,14 +211,16 @@ public sealed class Xpa1PublicationAuthorizationAuthorTests
             var ciphertextHash = SHA256.HashData(ciphertext);
             var routeHash = SHA256.HashData(ContactRouteClosureCodec.Encode(routeFixture.Route));
             var predecessor = new byte[32];
+            var ownerCapability = TestBytes(32, 0xc5);
             var expiresAt = checked(core.Freshness.TrustedUpperUnixSeconds + 10);
             var publisherInput = Xpa1PublicationAuthorizationAuthor.CreatePublisherSigningInput(
                 locator, contact.ResolverResponse.ArtifactHash.Span, ciphertextHash,
-                routeHash, 0, predecessor, expiresAt);
+                routeHash, 0, predecessor, expiresAt, ownerCapability);
             var signature = PublicKeyAuth.SignDetached(publisherInput, core.Device.PrivateKey);
             var request = new PermanentAddressPublicationAuthorizationRequest(
                 operation, 0, predecessor, ciphertext,
-                core.Freshness.TrustedLowerUnixSeconds, expiresAt, expiresAt, signature);
+                core.Freshness.TrustedLowerUnixSeconds, expiresAt, expiresAt,
+                ownerCapability, signature);
             var signers = core.NetworkWitnesses
                 .Take(core.NetworkAuthority.WitnessThreshold)
                 .Select(static witness =>
@@ -148,7 +234,7 @@ public sealed class Xpa1PublicationAuthorizationAuthorTests
         internal PermanentAddressPublicationAuthorizationRequest WithPublisherSignature(byte[] signature) =>
             new(Request.OperationId.Span, Request.Generation, Request.PredecessorObjectHash.Span,
                 Request.ObjectCiphertext.Span, Request.IssuedAtUnixSeconds, Request.ExpiresAtUnixSeconds,
-                Request.EffectiveExpiresAtUnixSeconds, signature);
+                Request.EffectiveExpiresAtUnixSeconds, Request.OwnerRetrieveCapability.Span, signature);
     }
 
     private sealed class ContactSigner(KeyPair key, Deep.Protocol.DeepNative.VerifiedDevice device)
@@ -157,6 +243,7 @@ public sealed class Xpa1PublicationAuthorizationAuthorTests
         public ReadOnlyMemory<byte> DeviceId => device.Certificate.DeviceId;
         public ReadOnlyMemory<byte> Ed25519PublicKey => key.PublicKey;
         public ReadOnlyMemory<byte> CustodyDomainHash => TestBytes(32, 0xce);
+        internal ContactDeviceSignaturePurpose LastPurpose { get; private set; }
 
         public ValueTask<int> SignAsync(
             ContactDeviceSigningRequest request,
@@ -164,6 +251,7 @@ public sealed class Xpa1PublicationAuthorizationAuthorTests
             CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            LastPurpose = request.Purpose;
             var signature = PublicKeyAuth.SignDetached(
                 request.SigningInput.ToArray(), key.PrivateKey);
             signature.CopyTo(signature64);

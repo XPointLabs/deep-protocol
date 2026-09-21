@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Deep.Protocol.DeepNative;
 using Deep.Protocol.ContactV1;
 
@@ -362,6 +363,24 @@ public sealed class ContactHelloDmc2Payload : Dmc2Payload
     private readonly byte[] relationshipId; private readonly byte[] dab1Reference; private readonly byte[] dmd1Hash; private readonly byte[] safetyNumberHash; private readonly byte[] inboundXur1;
     internal ContactHelloDmc2Payload(byte[] canonical, ReadOnlySpan<byte> relationshipId, ReadOnlySpan<byte> dab1Reference, ReadOnlySpan<byte> dmd1Hash, ReadOnlySpan<byte> safetyNumberHash, ContactPolicy policy, ReadOnlySpan<byte> inboundXur1) : base(Dmc2ContentKind.ContactHello, canonical) { this.relationshipId=relationshipId.ToArray(); this.dab1Reference=dab1Reference.ToArray(); this.dmd1Hash=dmd1Hash.ToArray(); this.safetyNumberHash=safetyNumberHash.ToArray(); Policy=policy; this.inboundXur1=inboundXur1.ToArray(); }
     public ReadOnlyMemory<byte> RelationshipId => relationshipId.ToArray(); public ReadOnlyMemory<byte> InitiatorDab1Reference => dab1Reference.ToArray(); public ReadOnlyMemory<byte> InitiatorDmd1Hash => dmd1Hash.ToArray(); public ReadOnlyMemory<byte> SafetyNumberHash => safetyNumberHash.ToArray(); public ContactPolicy Policy { get; } public ReadOnlyMemory<byte> InboundXur1 => inboundXur1.ToArray();
+}
+
+/// <summary>
+/// Non-forgeable result of the capability-based ContactHello author.  Decoding
+/// arbitrary DMC2 bytes cannot construct this value.
+/// </summary>
+public sealed class AuthoredVerifiedContactHello
+{
+    internal AuthoredVerifiedContactHello(ParsedDmc2 record)
+    {
+        Record = record ?? throw new ArgumentNullException(nameof(record));
+        if (record.ParsedPayload is not ContactHelloDmc2Payload)
+            throw new CryptographicException(
+                "The authored verified contact event is not ContactHello.");
+    }
+
+    public ParsedDmc2 Record { get; }
+    public ReadOnlyMemory<byte> CanonicalBytes => Record.CanonicalBytes;
 }
 
 public sealed class ContactAcceptDmc2Payload : Dmc2Payload

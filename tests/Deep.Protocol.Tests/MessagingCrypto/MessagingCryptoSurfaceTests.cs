@@ -37,6 +37,8 @@ public sealed class MessagingCryptoSurfaceTests
                 nameof(Dpk2PreKeyPersistenceProtector),
                 nameof(Dpk2PreKeyPersistenceScope),
                 nameof(Dpk2PreKeySecretCapability),
+                nameof(Dph2InitialClaimPreview),
+                nameof(VerifiedDph2InitialClaim),
                 nameof(IExactDpe2DurableTransactionAuthority),
                 nameof(InitiatorDph2ClaimPreparation),
                 nameof(InitiatorDph2PreKeyClaim),
@@ -44,6 +46,7 @@ public sealed class MessagingCryptoSurfaceTests
                 nameof(InitiatorInitialSessionCommitCapability),
                 nameof(ManagedInitiatorInitialSessionFactory),
                 nameof(ManagedResponderInitialSessionFactory),
+                nameof(ResponderInitialSessionMaterial),
                 nameof(MessagingE2eeActivationBlocker),
                 nameof(MessagingE2eeActivationReport),
                 nameof(MessagingE2eeActivationUnavailableException),
@@ -90,6 +93,9 @@ public sealed class MessagingCryptoSurfaceTests
         Assert.Empty(typeof(Dpk2PreKeySecretCapability).GetConstructors());
         Assert.Empty(typeof(Dpk2PreKeyPersistenceBlob).GetConstructors());
         Assert.Empty(typeof(RestoredDpk2PreKeySecretCapability).GetConstructors());
+        Assert.Empty(typeof(Dph2InitialClaimPreview).GetConstructors());
+        Assert.Empty(typeof(VerifiedDph2InitialClaim).GetConstructors());
+        Assert.Empty(typeof(ResponderInitialSessionMaterial).GetConstructors());
         Assert.Empty(typeof(InitiatorDph2ClaimPreparation).GetConstructors());
         Assert.Empty(typeof(InitiatorDph2PreKeyClaim).GetConstructors());
         Assert.Empty(typeof(InitiatorInitialSessionAtomicStorePayload).GetConstructors());

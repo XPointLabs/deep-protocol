@@ -82,12 +82,18 @@ public sealed partial class TripleRatchetTransactionsTests
             prepared.PersistencePlanForTests.DeletionManifestCommitment.ToArray(),
             prepared.PersistencePlanForTests.MessageKeyDeletionEvidence.ToArray());
         Assert.NotEmpty(prepared.PersistencePlanForTests.DeduplicationMutationCommitment.ToArray());
+        var stagedDmc2 = prepared.PersistencePlanForTests.AuthenticatedDmc2.ToArray();
+        var untrustedCopy = prepared.PersistencePlanForTests.AuthenticatedDmc2.ToArray();
+        untrustedCopy[0] ^= 0xFF;
+        Assert.Equal(stagedDmc2, prepared.PersistencePlanForTests.AuthenticatedDmc2.ToArray());
+        CryptographicOperations.ZeroMemory(untrustedCopy);
 
         using var success = await prepared.CommitAsync(authority);
         var exactDmc2 = success.TakeAuthenticatedDmc2();
         try
         {
             Assert.Equal(ExactDpe2ReceiveSuccessOutcome.Fresh, success.Outcome);
+            Assert.Equal(stagedDmc2, exactDmc2);
             var parsed = ApplicationCoreCodec.DecodeDmc2(exactDmc2);
             Assert.Equal(Dmc2ContentKind.MessageCreate, parsed.ContentKind);
             Assert.Equal(Dpe2Network(), parsed.NetworkId.ToArray());
@@ -97,6 +103,7 @@ public sealed partial class TripleRatchetTransactionsTests
         finally
         {
             CryptographicOperations.ZeroMemory(exactDmc2);
+            CryptographicOperations.ZeroMemory(stagedDmc2);
             CryptographicOperations.ZeroMemory(priorTrs1);
             CryptographicOperations.ZeroMemory(exactDpe2);
             authority.Dispose();
@@ -124,6 +131,7 @@ public sealed partial class TripleRatchetTransactionsTests
         Assert.False(prepared.PersistencePlanForTests.HasStateMutation);
         Assert.Empty(prepared.PersistencePlanForTests.NextTrs1.ToArray());
         Assert.Empty(prepared.PersistencePlanForTests.MessageKeyDeletionEvidence.ToArray());
+        Assert.Empty(prepared.PersistencePlanForTests.AuthenticatedDmc2.ToArray());
 
         using var success = await prepared.CommitAsync(authority);
 

@@ -201,6 +201,31 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
     }
 
     [Fact]
+    public async Task Dpk2Authoring_AllowsGenesisPreKeyServiceGenerationZero()
+    {
+        using var recovery = Recovery(Network);
+        var account = Dnp1IdentityAuthoringV1.AuthorGenesisAccount(
+            recovery, 1_900_000_000, 1, new FillRandom(0xa1));
+        using var device = Device();
+        var issued = await IssueDevice(recovery, account, device);
+        using var authority = device.CreateDpk2AuthoringAuthority(
+            issued.Verified, new IncrementingDpk2Random(), new DeterministicDpk2Kem());
+        var context = new Dpk2AuthoringContext(
+            CurrentDirectory(ExactDirectory(account, issued)),
+            prekeyServiceGeneration: 0,
+            inventoryEpoch: 1,
+            policyGeneration: 1,
+            notBeforeUnixSeconds: 1_900_000_300,
+            issuedAtUnixSeconds: 1_900_000_250,
+            expiresAtUnixSeconds: 1_900_086_700);
+
+        using var authored = authority.AuthorOneTime(context);
+
+        Assert.Equal(0UL, authored.Record.PrekeyServiceGeneration);
+        Assert.Equal(1UL, authored.Record.InventoryEpoch);
+    }
+
+    [Fact]
     public async Task Dpk2Authoring_RejectsForkedOrWrongDeviceAuthorityBeforeKeyGeneration()
     {
         using var recovery = Recovery(Network);

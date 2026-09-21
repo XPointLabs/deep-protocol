@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using Deep.Protocol.Identity;
+using Deep.Protocol.MessagingWire;
 using Sodium;
 
 namespace Deep.Protocol.MessagingCrypto;
@@ -570,6 +571,102 @@ internal static class HybridPreKeyHandshake
                 if (transcript.FullDph2ReplayHash is not null)
                     CryptographicOperations.ZeroMemory(transcript.FullDph2ReplayHash);
             }
+        }
+    }
+
+    /// <summary>
+    /// Derives only the initial AEAD key from a pre-claim header and a
+    /// disposable local secret copy. It cannot mint ratchet roots or a
+    /// VerifiedDph2Initiation. The caller must independently verify the
+    /// decrypted XPK1/XPC1 before any durable prekey/session mutation.
+    /// </summary>
+    internal static SecretBuffer PreviewInitialAeadKey(
+        HybridResponderStaticKeyMaterial responder,
+        OwnedDpk2PreKeyMaterial previewPreKeys,
+        Dph2PreClaimHeader header,
+        IMlKem768Provider mlKem)
+    {
+        ArgumentNullException.ThrowIfNull(responder);
+        ArgumentNullException.ThrowIfNull(previewPreKeys);
+        using var preKeys = previewPreKeys;
+        ArgumentNullException.ThrowIfNull(header);
+        ValidateProvider(mlKem);
+        var dph2 = header.Record;
+        var dpk2 = header.Offering.Record;
+        byte[]? identityPrivate = null, signedPrivate = null;
+        byte[]? dh1 = null, dh2 = null, dh3 = null, dh4 = null;
+        var pq = new byte[32];
+        try
+        {
+            (identityPrivate, signedPrivate) = responder.CopyForOperation();
+            if (!mlKem.EncapsulationKeyMatchesDecapsulationKey(
+                    dpk2.MlKem768EncapsulationKeySpan, preKeys.MlKemSecret))
+                throw new MessagingCryptoException(
+                    MessagingCryptoError.PreKeyConflict,
+                    "The preview ML-KEM secret differs from the selected DPK2.");
+            dh1 = Agree(signedPrivate, dph2.InitiatorDeviceAgreementPublicKeySpan);
+            dh2 = Agree(identityPrivate, dph2.InitiatorEphemeralX25519PublicKeySpan);
+            dh3 = Agree(signedPrivate, dph2.InitiatorEphemeralX25519PublicKeySpan);
+            if (dpk2.MlKemKind == Dpk2PrekeyKind.OneTime)
+            {
+                if (preKeys.OneTimePrivate is null)
+                    throw new MessagingCryptoException(
+                        MessagingCryptoError.PreKeyConflict,
+                        "The selected one-time preview prekey secret is missing.");
+                dh4 = Agree(preKeys.OneTimePrivate,
+                    dph2.InitiatorEphemeralX25519PublicKeySpan);
+            }
+            else if (preKeys.OneTimePrivate is not null)
+            {
+                throw new MessagingCryptoException(
+                    MessagingCryptoError.PreKeyConflict,
+                    "A last-resort preview contains a one-time X25519 secret.");
+            }
+            mlKem.Decapsulate(preKeys.MlKemSecret,
+                dph2.ActualMlKem768CiphertextSpan, pq);
+            MessagingCryptoValidation.NonZeroExact(pq, 32, nameof(pq));
+            return DerivePreviewInitialAeadKey(header.TranscriptHash,
+                dh1, dh2, dh3, dh4, pq);
+        }
+        finally
+        {
+            if (identityPrivate is not null) CryptographicOperations.ZeroMemory(identityPrivate);
+            if (signedPrivate is not null) CryptographicOperations.ZeroMemory(signedPrivate);
+            if (dh1 is not null) CryptographicOperations.ZeroMemory(dh1);
+            if (dh2 is not null) CryptographicOperations.ZeroMemory(dh2);
+            if (dh3 is not null) CryptographicOperations.ZeroMemory(dh3);
+            if (dh4 is not null) CryptographicOperations.ZeroMemory(dh4);
+            CryptographicOperations.ZeroMemory(pq);
+        }
+    }
+
+    private static SecretBuffer DerivePreviewInitialAeadKey(
+        ReadOnlySpan<byte> transcriptHash,
+        ReadOnlySpan<byte> dh1,
+        ReadOnlySpan<byte> dh2,
+        ReadOnlySpan<byte> dh3,
+        byte[]? dh4,
+        ReadOnlySpan<byte> pq)
+    {
+        var ikm = new byte[dh4 is null ? 128 : 160];
+        Span<byte> prk = stackalloc byte[64];
+        byte[]? initial = null;
+        try
+        {
+            dh1.CopyTo(ikm); dh2.CopyTo(ikm.AsSpan(32)); dh3.CopyTo(ikm.AsSpan(64));
+            var pqOffset = 96;
+            if (dh4 is not null) { dh4.CopyTo(ikm, 96); pqOffset = 128; }
+            pq.CopyTo(ikm.AsSpan(pqOffset));
+            if (HKDF.Extract(HashAlgorithmName.SHA512, ikm, transcriptHash, prk) != prk.Length)
+                throw new CryptographicException("Preview HKDF extract returned an unexpected length.");
+            initial = Expand(prk, "Deep/Messaging/V2/initial-aead", transcriptHash);
+            return SecretBuffer.ImportExact(initial, 32, nameof(initial));
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(ikm);
+            CryptographicOperations.ZeroMemory(prk);
+            if (initial is not null) CryptographicOperations.ZeroMemory(initial);
         }
     }
 

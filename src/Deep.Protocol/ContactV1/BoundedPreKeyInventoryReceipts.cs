@@ -647,7 +647,7 @@ public static partial class PreKeyInventoryPublicationVerifier
             var xps1 = FindRecipientXps1(recipientBundle, authority);
             var xpsHash = SHA256.HashData(xps1.CanonicalBytes);
             var xpsReference = new byte[38];
-            "XPS1"u8.CopyTo(xpsReference);
+            ProtocolMagicBytes.XPS1.CopyTo(xpsReference);
             System.Buffers.Binary.BinaryPrimitives.WriteUInt16BigEndian(xpsReference.AsSpan(4), 1);
             xpsHash.CopyTo(xpsReference, 6);
             try

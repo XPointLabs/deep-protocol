@@ -15,6 +15,8 @@ public enum ContactDeviceSignaturePurpose : byte
     RouteAdvertisement = 3,
     RouteReachability = 4,
     InviteRoute = 5,
+    PermanentAddressPublication = 6,
+    UpdateRendezvous = 7,
 }
 
 public sealed class ContactPublicationAuthoringException : CryptographicException
@@ -117,31 +119,57 @@ public sealed class ContactPreKeyServiceAuthoringRequest
 public sealed class VerifiedContactPreKeyService
 {
     private readonly byte[] exactXps1;
+    private readonly byte[] xps1Reference;
+    private readonly byte[] networkId;
     private readonly byte[] serviceCapability;
     private readonly byte[] deviceId;
+    private readonly byte[] dpd1Reference;
 
     internal VerifiedContactPreKeyService(
         ReadOnlySpan<byte> exactXps1,
+        ReadOnlySpan<byte> networkId,
         ReadOnlySpan<byte> serviceCapability,
         ReadOnlySpan<byte> deviceId,
+        ReadOnlySpan<byte> dpd1Reference,
         ulong generation,
+        ushort minimumOneTimeInventory,
+        ushort lastResortReuseLimit,
         ulong issuedAtUnixSeconds,
         ulong expiresAtUnixSeconds)
     {
         this.exactXps1 = exactXps1.ToArray();
+        xps1Reference = CreateReference(SHA256.HashData(exactXps1));
+        this.networkId = networkId.ToArray();
         this.serviceCapability = serviceCapability.ToArray();
         this.deviceId = deviceId.ToArray();
+        this.dpd1Reference = dpd1Reference.ToArray();
         Generation = generation;
+        MinimumOneTimeInventory = minimumOneTimeInventory;
+        LastResortReuseLimit = lastResortReuseLimit;
         IssuedAtUnixSeconds = issuedAtUnixSeconds;
         ExpiresAtUnixSeconds = expiresAtUnixSeconds;
     }
 
     public ReadOnlyMemory<byte> ExactXps1 => exactXps1.ToArray();
+    public ReadOnlyMemory<byte> Xps1Reference => xps1Reference.ToArray();
+    public ReadOnlyMemory<byte> NetworkId => networkId.ToArray();
     public ReadOnlyMemory<byte> ServiceCapability => serviceCapability.ToArray();
     public ReadOnlyMemory<byte> DeviceId => deviceId.ToArray();
+    public ReadOnlyMemory<byte> Dpd1Reference => dpd1Reference.ToArray();
     public ulong Generation { get; }
+    public ushort MinimumOneTimeInventory { get; }
+    public ushort LastResortReuseLimit { get; }
     public ulong IssuedAtUnixSeconds { get; }
     public ulong ExpiresAtUnixSeconds { get; }
+
+    private static byte[] CreateReference(ReadOnlySpan<byte> hash)
+    {
+        var result = new byte[38];
+        ProtocolMagicBytes.XPS1.CopyTo(result);
+        BinaryPrimitives.WriteUInt16BigEndian(result.AsSpan(4), 1);
+        hash.CopyTo(result.AsSpan(6));
+        return result;
+    }
 }
 
 public sealed class ContactBundleAuthoringRequest
@@ -300,7 +328,9 @@ public static class ContactPublicationAuthor
                     fields[11].ToArray(), input, device.DeviceEd25519PublicKey.ToArray()))
                 Fail("InvalidCustodySignature", "The custody signer returned an invalid XPS1 signature.");
             return new VerifiedContactPreKeyService(
-                exact, parsed.ServiceCapability, parsed.DeviceId, parsed.ServiceGeneration,
+                exact, parsed.NetworkId, parsed.ServiceCapability, parsed.DeviceId,
+                parsed.Dpd1Reference, parsed.ServiceGeneration,
+                parsed.MinimumOneTimeInventory, parsed.LastResortReuseLimit,
                 parsed.IssuedAtUnixSeconds, parsed.ExpiresAtUnixSeconds);
         }
         catch (ContactPublicationAuthoringException)

@@ -195,7 +195,9 @@ public sealed class XPointNetworkOperationalGenesisRequest
     private readonly byte[] directoryQueryLeafKey;
     private readonly byte[] xcc1CoreCommitment;
     private readonly byte[] xcb1ArtifactCommitment;
-    private readonly byte[] pma2ArtifactCommitment;
+    private readonly byte[] mailboxAuthorityId;
+    private readonly byte[] mailboxDepositIssuerPublicKey;
+    private readonly byte[] mailboxRetrieveIssuerPublicKey;
 
     public XPointNetworkOperationalGenesisRequest(
         ReadOnlySpan<byte> ceremonyId,
@@ -206,7 +208,9 @@ public sealed class XPointNetworkOperationalGenesisRequest
         ReadOnlySpan<byte> directoryQueryLeafKey,
         ReadOnlySpan<byte> xcc1CoreCommitment,
         ReadOnlySpan<byte> xcb1ArtifactCommitment,
-        ReadOnlySpan<byte> pma2ArtifactCommitment,
+        ReadOnlySpan<byte> mailboxAuthorityId,
+        ReadOnlySpan<byte> mailboxDepositIssuerPublicKey,
+        ReadOnlySpan<byte> mailboxRetrieveIssuerPublicKey,
         ulong issuedAtUnixSeconds,
         ulong notBeforeUnixSeconds,
         ulong expiresAtUnixSeconds,
@@ -230,7 +234,14 @@ public sealed class XPointNetworkOperationalGenesisRequest
         this.directoryQueryLeafKey = Required(directoryQueryLeafKey, 32, nameof(directoryQueryLeafKey));
         this.xcc1CoreCommitment = Required(xcc1CoreCommitment, 32, nameof(xcc1CoreCommitment));
         this.xcb1ArtifactCommitment = Required(xcb1ArtifactCommitment, 32, nameof(xcb1ArtifactCommitment));
-        this.pma2ArtifactCommitment = Required(pma2ArtifactCommitment, 32, nameof(pma2ArtifactCommitment));
+        this.mailboxAuthorityId = Required(mailboxAuthorityId, 32, nameof(mailboxAuthorityId));
+        this.mailboxDepositIssuerPublicKey = Required(
+            mailboxDepositIssuerPublicKey, 32, nameof(mailboxDepositIssuerPublicKey));
+        this.mailboxRetrieveIssuerPublicKey = Required(
+            mailboxRetrieveIssuerPublicKey, 32, nameof(mailboxRetrieveIssuerPublicKey));
+        if (this.mailboxDepositIssuerPublicKey.AsSpan().SequenceEqual(
+                this.mailboxRetrieveIssuerPublicKey))
+            throw new ArgumentException("Mailbox issuer keys must be role-separated.");
         IssuedAtUnixSeconds = issuedAtUnixSeconds;
         NotBeforeUnixSeconds = notBeforeUnixSeconds;
         ExpiresAtUnixSeconds = expiresAtUnixSeconds;
@@ -268,7 +279,9 @@ public sealed class XPointNetworkOperationalGenesisRequest
     public ReadOnlyMemory<byte> DirectoryQueryLeafKey => directoryQueryLeafKey.ToArray();
     public ReadOnlyMemory<byte> Xcc1CoreCommitment => xcc1CoreCommitment.ToArray();
     public ReadOnlyMemory<byte> Xcb1ArtifactCommitment => xcb1ArtifactCommitment.ToArray();
-    public ReadOnlyMemory<byte> Pma2ArtifactCommitment => pma2ArtifactCommitment.ToArray();
+    public ReadOnlyMemory<byte> MailboxAuthorityId => mailboxAuthorityId.ToArray();
+    public ReadOnlyMemory<byte> MailboxDepositIssuerPublicKey => mailboxDepositIssuerPublicKey.ToArray();
+    public ReadOnlyMemory<byte> MailboxRetrieveIssuerPublicKey => mailboxRetrieveIssuerPublicKey.ToArray();
     public ulong IssuedAtUnixSeconds { get; }
     public ulong NotBeforeUnixSeconds { get; }
     public ulong ExpiresAtUnixSeconds { get; }
@@ -300,6 +313,7 @@ public sealed class AuthoredXPointNetworkOperationalGenesis
         byte[] adh1,
         byte[] dtt1,
         byte[] adp1,
+        byte[] pma2,
         byte[] pmt2,
         VerifiedOnionNetworkContext verifiedNetwork)
     {
@@ -311,6 +325,7 @@ public sealed class AuthoredXPointNetworkOperationalGenesis
         ExactAdh1 = adh1.ToArray();
         ExactDtt1 = dtt1.ToArray();
         ExactAdp1 = adp1.ToArray();
+        ExactPma2 = pma2.ToArray();
         ExactPmt2 = pmt2.ToArray();
         VerifiedNetwork = verifiedNetwork;
     }
@@ -325,6 +340,7 @@ public sealed class AuthoredXPointNetworkOperationalGenesis
     public ReadOnlyMemory<byte> ExactAdh1 { get; }
     public ReadOnlyMemory<byte> ExactDtt1 { get; }
     public ReadOnlyMemory<byte> ExactAdp1 { get; }
+    public ReadOnlyMemory<byte> ExactPma2 { get; }
     public ReadOnlyMemory<byte> ExactPmt2 { get; }
     public VerifiedOnionNetworkContext VerifiedNetwork { get; }
 }
@@ -411,8 +427,15 @@ public static class XPointNetworkOperationalGenesisAuthor
             protectedLkg: null,
             currentCheckpoint: null,
             request.MinimumReader);
+        var pma = await AuthorMailboxAuthorityAsync(
+            request, authority, cancellationToken).ConfigureAwait(false);
+        var verifiedMailboxAuthority = MailboxAuthorityV2Verifier.Verify(
+            authority,
+            pma,
+            freshness.TrustedLowerUnixSeconds,
+            freshness.TrustedUpperUnixSeconds);
         var pmt = await AuthorMailboxTopologyAsync(
-            request, authority, xnv, xnd, freshness, witnesses, cancellationToken)
+            request, authority, verifiedMailboxAuthority, xnv, xnd, freshness, witnesses, cancellationToken)
             .ConfigureAwait(false);
         var verified = await OnionNetworkContextVerifier.VerifyAsync(
             authority,
@@ -437,8 +460,71 @@ public static class XPointNetworkOperationalGenesisAuthor
             adh,
             authoredProof.ExactDtt1.ToArray(),
             authoredProof.ExactAdp1.ToArray(),
+            pma,
             pmt,
             verified);
+    }
+
+    private static async ValueTask<byte[]> AuthorMailboxAuthorityAsync(
+        XPointNetworkOperationalGenesisRequest request,
+        VerifiedXPointNetworkAuthority authority,
+        CancellationToken cancellationToken)
+    {
+        ReadOnlyMemory<byte>[] fields =
+        [
+            authority.NetworkId.ToArray(), U64(0), new byte[32],
+            request.MailboxAuthorityId,
+            request.MailboxDepositIssuerPublicKey,
+            request.MailboxRetrieveIssuerPublicKey,
+            U64(1), U32(3_600), U16(1),
+            U64(request.IssuedAtUnixSeconds), U64(request.NotBeforeUnixSeconds),
+            U64(request.ExpiresAtUnixSeconds), authority.AuthorityCoreReference,
+            authority.DirectoryWitnessPolicyHash,
+            new byte[] { checked((byte)request.RootSigners.Count) },
+            SignatureRows(request.RootSigners.Select(static signer =>
+                (signer.RootKeyId.ToArray(), Placeholder64())).ToArray()),
+        ];
+        var provisional = ContactCodec.AuthorForOperationalAuthority(ProtocolMagic.PMA2, fields);
+        var input = provisional.SignatureInput.ToArray();
+        var receipts = new List<(byte[] Id, byte[] Signature)>();
+        try
+        {
+            foreach (var signer in request.RootSigners)
+            {
+                var signature = new byte[64];
+                var signingRequest = new XPointNetworkRootSigningRequest(
+                    request.CeremonyId.Span,
+                    XPointNetworkRootSignaturePurpose.MailboxAuthority,
+                    authority.NetworkId.Span,
+                    0,
+                    signer.RootKeyId.Span,
+                    signer.KeyGeneration,
+                    signer.Ed25519PublicKey.Span,
+                    signer.CustodyDomainHash.Span,
+                    input);
+                try
+                {
+                    var written = await signer.SignAsync(
+                        signingRequest, signature, cancellationToken).ConfigureAwait(false);
+                    ValidateSignature(written, signature, input, signer.Ed25519PublicKey.Span);
+                    receipts.Add((signer.RootKeyId.ToArray(), signature.ToArray()));
+                }
+                finally
+                {
+                    signingRequest.Clear();
+                    CryptographicOperations.ZeroMemory(signature);
+                }
+            }
+            fields[15] = SignatureRows(receipts.ToArray());
+            return ContactCodec.AuthorForOperationalAuthority(
+                ProtocolMagic.PMA2, fields).CanonicalBytes.ToArray();
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(input);
+            foreach (var receipt in receipts)
+                CryptographicOperations.ZeroMemory(receipt.Signature);
+        }
     }
 
     private static async ValueTask<byte[]> AuthorPolicyAsync(
@@ -658,6 +744,7 @@ public static class XPointNetworkOperationalGenesisAuthor
     private static async ValueTask<byte[]> AuthorMailboxTopologyAsync(
         XPointNetworkOperationalGenesisRequest request,
         VerifiedXPointNetworkAuthority authority,
+        VerifiedMailboxAuthorityV2 mailboxAuthority,
         byte[] exactXnv1,
         byte[][] exactXnd1,
         VerifiedAccountDirectoryFreshness freshness,
@@ -676,7 +763,8 @@ public static class XPointNetworkOperationalGenesisAuthor
         ReadOnlyMemory<byte>[] fields =
         [
             authority.NetworkId.ToArray(), U64(0), new byte[32],
-            ArtifactReference(ProtocolMagic.PMA2, request.Pma2ArtifactCommitment.Span),
+            XPointNetworkCodec.EncodeCoreReference(
+                ProtocolMagic.PMA2, mailboxAuthority.CoreHash.Span),
             XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XNV1, view.CoreHash.Span),
             U64(1), new byte[] { 2 }, U16(checked((ushort)nodes.Length)), Join(rows),
             U64(request.IssuedAtUnixSeconds), U64(request.NotBeforeUnixSeconds), U64(request.ExpiresAtUnixSeconds),

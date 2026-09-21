@@ -105,7 +105,8 @@ public sealed class Xpu1Request : ContactServiceRequestRecord
     public ReadOnlyMemory<byte> RouteClosureHash => Field(24);
     public ReadOnlyMemory<byte> ExactRouteClosure => Field(25);
     public ReadOnlyMemory<byte> ExactXpa1 => Field(26);
-    public ReadOnlyMemory<byte> AuthorizedBodyHash => ServiceWire.ProjectedHash(this, "Deep/ContactResolver/V1/XPU-authorized-body", [1,2,3,4,5,6,16,17,18,19,20,21,22,23,24,25]);
+    public ReadOnlyMemory<byte> OwnerRetrieveCapability => Field(27);
+    public ReadOnlyMemory<byte> AuthorizedBodyHash => ServiceWire.ProjectedHash(this, "Deep/ContactResolver/V1/XPU-authorized-body", [1,2,3,4,5,6,16,17,18,19,20,21,22,23,24,25,27]);
 }
 
 public sealed class Xiq1Request : ContactServiceRequestRecord
@@ -161,7 +162,7 @@ public sealed class Xus1Result : ContactServiceResultRecord { internal Xus1Resul
 
 public static class Xpu1Codec
 {
-    private static readonly ushort[] Tags = [1,2,3,4,5,6,16,17,18,19,20,21,22,23,24,25,26];
+    private static readonly ushort[] Tags = [1,2,3,4,5,6,16,17,18,19,20,21,22,23,24,25,26,27];
     public static byte[] ComputeAuthorizedBodyHash(
         ReadOnlySpan<byte> networkId16, ReadOnlySpan<byte> operationId32,
         ReadOnlySpan<byte> viewHash32, ReadOnlySpan<byte> placementHash32,
@@ -169,12 +170,13 @@ public static class Xpu1Codec
         ReadOnlySpan<byte> xir1Hash32, ulong generation,
         ReadOnlySpan<byte> predecessorObjectHash32, ReadOnlySpan<byte> objectCiphertext,
         uint usageLimit, ulong effectiveExpiresAt,
-        ReadOnlySpan<byte> exactRouteClosure)
+        ReadOnlySpan<byte> exactRouteClosure,
+        ReadOnlySpan<byte> ownerRetrieveCapability32)
     {
         var fields=ServiceWire.RequestFields(networkId16,operationId32,viewHash32,placementHash32,issuedAt,expiresAt,
             [(16,locatorHash32.ToArray()),(17,xir1Hash32.ToArray()),(18,ServiceWire.Be(generation)),(19,predecessorObjectHash32.ToArray()),
              (20,SHA256.HashData(objectCiphertext)),(21,objectCiphertext.ToArray()),(22,ServiceWire.Be(usageLimit)),(23,ServiceWire.Be(effectiveExpiresAt)),
-             (24,SHA256.HashData(exactRouteClosure)),(25,exactRouteClosure.ToArray())]);
+             (24,SHA256.HashData(exactRouteClosure)),(25,exactRouteClosure.ToArray()),(27,ownerRetrieveCapability32.ToArray())]);
         return ServiceWire.HashProjection(ProtocolMagic.XPU1,"Deep/ContactResolver/V1/XPU-authorized-body",fields);
     }
 
@@ -185,23 +187,23 @@ public static class Xpu1Codec
         ReadOnlySpan<byte> xir1Hash32, ulong generation,
         ReadOnlySpan<byte> predecessorObjectHash32, ReadOnlySpan<byte> objectCiphertext,
         uint usageLimit, ulong effectiveExpiresAt, ReadOnlySpan<byte> exactRouteClosure,
-        ReadOnlySpan<byte> exactXpa1)
+        ReadOnlySpan<byte> exactXpa1, ReadOnlySpan<byte> ownerRetrieveCapability32)
     {
         var bytes=ServiceWire.EncodeRequest(ProtocolMagic.XPU1,networkId16,operationId32,viewHash32,placementHash32,issuedAt,expiresAt,
             [(16,locatorHash32.ToArray()),(17,xir1Hash32.ToArray()),(18,ServiceWire.Be(generation)),(19,predecessorObjectHash32.ToArray()),
              (20,SHA256.HashData(objectCiphertext)),(21,objectCiphertext.ToArray()),(22,ServiceWire.Be(usageLimit)),(23,ServiceWire.Be(effectiveExpiresAt)),
-             (24,SHA256.HashData(exactRouteClosure)),(25,exactRouteClosure.ToArray()),(26,exactXpa1.ToArray())]);
+             (24,SHA256.HashData(exactRouteClosure)),(25,exactRouteClosure.ToArray()),(26,exactXpa1.ToArray()),(27,ownerRetrieveCapability32.ToArray())]);
         _=Decode(bytes);return bytes;
     }
     public static Xpu1Request Decode(ReadOnlySpan<byte> encoded)
     {
         var record = ServiceWire.ParseRequest(encoded, ProtocolMagic.XPU1, Tags);
         ServiceWire.ValidateRequestCommon(record);
-        ServiceWire.ExactLengths(record, (16,32),(17,32),(18,8),(19,32),(20,32),(22,4),(23,8),(24,32));
+        ServiceWire.ExactLengths(record, (16,32),(17,32),(18,8),(19,32),(20,32),(22,4),(23,8),(24,32),(27,32));
         ServiceWire.LengthRange(record, 21, 40, 65_575);
         ServiceWire.LengthRange(record, 25, ContactRouteClosureCodec.MinimumEncodedBytes, ContactRouteClosureCodec.MaximumEncodedBytes);
         ServiceWire.LengthRange(record, 26, 12, 65_535);
-        ServiceWire.NonZero(record, 16,17,20,24);
+        ServiceWire.NonZero(record, 16,17,20,24,27);
         ServiceWire.GenerationPredecessor(record, 18,19);
         if (ServiceWire.U32(record[22]) > 1) ServiceWire.Reject(ContactValidationStage.Scalar, "UsageLimitOutOfRange");
         if (ServiceWire.U64(record[23]) <= ServiceWire.U64(record[5])) ServiceWire.Reject(ContactValidationStage.Scalar, "InvalidEffectiveExpiry");
@@ -209,7 +211,9 @@ public static class Xpu1Codec
         if (!CryptographicOperations.FixedTimeEquals(cipherHash, record[20])) ServiceWire.Reject(ContactValidationStage.Derived, "ObjectCiphertextHashMismatch");
         var routeHash = SHA256.HashData(record[25]);
         if (!CryptographicOperations.FixedTimeEquals(routeHash, record[24])) ServiceWire.Reject(ContactValidationStage.Derived, "RouteClosureHashMismatch");
-        _ = ContactRouteClosureCodec.Decode(record[25]);
+        var route = ContactRouteClosureCodec.Decode(record[25]);
+        if (CryptographicOperations.FixedTimeEquals(record[27], route.Reachability.Field(10).Span))
+            ServiceWire.Reject(ContactValidationStage.Derived, "MailboxGrantCapabilitiesMustBeDistinct");
         var model = new Xpu1Request(record);
         _ = ServiceWire.ParseValidatedXpa1(model);
         return model;
@@ -326,7 +330,7 @@ internal sealed class ServiceRecord(string magic, byte[] canonical, byte[] wire,
 
 internal static class ServiceWire
 {
-    private const int Header=12, FieldHeader=8, MaxCanonical=65_535, MaxXpu1Canonical=92_992, MaxXis1Canonical=89_388;
+    private const int Header=12, FieldHeader=8, MaxCanonical=65_535, MaxXpu1Canonical=93_032, MaxXis1Canonical=89_388;
     private static readonly int[] Buckets=[256,1024,4096,16384,65536,131072];
     internal static ServiceRecord ParseRequest(ReadOnlySpan<byte> bytes,string magic,ushort[] tags)=>Parse(bytes,magic,tags,false,false);
     internal static ServiceRecord ParseResult(ReadOnlySpan<byte> bytes,string magic,bool class4)=>Parse(bytes,magic,null,true,class4);

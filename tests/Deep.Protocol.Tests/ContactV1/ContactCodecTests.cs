@@ -18,9 +18,9 @@ public sealed class ContactCodecTests
         var manifest = File.ReadAllBytes(FindSpec("contact-codec-v1.vectors.json"));
         var canonicalManifest = System.Text.Encoding.UTF8.GetBytes(
             System.Text.Encoding.UTF8.GetString(manifest).Replace("\r\n", "\n", StringComparison.Ordinal));
-        Assert.Equal("6330a8f5d0d2345ac04a6a1a3109fdd28511e9bbf254fe240203f8f49d7c1386", Convert.ToHexString(SHA256.HashData(canonicalManifest)).ToLowerInvariant());
+        Assert.Equal("18073a01239730c4d809478e62bd5097a320e5439a25a6dcf94f3a6f8de7721a", Convert.ToHexString(SHA256.HashData(canonicalManifest)).ToLowerInvariant());
         using var anchor = JsonDocument.Parse(File.ReadAllBytes(FindSpec("contact-codec-v1.vectors.anchor.json")));
-        Assert.Equal("6330a8f5d0d2345ac04a6a1a3109fdd28511e9bbf254fe240203f8f49d7c1386", anchor.RootElement.GetProperty("sha256").GetString());
+        Assert.Equal("18073a01239730c4d809478e62bd5097a320e5439a25a6dcf94f3a6f8de7721a", anchor.RootElement.GetProperty("sha256").GetString());
         using var document = JsonDocument.Parse(manifest);
         Assert.Equal("FROZEN_TARGET_NOT_ACTIVE", document.RootElement.GetProperty("status").GetString());
         Assert.False(ContactCodec.RuntimeActivation);

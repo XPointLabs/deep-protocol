@@ -354,6 +354,37 @@ public sealed class VerifiedOnionNetworkContext
     internal ReadOnlySpan<byte> NetworkIdSpan => _networkId;
     internal OnionTrustedTimeLease? TrustedTime { get; }
     internal VerifiedOnionNetworkClosure? Closure { get; }
+
+    /// <summary>
+    /// Proves that an exact PMT2 artifact reference belongs to this verified
+    /// current network closure without exposing the closure or its raw records.
+    /// </summary>
+    public bool BindsProjection(ReadOnlyMemory<byte> exactPmt2Reference)
+    {
+        var closure = Closure;
+        return closure?.PmtArtifactReference is { Length: 38 } projection &&
+            exactPmt2Reference.Length == projection.Length &&
+            CryptographicOperations.FixedTimeEquals(
+                exactPmt2Reference.Span,
+                projection);
+    }
+
+    /// <summary>
+    /// Returns the identity/receipt verification key of one node only after the
+    /// node has been admitted by the exact current XNV1/XND1 closure.
+    /// </summary>
+    public ReadOnlyMemory<byte> ResolveNodeIdentityPublicKey(
+        ReadOnlyMemory<byte> nodeId)
+    {
+        EnsureCurrent();
+        var node = ResolveNode(nodeId.Span);
+        var key = node.IdentityPublicKey;
+        if (key is not { Length: 32 } || key.AsSpan().IndexOfAnyExcept((byte)0) < 0)
+            throw new OnionBoundaryException(
+                "node-identity-key-unavailable",
+                "The verified node has no current identity/receipt verification key.");
+        return key.ToArray();
+    }
     internal IEnumerable<VerifiedNetworkNode> CandidateNodes => _nodes.Values;
     internal VerifiedNetworkNode ResolveNode(ReadOnlySpan<byte> nodeId)
     {

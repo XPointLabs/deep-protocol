@@ -86,8 +86,8 @@ public sealed class DeepProtocolRegistryTests
     [Fact]
     public void FrozenRegistryProvenanceAndDomains_AreIndependentExpectedValues()
     {
-        Assert.Equal("2651599913bf92c021d36b6a53395499b6a091fb", DeepProtocolRegistryGenerated.Dnp1ApprovedCommit);
-        Assert.Equal("31482ef7b8e6f89e3677701fbcb2cc2248df4e51e5315ee48b5f37198b68f1c4", DeepProtocolRegistryGenerated.Dnp1RegistrySha256);
+        Assert.Equal("a8456987efe031388ca2eb9006886fb78f31e06c", DeepProtocolRegistryGenerated.Dnp1ApprovedCommit);
+        Assert.Equal("e036a0b6acb260e05e18ac536a723b0b8561d2ba1d813429304505b0e7a7da7b", DeepProtocolRegistryGenerated.Dnp1RegistrySha256);
 
         Assert.Equal("Deep/Artifact/V1/DPA1", DeepProtocolRegistryGenerated.GetDnp1ArtifactHashDomain(1));
         Assert.Equal("Deep/Artifact/V1/DRS1", DeepProtocolRegistryGenerated.GetDnp1ArtifactHashDomain(4));
@@ -117,7 +117,7 @@ public sealed class DeepProtocolRegistryTests
         Assert.Contains(
             DeepProtocolRegistryGenerated.Identifiers,
             static value => value.Namespace == "magic" && value.CanonicalName == "MAU2" &&
-                            value.Lifecycle == ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER);
+                            value.Lifecycle == ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE);
         Assert.Contains(
             DeepProtocolRegistryGenerated.Identifiers,
             static value => value.Namespace == "magic" && value.CanonicalName == "PMT1" &&

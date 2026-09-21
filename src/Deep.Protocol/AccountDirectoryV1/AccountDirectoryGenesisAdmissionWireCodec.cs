@@ -74,8 +74,8 @@ public static class AccountDirectoryGenesisAdmissionWireCodec
     public const int MaximumResponseLength = 128 * 1024;
 
     private const ushort Version = 1;
-    private static ReadOnlySpan<byte> RequestMagic => "DGA1"u8;
-    private static ReadOnlySpan<byte> ResponseMagic => "DGR1"u8;
+    private static ReadOnlySpan<byte> RequestMagic => ProtocolMagicBytes.DGA1;
+    private static ReadOnlySpan<byte> ResponseMagic => ProtocolMagicBytes.DGR1;
 
     public static byte[] EncodeRequest(AccountDirectoryGenesisAdmissionWireRequest value)
     {

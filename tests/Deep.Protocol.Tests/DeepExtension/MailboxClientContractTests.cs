@@ -101,6 +101,28 @@ public sealed class MailboxClientContractTests
     }
 
     [Fact]
+    public void EpochWindow_CurrentOnly_AcceptsExactCurrentAndNoFabricatedSuccessor()
+    {
+        var window = new MailboxEpochWindow
+        {
+            CurrentEpoch = 7,
+            NextEpoch = 0,
+            CurrentNotBeforeUnixSeconds = 900,
+            NextNotBeforeUnixSeconds = 0,
+            CurrentExpiresAtUnixSeconds = 1100,
+            NextExpiresAtUnixSeconds = 0
+        };
+
+        window.Validate();
+        Assert.True(window.IsCurrentOnly);
+        Assert.True(window.Accepts(7, 1010));
+        Assert.False(window.Accepts(8, 1010));
+        Assert.False(window.Accepts(7, 1101));
+        Assert.Throws<MailboxClientException>(() =>
+            (window with { NextNotBeforeUnixSeconds = 950 }).Validate());
+    }
+
+    [Fact]
     public void CiphertextAndTtlBounds_AreStrict()
     {
         _ = MailboxClientCodec.EncodeEncryptedEnvelope(Envelope() with

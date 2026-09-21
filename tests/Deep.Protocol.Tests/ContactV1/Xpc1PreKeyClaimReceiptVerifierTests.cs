@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Reflection;
 using System.Security.Cryptography;
+using Deep.Protocol.AccountDirectoryV1;
 using Deep.Protocol.ContactV1;
 using Deep.Protocol.DeepExtension.PrivacyRouting;
 using Deep.Protocol.MessagingCrypto;
@@ -30,6 +31,15 @@ public sealed class Xpc1PreKeyClaimReceiptVerifierTests
         Assert.Equal(
             fixture.Dpk2.SignedX25519PrekeyPublic.ToArray(),
             verified.Offering.InitiatorAgreementPeerPublicKey.ToArray());
+
+        var transcript = verified.CopyEncryptedInitialClaimTranscript();
+        Assert.Equal(fixture.Request.CanonicalBytes.ToArray(), transcript.Xpk1);
+        Assert.Equal(fixture.Result.WireBytes.ToArray(), transcript.Xpc1Wire);
+        transcript.Xpk1[0] ^= 0xff;
+        transcript.Xpc1Wire[0] ^= 0xff;
+        var retained = verified.CopyEncryptedInitialClaimTranscript();
+        Assert.Equal(fixture.Request.CanonicalBytes.ToArray(), retained.Xpk1);
+        Assert.Equal(fixture.Result.WireBytes.ToArray(), retained.Xpc1Wire);
 
         var network = verified.NetworkId.ToArray();
         network[0] ^= 0xff;
@@ -199,14 +209,16 @@ public sealed class Xpc1PreKeyClaimReceiptVerifierTests
         var result = fixture.BuildResult(request, fixture.Dpk2);
         var claim = await fixture.VerifyAsync(request: request, result: result);
         var dph2 = fixture.BuildDph2(result.Field(18).ToArray(), request);
-        var initiation = new VerifiedDph2Initiation(
-            dph2,
-            new VerifiedDpk2Offering(fixture.Dpk2,
-                MessagingWireCryptographicInputs.ComputeExactDpk2Hash(fixture.Dpk2)),
-            MessagingWireCryptographicInputs.ComputeDph2TranscriptHash(fixture.Dpk2, dph2),
-            MessagingWireCryptographicInputs.ComputeDph2FullReplayHash(dph2),
-            MessagingWireCryptographicInputs.ComputeDph2ClaimBinding(dph2),
-            Bytes(32, 0xc4));
+        Assert.Throws<MessagingWireFormatException>(() =>
+            Dph2VerificationPlan.Create(dph2, claim.Offering).Prevalidate(
+                new Dph2ResolvedInitiator(Bytes(32, 0xda), Bytes(32, 0xc4))));
+        var preClaim = Dph2VerificationPlan.Create(dph2, claim.Offering).Prevalidate(
+            new Dph2ResolvedInitiator(
+                dph2.InitiatorDeviceAgreementPublicKey.Span, Bytes(32, 0xc4)));
+        var unrelated = await fixture.VerifyAsync();
+        Assert.Throws<Xpc1PreKeyClaimReceiptException>(() =>
+            preClaim.Promote(unrelated));
+        var initiation = preClaim.Promote(claim);
 
         var cryptoClaim = VerifiedPreKeyClaimCapability.CreateFromVerifiedXpc1(claim, initiation);
         var consumed = cryptoClaim.Consume();
@@ -220,6 +232,251 @@ public sealed class Xpc1PreKeyClaimReceiptVerifierTests
         var bridgeAgain = Assert.Throws<Xpc1PreKeyClaimReceiptException>(() =>
             VerifiedPreKeyClaimCapability.CreateFromVerifiedXpc1(claim, initiation));
         Assert.Equal("ClaimCapabilityConsumed", bridgeAgain.Code);
+    }
+
+    [Fact]
+    public async Task EncryptedInitialClaimPrefixBindsExactRequestResultAndDph2()
+    {
+        var fixture = await Fixture.CreateAsync();
+        var provisional = fixture.BuildDph2(Bytes(32, 0xb1));
+        var commitment = MessagingWireCryptographicInputs.ComputeSenderEphemeralCommitment(provisional);
+        var request = fixture.BuildRequest(senderEphemeralCommitment: commitment);
+        var result = fixture.BuildResult(request, fixture.Dpk2);
+        var claim = await fixture.VerifyAsync(request: request, result: result);
+        var dph2 = fixture.BuildDph2(result.Field(18).ToArray(), request);
+        var transcript = claim.CopyEncryptedInitialClaimTranscript();
+
+        var prefix = Dph2InitialClaimTranscriptCodec.Encode(
+            transcript.Xpk1, transcript.Xpc1Wire, dph2);
+        var body = new byte[prefix.Length + 1];
+        prefix.CopyTo(body, 0);
+        body[^1] = 1;
+        var decoded = Dph2InitialClaimTranscriptCodec.DecodePrefix(body, dph2);
+        Assert.Equal(prefix.Length, decoded.Consumed);
+        Assert.Equal(request.CanonicalBytes.ToArray(), decoded.Request.CanonicalBytes.ToArray());
+        Assert.Equal(result.WireBytes.ToArray(), decoded.Result.WireBytes.ToArray());
+
+        var changedClaim = fixture.BuildDph2(Bytes(32, 0xe1), request);
+        Assert.Throws<CryptographicException>(() =>
+            Dph2InitialClaimTranscriptCodec.Encode(
+                request.CanonicalBytes.Span, result.WireBytes.Span, changedClaim));
+        var unclaimed = Xpc1Codec.Encode(request.CanonicalBytes.Span,
+            Xpc1Status.PreKeysUnavailable, ContactServiceMutationOutcome.None,
+            60, 0, ContactServicePaddingClass.Bytes256, []);
+        Assert.Throws<CryptographicException>(() =>
+            Dph2InitialClaimTranscriptCodec.Encode(
+                request.CanonicalBytes.Span, unclaimed, dph2));
+        var changedPadding = result.WireBytes.ToArray();
+        changedPadding[^1] ^= 1;
+        Assert.Throws<ContactFormatException>(() =>
+            Dph2InitialClaimTranscriptCodec.Encode(
+                request.CanonicalBytes.Span, changedPadding, dph2));
+        var oversizedBody = new byte[Dph2InitialClaimTranscriptCodec.MaximumUnpaddedPayloadBytes + 1];
+        Assert.Throws<CryptographicException>(() =>
+            Dph2InitialClaimTranscriptCodec.DecodePrefix(oversizedBody, dph2));
+        Assert.Throws<CryptographicException>(() =>
+            Dph2InitialClaimTranscriptCodec.DecodePrefix(prefix, dph2));
+        var truncated = body.AsSpan(0, body.Length - 2).ToArray();
+        Assert.Throws<CryptographicException>(() =>
+            Dph2InitialClaimTranscriptCodec.DecodePrefix(truncated, dph2));
+        var oversized = new byte[9];
+        BinaryPrimitives.WriteUInt32BigEndian(oversized, uint.MaxValue);
+        Assert.Throws<CryptographicException>(() =>
+            Dph2InitialClaimTranscriptCodec.DecodePrefix(oversized, dph2));
+    }
+
+    [Fact]
+    public async Task PreClaimAeadPreviewOpensOnlyExactEncryptedTranscript()
+    {
+        var fixture = await Fixture.CreateAsync();
+        var preliminary = fixture.BuildDph2(Bytes(32, 0xb1));
+        var commitment = MessagingWireCryptographicInputs.ComputeSenderEphemeralCommitment(preliminary);
+        var request = fixture.BuildRequest(senderEphemeralCommitment: commitment);
+        var result = fixture.BuildResult(request, fixture.Dpk2);
+        var verifiedClaim = await fixture.VerifyAsync(request: request, result: result);
+        var dph2 = fixture.BuildDph2(result.Field(18).ToArray(), request);
+        var transcript = verifiedClaim.CopyEncryptedInitialClaimTranscript();
+        var prefix = Dph2InitialClaimTranscriptCodec.Encode(
+            transcript.Xpk1, transcript.Xpc1Wire, dph2);
+        var padded = new byte[16384];
+        prefix.CopyTo(padded, 0);
+        padded[prefix.Length] = 1;
+        BinaryPrimitives.WriteUInt32BigEndian(padded.AsSpan(padded.Length - 4),
+            checked((uint)(prefix.Length + 1)));
+        var key = Bytes(32, 0xe3);
+        var nonce = dph2.InitialPayloadNonce.ToArray();
+        var aad = MessagingWireCryptographicInputs.GetDph2InitialAeadAssociatedData(
+            fixture.Dpk2, dph2);
+        byte[]? ciphertext = null;
+        try
+        {
+            ciphertext = SecretAeadXChaCha20Poly1305.Encrypt(padded, nonce, key, aad);
+            var sealedDph2 = fixture.BuildDph2(
+                result.Field(18).ToArray(), request, ciphertext);
+            var preClaim = Dph2VerificationPlan.Create(sealedDph2, verifiedClaim.Offering)
+                .Prevalidate(new Dph2ResolvedInitiator(
+                    sealedDph2.InitiatorDeviceAgreementPublicKey.Span,
+                    Bytes(32, 0xc4)));
+            using var previewKey = SecretBuffer.ImportExact(key, 32, nameof(key));
+            var preview = Dph2InitialPayloadReader.PreviewClaimTranscript(preClaim, previewKey);
+            Assert.Equal(transcript.Xpk1, preview.Request.CanonicalBytes.ToArray());
+            Assert.Equal(transcript.Xpc1Wire, preview.Result.WireBytes.ToArray());
+            var verifiedPreview = await new Dph2InitialClaimPreview(
+                preClaim, preview.Request, preview.Result).VerifyClaimForTestsAsync(
+                    fixture.Placement, fixture.Authority, fixture.Bundle,
+                    new OnionTrustedTimeAuthority(new FixedClock(
+                        new OnionMonotonicReading(fixture.Core.BootId, 1_003))));
+            Assert.Equal(sealedDph2.SessionId.ToArray(),
+                verifiedPreview.Initiation.SessionId.ToArray());
+            var verifiedTranscript = verifiedPreview.Claim.CopyEncryptedInitialClaimTranscript();
+            try { Assert.Equal(transcript.Xpc1Wire, verifiedTranscript.Xpc1Wire); }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(verifiedTranscript.Xpk1);
+                CryptographicOperations.ZeroMemory(verifiedTranscript.Xpc1Wire);
+            }
+
+            var fakeReceipt = fixture.BuildResult(request, fixture.Dpk2,
+                fakeReplicaSignature: true);
+            await Assert.ThrowsAsync<CryptographicException>(() =>
+                new Dph2InitialClaimPreview(preClaim, preview.Request, preview.Result)
+                    .VerifyCurrentAsync(
+                        fixture.Core.Freshness, fixture.Placement,
+                        fixture.Authority, fixture.Bundle,
+                        new OnionTrustedTimeAuthority(new FixedClock(
+                            new OnionMonotonicReading(fixture.Core.BootId, 1_003))))
+                    .AsTask());
+            var invalidPreview = new Dph2InitialClaimPreview(
+                preClaim, preview.Request, fakeReceipt);
+            await Assert.ThrowsAsync<Xpc1PreKeyClaimReceiptException>(() =>
+                invalidPreview.VerifyClaimForTestsAsync(
+                    fixture.Placement, fixture.Authority, fixture.Bundle,
+                    new OnionTrustedTimeAuthority(new FixedClock(
+                        new OnionMonotonicReading(fixture.Core.BootId, 1_003))))
+                .AsTask());
+
+            var changed = ciphertext.ToArray();
+            changed[^1] ^= 1;
+            var tampered = fixture.BuildDph2(result.Field(18).ToArray(), request, changed);
+            var tamperedPreClaim = Dph2VerificationPlan.Create(tampered, verifiedClaim.Offering)
+                .Prevalidate(new Dph2ResolvedInitiator(
+                    tampered.InitiatorDeviceAgreementPublicKey.Span,
+                    Bytes(32, 0xc4)));
+            Assert.ThrowsAny<CryptographicException>(() =>
+                Dph2InitialPayloadReader.PreviewClaimTranscript(tamperedPreClaim, previewKey));
+            CryptographicOperations.ZeroMemory(changed);
+
+            var eventOnly = new byte[4096];
+            try
+            {
+                eventOnly[0] = 1;
+                BinaryPrimitives.WriteUInt32BigEndian(eventOnly.AsSpan(eventOnly.Length - 4), 1);
+                var oldCiphertext = SecretAeadXChaCha20Poly1305.Encrypt(
+                    eventOnly, nonce, key, aad);
+                try
+                {
+                    var oldDph2 = fixture.BuildDph2(
+                        result.Field(18).ToArray(), request, oldCiphertext);
+                    var oldPreClaim = Dph2VerificationPlan.Create(oldDph2, verifiedClaim.Offering)
+                        .Prevalidate(new Dph2ResolvedInitiator(
+                            oldDph2.InitiatorDeviceAgreementPublicKey.Span,
+                            Bytes(32, 0xc4)));
+                    Assert.Throws<CryptographicException>(() =>
+                        Dph2InitialPayloadReader.PreviewClaimTranscript(oldPreClaim, previewKey));
+                }
+                finally { CryptographicOperations.ZeroMemory(oldCiphertext); }
+            }
+            finally { CryptographicOperations.ZeroMemory(eventOnly); }
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(transcript.Xpk1);
+            CryptographicOperations.ZeroMemory(transcript.Xpc1Wire);
+            CryptographicOperations.ZeroMemory(prefix);
+            CryptographicOperations.ZeroMemory(padded);
+            CryptographicOperations.ZeroMemory(key);
+            CryptographicOperations.ZeroMemory(nonce);
+            CryptographicOperations.ZeroMemory(aad);
+            if (ciphertext is not null) CryptographicOperations.ZeroMemory(ciphertext);
+        }
+    }
+
+    [Fact]
+    public async Task PreClaimPreviewPromotesOnlyTheExactIndependentlyVerifiedWire()
+    {
+        var fixture = await Fixture.CreateAsync();
+        var preliminary = fixture.BuildDph2(Bytes(32, 0xb1));
+        var commitment = MessagingWireCryptographicInputs.ComputeSenderEphemeralCommitment(preliminary);
+        var request = fixture.BuildRequest(senderEphemeralCommitment: commitment);
+        var result = fixture.BuildResult(request, fixture.Dpk2);
+        var verified = await fixture.VerifyAsync(request: request, result: result);
+        var dph2 = fixture.BuildDph2(result.Field(18).ToArray(), request);
+        var header = Dph2VerificationPlan.Create(dph2, verified.Offering)
+            .Prevalidate(new Dph2ResolvedInitiator(
+                dph2.InitiatorDeviceAgreementPublicKey.Span, Bytes(32, 0xc4)));
+
+        var exact = new Dph2InitialClaimPreview(header, request, result);
+        var initiation = exact.Promote(verified);
+        Assert.Equal(dph2.SessionId.ToArray(), initiation.SessionId.ToArray());
+        Assert.Throws<InvalidOperationException>(() => exact.Promote(verified));
+
+        var changedWire = fixture.BuildResult(request, fixture.Dpk2, serverTime: 31);
+        var substituted = new Dph2InitialClaimPreview(header, request, changedWire);
+        Assert.Throws<CryptographicException>(() => substituted.Promote(verified));
+        Assert.Throws<InvalidOperationException>(() => substituted.Promote(verified));
+    }
+
+    [Fact]
+    public async Task CurrentInitiatorCheckpointIsRequiredForProductionClaimPromotion()
+    {
+        var fixture = await Fixture.CreateAsync();
+        var preliminary = fixture.BuildDph2(Bytes(32, 0xb1), currentInitiator: true);
+        var commitment = MessagingWireCryptographicInputs.ComputeSenderEphemeralCommitment(preliminary);
+        var request = fixture.BuildRequest(senderEphemeralCommitment: commitment);
+        var result = fixture.BuildResult(request, fixture.Dpk2);
+        var verifiedClaim = await fixture.VerifyAsync(request: request, result: result);
+        var dph2 = fixture.BuildDph2(
+            result.Field(18).ToArray(), request, currentInitiator: true);
+        var initiator = fixture.Core.Identity.VerifiedRecipient.Certificate;
+        var directory = fixture.Core.Identity.Directory.Record;
+        var header = Dph2VerificationPlan.Create(dph2, verifiedClaim.Offering)
+            .Prevalidate(new Dph2ResolvedInitiator(
+                initiator.DeviceX25519PublicKey.Span, directory.RecordHash.Span));
+        var sourceFreshness = fixture.Core.Identity.Freshness;
+        VerifiedAccountDirectoryFreshness WithDeadline(ulong deadline) => new(
+            sourceFreshness.ExactAdh1.Span,
+            AccountDirectoryAdh1Codec.Decode(sourceFreshness.ExactAdh1.Span),
+            sourceFreshness.ExactAdh1CoreHash.Span,
+            sourceFreshness.ExactDtt1.Span,
+            sourceFreshness.ExactDtt1CoreHash.Span,
+            sourceFreshness.ExactAdp1.Span,
+            sourceFreshness.ExactAdp1Hash.Span,
+            AccountDirectoryAdp1Codec.Decode(sourceFreshness.ExactAdp1.Span),
+            sourceFreshness.ExactAdc1Reference.Span,
+            sourceFreshness.TrustedLowerUnixSeconds,
+            sourceFreshness.TrustedUpperUnixSeconds,
+            new AccountDirectoryMonotonicRequestWindow(
+                fixture.Core.BootId, 1_000, 1_002, 1_003),
+            deadline,
+            sourceFreshness.CurrentCheckpoint);
+        var freshness = WithDeadline(1_050);
+        var verified = await new Dph2InitialClaimPreview(header, request, result)
+            .VerifyCurrentAsync(
+                freshness, fixture.Placement, fixture.Authority, fixture.Bundle,
+                new OnionTrustedTimeAuthority(new FixedClock(
+                    new OnionMonotonicReading(fixture.Core.BootId, 1_003))));
+        Assert.Equal(dph2.SessionId.ToArray(), verified.Initiation.SessionId.ToArray());
+        Assert.Equal(result.Field(18).ToArray(), verified.Claim.ClaimReceiptHash.ToArray());
+        Assert.Same(freshness.CurrentCheckpoint, verified.InitiatorCheckpoint);
+        Assert.Same(fixture.Bundle, verified.RecipientBundle);
+
+        await Assert.ThrowsAsync<CryptographicException>(() =>
+            new Dph2InitialClaimPreview(header, request, result)
+                .VerifyCurrentAsync(
+                    WithDeadline(1_003), fixture.Placement, fixture.Authority, fixture.Bundle,
+                    new OnionTrustedTimeAuthority(new FixedClock(
+                        new OnionMonotonicReading(fixture.Core.BootId, 1_003))))
+                .AsTask());
     }
 
     [Fact]
@@ -466,23 +723,37 @@ public sealed class Xpc1PreKeyClaimReceiptVerifierTests
             return Xpc1Codec.Decode(wire, Request.CanonicalBytes.Span);
         }
 
-        internal Dph2Record BuildDph2(byte[] claimReceiptHash, Xpk1Request? request = null)
+        internal Dph2Record BuildDph2(
+            byte[] claimReceiptHash,
+            Xpk1Request? request = null,
+            byte[]? initialCiphertext = null,
+            bool currentInitiator = false)
         {
             request ??= Request;
+            var initiator = Core.Identity.VerifiedRecipient.Certificate;
+            var directory = Core.Identity.Directory.Record;
             return new Dph2Record(
-                Core.Network, Bytes(32, 0xc1), Bytes(32, 0xc2), 1,
-                Reference("DPD1", 0xc3),
+                Core.Network,
+                currentInitiator ? directory.DeepAccountId.Span : Bytes(32, 0xc1),
+                currentInitiator ? initiator.DeviceId.Span : Bytes(32, 0xc2),
+                currentInitiator ? initiator.DeviceGeneration : 1,
+                currentInitiator
+                    ? directory.ActiveDevices[0].Dpd1Reference.CanonicalBytes.Span
+                    : Reference("DPD1", 0xc3),
+                Deep.Protocol.ApplicationCore.ApplicationCoreCodec.AuthorDid1(
+                    Bytes(32, 0xca), Bytes(16, 0xcb)).CanonicalBytes.Span,
                 Dpk2.ResponderAccountId.Span, Dpk2.ResponderDeviceId.Span,
                 Dpk2.ResponderDeviceGeneration,
                 MessagingWireCryptographicInputs.ComputeExactDpk2Hash(Dpk2),
                 request.OperationId.Span, claimReceiptHash, 0,
-                Bytes(32, 0xc4), Bytes(32, 0xc5),
+                currentInitiator ? initiator.DeviceX25519PublicKey.Span : Bytes(32, 0xc4),
+                Bytes(32, 0xc5),
                 Dph2SelectedPrekey.OneTime(
                     Dpk2.SignedX25519PrekeyId.Span,
                     Dpk2.OneTimeX25519PrekeyId.Span,
                     Dpk2.MlKemPrekeyId.Span),
                 Bytes(1088, 0xc6), Bytes(32, 0xc7), Bytes(24, 0xc8),
-                Dph2InitialCiphertext.Import(Bytes(4112, 0xc9)));
+                Dph2InitialCiphertext.Import(initialCiphertext ?? Bytes(4112, 0xc9)));
         }
     }
 

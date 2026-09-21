@@ -410,7 +410,7 @@ public static class AccountDirectoryHeadAuthor
 
     private static byte[] CheckpointReference(AccountDirectoryAdc1 checkpoint) =>
         AccountDirectoryCrypto.CreateReference(
-            "ADC1"u8,
+            ProtocolMagicBytes.ADC1,
             1,
             SHA256.HashData(AccountDirectoryAdc1Codec.Encode(checkpoint)));
 

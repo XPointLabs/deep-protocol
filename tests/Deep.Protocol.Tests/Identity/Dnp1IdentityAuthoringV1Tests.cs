@@ -818,11 +818,15 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
         using var device = Device();
         var issued = await IssueDevice(recovery, account, device);
         var directory = ExactDirectory(account, issued);
+        var addressBinding = recovery.AuthorGenesisDab1(
+            directory.Identity, deploymentProfileId: 1);
         using var authority = device.CreateAgreementAuthority(issued.Verified);
         var factory = new ManagedInitiatorInitialSessionFactory(128);
 
-        using var first = factory.BeginClaim(authority, CurrentDirectory(directory));
-        using var second = factory.BeginClaim(authority, CurrentDirectory(directory));
+        using var first = factory.BeginClaim(
+            authority, CurrentDirectory(directory), addressBinding);
+        using var second = factory.BeginClaim(
+            authority, CurrentDirectory(directory), addressBinding);
 
         Assert.Equal(authority.NetworkId.ToArray(), first.NetworkId.ToArray());
         Assert.Equal(32, first.ClaimOperationId.Length);

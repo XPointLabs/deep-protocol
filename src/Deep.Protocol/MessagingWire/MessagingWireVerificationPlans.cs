@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using System.Text;
+using Deep.Protocol.ContactV1;
 using Deep.Protocol.MessagingCrypto;
 
 namespace Deep.Protocol.MessagingWire;
@@ -227,14 +228,28 @@ internal sealed class Dph2VerificationPlan
         return new Dph2VerificationPlan(record, offering);
     }
 
-    internal VerifiedDph2Initiation Verify(IDph2VerificationCallbacks callbacks)
+    /// <summary>
+    /// Checks the public header, exact selected DPK2 and independently
+    /// resolved initiator device without claiming that XPC1 was verified.
+    /// This may be used only for a bounded pre-claim AEAD preview; it is not
+    /// a VerifiedDph2Initiation and cannot authorize state commit or ACK.
+    /// </summary>
+    internal Dph2PreClaimHeader Prevalidate(Dph2ResolvedInitiator initiator)
     {
-        ArgumentNullException.ThrowIfNull(callbacks);
-        var initiator = callbacks.ResolveInitiator(Record);
+        ArgumentNullException.ThrowIfNull(initiator);
         if (!CryptographicOperations.FixedTimeEquals(
                 initiator.AgreementKey.Span, Record.InitiatorDeviceAgreementPublicKey.Span))
             Reject(MessagingWirePrevalidationStage.HashProjection,
                 "DPH2 initiator key differs from the exact active device closure.");
+        return new Dph2PreClaimHeader(
+            Record, Offering, _transcriptHash, _fullReplayHash, _claimBinding,
+            initiator.DeviceDirectoryHeadHash.Span);
+    }
+
+    internal VerifiedDph2Initiation Verify(IDph2VerificationCallbacks callbacks)
+    {
+        ArgumentNullException.ThrowIfNull(callbacks);
+        var preClaim = Prevalidate(callbacks.ResolveInitiator(Record));
         if (!callbacks.VerifyExactClaim(new Dph2ClaimVerification
             {
                 OperationId = Record.ClaimOperationId,
@@ -250,14 +265,54 @@ internal sealed class Dph2VerificationPlan
         return new VerifiedDph2Initiation(
             Record,
             Offering,
-            _transcriptHash,
-            _fullReplayHash,
-            _claimBinding,
-            initiator.DeviceDirectoryHeadHash.Span);
+            preClaim.TranscriptHash,
+            preClaim.FullReplayHash,
+            preClaim.ClaimBinding,
+            preClaim.InitiatorDirectoryHeadHash);
     }
 
     private static void Reject(MessagingWirePrevalidationStage stage, string message) =>
         throw MessagingWireFraming.Error(stage, MessagingWireRejection.CallbackRejected, message);
+}
+
+internal sealed class Dph2PreClaimHeader
+{
+    private readonly byte[] _transcriptHash;
+    private readonly byte[] _fullReplayHash;
+    private readonly byte[] _claimBinding;
+    private readonly byte[] _initiatorDirectoryHeadHash;
+
+    internal Dph2PreClaimHeader(
+        Dph2Record record,
+        VerifiedDpk2Offering offering,
+        ReadOnlySpan<byte> transcriptHash,
+        ReadOnlySpan<byte> fullReplayHash,
+        ReadOnlySpan<byte> claimBinding,
+        ReadOnlySpan<byte> initiatorDirectoryHeadHash)
+    {
+        Record = record;
+        Offering = offering;
+        _transcriptHash = transcriptHash.ToArray();
+        _fullReplayHash = fullReplayHash.ToArray();
+        _claimBinding = claimBinding.ToArray();
+        _initiatorDirectoryHeadHash = initiatorDirectoryHeadHash.ToArray();
+    }
+
+    internal Dph2Record Record { get; }
+    internal VerifiedDpk2Offering Offering { get; }
+    internal ReadOnlySpan<byte> TranscriptHash => _transcriptHash;
+    internal ReadOnlySpan<byte> FullReplayHash => _fullReplayHash;
+    internal ReadOnlySpan<byte> ClaimBinding => _claimBinding;
+    internal ReadOnlySpan<byte> InitiatorDirectoryHeadHash => _initiatorDirectoryHeadHash;
+
+    internal VerifiedDph2Initiation Promote(VerifiedXpc1PreKeyClaimReceipt verifiedClaim)
+    {
+        ArgumentNullException.ThrowIfNull(verifiedClaim);
+        verifiedClaim.RequireMatchesDph2Header(Record);
+        return new VerifiedDph2Initiation(
+            Record, Offering, _transcriptHash, _fullReplayHash,
+            _claimBinding, _initiatorDirectoryHeadHash);
+    }
 }
 
 public interface IDtr2VerificationCallbacks

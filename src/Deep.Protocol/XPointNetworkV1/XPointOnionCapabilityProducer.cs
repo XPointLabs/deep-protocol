@@ -16,6 +16,7 @@ public enum ContactServiceRequestKind : byte
     PublishContactUpdate = 4,
     QueryContactUpdate = 5,
     PublishPreKeyInventory = 6,
+    AcquireMailboxGrant = 7,
 }
 
 public enum ContactServiceClass : byte
@@ -41,7 +42,8 @@ public sealed class VerifiedContactServicePlacement
         ReadOnlySpan<byte> shardKey,
         ulong selectionEpoch,
         ulong validUntilUnixSeconds,
-        IEnumerable<byte[]> rankedReplicaNodeIds)
+        IEnumerable<byte[]> rankedReplicaNodeIds,
+        ulong policyGeneration = 0)
     {
         Network = network;
         RequestKind = requestKind;
@@ -51,6 +53,7 @@ public sealed class VerifiedContactServicePlacement
         _shardKey = shardKey.ToArray();
         SelectionEpoch = selectionEpoch;
         ValidUntilUnixSeconds = validUntilUnixSeconds;
+        PolicyGeneration = policyGeneration;
         _rankedReplicaNodeIds = rankedReplicaNodeIds.Select(static value => value.ToArray()).ToArray();
     }
 
@@ -61,6 +64,7 @@ public sealed class VerifiedContactServicePlacement
     public ReadOnlyMemory<byte> PlacementHash => _placementHash.ToArray();
     public ulong SelectionEpoch { get; }
     public ulong ValidUntilUnixSeconds { get; }
+    public ulong PolicyGeneration { get; }
     public IReadOnlyList<ReadOnlyMemory<byte>> RankedReplicaNodeIds =>
         Array.AsReadOnly(_rankedReplicaNodeIds.Select(static value => (ReadOnlyMemory<byte>)value.ToArray()).ToArray());
 
@@ -95,7 +99,10 @@ public static class ContactServicePlacementFactory
 
         var serviceClass = requestKind switch
         {
-            ContactServiceRequestKind.PublishInvite or ContactServiceRequestKind.ResolveInvite => ContactServiceClass.InviteResolver,
+            ContactServiceRequestKind.PublishInvite or
+                ContactServiceRequestKind.ResolveInvite or
+                ContactServiceRequestKind.AcquireMailboxGrant =>
+                ContactServiceClass.InviteResolver,
             ContactServiceRequestKind.ClaimPreKey or ContactServiceRequestKind.PublishPreKeyInventory => ContactServiceClass.PreKeyClaim,
             ContactServiceRequestKind.PublishContactUpdate or ContactServiceRequestKind.QueryContactUpdate => ContactServiceClass.ContactUpdate,
             _ => throw new OnionBoundaryException("service-class-invalid", "The Contact Resolver request kind is unknown."),
@@ -125,7 +132,8 @@ public static class ContactServicePlacementFactory
             "Deep/ContactResolver/V1/service-placement", placementPayload);
         return new VerifiedContactServicePlacement(
             network, requestKind, serviceClass, closure.ViewCoreHash, placementHash,
-            shardKey.Span, closure.SelectionEpoch, closure.HardUpperUnixSeconds, ranked);
+            shardKey.Span, closure.SelectionEpoch, closure.HardUpperUnixSeconds, ranked,
+            closure.Policy.PolicyGeneration);
     }
 
     private static byte[] Rank(
