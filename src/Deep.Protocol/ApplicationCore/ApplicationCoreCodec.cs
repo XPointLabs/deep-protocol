@@ -13,8 +13,8 @@ public static partial class ApplicationCoreCodec
     private static ReadOnlySpan<byte> DaoMagic => ProtocolMagicBytes.DAO1;
     private static readonly int[] DaoTotals =
     [
-        4725, 4821, 4885, 5685, 5877, 6129, 17013, 17109, 17173, 17973, 18165,
-        18417, 33397, 33493, 33557, 34357, 34549, 34801, 49765, 49861, 49925,
+        4725, 4821, 4885, 5685, 5877, 6213, 17013, 17109, 17173, 17973, 18165,
+        18501, 33397, 33493, 33557, 34357, 34549, 34885, 49765, 49861, 49925,
         50725, 50917,
     ];
 

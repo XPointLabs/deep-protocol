@@ -102,19 +102,19 @@ public sealed class ApplicationCoreNegativeTests
     [InlineData(4885)]
     [InlineData(5685)]
     [InlineData(5877)]
-    [InlineData(6129)]
+    [InlineData(6213)]
     [InlineData(17013)]
     [InlineData(17109)]
     [InlineData(17173)]
     [InlineData(17973)]
     [InlineData(18165)]
-    [InlineData(18417)]
+    [InlineData(18501)]
     [InlineData(33397)]
     [InlineData(33493)]
     [InlineData(33557)]
     [InlineData(34357)]
     [InlineData(34549)]
-    [InlineData(34801)]
+    [InlineData(34885)]
     [InlineData(49765)]
     [InlineData(49861)]
     [InlineData(49925)]
@@ -127,6 +127,20 @@ public sealed class ApplicationCoreNegativeTests
             ApplicationCoreFixture.Bytes(32, 0x13), ApplicationCoreFixture.Bytes(32, 0x14),
             ApplicationCoreFixture.Bytes(24, 0x15), ApplicationCoreFixture.Bytes(total - 196, 0x16));
         Assert.Equal(total, record.CanonicalBytes.Length);
+    }
+
+    [Theory]
+    [InlineData(6129)]
+    [InlineData(18417)]
+    [InlineData(34801)]
+    public void Dao1_RetiredDph2TotalsReject(int total)
+    {
+        var exception = Assert.Throws<ApplicationCoreFormatException>(() =>
+            ApplicationCoreCodec.AuthorDao1(
+                ApplicationCoreFixture.Bytes(16, 0x11), ApplicationCoreFixture.Bytes(32, 0x12),
+                ApplicationCoreFixture.Bytes(32, 0x13), ApplicationCoreFixture.Bytes(32, 0x14),
+                ApplicationCoreFixture.Bytes(24, 0x15), ApplicationCoreFixture.Bytes(total - 196, 0x16)));
+        Assert.Equal(ApplicationCoreRejection.InvalidTotalSize, exception.Rejection);
     }
 
     [Fact]

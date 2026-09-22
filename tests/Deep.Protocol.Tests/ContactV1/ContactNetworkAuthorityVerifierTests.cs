@@ -80,9 +80,15 @@ public sealed class ContactNetworkAuthorityVerifierTests
         Assert.Equal(
             [nameof(ContactNetworkAuthorityVerifier.BindSelectionAsync),
              nameof(ContactNetworkAuthorityVerifier.VerifyAsync),
+             nameof(ContactNetworkAuthorityVerifier.VerifyProposalAsync),
              nameof(ContactNetworkAuthorityVerifier.VerifyProposalAsync)],
             methods.Select(static method => method.Name)
                 .OrderBy(static name => name, StringComparer.Ordinal).ToArray());
+        Assert.Equal(
+            [typeof(VerifiedDevice), typeof(VerifiedDeviceRelative)],
+            methods.Where(static candidate => candidate.Name == nameof(ContactNetworkAuthorityVerifier.VerifyProposalAsync))
+                .Select(static candidate => candidate.GetParameters()[3].ParameterType)
+                .OrderBy(static type => type.Name, StringComparer.Ordinal).ToArray());
         var method = Assert.Single(methods,
             static candidate => candidate.Name == nameof(ContactNetworkAuthorityVerifier.VerifyAsync));
         Assert.Equal(
