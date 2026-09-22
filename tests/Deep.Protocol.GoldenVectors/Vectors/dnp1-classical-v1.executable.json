@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0.0",
-  "normativeCommit": "2651599913bf92c021d36b6a53395499b6a091fb",
+  "normativeCommit": "a8456987efe031388ca2eb9006886fb78f31e06c",
   "protocolBaseCommit": "e75bfed411cfe13134a55a09a3c754b174f13322",
   "normativeFiles": [
     {
@@ -9,7 +9,7 @@
     },
     {
       "path": "dnp1-classical-v1.registry.json",
-      "sha256": "31482EF7B8E6F89E3677701FBCB2CC2248DF4E51E5315EE48B5F37198B68F1C4"
+      "sha256": "E036A0B6ACB260E05E18AC536A723B0B8561D2BA1D813429304505B0E7A7DA7B"
     },
     {
       "path": "dnp1-classical-v1.registry.schema.json",
@@ -88,7 +88,7 @@
     "tests/Deep.Protocol.Tests/DeepNative/RecoveryColdProtectedPayloadTests.cs",
     "tests/Deep.Protocol.Tests/DevOpsWitness/Dnp1PackageBlockingWitnessTests.cs"
   ],
-  "implementationScopeSha256": "202508FF6C54C2ECDC82C48A97620A8F03D5D06DA3704FB7AEC3B76078E6167C",
+  "implementationScopeSha256": "CBC9E73D595F837E1C1FB6F09B1D73F4D6ED40A0BC8FA1FE67160CC33CA40498",
   "mappings": [
     {
       "id": "api-recovery-freeze-provider-nonce",

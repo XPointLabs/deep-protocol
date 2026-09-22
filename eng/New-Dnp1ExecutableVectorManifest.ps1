@@ -26,7 +26,11 @@ if ($ProtocolBaseCommit -notmatch '^[0-9a-f]{40}$') { throw 'Protocol base commi
 if ($LASTEXITCODE -ne 0) { throw 'Protocol base commit is not an ancestor of the checked-out source.' }
 
 function Get-Sha256([string] $Path) {
-    return (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToUpperInvariant()
+    # Bind the repository-canonical text so Windows CRLF and hosted Linux LF
+    # checkouts produce the same executable evidence digest.
+    $text = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes($Path))
+    $canonical = $text.Replace("`r`n", "`n").Replace("`r", "`n")
+    return Get-BytesSha256 ([Text.Encoding]::UTF8.GetBytes($canonical))
 }
 
 function Get-RelativeWithin([string] $Base, [string] $Path) {
