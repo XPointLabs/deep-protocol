@@ -12,7 +12,7 @@ namespace Deep.Protocol.Tests.Identity;
 
 public sealed partial class Dnp1IdentityAuthoringV1Tests
 {
-    private const string OtherMnemonic = "legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth title";
+    internal const string OtherMnemonic = "legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth title";
 
     [Fact]
     public async Task Did2Admission_AdvancesThresholdHeadAndRejectsChangedPrivateJournal()

@@ -36,11 +36,12 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
 
     internal static async Task<(DeepIdV2GenesisAdmissionRequest Admission,
         VerifiedAdc1V2 Checkpoint, VerifiedDab2 Binding)> CreateRealDid2DirectoryGenesisAsync(
-            byte[]? networkOverride = null, ulong epoch = 1_900_000_000)
+            byte[]? networkOverride = null, ulong epoch = 1_900_000_000,
+            string? mnemonicOverride = null)
     {
         var network = networkOverride ?? Network;
         using var phrase = DeepRecoveryV1.VerifyCanonicalUtf8(
-            Encoding.ASCII.GetBytes(Mnemonic));
+            Encoding.ASCII.GetBytes(mnemonicOverride ?? Mnemonic));
         using var recovery = DeepRecoveryV1.DeriveAccountCapabilities(
             phrase, network, 1);
         var account = Dnp1IdentityAuthoringV1.AuthorGenesisAccount(

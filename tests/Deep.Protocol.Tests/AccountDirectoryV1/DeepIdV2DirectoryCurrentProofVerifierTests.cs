@@ -185,6 +185,85 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
             verifiedSuccessor.CurrentCheckpoint!.Checkpoint.ArtifactHash.ToArray());
         Assert.Equal((ulong)2, verifiedSuccessor.NextProtectedLkg.LogGeneration);
 
+        // A later signed head changes both committed roots by admitting a
+        // second, independently PQ-authorized account. The first account's
+        // proof must remain current against the final two-leaf map, and the
+        // newly admitted account must resolve from the same protected floor.
+        var (_, secondCheckpoint, secondBinding) = await
+            Dnp1IdentityAuthoringV1Tests.CreateRealDid2DirectoryGenesisAsync(
+                authority.Network, mnemonicOverride:
+                Dnp1IdentityAuthoringV1Tests.OtherMnemonic);
+        var secondLeaf = secondCheckpoint.Checkpoint.DirectoryLeafKey.ToArray();
+        Assert.NotEqual(leaf, secondLeaf);
+        var nextMap = new Dictionary<string, byte[]>(map,
+            StringComparer.Ordinal)
+        {
+            [Convert.ToHexString(secondLeaf)] =
+                secondCheckpoint.Checkpoint.ArtifactReference.ToArray()
+        };
+        var nextMapRoot = DeepIdV2DirectorySparseMap.ComputeFullMapRoot(nextMap);
+        var secondTransition = DeepIdV2DirectoryTransitionCodec.Author(1,
+            secondLeaf, new byte[38],
+            secondCheckpoint.Checkpoint.ArtifactReference.Span,
+            mapRoot, nextMapRoot);
+        ReadOnlyMemory<byte>[] expandedJournal =
+            [transition.CanonicalBytes, secondTransition.CanonicalBytes];
+        var expandedHead = authority.Head(3,
+            verifiedSuccessor.NextProtectedLkg.CoreHash.ToArray(), 2,
+            DeepIdV2DirectoryJournal.ComputeAppendRoot(expandedJournal),
+            nextMapRoot, minimumReader: 2);
+        var expandedHeadBytes = AccountDirectoryAdh1Codec.Encode(expandedHead);
+        var expandedLkg = new AccountDirectoryProtectedLkg(expandedHeadBytes);
+
+        async Task<VerifiedDeepIdV2DirectoryFreshness> VerifyExpandedAsync(
+            byte[] queriedLeaf, VerifiedDab2 queriedBinding, byte nonceMarker)
+        {
+            var requestNonce = Bytes(32, nonceMarker);
+            var expandedMaterial = DeepIdV2DirectoryProofMaterialAuthor.Create(
+                expandedLkg, expandedJournal,
+                [checkpoint, secondCheckpoint], queriedLeaf,
+                verifiedSuccessor.NextProtectedLkg);
+            var expandedRequest = new AccountDirectoryProofAuthoringRequest(
+                authority.Network, requestNonce, Bytes(16, 0x44), 1_000,
+                expandedHeadBytes, authority.CurrentXnv(), 1_900_000_300, 5,
+                1_900_000_300, 1_900_000_360,
+                AccountDirectoryDtt1IssuanceEpoch.Derive(
+                    authority.Verified, 1_900_000_300, 5), 2);
+            var expandedPackage = await DeepIdV2DirectoryProofAuthor
+                .IssueGenesisAsync(authority.Verified, expandedRequest,
+                    expandedMaterial,
+                    authority.Witnesses.Take(2).Select(WitnessSigner.Valid)
+                        .Cast<IAccountDirectoryDtt1WitnessSigner>().ToArray(),
+                    1, pq);
+            var expandedLookup = DeepIdV2AccountDirectoryLookupCodec.Author(
+                queriedBinding.DeepId, authority.Network,
+                verifiedSuccessor.NextProtectedLkg.LogGeneration,
+                verifiedSuccessor.NextProtectedLkg.CoreHash.Span,
+                1, new byte[38], new byte[32]);
+            var expandedQuery = VerifiedDeepIdV2DirectoryQuery.VerifyBinding(
+                expandedLookup, queriedBinding);
+            return DeepIdV2DirectoryCurrentProofVerifier.VerifyGenesis(
+                authority.Verified, expandedPackage.ExactAdh1,
+                expandedPackage.ExactDtt1, expandedPackage.ExactAdp1V2,
+                requestNonce, expandedQuery, Window(),
+                verifiedSuccessor.NextProtectedLkg, 1, 2, pq);
+        }
+
+        var firstAfterMutation = await VerifyExpandedAsync(leaf, binding, 0x36);
+        Assert.Equal(checkpoint.Checkpoint.ArtifactHash.ToArray(),
+            firstAfterMutation.CurrentCheckpoint!.Checkpoint.ArtifactHash.ToArray());
+        Assert.Equal((ulong)2, firstAfterMutation.NextProtectedLkg.TreeSize);
+        var secondAfterMutation = await VerifyExpandedAsync(
+            secondLeaf, secondBinding, 0x37);
+        Assert.Equal(secondCheckpoint.Checkpoint.ArtifactHash.ToArray(),
+            secondAfterMutation.CurrentCheckpoint!.Checkpoint.ArtifactHash.ToArray());
+        Assert.Equal(firstAfterMutation.NextProtectedLkg.CoreHash.ToArray(),
+            secondAfterMutation.NextProtectedLkg.CoreHash.ToArray());
+        Assert.Throws<System.Security.Cryptography.CryptographicException>(() =>
+            DeepIdV2DirectoryProofMaterialAuthor.Create(expandedLkg,
+                journal, [checkpoint, secondCheckpoint], leaf,
+                verifiedSuccessor.NextProtectedLkg));
+
         var badFloorAdl = DeepIdV2AccountDirectoryLookupCodec.Author(
             binding.DeepId, authority.Network,
             initialLkg.LogGeneration, Bytes(32, 0x5b),

@@ -51,7 +51,9 @@ public sealed class VerifiedDeepIdV2DirectoryQuery
 /// <summary>
 /// Non-forgeable, nonce-bound DID2 directory result. The positive closure is
 /// currently limited to exact generation-zero account/binding/checkpoint
-/// admission; successor and forward-checkpoint histories fail closed.
+/// admissions. Direct signed successor heads (including new genesis leaves)
+/// are accepted with append consistency; beyond-horizon forward checkpoints
+/// still fail closed.
 /// </summary>
 public sealed class VerifiedDeepIdV2DirectoryFreshness
 {
