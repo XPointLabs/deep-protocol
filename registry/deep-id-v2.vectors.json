@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "1",
+  "status": "TRANSCRIPT_VECTOR_NOT_FULL_CLOSURE",
+  "decision": "DR-0006",
+  "fixture": {
+    "bip39EntropyHex": "0000000000000000000000000000000000000000000000000000000000000000",
+    "networkIdHex": "000102030405060708090a0b0c0d0e0f",
+    "deploymentProfileId": 1,
+    "accountGeneration": 1,
+    "bindingGeneration": 0,
+    "dpa1Reference": "test-only fixed hash with type 0x0001 and length 644; not a real DPA1 closure",
+    "mldsaSignatureRandomness": "32 zero bytes, deterministic public fixture only"
+  },
+  "expected": {
+    "didSha256": "054709aba16d7e1a4d8eeb44cbb4b5096a06b0915ce14b32e9fdb6be8968bcd6",
+    "didRecordHash": "bea14bedff9a97c5108a5eebc3c4443192de68ea5db3270f29cf4b42da63b123",
+    "deepIdText": "deep1q2l2zjldl7df03gs3f0whs7ygsce9hngafwmxfc09885ksk6vwcjxucsd87zcpnlnyaxcyhw8tjyu8sg4nsev",
+    "dabUnsignedSha256": "5829c1b06832ed1e914c41790c57e3454d642c7fe5c133cf26fbcbc9f73ac39d",
+    "dabSha256": "24c2cf347e1f99fc1e6f9acdf783ca5426e6bb1bc66ace9357307a1d88cda438",
+    "dabRecordHash": "8704ba997eb7e56176d0d2332e0a5d58a8d1c0f09e8d782b8ad4e5ba39e8bac3",
+    "rootEdSignatureSha256": "66564815a066f9b3c404330a201a81c2fe10aaeb0d242a6b1c9f0a165ca731c1",
+    "rootPqSignatureSha256": "2e27175fbe7704cd86a642eeae168011cd9ff8a21b04a6535f523fe4fb36ed88",
+    "accountSignatureSha256": "c68fc89fec6f242b8ab6eda35b35f8135e0391c6363309f5ce44901bedefec40"
+  },
+  "negativeChecks": [
+    "uppercase text rejects",
+    "Bech32m checksum mutation rejects",
+    "Ed25519 transcript mutation rejects",
+    "ML-DSA transcript mutation rejects",
+    "ML-DSA root-key substitution rejects"
+  ]
+}

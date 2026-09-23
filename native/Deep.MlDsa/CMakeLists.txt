@@ -66,6 +66,19 @@ if(DEEP_MLDSA_BUILD_TESTS)
   endif()
   add_test(NAME deep_mldsa_v1_native COMMAND deep_mldsa_tests)
 
+  add_executable(deep_id_v2_vector_probe tests/deep_id_v2_vector_probe.c)
+  set_target_properties(deep_id_v2_vector_probe PROPERTIES
+    C_STANDARD 11 C_STANDARD_REQUIRED YES C_EXTENSIONS NO)
+  target_include_directories(deep_id_v2_vector_probe PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+  target_compile_definitions(deep_id_v2_vector_probe PRIVATE DEEP_MLDSA_USE_SHARED=1)
+  target_link_libraries(deep_id_v2_vector_probe PRIVATE deep_mldsa)
+  if(MSVC)
+    set_property(TARGET deep_id_v2_vector_probe PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded")
+    target_compile_options(deep_id_v2_vector_probe PRIVATE /W4 /WX /sdl /GS /guard:cf)
+  else()
+    target_compile_options(deep_id_v2_vector_probe PRIVATE -Wall -Wextra -Wpedantic -Werror)
+  endif()
+
   add_executable(deep_mldsa_upstream_kat tests/upstream_mldsa65_kat.c)
   set_target_properties(deep_mldsa_upstream_kat PROPERTIES
     C_STANDARD 11 C_STANDARD_REQUIRED YES C_EXTENSIONS NO)

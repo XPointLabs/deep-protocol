@@ -1,0 +1,74 @@
+{
+  "schemaVersion": "1",
+  "registryId": "deep-id-v2-clean-break",
+  "decision": "DR-0006",
+  "lifecycle": "TARGET_UNFROZEN_DEPENDENT_CLOSURES",
+  "releaseEncode": false,
+  "suite": {
+    "namespace": "Deep application root identity",
+    "id": "0x0301",
+    "name": "DeepRootHybridEd25519MlDsa65V2",
+    "requiredAlgorithms": ["Ed25519", "ML-DSA-65"]
+  },
+  "canonicalHeader": {
+    "bytes": 12,
+    "version": 2,
+    "suite": "0x0301",
+    "reserved": 0,
+    "tagHeadersBytes": 8,
+    "integerEncoding": "unsigned big-endian",
+    "maximumRecordBytes": 65535
+  },
+  "records": {
+    "DID2": {
+      "totalBytes": 2036,
+      "fields": [
+        { "tag": 1, "name": "rootEd25519PublicKey", "bytes": 32 },
+        { "tag": 2, "name": "rootMlDsa65PublicKey", "bytes": 1952 },
+        { "tag": 3, "name": "resolverReadCapability", "bytes": 16 }
+      ],
+      "hashDomain": "Deep/Application/V2/record-hash/DID2"
+    },
+    "DAB2": {
+      "totalBytes": 3711,
+      "unsignedProjectionBytes": 250,
+      "unsignedProjectionTags": [1, 2, 3, 4, 5, 6, 7],
+      "artifactType": "0x1002",
+      "fields": [
+        { "tag": 1, "name": "exactDid2Hash", "bytes": 32 },
+        { "tag": 2, "name": "identityRealmId", "bytes": 32 },
+        { "tag": 3, "name": "bindingGeneration", "bytes": 8 },
+        { "tag": 4, "name": "predecessorDab2Hash", "bytes": 32 },
+        { "tag": 5, "name": "deepAccountId", "bytes": 32 },
+        { "tag": 6, "name": "accountGeneration", "bytes": 8 },
+        { "tag": 7, "name": "exactDpa1ArtifactReference", "bytes": 38 },
+        { "tag": 8, "name": "rootEd25519Signature", "bytes": 64 },
+        { "tag": 9, "name": "rootMlDsa65Signature", "bytes": 3309 },
+        { "tag": 10, "name": "accountEd25519Signature", "bytes": 64 }
+      ],
+      "hashDomain": "Deep/Application/V2/record-hash/DAB2",
+      "realmDomain": "Deep/Application/V2/address-binding-realm",
+      "signatureInputs": [
+        "Deep/Application/V2/address-binding/root-ed25519",
+        "Deep/Application/V2/address-binding/root-mldsa65",
+        "Deep/Application/V2/address-binding/account-ed25519"
+      ],
+      "mlDsaContextAscii": "Deep/DAB2/V2/root",
+      "mlDsaInterface": "pure message, caller-randomized; deterministic zero randomness only for public vectors"
+    }
+  },
+  "compactDeepId": {
+    "humanReadablePart": "deep",
+    "encoding": "lowercase Bech32m",
+    "payloadBytes": 49,
+    "textCharacters": 90,
+    "payload": "0x02 || exactDID2RecordHash32 || resolverReadCapability16",
+    "mustFetchAndVerifyExactDid2BeforeTrust": true
+  },
+  "retiredReject": ["DID1", "DAB1", "artifactType:0x1001"],
+  "dependentReFreezeRequired": [
+    "DCA1", "DCB1", "DCR1", "DPH2", "DAO1", "ADP1",
+    "contact locator", "contact safety number", "QR", "client database"
+  ],
+  "transcriptVectors": "deep-id-v2.vectors.json"
+}
