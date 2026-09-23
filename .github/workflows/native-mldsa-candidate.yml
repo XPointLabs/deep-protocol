@@ -60,11 +60,11 @@ jobs:
           $probe = Join-Path $candidateDir $probeName
           python eng/Test-DeepIdV2Transcript.py --probe $probe
       - name: Pinned NIST ACVP vectors through Deep ABI
-        if: runner.os == 'Linux'
-        shell: bash
-        run: >-
-          python3 eng/Test-DeepMlDsaAcvp.py
-          --library "$RUNNER_TEMP/deep-mldsa-build/libdeep_mldsa.so"
+        shell: pwsh
+        run: |
+          $libraryName = if ($IsWindows) { 'deep_mldsa.dll' } else { 'libdeep_mldsa.so' }
+          $candidateDir = if ($IsWindows) { '${{ runner.temp }}/deep-mldsa-build/Release' } else { '${{ runner.temp }}/deep-mldsa-build' }
+          python eng/Test-DeepMlDsaAcvp.py --library (Join-Path $candidateDir $libraryName)
       - name: AddressSanitizer and UBSan native ABI tests
         if: runner.os == 'Linux'
         shell: bash
