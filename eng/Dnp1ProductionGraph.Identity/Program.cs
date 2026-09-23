@@ -602,7 +602,10 @@ internal static class GraphPolicy
                 "Deep.Protocol|12256|FD4AB5EE19D61569028022E8E9420299696746C20EF57E6ED116B02D11500EDB",
                 // Candidate DID2-only genesis admission verifier; wire cutover remains open.
                 "Deep.Protocol|12276|593ED8EB4E1994CBA7711F29CCABCAFC12F9B5B8EF41E86B3A9F8D523E46AB08",
-                "Deep.Protocol|12276|D7B698B588C5EB4E449742EDBFD248DAFD42635CF26CF4BDACD0498AD347BA4C"
+                "Deep.Protocol|12276|D7B698B588C5EB4E449742EDBFD248DAFD42635CF26CF4BDACD0498AD347BA4C",
+                // Candidate DGA1/DGR1 V2 bounded wire; service cutover remains open.
+                "Deep.Protocol|12300|D05D050E2AAA3558AEF7EC2751950397AFEAB4E5E5678F13C72AC88745AD60E1",
+                "Deep.Protocol|12300|2DAFF28F9A5C9EE557B8E61D961EAEF028B1BEB3F2CD4B4F81F7DE814FAA3803"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [
