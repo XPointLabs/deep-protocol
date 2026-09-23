@@ -1,10 +1,70 @@
 using Deep.Protocol.AccountDirectoryV1;
 using Deep.Protocol.ApplicationCore;
+using Deep.Protocol.MessagingCrypto;
+using Deep.Protocol.Tests.Identity;
+using System.Runtime.InteropServices;
 
 namespace Deep.Protocol.Tests.AccountDirectoryV1;
 
 public sealed partial class AccountDirectoryFreshnessVerificationTests
 {
+    [Fact]
+    public async Task Did2Verifier_RealPqGenesisClosesSignedCurrentProof()
+    {
+        if (!OperatingSystem.IsWindows() ||
+            RuntimeInformation.ProcessArchitecture is not
+                (Architecture.X64 or Architecture.Arm64))
+            return;
+
+        var (admission, checkpoint) = await
+            Dnp1IdentityAuthoringV1Tests.CreateRealDid2DirectoryGenesisAsync();
+        var authority = AuthorityFixture.Create(
+            networkOverride: checkpoint.Checkpoint.NetworkId.ToArray(),
+            timeBase: 1_900_000_000);
+        var initial = authority.Head(0, new byte[32], 0,
+            AccountDirectoryRfc6962.ComputeEmptyTreeHash(),
+            DeepIdV2DirectorySparseMap.EmptyMapRoot.ToArray(),
+            minimumReader: 2);
+        var initialLkg = new AccountDirectoryProtectedLkg(
+            AccountDirectoryAdh1Codec.Encode(initial));
+        var leaf = checkpoint.Checkpoint.DirectoryLeafKey.ToArray();
+        var map = new Dictionary<string, byte[]>(StringComparer.Ordinal)
+        {
+            [Convert.ToHexString(leaf)] =
+                checkpoint.Checkpoint.ArtifactReference.ToArray()
+        };
+        var mapRoot = DeepIdV2DirectorySparseMap.ComputeFullMapRoot(map);
+        var transition = DeepIdV2DirectoryTransitionCodec.Author(0, leaf,
+            new byte[38], checkpoint.Checkpoint.ArtifactReference.Span,
+            DeepIdV2DirectorySparseMap.EmptyMapRoot.Span, mapRoot);
+        ReadOnlyMemory<byte>[] journal = [transition.CanonicalBytes];
+        var head = authority.Head(1, initialLkg.CoreHash.ToArray(), 1,
+            DeepIdV2DirectoryJournal.ComputeAppendRoot(journal), mapRoot,
+            minimumReader: 2);
+        var exactHead = AccountDirectoryAdh1Codec.Encode(head);
+        var nonce = Bytes(32, 0x31);
+        var dtt = authority.Dtt(head, nonce, observed: 1_900_000_300);
+        var material = DeepIdV2DirectoryProofMaterialAuthor.Create(
+            new AccountDirectoryProtectedLkg(exactHead), journal,
+            [checkpoint], leaf, initialLkg);
+        var exactAdp = DeepIdV2Adp1Codec.Author(material,
+            AccountDirectoryCrypto.ComputeDtt1CoreHash(dtt)).CanonicalBytes;
+        using var pq = DeepMlDsa65NativeProvider.LoadCandidateForCurrentProcess();
+
+        var verified = DeepIdV2DirectoryCurrentProofVerifier.VerifyGenesis(
+            authority.Verified, exactHead,
+            AccountDirectoryDtt1Codec.Encode(dtt), exactAdp, nonce, leaf,
+            Window(), initialLkg, 1, 2, pq);
+
+        Assert.Equal(AccountDirectoryAdp1ResultKind.CurrentValue,
+            verified.ResultKind);
+        Assert.Equal(checkpoint.Checkpoint.ArtifactHash.ToArray(),
+            verified.CurrentCheckpoint!.Checkpoint.ArtifactHash.ToArray());
+        Assert.Equal(exactHead, verified.NextProtectedLkg.ExactAdh1.ToArray());
+        Assert.Equal(admission.ExactDab2.ToArray(),
+            DeepIdV2Adp1Codec.Decode(exactAdp.Span).ExactDab2.ToArray());
+    }
+
     [Fact]
     public void Did2Verifier_AcceptsExactNonceBoundEmptyMapAndIssuesOnlyV2Lkg()
     {

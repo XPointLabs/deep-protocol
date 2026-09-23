@@ -602,19 +602,22 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
     private sealed class AuthorityFixture
     {
         private readonly KeyPair root;
+        private readonly ulong timeBase;
 
         private AuthorityFixture(
             byte[] network,
             KeyPair root,
             Witness[] witnesses,
             byte[] exactXna1,
-            VerifiedXPointNetworkAuthority verified)
+            VerifiedXPointNetworkAuthority verified,
+            ulong timeBase)
         {
             Network = network;
             this.root = root;
             Witnesses = witnesses;
             ExactXna1 = exactXna1;
             Verified = verified;
+            this.timeBase = timeBase;
         }
 
         internal byte[] Network { get; }
@@ -622,21 +625,24 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
         internal byte[] ExactXna1 { get; }
         internal VerifiedXPointNetworkAuthority Verified { get; }
 
-        internal static AuthorityFixture Create(byte networkMarker = 0x11, byte seedOffset = 0)
+        internal static AuthorityFixture Create(byte networkMarker = 0x11,
+            byte seedOffset = 0, byte[]? networkOverride = null,
+            ulong timeBase = 1_700_000_000)
         {
-            var network = Bytes(16, networkMarker);
+            var network = networkOverride?.ToArray() ?? Bytes(16, networkMarker);
             var root = PublicKeyAuth.GenerateKeyPair(Bytes(32, checked((byte)(0x20 + seedOffset))));
             var witnesses = Enumerable.Range(0, 3).Select(index => new Witness(
                 Bytes(32, checked((byte)(0x40 + seedOffset + index))),
                 PublicKeyAuth.GenerateKeyPair(Bytes(32, checked((byte)(0x50 + seedOffset + index)))),
                 Bytes(32, checked((byte)(0x60 + seedOffset + index))))).ToArray();
-            var dts = Dts(network, root);
+            var dts = Dts(network, root, timeBase);
             var policyHash = AccountDirectoryCrypto.ComputeDts1PolicyHash(AccountDirectoryDts1Codec.Decode(dts));
-            var xna = Xna(network, root, witnesses, policyHash);
+            var xna = Xna(network, root, witnesses, policyHash, timeBase);
             var xnaRecord = XPointNetworkCodec.Parse<Xna1Record>(xna);
             var pin = new XPointNetworkGenesisPin(network, xnaRecord.CoreHash.Span);
             var verified = XPointNetworkAuthorityVerifier.Verify(pin, [xna], [dts]);
-            return new AuthorityFixture(network, root, witnesses, xna, verified);
+            return new AuthorityFixture(network, root, witnesses, xna,
+                verified, timeBase);
         }
 
         internal AccountDirectoryAdh1 Head(
@@ -658,7 +664,7 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
                 Network, generation, predecessor, treeSize, appendRoot, mapRoot,
                 authorityReference ?? Verified.AuthorityCoreReference.ToArray(),
                 witnessPolicy ?? Verified.DirectoryWitnessPolicyHash.ToArray(),
-                1_700_000_000, 1_700_010_000, minimumReader, placeholders);
+                timeBase, checked(timeBase + 10_000), minimumReader, placeholders);
             var signing = AccountDirectoryCrypto.ComputeAdh1SigningInput(unsigned);
             var receipts = selected.Select(signer => new AccountDirectoryAdh1WitnessEntry(
                 signer.Id, PublicKeyAuth.SignDetached(signing, signer.PrivateKey))).ToArray();
@@ -666,38 +672,39 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
                 Network, generation, predecessor, treeSize, appendRoot, mapRoot,
                 authorityReference ?? Verified.AuthorityCoreReference.ToArray(),
                 witnessPolicy ?? Verified.DirectoryWitnessPolicyHash.ToArray(),
-                1_700_000_000, 1_700_010_000, minimumReader, receipts);
+                timeBase, checked(timeBase + 10_000), minimumReader, receipts);
         }
 
         internal AccountDirectoryDtt1 Dtt(
             AccountDirectoryAdh1 head,
             byte[] nonce,
             IReadOnlyList<WitnessSigner>? signers = null,
-            ulong observed = 1_700_000_200,
+            ulong? observed = null,
             byte[]? adhHash = null,
             byte[]? epochId = null)
         {
+            var observation = observed ?? checked(timeBase + 200);
             var selected = (signers ?? Witnesses.Take(2).Select(WitnessSigner.Valid).ToArray())
                 .OrderBy(static signer => signer.Id, ByteArrayComparer.Instance).ToArray();
             var placeholders = selected.Select((signer, index) => new AccountDirectoryDtt1WitnessReceipt(
                 signer.Id, Bytes(64, checked((byte)(0x80 + index))))).ToArray();
             var headHash = adhHash ?? AccountDirectoryCrypto.ComputeAdh1CoreHash(head);
-            var epochObserved = observed < Verified.Dts1NotBefore || observed > Verified.Dts1ExpiresAt
+            var epochObserved = observation < Verified.Dts1NotBefore || observation > Verified.Dts1ExpiresAt
                 ? Verified.Dts1NotBefore + 100
-                : observed;
+                : observation;
             var issuanceEpoch = AccountDirectoryDtt1IssuanceEpoch.Derive(Verified, epochObserved, 5);
             var selectedEpochId = epochId ?? issuanceEpoch.Id.ToArray();
             var unsigned = new AccountDirectoryDtt1(
-                Network, nonce, observed, 5, headHash, head.LogGeneration, Bytes(32, 0x90), 1,
+                Network, nonce, observation, 5, headHash, head.LogGeneration, Bytes(32, 0x90), 1,
                 Verified.AuthorityCoreReference.Span, Verified.DirectoryWitnessPolicyHash.Span,
-                observed, checked(observed + 60), selectedEpochId, placeholders);
+                observation, checked(observation + 60), selectedEpochId, placeholders);
             var signing = AccountDirectoryCrypto.ComputeDtt1SigningInput(unsigned);
             var receipts = selected.Select(signer => new AccountDirectoryDtt1WitnessReceipt(
                 signer.Id, PublicKeyAuth.SignDetached(signing, signer.PrivateKey))).ToArray();
             return new AccountDirectoryDtt1(
-                Network, nonce, observed, 5, headHash, head.LogGeneration, Bytes(32, 0x90), 1,
+                Network, nonce, observation, 5, headHash, head.LogGeneration, Bytes(32, 0x90), 1,
                 Verified.AuthorityCoreReference.Span, Verified.DirectoryWitnessPolicyHash.Span,
-                observed, checked(observed + 60), selectedEpochId, receipts);
+                observation, checked(observation + 60), selectedEpochId, receipts);
         }
 
         internal byte[] CurrentXnv()
@@ -924,7 +931,7 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
                 [new AccountDirectoryAdf1RootReceipt(rootId, signature)]);
         }
 
-        private static byte[] Dts(byte[] network, KeyPair root)
+        private static byte[] Dts(byte[] network, KeyPair root, ulong timeBase)
         {
             var sources = new[]
             {
@@ -937,16 +944,17 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
             var placeholder = new[] { new AccountDirectoryDts1RootReceipt(rootId, Bytes(64, 0x21)) };
             var unsigned = new AccountDirectoryDts1(
                 network, 0, new byte[32], sources, 2, 2, 30, 5,
-                1_699_000_000, 1_701_000_000, 1, 0, placeholder);
+                checked(timeBase - 1_000_000), checked(timeBase + 1_000_000), 1, 0, placeholder);
             var signature = PublicKeyAuth.SignDetached(
                 AccountDirectoryCrypto.ComputeDts1SigningInput(unsigned), root.PrivateKey);
             return AccountDirectoryDts1Codec.Encode(new AccountDirectoryDts1(
                 network, 0, new byte[32], sources, 2, 2, 30, 5,
-                1_699_000_000, 1_701_000_000, 1, 0,
+                checked(timeBase - 1_000_000), checked(timeBase + 1_000_000), 1, 0,
                 [new AccountDirectoryDts1RootReceipt(rootId, signature)]));
         }
 
-        private static byte[] Xna(byte[] network, KeyPair root, Witness[] witnesses, byte[] policyHash)
+        private static byte[] Xna(byte[] network, KeyPair root, Witness[] witnesses,
+            byte[] policyHash, ulong timeBase)
         {
             ReadOnlyMemory<byte>[] fields = new ReadOnlyMemory<byte>[20];
             fields[0] = network; fields[1] = U64(0); fields[2] = new byte[32]; fields[3] = new byte[] { 1 };
@@ -955,8 +963,8 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
             fields[9] = Join(witnesses.Select(witness => Join(
                 witness.Id, U64(0), witness.Key.PublicKey, witness.FailureDomain)).ToArray());
             fields[10] = new byte[] { 2 }; fields[11] = Reference("DTS1", policyHash); fields[12] = policyHash;
-            fields[13] = U32(30); fields[14] = U64(1); fields[15] = U64(1_699_000_000);
-            fields[16] = U64(1_699_000_000); fields[17] = U64(1_710_000_000); fields[18] = new byte[] { 1 };
+            fields[13] = U32(30); fields[14] = U64(1); fields[15] = U64(checked(timeBase - 1_000_000));
+            fields[16] = U64(checked(timeBase - 1_000_000)); fields[17] = U64(checked(timeBase + 10_000_000)); fields[18] = new byte[] { 1 };
             fields[19] = Join(Bytes(32, 0x20), Bytes(64, 0x22));
             var unsigned = XPointNetworkCodec.Parse<Xna1Record>(XPointNetworkCodec.Write(XPointNetworkRegistry.Xna1, fields));
             var signature = PublicKeyAuth.SignDetached(XPointNetworkCrypto.ComputeSigningInput(unsigned), root.PrivateKey);
