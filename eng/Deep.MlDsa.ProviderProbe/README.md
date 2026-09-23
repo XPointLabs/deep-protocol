@@ -36,5 +36,15 @@ The Windows arm64 managed result and Linux/ARM64 native result both yielded
 `d666806e11cee19a7c989f7445f90dd419cf4d2d51db8c0fdb4c0f0a542238c9`.
 The native source at the pinned commit also passed its upstream `run_func_65`
 and `run_kat_65` (`META.yml ML-DSA-65 kat-sha256: OK`) inside Linux/ARM64
-Docker. This is cross-provider keygen evidence only; physical Android and
-Windows native-provider gates remain open.
+Docker. Physical Android native-provider checks are recorded in
+`native/Deep.MlDsa/evidence/android-api31-arm64.v1.json`; Windows native-provider
+gates remain open.
+
+`native_signature_probe.c` drives the Deep-owned C ABI with the same public
+`00..1f` seed, the message `Deep/PQRoot/signature-differential/v1`, empty FIPS
+204 context and all-zero test randomness. Its signature SHA-256 on physical
+Android arm64 matches the deterministic Bouncy Castle 2.7.0 signature on
+Windows arm64:
+`e8a6098e794cff6a62f2c3bceb0f2d4898d3630300f34264770e2845d321683a`.
+This fixture is **test-only**: real signing must supply fresh CSPRNG randomness.
+The cross-provider result proves this one transcript, not all FIPS 204 cases.

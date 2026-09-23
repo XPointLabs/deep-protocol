@@ -9,6 +9,8 @@ using Org.BouncyCastle.Crypto.Signers;
 // Test-only provider feasibility. Never persist or print seed/private-key bytes.
 const string ExpectedTestVectorPublicKeySha256 =
     "d666806e11cee19a7c989f7445f90dd419cf4d2d51db8c0fdb4c0f0a542238c9";
+const string ExpectedTestVectorSignatureSha256 =
+    "e8a6098e794cff6a62f2c3bceb0f2d4898d3630300f34264770e2845d321683a";
 var parameters = MLDsaParameters.ml_dsa_65;
 var seed = RandomNumberGenerator.GetBytes(32);
 var message = Encoding.ASCII.GetBytes("Deep/PQRoot/provider-probe/v1");
@@ -17,6 +19,8 @@ byte[]? restoredPublicKeyBytes = null;
 byte[]? signature = null;
 byte[]? testVectorSeed = null;
 byte[]? testVectorPublicKey = null;
+byte[]? testVectorMessage = null;
+byte[]? testVectorSignature = null;
 try
 {
     var privateKey = MLDsaPrivateKeyParameters.FromSeed(parameters, seed);
@@ -70,8 +74,18 @@ try
         .ToLowerInvariant();
     var testVectorMatched = StringComparer.Ordinal.Equals(
         testVectorPublicKeySha256, ExpectedTestVectorPublicKeySha256);
+    testVectorMessage = Encoding.ASCII.GetBytes("Deep/PQRoot/signature-differential/v1");
+    var testVectorSigner = new MLDsaSigner(parameters, deterministic: true);
+    testVectorSigner.Init(true, MLDsaPrivateKeyParameters.FromSeed(parameters, testVectorSeed));
+    testVectorSigner.BlockUpdate(testVectorMessage, 0, testVectorMessage.Length);
+    testVectorSignature = testVectorSigner.GenerateSignature();
+    var testVectorSignatureSha256 = Convert.ToHexString(SHA256.HashData(testVectorSignature))
+        .ToLowerInvariant();
+    var testVectorSignatureMatched = StringComparer.Ordinal.Equals(
+        testVectorSignatureSha256, ExpectedTestVectorSignatureSha256);
     var success = deterministicRecovery && signatureVerified &&
-        tamperedMessageRejected && substitutedKeyRejected && testVectorMatched;
+        tamperedMessageRejected && substitutedKeyRejected &&
+        testVectorMatched && testVectorSignatureMatched;
     Console.WriteLine(JsonSerializer.Serialize(new
     {
         schemaVersion = "1",
@@ -91,6 +105,8 @@ try
         privateKeyOwnedByteArrayFields = secretArrays,
         testVectorPublicKeySha256,
         testVectorMatched,
+        testVectorSignatureSha256,
+        testVectorSignatureMatched,
     }));
     return success ? 0 : 1;
 }
@@ -103,4 +119,6 @@ finally
     if (signature is not null) CryptographicOperations.ZeroMemory(signature);
     if (testVectorSeed is not null) CryptographicOperations.ZeroMemory(testVectorSeed);
     if (testVectorPublicKey is not null) CryptographicOperations.ZeroMemory(testVectorPublicKey);
+    if (testVectorMessage is not null) CryptographicOperations.ZeroMemory(testVectorMessage);
+    if (testVectorSignature is not null) CryptographicOperations.ZeroMemory(testVectorSignature);
 }

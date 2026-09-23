@@ -13,6 +13,7 @@
   "sharedLibraryExportCount": 8,
   "sharedLibraryExactDeepAbiExports": true,
   "sharedLibraryPhysicalLoadAndTests": "passed",
+  "independentManagedSignatureSha256Matched": "e8a6098e794cff6a62f2c3bceb0f2d4898d3630300f34264770e2845d321683a",
   "result": "passed",
   "checks": [
     "seed-to-public-key-repeatability",
@@ -28,7 +29,7 @@
   "openGates": [
     "Windows x64 and ARM64 native ABI tests",
     "Android .NET/MAUI release-asset load and AOT binding",
-    "full FIPS 204 KAT and independent signing differential",
+    "full FIPS 204 KAT and extended signing differential",
     "native secret-lifetime and side-channel review",
     "reproducible approved assets and SBOM",
     "DR-0006 identity wire and consumer freeze"
