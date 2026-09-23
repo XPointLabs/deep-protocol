@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "1",
+  "date": "2026-09-23",
+  "status": "candidate-only",
+  "host": "Windows ARM64",
+  "target": "Windows x64 under OS emulation",
+  "compiler": "MSVC 19.44.35227.0",
+  "sdk": "Windows SDK 10.0.26100.0",
+  "configuration": "Release; portable C ML-DSA-65; static MSVC runtime",
+  "sourcePin": "834a90d5e846ffa1e1611bd24e160bb2e9b86d35",
+  "candidateDllSha256": "7e353ba3edf34ebe714fb083765d0ff5dac6147c80d395f4c3c6cba2bc4c9336",
+  "ctest": {
+    "passed": 2,
+    "failed": 0,
+    "cases": [
+      "deep_mldsa_v1_native",
+      "deep_mldsa_65_upstream_kat"
+    ],
+    "upstreamKatSha256": "2ff0ddcd0dc08b746aa04853d6f84c82c6c8ac38783c9061aed78e29c1698ae5"
+  },
+  "acvp": "not-run: local Python process is ARM64 and cannot load an x64 DLL",
+  "limitations": [
+    "x64 execution was emulated, not on a physical x64 runner",
+    "no Windows ARM64 target compiler was available locally",
+    "candidate DLL was not copied into a production package or client"
+  ]
+}

@@ -54,3 +54,11 @@ uninstalled. It also passed public-key/signature differential fixtures,
 verification, tamper rejection and native buffer clearing. See
 `evidence/android-api31-arm64.v1.json`. This does **not** approve an asset
 for the production client or establish Windows parity.
+
+On 2026-09-23 the portable-C candidate also built with MSVC 19.44 for Windows
+x64 on a Windows ARM64 host and passed both CTest cases under OS emulation,
+including the upstream KAT. See `evidence/windows-x64-emulated.v1.json`.
+This is narrower than a physical Windows x64/arm64 asset gate. The pinned
+ACVP script could not run locally against the x64 DLL because the available
+Python process is ARM64. CI on native x64/arm64 runners, exact release assets
+and client packaging remain open.
