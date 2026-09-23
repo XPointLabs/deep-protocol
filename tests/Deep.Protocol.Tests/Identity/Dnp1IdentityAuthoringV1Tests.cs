@@ -672,6 +672,12 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
         Assert.Equal(DeepIdV2AccountDirectoryCodec.ComputeDirectoryLeafKey(
                 Network, binding.Head.DeepId),
             checkpoint.Checkpoint.DirectoryLeafKey.ToArray());
+        var lookupCapability = DeepIdV2AccountDirectoryLookupCodec.Author(
+            binding.Head.DeepId, Network, 0, Enumerable.Repeat((byte)0x5a, 32).ToArray(),
+            1, new byte[38], new byte[32]);
+        Assert.Equal(checkpoint.Checkpoint.DirectoryLeafKey.ToArray(),
+            DeepIdV2AccountDirectoryLookupCodec.VerifyAndGetDirectoryLeafKey(
+                lookupCapability, binding.Head));
         Assert.False(checkpoint.IsDcaAuthorizationRevoked(
             contactAuthorization.Record.AuthorizationId.Span));
         Assert.Throws<AccountDirectoryAdc1VerificationException>(() =>

@@ -179,7 +179,7 @@ public static class DeepIdV2AccountDirectoryCodec
         return Decode(canonical);
     }
 
-    public static byte[] ComputeDirectoryLeafKey(ReadOnlySpan<byte> networkId16,
+    public static byte[] ComputeDirectoryLookupKey(ReadOnlySpan<byte> networkId16,
         ParsedDid2 exactDid2)
     {
         ArgumentNullException.ThrowIfNull(exactDid2);
@@ -189,8 +189,14 @@ public static class DeepIdV2AccountDirectoryCodec
         var preimage = new byte[16 + DeepIdV2Codec.Did2Length];
         networkId16.CopyTo(preimage);
         exactDid2.CanonicalBytes.Span.CopyTo(preimage.AsSpan(16));
-        var lookup = AccountDirectoryCrypto.Sha256Domain(
+        return AccountDirectoryCrypto.Sha256Domain(
             "Deep/AccountDirectory/V2/lookup", preimage);
+    }
+
+    public static byte[] ComputeDirectoryLeafKey(ReadOnlySpan<byte> networkId16,
+        ParsedDid2 exactDid2)
+    {
+        var lookup = ComputeDirectoryLookupKey(networkId16, exactDid2);
         return AccountDirectoryCrypto.Sha256Domain(
             "Deep/AccountDirectory/V2/leaf", lookup);
     }

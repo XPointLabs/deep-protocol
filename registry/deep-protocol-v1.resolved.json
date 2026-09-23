@@ -3,7 +3,7 @@
   "schemaVersion": "1.0.0",
   "registryGeneration": 1,
   "registryId": "deep-protocol-v1-resolved",
-  "sourceRegistrySha256": "087d8883b703187523ef707672506dd8eba3b9f0af02dd132065a09b1af34b14",
+  "sourceRegistrySha256": "4e4967618161c4be1826bd544e1b294f1c1b40b1078ffcca5e0b8d2951e1e9cf",
   "dnp1ApprovedCommit": "a8456987efe031388ca2eb9006886fb78f31e06c",
   "dnp1RegistrySha256": "e036a0b6acb260e05e18ac536a723b0b8561d2ba1d813429304505b0e7a7da7b",
   "records": [
@@ -1276,6 +1276,7 @@
       "contractState": "allocation-only",
       "implementationPaths": [
         "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAdl1Codec.cs",
+        "src/Deep.Protocol/AccountDirectoryV1/DeepIdV2AccountDirectoryLookupCodec.cs",
         "src/Deep.Protocol/XPointNetworkV1/XPointNetworkSemantics.cs"
       ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
@@ -2859,7 +2860,8 @@
       "lifecycle": "TARGET_UNFROZEN",
       "contractState": "allocation-only",
       "implementationPaths": [
-        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAdl1Codec.cs"
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAdl1Codec.cs",
+        "src/Deep.Protocol/AccountDirectoryV1/DeepIdV2AccountDirectoryLookupCodec.cs"
       ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
