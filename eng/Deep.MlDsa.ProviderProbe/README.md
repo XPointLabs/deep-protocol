@@ -22,3 +22,19 @@ object has eight private `byte[]` fields and does not implement `IDisposable`;
 the caller can wipe its own seed but cannot prove that retained copies are
 cleared. The candidate is therefore not suitable for production identity
 creation under the current zeroization gate.
+
+`native_public_key_probe.c` uses the **public test seed** `00..1f` and writes
+only its ML-DSA-65 public key. Compile it against `mldsa-native` v2.0.0 commit
+`834a90d5e846ffa1e1611bd24e160bb2e9b86d35` with
+`MLD_CONFIG_PARAMETER_SET=65` and `MLD_CONFIG_NO_RANDOMIZED_API`, then pipe
+the output through SHA-256. Compare that digest to
+`testVectorPublicKeySha256` in the managed probe JSON. This is a
+cross-provider keygen fixture, not yet the full FIPS 204 or signing
+differential suite.
+
+The Windows arm64 managed result and Linux/ARM64 native result both yielded
+`d666806e11cee19a7c989f7445f90dd419cf4d2d51db8c0fdb4c0f0a542238c9`.
+The native source at the pinned commit also passed its upstream `run_func_65`
+and `run_kat_65` (`META.yml ML-DSA-65 kat-sha256: OK`) inside Linux/ARM64
+Docker. This is cross-provider keygen evidence only; physical Android and
+Windows native-provider gates remain open.

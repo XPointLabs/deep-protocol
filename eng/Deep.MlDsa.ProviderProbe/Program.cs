@@ -7,12 +7,16 @@ using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Crypto.Signers;
 
 // Test-only provider feasibility. Never persist or print seed/private-key bytes.
+const string ExpectedTestVectorPublicKeySha256 =
+    "d666806e11cee19a7c989f7445f90dd419cf4d2d51db8c0fdb4c0f0a542238c9";
 var parameters = MLDsaParameters.ml_dsa_65;
 var seed = RandomNumberGenerator.GetBytes(32);
 var message = Encoding.ASCII.GetBytes("Deep/PQRoot/provider-probe/v1");
 byte[]? publicKeyBytes = null;
 byte[]? restoredPublicKeyBytes = null;
 byte[]? signature = null;
+byte[]? testVectorSeed = null;
+byte[]? testVectorPublicKey = null;
 try
 {
     var privateKey = MLDsaPrivateKeyParameters.FromSeed(parameters, seed);
@@ -58,8 +62,16 @@ try
     var disposable = typeof(IDisposable).IsAssignableFrom(privateKeyType);
     var secretArrays = privateKeyType.GetFields(BindingFlags.Instance | BindingFlags.NonPublic)
         .Count(field => field.FieldType == typeof(byte[]));
+    // Public interoperability fixture only. The seed is fixed and never an account secret.
+    testVectorSeed = Enumerable.Range(0, 32).Select(static value => (byte)value).ToArray();
+    testVectorPublicKey = MLDsaPrivateKeyParameters.FromSeed(parameters, testVectorSeed)
+        .GetPublicKeyEncoded();
+    var testVectorPublicKeySha256 = Convert.ToHexString(SHA256.HashData(testVectorPublicKey))
+        .ToLowerInvariant();
+    var testVectorMatched = StringComparer.Ordinal.Equals(
+        testVectorPublicKeySha256, ExpectedTestVectorPublicKeySha256);
     var success = deterministicRecovery && signatureVerified &&
-        tamperedMessageRejected && substitutedKeyRejected;
+        tamperedMessageRejected && substitutedKeyRejected && testVectorMatched;
     Console.WriteLine(JsonSerializer.Serialize(new
     {
         schemaVersion = "1",
@@ -77,6 +89,8 @@ try
         signatureBytes = signature.Length,
         privateKeyImplementsIDisposable = disposable,
         privateKeyOwnedByteArrayFields = secretArrays,
+        testVectorPublicKeySha256,
+        testVectorMatched,
     }));
     return success ? 0 : 1;
 }
@@ -87,4 +101,6 @@ finally
     if (publicKeyBytes is not null) CryptographicOperations.ZeroMemory(publicKeyBytes);
     if (restoredPublicKeyBytes is not null) CryptographicOperations.ZeroMemory(restoredPublicKeyBytes);
     if (signature is not null) CryptographicOperations.ZeroMemory(signature);
+    if (testVectorSeed is not null) CryptographicOperations.ZeroMemory(testVectorSeed);
+    if (testVectorPublicKey is not null) CryptographicOperations.ZeroMemory(testVectorPublicKey);
 }
