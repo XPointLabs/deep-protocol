@@ -1494,16 +1494,17 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
         GenesisAccountAuthoringResult account,
         OwnedGenesisDeviceSecrets device,
         DurableState? state = null,
-        byte randomOffset = 0)
+        byte randomOffset = 0,
+        ulong issuedAtUnixSeconds = 1_900_000_100)
     {
         var result = await Dnp1IdentityAuthoringV1.IssueGenesisDeviceAsync(
             recovery,
             account,
             device,
             new DurablePersistence(state ?? new DurableState()),
-            1_900_000_100,
-            1_900_086_500,
-            1_900_172_900,
+            issuedAtUnixSeconds,
+            checked(issuedAtUnixSeconds + 86_400),
+            checked(issuedAtUnixSeconds + 172_800),
             new FillRandom(
                 checked((byte)(0xb1 + randomOffset)),
                 checked((byte)(0xb2 + randomOffset)),

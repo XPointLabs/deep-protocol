@@ -8,23 +8,52 @@ namespace Deep.Protocol.Tests.Identity;
 
 public sealed partial class Dnp1IdentityAuthoringV1Tests
 {
-    internal static async Task<(DeepIdV2GenesisAdmissionRequest Admission,
-        VerifiedAdc1V2 Checkpoint, VerifiedDab2 Binding)> CreateRealDid2DirectoryGenesisAsync()
+    [Fact]
+    public async Task RealDid2AlternateNetworkEpochClosesThroughAdmissionWire()
     {
+        if (!((OperatingSystem.IsWindows() &&
+                System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture is
+                    (System.Runtime.InteropServices.Architecture.X64 or
+                     System.Runtime.InteropServices.Architecture.Arm64)) ||
+              (OperatingSystem.IsLinux() &&
+                System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture ==
+                    System.Runtime.InteropServices.Architecture.X64)))
+            return;
+        var (admission, checkpoint, _) = await CreateRealDid2DirectoryGenesisAsync(
+            Enumerable.Repeat((byte)0x11, 16).ToArray(), 1_700_000_000);
+        var request = new DeepIdV2GenesisAdmissionWireRequest(
+            Enumerable.Repeat((byte)0x91, 32).ToArray(), admission);
+        var exact = DeepIdV2GenesisAdmissionWireCodec.EncodeRequest(request);
+        Assert.Equal(8482, exact.Length);
+        var decoded = DeepIdV2GenesisAdmissionWireCodec.DecodeRequest(exact);
+        using var verifier = DeepMlDsa65CandidateVerifierFactory
+            .OpenForCurrentProcess();
+        var admitted = DeepIdV2GenesisAdmissionVerifier.Verify(
+            decoded.Admission, 1_700_000_405, 1, 2, verifier);
+        Assert.Equal(checkpoint.Checkpoint.ArtifactHash.ToArray(),
+            admitted.Checkpoint.ArtifactHash.ToArray());
+    }
+
+    internal static async Task<(DeepIdV2GenesisAdmissionRequest Admission,
+        VerifiedAdc1V2 Checkpoint, VerifiedDab2 Binding)> CreateRealDid2DirectoryGenesisAsync(
+            byte[]? networkOverride = null, ulong epoch = 1_900_000_000)
+    {
+        var network = networkOverride ?? Network;
         using var phrase = DeepRecoveryV1.VerifyCanonicalUtf8(
             Encoding.ASCII.GetBytes(Mnemonic));
         using var recovery = DeepRecoveryV1.DeriveAccountCapabilities(
-            phrase, Network, 1);
+            phrase, network, 1);
         var account = Dnp1IdentityAuthoringV1.AuthorGenesisAccount(
-            recovery, 1_900_000_000, 1, new FillRandom(0xa1));
+            recovery, epoch, 1, new FillRandom(0xa1));
         using var device = Device();
-        var issued = await IssueDevice(recovery, account, device);
+        var issued = await IssueDevice(recovery, account, device,
+            issuedAtUnixSeconds: checked(epoch + 100));
         var closure = ApplicationCoreVerifier.CreateIdentityClosure(
             issued.Verified.Identity, [issued.Verified]);
         var binding = recovery.AuthorGenesisDab2(phrase, closure, 1);
-        var directory = recovery.AuthorGenesisDmd1(closure, 1_900_000_200);
+        var directory = recovery.AuthorGenesisDmd1(closure, checked(epoch + 200));
         var checkpoint = recovery.AuthorGenesisAdc1V2(binding, directory,
-            1_900_000_300);
+            checked(epoch + 300));
         var admission = new DeepIdV2GenesisAdmissionRequest(
             account.CanonicalDpa1.Span, account.CanonicalDrs1.Span,
             [issued.CanonicalDpd1], binding.Head.DeepId.CanonicalBytes.Span,
