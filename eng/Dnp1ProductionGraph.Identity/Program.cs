@@ -599,7 +599,10 @@ internal static class GraphPolicy
                 "Deep.Protocol|12227|AE02D088E4DE04DC087926CD39BD908A1912B84185C5DAC91D2DA3F1D92D1721",
                 // Candidate V2 witness-private transition and sparse-map primitives.
                 "Deep.Protocol|12256|83499EFF68F9C1788B26875CBD5834498CE164E5DB21B43EF4E65D02F31E1790",
-                "Deep.Protocol|12256|FD4AB5EE19D61569028022E8E9420299696746C20EF57E6ED116B02D11500EDB"
+                "Deep.Protocol|12256|FD4AB5EE19D61569028022E8E9420299696746C20EF57E6ED116B02D11500EDB",
+                // Candidate DID2-only genesis admission verifier; wire cutover remains open.
+                "Deep.Protocol|12276|593ED8EB4E1994CBA7711F29CCABCAFC12F9B5B8EF41E86B3A9F8D523E46AB08",
+                "Deep.Protocol|12276|D7B698B588C5EB4E449742EDBFD248DAFD42635CF26CF4BDACD0498AD347BA4C"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

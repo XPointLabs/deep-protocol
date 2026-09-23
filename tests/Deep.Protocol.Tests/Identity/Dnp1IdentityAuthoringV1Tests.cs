@@ -678,6 +678,58 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
         Assert.Equal(checkpoint.Checkpoint.DirectoryLeafKey.ToArray(),
             DeepIdV2AccountDirectoryLookupCodec.VerifyAndGetDirectoryLeafKey(
                 lookupCapability, binding.Head));
+        var admission = new DeepIdV2GenesisAdmissionRequest(
+            account.CanonicalDpa1.Span, account.CanonicalDrs1.Span,
+            [issued.CanonicalDpd1], binding.Head.DeepId.CanonicalBytes.Span,
+            binding.Head.Record.CanonicalBytes.Span,
+            directory.Head.Record.CanonicalBytes.Span,
+            checkpoint.Checkpoint.CanonicalBytes.Span, []);
+        using (var verifier = DeepMlDsa65NativeProvider.LoadCandidateForCurrentProcess())
+        {
+            var admitted = DeepIdV2GenesisAdmissionVerifier.Verify(admission,
+                1_900_000_300, deploymentProfileId: 1, supportedReader: 2,
+                verifier);
+            Assert.Equal(checkpoint.Checkpoint.ArtifactHash.ToArray(),
+                admitted.Checkpoint.ArtifactHash.ToArray());
+            var substitutedDid = binding.Head.DeepId.CanonicalBytes.ToArray();
+            substitutedDid[52] ^= 1;
+            var wrongDid = new DeepIdV2GenesisAdmissionRequest(
+                account.CanonicalDpa1.Span, account.CanonicalDrs1.Span,
+                [issued.CanonicalDpd1], substitutedDid,
+                binding.Head.Record.CanonicalBytes.Span,
+                directory.Head.Record.CanonicalBytes.Span,
+                checkpoint.Checkpoint.CanonicalBytes.Span, []);
+            Assert.Throws<AccountDirectoryGenesisAdmissionException>(() =>
+                DeepIdV2GenesisAdmissionVerifier.Verify(wrongDid,
+                    1_900_000_300, 1, 2, verifier));
+            var forgedBinding = binding.Head.Record.CanonicalBytes.ToArray();
+            forgedBinding[^1] ^= 1;
+            var wrongBinding = new DeepIdV2GenesisAdmissionRequest(
+                account.CanonicalDpa1.Span, account.CanonicalDrs1.Span,
+                [issued.CanonicalDpd1], binding.Head.DeepId.CanonicalBytes.Span,
+                forgedBinding, directory.Head.Record.CanonicalBytes.Span,
+                checkpoint.Checkpoint.CanonicalBytes.Span, []);
+            Assert.Throws<AccountDirectoryGenesisAdmissionException>(() =>
+                DeepIdV2GenesisAdmissionVerifier.Verify(wrongBinding,
+                    1_900_000_300, 1, 2, verifier));
+            var forgedPqBinding = binding.Head.Record.CanonicalBytes.ToArray();
+            forgedPqBinding[330] ^= 1; // DAB2 tag 9: ML-DSA root signature.
+            var wrongPqBinding = new DeepIdV2GenesisAdmissionRequest(
+                account.CanonicalDpa1.Span, account.CanonicalDrs1.Span,
+                [issued.CanonicalDpd1], binding.Head.DeepId.CanonicalBytes.Span,
+                forgedPqBinding, directory.Head.Record.CanonicalBytes.Span,
+                checkpoint.Checkpoint.CanonicalBytes.Span, []);
+            Assert.Throws<AccountDirectoryGenesisAdmissionException>(() =>
+                DeepIdV2GenesisAdmissionVerifier.Verify(wrongPqBinding,
+                    1_900_000_300, 1, 2, verifier));
+        }
+        Assert.Throws<ArgumentException>(() => new DeepIdV2GenesisAdmissionRequest(
+            account.CanonicalDpa1.Span, account.CanonicalDrs1.Span,
+            [issued.CanonicalDpd1],
+            new byte[76],
+            binding.Head.Record.CanonicalBytes.Span,
+            directory.Head.Record.CanonicalBytes.Span,
+            checkpoint.Checkpoint.CanonicalBytes.Span, []));
         Assert.False(checkpoint.IsDcaAuthorizationRevoked(
             contactAuthorization.Record.AuthorizationId.Span));
         Assert.Throws<AccountDirectoryAdc1VerificationException>(() =>
