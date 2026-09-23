@@ -115,6 +115,55 @@ public static class DeepIdV2DirectorySparseMap
 
     public static ReadOnlyMemory<byte> EmptyMapRoot => Empty[256].ToArray();
 
+    internal static byte[] ComputeFullMapRoot(
+        IReadOnlyDictionary<string, byte[]> currentReferencesByHexLeaf)
+    {
+        var levels = BuildLevels(currentReferencesByHexLeaf);
+        return currentReferencesByHexLeaf.Count == 0
+            ? Empty[256].ToArray()
+            : levels[256].Single().Value.ToArray();
+    }
+
+    internal static (byte[] Bitmap, byte[] Siblings) CreateProof(
+        IReadOnlyDictionary<string, byte[]> currentReferencesByHexLeaf,
+        ReadOnlySpan<byte> queriedLeafKey32)
+    {
+        Require(queriedLeafKey32, 32, nameof(queriedLeafKey32));
+        if (queriedLeafKey32.IndexOfAnyExcept((byte)0) < 0)
+            throw new ArgumentException("Directory V2 query key cannot be zero.",
+                nameof(queriedLeafKey32));
+        var levels = BuildLevels(currentReferencesByHexLeaf);
+        var position = queriedLeafKey32.ToArray();
+        var bitmap = new byte[32];
+        var siblings = new List<byte>();
+        for (var level = 0; level < 256; level++)
+        {
+            ToggleBit(position, 255 - level);
+            var sibling = levels[level].GetValueOrDefault(
+                Convert.ToHexString(position), Empty[level]);
+            ToggleBit(position, 255 - level);
+            if (!CryptographicOperations.FixedTimeEquals(sibling, Empty[level]))
+            {
+                bitmap[level / 8] |= checked((byte)(0x80 >> (level % 8)));
+                siblings.AddRange(sibling);
+            }
+            ClearBit(position, 255 - level);
+        }
+        var query = Convert.ToHexString(queriedLeafKey32);
+        var root = currentReferencesByHexLeaf.TryGetValue(query, out var reference)
+            ? ComputePresentRoot(queriedLeafKey32, reference, bitmap,
+                siblings.ToArray())
+            : ComputeNonMembershipRoot(queriedLeafKey32, bitmap,
+                siblings.ToArray());
+        var expectedRoot = currentReferencesByHexLeaf.Count == 0
+            ? Empty[256]
+            : levels[256].Single().Value;
+        if (!CryptographicOperations.FixedTimeEquals(root, expectedRoot))
+            throw new CryptographicException(
+                "Directory V2 sparse proof does not reconstruct its source map.");
+        return (bitmap, siblings.ToArray());
+    }
+
     public static byte[] ComputeNonMembershipRoot(ReadOnlySpan<byte> leafKey32,
         ReadOnlySpan<byte> bitmap32, ReadOnlySpan<byte> siblings) =>
         Compute(leafKey32, Empty[0], bitmap32, siblings);
@@ -191,6 +240,95 @@ public static class DeepIdV2DirectorySparseMap
         }
         return empty;
     }
+
+    private static Dictionary<string, byte[]>[] BuildLevels(
+        IReadOnlyDictionary<string, byte[]> map)
+    {
+        ArgumentNullException.ThrowIfNull(map);
+        if (map.Count > 1_000_000)
+            throw new ArgumentOutOfRangeException(nameof(map));
+        var levels = new Dictionary<string, byte[]>[257];
+        var leaves = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+        Span<byte> payload = stackalloc byte[70];
+        Span<byte> pair = stackalloc byte[64];
+        foreach (var entry in map)
+        {
+            if (entry.Key.Length != 64)
+                throw new ArgumentException("Directory V2 leaf keys must be canonical hex.",
+                    nameof(map));
+            byte[] key;
+            try { key = Convert.FromHexString(entry.Key); }
+            catch (FormatException exception)
+            { throw new ArgumentException("Directory V2 leaf key is not hex.",
+                nameof(map), exception); }
+            if (!string.Equals(Convert.ToHexString(key), entry.Key,
+                    StringComparison.Ordinal))
+                throw new ArgumentException("Directory V2 leaf key is not canonical hex.",
+                    nameof(map));
+            if (key.AsSpan().IndexOfAnyExcept((byte)0) < 0)
+                throw new ArgumentException("Directory V2 leaf key cannot be zero.",
+                    nameof(map));
+            ValidateReference(entry.Value);
+            key.AsSpan().CopyTo(payload);
+            entry.Value.AsSpan().CopyTo(payload[32..]);
+            leaves.Add(entry.Key, AccountDirectoryCrypto.Sha256Domain(
+                PresentDomain, payload));
+        }
+        levels[0] = leaves;
+        for (var level = 0; level < 256; level++)
+        {
+            var current = levels[level];
+            var next = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+            var consumed = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var entry in current)
+            {
+                if (!consumed.Add(entry.Key)) continue;
+                var position = Convert.FromHexString(entry.Key);
+                ToggleBit(position, 255 - level);
+                var siblingKey = Convert.ToHexString(position);
+                var sibling = current.GetValueOrDefault(siblingKey, Empty[level]);
+                consumed.Add(siblingKey);
+                ToggleBit(position, 255 - level);
+                if (Bit(position, 255 - level))
+                {
+                    sibling.AsSpan().CopyTo(pair);
+                    entry.Value.AsSpan().CopyTo(pair[32..]);
+                }
+                else
+                {
+                    entry.Value.AsSpan().CopyTo(pair);
+                    sibling.AsSpan().CopyTo(pair[32..]);
+                }
+                next.Add(Convert.ToHexString(Cleared(position, 255 - level)),
+                    AccountDirectoryCrypto.Sha256Domain(NodeDomain, pair));
+            }
+            levels[level + 1] = next;
+        }
+        return levels;
+    }
+
+    private static void ValidateReference(byte[]? reference)
+    {
+        if (reference is null)
+            throw new ArgumentException("Directory V2 map reference is null.");
+        DeepIdV2DirectoryTransitionCodec.ValidateAdcReference(reference,
+            allowZero: false);
+    }
+
+    private static byte[] Cleared(byte[] position, int bit)
+    {
+        ClearBit(position, bit);
+        return position;
+    }
+
+    private static bool Bit(ReadOnlySpan<byte> value, int bit) =>
+        (value[bit / 8] & (0x80 >> (bit % 8))) != 0;
+
+    private static void ToggleBit(Span<byte> value, int bit) =>
+        value[bit / 8] ^= checked((byte)(0x80 >> (bit % 8)));
+
+    private static void ClearBit(Span<byte> value, int bit) =>
+        value[bit / 8] &= unchecked((byte)~(0x80 >> (bit % 8)));
 
     private static void Require(ReadOnlySpan<byte> value, int length, string name)
     {

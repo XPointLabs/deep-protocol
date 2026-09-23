@@ -128,6 +128,58 @@ public sealed class DeepIdV2DirectoryProofPrimitivesTests
                 new byte[32], new byte[32], []));
     }
 
+    [Fact]
+    public void FullMapV2_AuthorsMembershipAndNonMembershipProofsForMultipleLeaves()
+    {
+        var first = Bytes(32, 0x10);
+        var second = first.ToArray();
+        second[^1] ^= 1; // Adjacent leaves share the same parent at level zero.
+        var absent = Bytes(32, 0x30);
+        var firstReference = AdcReference(2, Bytes(32, 0x40));
+        var secondReference = AdcReference(2, Bytes(32, 0x50));
+        var map = new Dictionary<string, byte[]>(StringComparer.Ordinal)
+        {
+            [Convert.ToHexString(first)] = firstReference,
+            [Convert.ToHexString(second)] = secondReference
+        };
+        var root = DeepIdV2DirectorySparseMap.ComputeFullMapRoot(map);
+        foreach (var (key, reference) in new[]
+                 { (first, firstReference), (second, secondReference) })
+        {
+            var proof = DeepIdV2DirectorySparseMap.CreateProof(map, key);
+            Assert.Equal(root, DeepIdV2DirectorySparseMap.ComputePresentRoot(
+                key, reference, proof.Bitmap, proof.Siblings));
+        }
+        var missing = DeepIdV2DirectorySparseMap.CreateProof(map, absent);
+        Assert.Equal(root, DeepIdV2DirectorySparseMap.ComputeNonMembershipRoot(
+            absent, missing.Bitmap, missing.Siblings));
+        var changed = missing.Siblings.ToArray();
+        changed[0] ^= 1;
+        Assert.NotEqual(root, DeepIdV2DirectorySparseMap.ComputeNonMembershipRoot(
+            absent, missing.Bitmap, changed));
+        var empty = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+        Assert.Equal(DeepIdV2DirectorySparseMap.EmptyMapRoot.ToArray(),
+            DeepIdV2DirectorySparseMap.ComputeFullMapRoot(empty));
+        var emptyProof = DeepIdV2DirectorySparseMap.CreateProof(empty, absent);
+        Assert.All(emptyProof.Bitmap, item => Assert.Equal(0, item));
+        Assert.Empty(emptyProof.Siblings);
+    }
+
+    [Fact]
+    public void FullMapV2_RejectsLegacyReferenceAndNoncanonicalLeaf()
+    {
+        var leaf = Bytes(32, 0x10);
+        Assert.Throws<AccountDirectoryAdp1FormatException>(() =>
+            DeepIdV2DirectorySparseMap.ComputeFullMapRoot(
+                new Dictionary<string, byte[]>
+                { [Convert.ToHexString(leaf)] = AdcReference(1, Bytes(32, 1)) }));
+        Assert.Throws<ArgumentException>(() =>
+            DeepIdV2DirectorySparseMap.CreateProof(
+                new Dictionary<string, byte[]>
+                { [Convert.ToHexString(leaf).ToLowerInvariant()] =
+                    AdcReference(2, Bytes(32, 1)) }, leaf));
+    }
+
     private static byte[][] IndependentEmpty()
     {
         var empty = new byte[257][];
