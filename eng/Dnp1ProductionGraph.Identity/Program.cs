@@ -591,7 +591,9 @@ internal static class GraphPolicy
                 "Deep.Protocol|12143|F57B2CAE817343B7877F63FC73DF2A8DEF6CBB1C13C9930CF67C8CFF5CF7B07F",
                 "Deep.Protocol|12144|5BC6710AAD45D372231A66A69D80F85734AEFEAACE2F72E39258E8DEEC8A5DC2",
                 // Explicit restore of the existing signed genesis, never re-issuance.
-                "Deep.Protocol|12145|899F4F2E692BA657ABC873342AF6A71F89745AB3F9837981AA7CB1345F9A5750"
+                "Deep.Protocol|12145|899F4F2E692BA657ABC873342AF6A71F89745AB3F9837981AA7CB1345F9A5750",
+                // DR-0006 candidate ADC1 V2 exact DID2/DAB2 directory closure.
+                "Deep.Protocol|12202|F0EDF73C3E10951FFD00B416FC399497320E92E6C2C575E42097C703E3C34F69"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

@@ -725,9 +725,12 @@ public sealed class DeepRecoveryAccountCapabilities : IDisposable
     }
 
     /// <summary>
-    /// Candidate clean-break genesis binding. The supplied phrase must recreate
-    /// this exact account authority; V2 root seeds never leave the callback.
-    /// This does not activate the retired DID1/DAB1 consumer graph.
+    /// Candidate one-shot clean-break genesis issuance. The supplied phrase
+    /// must recreate this exact account authority; V2 root seeds never leave
+    /// the callback. On restore, fetch the exact previously issued DAB2 and
+    /// use DeepIdV2Root.RestoreExistingGenesisDab2 instead: hedged ML-DSA
+    /// makes a second genesis issuance a distinct, forked record. This does
+    /// not activate the retired DID1/DAB1 consumer graph.
     /// </summary>
     public Dab2LineageState AuthorGenesisDab2(
         VerifiedDeepRecoveryPhrase phrase,
@@ -966,6 +969,62 @@ public sealed class DeepRecoveryAccountCapabilities : IDisposable
     /// <summary>
     /// Authors and verifies the account-owned generation-zero ADC1 leaf. The
     /// global ADH1 tree and witness receipts remain directory-authority work.
+    /// </summary>
+    public VerifiedAdc1V2 AuthorGenesisAdc1V2(
+        Dab2LineageState binding,
+        Dmd1LineageState directory,
+        ulong issuedAtUnixSeconds,
+        ushort minimumReader = DeepIdV2AccountDirectoryCodec.Version)
+    {
+        ArgumentNullException.ThrowIfNull(binding);
+        ArgumentNullException.ThrowIfNull(directory);
+        if (issuedAtUnixSeconds == 0)
+            throw new ArgumentOutOfRangeException(nameof(issuedAtUnixSeconds));
+        if (minimumReader < DeepIdV2AccountDirectoryCodec.Version)
+            throw new ArgumentOutOfRangeException(nameof(minimumReader));
+
+        lock (sync)
+        {
+            ThrowIfDisposed();
+            EnsureIdentityAuthority(binding.Head.Identity);
+            if (!ReferenceEquals(binding.Head.Identity, directory.Head.Identity))
+                throw new RecordException(RecordError.InvalidTransition,
+                    "Genesis ADC1 V2 requires one exact DAB2/DMD1 identity closure.");
+
+            byte[]? signature = null;
+            try
+            {
+                var account = directory.Head.Identity.Account;
+                var leafKey = DeepIdV2AccountDirectoryCodec.ComputeDirectoryLeafKey(
+                    networkId, binding.Head.DeepId);
+                var revokedHash = DeepIdV2AccountDirectoryCodec
+                    .ComputeRevokedDcaAuthorizationIdsHash([]);
+                var dpaReference = AccountDirectoryCrypto.CreateReference(
+                    ProtocolMagicBytes.DPA1, 1, account.Certificate.CanonicalHash.Span);
+                var drsReference = AccountDirectoryCrypto.CreateReference(
+                    ProtocolMagicBytes.DRS1, 1,
+                    directory.Head.Identity.Revocations.Snapshot.CanonicalHash.Span);
+                ParsedAdc1V2 Build(ReadOnlySpan<byte> signatureValue) =>
+                    DeepIdV2AccountDirectoryCodec.Author(networkId, leafKey,
+                        AccountGeneration, 0, new byte[32], dpaReference,
+                        drsReference, directory.Head.Record.RecordHash.Span,
+                        binding.Head.Record.RecordHash.Span, revokedHash,
+                        issuedAtUnixSeconds, minimumReader, signatureValue);
+                var unsigned = Build(Enumerable.Repeat((byte)1, 64).ToArray());
+                signature = SignBytes(unsigned.SignatureInput.Span,
+                    deviceIssuerSigningSeed);
+                return DeepIdV2AccountDirectoryCodec.Verify(Build(signature),
+                    binding.Head, directory.Head, [], minimumReader);
+            }
+            finally
+            {
+                ZeroOwned(signature);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Pre-cutover DID1/DAB1 directory checkpoint. Not a DID2 compatibility path.
     /// </summary>
     public VerifiedAccountDirectoryCheckpoint AuthorGenesisAdc1(
         Dab1LineageState binding,

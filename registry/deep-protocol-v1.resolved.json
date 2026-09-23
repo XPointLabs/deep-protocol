@@ -3,7 +3,7 @@
   "schemaVersion": "1.0.0",
   "registryGeneration": 1,
   "registryId": "deep-protocol-v1-resolved",
-  "sourceRegistrySha256": "f381c15d764b66ea56231b380bf4e17e37e5f284fb90b83c1e05cdbd18601263",
+  "sourceRegistrySha256": "087d8883b703187523ef707672506dd8eba3b9f0af02dd132065a09b1af34b14",
   "dnp1ApprovedCommit": "a8456987efe031388ca2eb9006886fb78f31e06c",
   "dnp1RegistrySha256": "e036a0b6acb260e05e18ac536a723b0b8561d2ba1d813429304505b0e7a7da7b",
   "records": [
@@ -2787,6 +2787,7 @@
         "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryFreshnessVerification.cs",
         "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryHeadAuthor.cs",
         "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryProofMaterialAuthor.cs",
+        "src/Deep.Protocol/AccountDirectoryV1/DeepIdV2AccountDirectoryCodec.cs",
         "src/Deep.Protocol/GroupV1/GroupCodec.cs",
         "src/Deep.Protocol/GroupV1/GroupTransitionVerifier.cs"
       ],
@@ -3292,6 +3293,7 @@
         "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAdc1Codec.cs",
         "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAdc1Verification.cs",
         "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAdp1Codec.cs",
+        "src/Deep.Protocol/AccountDirectoryV1/DeepIdV2AccountDirectoryCodec.cs",
         "src/Deep.Protocol/ApplicationCore/ApplicationCoreCodec.cs",
         "src/Deep.Protocol/ApplicationCore/DeepIdV2ContactAuthorizationCodec.cs",
         "src/Deep.Protocol/DeepNative/Dnp1RecordDefinitions.cs",
@@ -3532,6 +3534,7 @@
         "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAdc1Codec.cs",
         "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAdc1Verification.cs",
         "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAdp1Codec.cs",
+        "src/Deep.Protocol/AccountDirectoryV1/DeepIdV2AccountDirectoryCodec.cs",
         "src/Deep.Protocol/ApplicationCore/ApplicationCoreCodec.cs",
         "src/Deep.Protocol/ContactV1/BoundedPreKeyInventoryReceipts.cs",
         "src/Deep.Protocol/ContactV1/ContactCodec.cs",

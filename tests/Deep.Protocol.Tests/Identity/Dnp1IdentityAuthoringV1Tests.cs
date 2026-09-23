@@ -663,6 +663,28 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
             contactAuthorization.Record.Dab2Reference.TypeCode);
         Assert.Equal(2, contactAuthorization.Record.CanonicalBytes.Span[5]);
         Assert.Equal(473, contactAuthorization.Record.CanonicalBytes.Length);
+        var checkpoint = recovery.AuthorGenesisAdc1V2(binding, directory,
+            issuedAtUnixSeconds: 1_900_000_300);
+        Assert.Equal(458, checkpoint.Checkpoint.CanonicalBytes.Length);
+        Assert.Equal(2, checkpoint.Checkpoint.CanonicalBytes.Span[5]);
+        Assert.Equal(binding.Head.Record.RecordHash.ToArray(),
+            checkpoint.Checkpoint.ExactDab2Hash.ToArray());
+        Assert.Equal(DeepIdV2AccountDirectoryCodec.ComputeDirectoryLeafKey(
+                Network, binding.Head.DeepId),
+            checkpoint.Checkpoint.DirectoryLeafKey.ToArray());
+        Assert.False(checkpoint.IsDcaAuthorizationRevoked(
+            contactAuthorization.Record.AuthorizationId.Span));
+        Assert.Throws<AccountDirectoryAdc1VerificationException>(() =>
+            DeepIdV2AccountDirectoryCodec.Verify(checkpoint.Checkpoint,
+                binding.Head, directory.Head,
+                [contactAuthorization.Record.AuthorizationId], supportedReader: 2));
+        var oldCheckpoint = checkpoint.Checkpoint.CanonicalBytes.ToArray();
+        oldCheckpoint[5] = 1;
+        Assert.Throws<ApplicationCoreFormatException>(() =>
+            DeepIdV2AccountDirectoryCodec.Decode(oldCheckpoint));
+        Assert.Throws<AccountDirectoryAdc1VerificationException>(() =>
+            DeepIdV2AccountDirectoryCodec.Verify(checkpoint.Checkpoint,
+                binding.Head, directory.Head, [], supportedReader: 1));
 
         using var restoredPhrase = DeepRecoveryV1.VerifyCanonicalUtf8(
             Encoding.ASCII.GetBytes(Mnemonic));
