@@ -103,7 +103,7 @@ public static class DeepIdV2DirectoryProofAuthor
                 AccountDirectoryCrypto.ComputeDtt1CoreHash(dtt));
             var exactAdp = proof.CanonicalBytes.ToArray();
 
-            _ = DeepIdV2DirectoryCurrentProofVerifier.VerifyGenesis(
+            _ = DeepIdV2DirectoryCurrentProofVerifier.VerifyExactLeafForAuthor(
                 authority, head.ExactAdh1, exactDtt, exactAdp,
                 request.Nonce.Span, material.QueriedDirectoryLeafKey.Span,
                 new AccountDirectoryMonotonicRequestWindow(

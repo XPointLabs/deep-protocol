@@ -7,6 +7,48 @@ using Deep.Protocol.XPointNetworkV1;
 namespace Deep.Protocol.AccountDirectoryV1;
 
 /// <summary>
+/// A DID2 lookup leaf bound to an independently verified DAB2 identity and
+/// one exact protected directory floor. ADL1 parsing alone cannot mint it.
+/// </summary>
+public sealed class VerifiedDeepIdV2DirectoryQuery
+{
+    private readonly byte[] networkId;
+    private readonly byte[] leaf;
+    private readonly byte[] minimumAdhHash;
+
+    private VerifiedDeepIdV2DirectoryQuery(ParsedAdl1V2 adl1,
+        ReadOnlySpan<byte> directoryLeafKey)
+    {
+        networkId = adl1.NetworkId.ToArray();
+        leaf = directoryLeafKey.ToArray();
+        MinimumAdhGeneration = adl1.MinimumAdhGeneration;
+        minimumAdhHash = adl1.MinimumAdhHash.ToArray();
+    }
+
+    public ReadOnlyMemory<byte> NetworkId => networkId.ToArray();
+    public ReadOnlyMemory<byte> DirectoryLeafKey => leaf.ToArray();
+    public ulong MinimumAdhGeneration { get; }
+    public ReadOnlyMemory<byte> MinimumAdhHash => minimumAdhHash.ToArray();
+
+    public static VerifiedDeepIdV2DirectoryQuery VerifyBinding(
+        ParsedAdl1V2 adl1, VerifiedDab2 trustedBinding)
+    {
+        ArgumentNullException.ThrowIfNull(adl1);
+        ArgumentNullException.ThrowIfNull(trustedBinding);
+        var accountNetwork = trustedBinding.Identity.Account.Certificate.NetworkId.Span;
+        if (adl1.NetworkId.Length != accountNetwork.Length ||
+            !CryptographicOperations.FixedTimeEquals(adl1.NetworkId.Span,
+                accountNetwork))
+            throw new AccountDirectoryFreshnessVerificationException(
+                "QueryNetworkMismatch",
+                "DID2 ADL1 network differs from the verified account network.");
+        var leaf = DeepIdV2AccountDirectoryLookupCodec
+            .VerifyAndGetDirectoryLeafKey(adl1, trustedBinding);
+        return new VerifiedDeepIdV2DirectoryQuery(adl1, leaf);
+    }
+}
+
+/// <summary>
 /// Non-forgeable, nonce-bound DID2 directory result. The positive closure is
 /// currently limited to exact generation-zero account/binding/checkpoint
 /// admission; successor and forward-checkpoint histories fail closed.
@@ -74,11 +116,45 @@ public static class DeepIdV2DirectoryCurrentProofVerifier
         ReadOnlyMemory<byte> exactDtt1,
         ReadOnlyMemory<byte> exactAdp1V2,
         ReadOnlySpan<byte> callerNonce,
-        ReadOnlySpan<byte> queriedDirectoryLeafKey,
+        VerifiedDeepIdV2DirectoryQuery query,
         AccountDirectoryMonotonicRequestWindow monotonic,
         AccountDirectoryProtectedLkg? protectedLkg,
         ushort deploymentProfileId, ushort supportedReader,
         IDeepMlDsa65Verifier mlDsa65)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        return VerifyCore(authority, exactAdh1, exactDtt1, exactAdp1V2,
+            callerNonce, query.DirectoryLeafKey.Span, monotonic, protectedLkg,
+            deploymentProfileId, supportedReader, mlDsa65, query);
+    }
+
+    internal static VerifiedDeepIdV2DirectoryFreshness VerifyExactLeafForAuthor(
+        VerifiedXPointNetworkAuthority authority,
+        ReadOnlyMemory<byte> exactAdh1,
+        ReadOnlyMemory<byte> exactDtt1,
+        ReadOnlyMemory<byte> exactAdp1V2,
+        ReadOnlySpan<byte> callerNonce,
+        ReadOnlySpan<byte> queriedDirectoryLeafKey,
+        AccountDirectoryMonotonicRequestWindow monotonic,
+        AccountDirectoryProtectedLkg? protectedLkg,
+        ushort deploymentProfileId, ushort supportedReader,
+        IDeepMlDsa65Verifier mlDsa65) =>
+        VerifyCore(authority, exactAdh1, exactDtt1, exactAdp1V2,
+            callerNonce, queriedDirectoryLeafKey, monotonic, protectedLkg,
+            deploymentProfileId, supportedReader, mlDsa65, null);
+
+    private static VerifiedDeepIdV2DirectoryFreshness VerifyCore(
+        VerifiedXPointNetworkAuthority authority,
+        ReadOnlyMemory<byte> exactAdh1,
+        ReadOnlyMemory<byte> exactDtt1,
+        ReadOnlyMemory<byte> exactAdp1V2,
+        ReadOnlySpan<byte> callerNonce,
+        ReadOnlySpan<byte> queriedDirectoryLeafKey,
+        AccountDirectoryMonotonicRequestWindow monotonic,
+        AccountDirectoryProtectedLkg? protectedLkg,
+        ushort deploymentProfileId, ushort supportedReader,
+        IDeepMlDsa65Verifier mlDsa65,
+        VerifiedDeepIdV2DirectoryQuery? boundQuery)
     {
         ArgumentNullException.ThrowIfNull(authority);
         ArgumentNullException.ThrowIfNull(monotonic);
@@ -126,6 +202,9 @@ public static class DeepIdV2DirectoryCurrentProofVerifier
                 !Fixed(proof.LiveDtt1CoreHash.Span, dttHash))
                 Fail("AdpCrossLinkMismatch", "ADP1 V2 does not bind the exact head, query and DTT1.");
             VerifyHistory(authority, proof, head, headHash, protectedLkg);
+            if (boundQuery is not null)
+                VerifyQueryFloor(boundQuery, authority, head, headHash,
+                    protectedLkg, queriedDirectoryLeafKey);
 
             VerifiedAdc1V2? current = null;
             if (proof.ResultKind == AccountDirectoryAdp1ResultKind.CurrentValue)
@@ -166,6 +245,26 @@ public static class DeepIdV2DirectoryCurrentProofVerifier
                 "InvalidDid2DirectoryProof",
                 "The exact DID2 directory proof failed closed.", exception);
         }
+    }
+
+    private static void VerifyQueryFloor(
+        VerifiedDeepIdV2DirectoryQuery query,
+        VerifiedXPointNetworkAuthority authority,
+        AccountDirectoryAdh1 head, ReadOnlySpan<byte> headHash,
+        AccountDirectoryProtectedLkg? lkg,
+        ReadOnlySpan<byte> queriedDirectoryLeafKey)
+    {
+        if (!Fixed(query.NetworkId.Span, authority.NetworkId.Span) ||
+            !Fixed(query.DirectoryLeafKey.Span, queriedDirectoryLeafKey))
+            Fail("QueryNetworkMismatch", "The DID2 ADL1 query belongs to another network or leaf.");
+        if (head.LogGeneration == query.MinimumAdhGeneration &&
+            Fixed(headHash, query.MinimumAdhHash.Span))
+            return;
+        if (lkg is not null &&
+            lkg.LogGeneration == query.MinimumAdhGeneration &&
+            Fixed(lkg.CoreHash.Span, query.MinimumAdhHash.Span))
+            return;
+        Fail("QueryFloorMismatch", "The DID2 ADL1 floor is not this head or the exact protected LKG.");
     }
 
     private static void VerifyHistory(VerifiedXPointNetworkAuthority authority,

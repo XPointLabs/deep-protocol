@@ -626,7 +626,10 @@ internal static class GraphPolicy
                 "Deep.Protocol|12393|24667DCCFE8EB3684082383C15BB87F41D5C53492B12DBA5F2BEC99E95FD909A",
                 // Candidate DID2-only nonce-bound proof issuer; service cutover remains open.
                 "Deep.Protocol|12410|F9D24903B5BAC20659A1A5908C0FD8A8A8A7001C004312EDE47CF593CF237935",
-                "Deep.Protocol|12410|E03116812CE17F3DA5EAD8036978BDE3F9A790FA6AB415FA03FE79E4352DF6C7"
+                "Deep.Protocol|12410|E03116812CE17F3DA5EAD8036978BDE3F9A790FA6AB415FA03FE79E4352DF6C7",
+                // Public DID2 freshness now requires a verified DAB2-bound ADL1 query.
+                "Deep.Protocol|12420|A127AC1678FAE99FEA11BFCA780BE8A4A5B062CB46EC30518750425F4AD5E820",
+                "Deep.Protocol|12420|3ECB355FD9A6FF124BB5EB31020FE9AC64448E691F2C01269954F3A16446599D"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

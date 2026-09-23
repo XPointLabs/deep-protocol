@@ -9,7 +9,7 @@ namespace Deep.Protocol.Tests.Identity;
 public sealed partial class Dnp1IdentityAuthoringV1Tests
 {
     internal static async Task<(DeepIdV2GenesisAdmissionRequest Admission,
-        VerifiedAdc1V2 Checkpoint)> CreateRealDid2DirectoryGenesisAsync()
+        VerifiedAdc1V2 Checkpoint, VerifiedDab2 Binding)> CreateRealDid2DirectoryGenesisAsync()
     {
         using var phrase = DeepRecoveryV1.VerifyCanonicalUtf8(
             Encoding.ASCII.GetBytes(Mnemonic));
@@ -31,6 +31,6 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
             binding.Head.Record.CanonicalBytes.Span,
             directory.Head.Record.CanonicalBytes.Span,
             checkpoint.Checkpoint.CanonicalBytes.Span, []);
-        return (admission, checkpoint);
+        return (admission, checkpoint, binding.Head);
     }
 }

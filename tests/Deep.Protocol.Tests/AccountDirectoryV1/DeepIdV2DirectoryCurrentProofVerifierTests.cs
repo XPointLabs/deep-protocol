@@ -16,7 +16,7 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
                 (Architecture.X64 or Architecture.Arm64))
             return;
 
-        var (admission, checkpoint) = await
+        var (admission, checkpoint, binding) = await
             Dnp1IdentityAuthoringV1Tests.CreateRealDid2DirectoryGenesisAsync();
         var authority = AuthorityFixture.Create(
             networkOverride: checkpoint.Checkpoint.NetworkId.ToArray(),
@@ -59,9 +59,15 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
                 .Cast<IAccountDirectoryDtt1WitnessSigner>().ToArray(),
             1, pq);
 
+        var adl = DeepIdV2AccountDirectoryLookupCodec.Author(
+            binding.DeepId, authority.Network,
+            initialLkg.LogGeneration, initialLkg.CoreHash.Span,
+            1, new byte[38], new byte[32]);
+        var query = VerifiedDeepIdV2DirectoryQuery.VerifyBinding(adl, binding);
+
         var verified = DeepIdV2DirectoryCurrentProofVerifier.VerifyGenesis(
             authority.Verified, package.ExactAdh1, package.ExactDtt1,
-            package.ExactAdp1V2, nonce, leaf,
+            package.ExactAdp1V2, nonce, query,
             Window(), initialLkg, 1, 2, pq);
 
         Assert.Equal(AccountDirectoryAdp1ResultKind.CurrentValue,
@@ -71,6 +77,27 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
         Assert.Equal(exactHead, verified.NextProtectedLkg.ExactAdh1.ToArray());
         Assert.Equal(admission.ExactDab2.ToArray(),
             DeepIdV2Adp1Codec.Decode(package.ExactAdp1V2.Span).ExactDab2.ToArray());
+
+        var badFloorAdl = DeepIdV2AccountDirectoryLookupCodec.Author(
+            binding.DeepId, authority.Network,
+            initialLkg.LogGeneration, Bytes(32, 0x5b),
+            1, new byte[38], new byte[32]);
+        var badFloorQuery = VerifiedDeepIdV2DirectoryQuery.VerifyBinding(
+            badFloorAdl, binding);
+        Assert.Equal("QueryFloorMismatch",
+            Assert.Throws<AccountDirectoryFreshnessVerificationException>(() =>
+                DeepIdV2DirectoryCurrentProofVerifier.VerifyGenesis(
+                    authority.Verified, package.ExactAdh1, package.ExactDtt1,
+                    package.ExactAdp1V2, nonce, badFloorQuery,
+                    Window(), initialLkg, 1, 2, pq)).Code);
+        var otherNetworkAdl = DeepIdV2AccountDirectoryLookupCodec.Author(
+            binding.DeepId, Bytes(16, 0x71),
+            initialLkg.LogGeneration, initialLkg.CoreHash.Span,
+            1, new byte[38], new byte[32]);
+        Assert.Equal("QueryNetworkMismatch",
+            Assert.Throws<AccountDirectoryFreshnessVerificationException>(() =>
+                VerifiedDeepIdV2DirectoryQuery.VerifyBinding(
+                    otherNetworkAdl, binding)).Code);
 
         var wrongHeadRequest = new AccountDirectoryProofAuthoringRequest(
             authority.Network, nonce, Bytes(16, 0x44), 1_000,
@@ -201,7 +228,7 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
             byte[]? nonce = null, byte[]? query = null, byte[]? adp = null,
             byte[]? dtt = null, AccountDirectoryProtectedLkg? lkg = null,
             ushort supportedReader = 2) =>
-            DeepIdV2DirectoryCurrentProofVerifier.VerifyGenesis(
+            DeepIdV2DirectoryCurrentProofVerifier.VerifyExactLeafForAuthor(
                 Authority.Verified, HeadBytes, dtt ?? DttBytes, adp ?? AdpBytes,
                 nonce ?? Nonce, query ?? Query, Window(), lkg,
                 deploymentProfileId: 1, supportedReader, new DenyingMlDsa65Verifier());
