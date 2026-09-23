@@ -74,6 +74,7 @@
   <ItemGroup Condition="'$(RecoveryTestSeam)' == 'true'">
     <InternalsVisibleTo Include="Deep.Protocol.MembershipRoutes.Tests" />
     <InternalsVisibleTo Include="Deep.Protocol.Tests" />
+    <InternalsVisibleTo Include="SurvivalMailboxDriver" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(MlKemAndroidProbe)' == 'true'">
