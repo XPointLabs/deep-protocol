@@ -116,7 +116,7 @@ public static class AccountDirectoryProofMaterialAuthor
         return result;
     }
 
-    private static ReadOnlyMemory<byte>[] BuildConsistencyProof(
+    internal static ReadOnlyMemory<byte>[] BuildConsistencyProof(
         AccountDirectoryProtectedLkg? caller,
         AccountDirectoryProtectedLkg current,
         IReadOnlyList<byte[]> leaves)
@@ -182,7 +182,7 @@ public static class AccountDirectoryProofMaterialAuthor
         }
     }
 
-    private static ReadOnlyMemory<byte>[] BuildInclusionProof(
+    internal static ReadOnlyMemory<byte>[] BuildInclusionProof(
         IReadOnlyList<byte[]> leaves,
         int leafIndex)
     {

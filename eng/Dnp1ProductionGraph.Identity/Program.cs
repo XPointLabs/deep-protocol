@@ -611,7 +611,10 @@ internal static class GraphPolicy
                 "Deep.Protocol|12300|F7D75F036720CC64E85590A2BFA04E6F4CD224EC4B1F99F2C7A6FEEDF13B380B",
                 // Candidate DID2-only threshold head mutation over exact V2 journal.
                 "Deep.Protocol|12316|ACC99C388264688B6D1172136489ECF53F4C33E5D09155D351554162D9E39D7E",
-                "Deep.Protocol|12316|A0A5A6010A5F72F4ABEA349C4D9096C98CF7B871BA0D29916445D83EC3C5286D"
+                "Deep.Protocol|12316|A0A5A6010A5F72F4ABEA349C4D9096C98CF7B871BA0D29916445D83EC3C5286D",
+                // Candidate V2 proof material; no public ADP1 envelope yet.
+                "Deep.Protocol|12341|DCDCE29546C76D0D18DC0BB87A3F6761E30357755BE7DFF42C56C395F0336617",
+                "Deep.Protocol|12341|42C523A1BBA92CF1A93648E7000CFF0A926D222F6605965A5D82221DE23CC1A2"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [
