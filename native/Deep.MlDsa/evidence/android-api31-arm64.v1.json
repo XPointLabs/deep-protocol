@@ -21,6 +21,22 @@
     "physicalAndroidApi31Arm64": "passed",
     "androidCompiler": "Android NDK 28.2.13676358 aarch64-linux-android31-clang"
   },
+  "androidManagedReleaseProbe": {
+    "project": "eng/Deep.MlDsa.AndroidManagedProbe",
+    "targetFramework": "net10.0-android",
+    "rid": "android-arm64",
+    "signedApkSha256": "68a438fc8d09cd968251a65b283ab0a6f110e5c0fe098d43fd993eb3e0b29299",
+    "packagedNativeAssetSha256": "6e46e4df970f5376416af3c50fb39e580487a616d2541aa26d1d90eddf918cc9",
+    "physicalResult": "success:true",
+    "checks": [
+      "packaged-asset-digest",
+      "dotnet-native-library-load-and-abi-bind",
+      "public-key-and-signature-cross-provider-fixtures",
+      "signature-verification-and-tamper-rejection",
+      "native-seed-buffer-zeroization"
+    ],
+    "probeAppUninstalledFromDevice": true
+  },
   "result": "passed",
   "checks": [
     "seed-to-public-key-repeatability",
@@ -35,7 +51,7 @@
   "productionEligible": false,
   "openGates": [
     "Windows x64 and ARM64 native ABI tests",
-    "Android .NET/MAUI release-asset load and AOT binding",
+    "production .NET/MAUI approved-asset integration and AOT binding",
     "official ACVP/FIPS 204 vector suite and extended independent signing differential",
     "native secret-lifetime and side-channel review",
     "reproducible approved assets and SBOM",

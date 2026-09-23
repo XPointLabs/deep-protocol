@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-android</TargetFramework>
+    <TargetPlatformVersion>36.0</TargetPlatformVersion>
+    <SupportedOSPlatformVersion>26.0</SupportedOSPlatformVersion>
+    <RuntimeIdentifier>android-arm64</RuntimeIdentifier>
+    <OutputType>Exe</OutputType>
+    <ApplicationId>org.deep.protocol.mldsaprobecandidate</ApplicationId>
+    <ApplicationTitle>Deep ML-DSA Candidate Probe</ApplicationTitle>
+    <ApplicationVersion>1</ApplicationVersion>
+    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <AndroidPackageFormat>apk</AndroidPackageFormat>
+    <EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(DeepMlDsaAndroidAsset)' != ''">
+    <AndroidAsset Include="$(DeepMlDsaAndroidAsset)"
+                  Link="Assets\deep-mldsa\libdeep_mldsa.so" />
+  </ItemGroup>
+
+  <Target Name="ValidateDeepMlDsaAndroidAsset" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(DeepMlDsaAndroidAsset)' == ''"
+           Text="DeepMlDsaAndroidAsset must name the physical-test candidate libdeep_mldsa.so." />
+    <Error Condition="!Exists('$(DeepMlDsaAndroidAsset)')"
+           Text="The DeepMlDsaAndroidAsset file is absent." />
+    <GetFileHash Files="$(DeepMlDsaAndroidAsset)" Algorithm="SHA256" HashEncoding="hex">
+      <Output TaskParameter="Items" ItemName="_DeepMlDsaAndroidAssetHash" />
+    </GetFileHash>
+    <Error Condition="'%(_DeepMlDsaAndroidAssetHash.FileHash)' != '6e46e4df970f5376416af3c50fb39e580487a616d2541aa26d1d90eddf918cc9'"
+           Text="The candidate Android ML-DSA asset digest differs from physical evidence." />
+  </Target>
+</Project>

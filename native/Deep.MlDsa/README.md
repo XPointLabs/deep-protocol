@@ -37,4 +37,12 @@ the pinned upstream `META.yml`:
 `2ff0ddcd0dc08b746aa04853d6f84c82c6c8ac38783c9061aed78e29c1698ae5`.
 It passed on Linux arm64 and a physical Android API 31 arm64 device. This
 tests the selected backend against the upstream KAT, but official ACVP/FIPS
-204 coverage, independent differentials and packaged runtime load remain open.
+204 coverage, independent differentials and production packaged runtime load
+remain open.
+
+An isolated `net10.0-android` Release/AOT probe packages the exact Android
+candidate `.so` by digest and exercises the Deep C ABI through .NET on the
+physical API 31 arm64 device. It passed public-key/signature differential
+fixtures, verification, tamper rejection and native buffer clearing. The
+test-only APK was uninstalled. This does **not** approve an asset for the
+production client or establish Windows parity.
