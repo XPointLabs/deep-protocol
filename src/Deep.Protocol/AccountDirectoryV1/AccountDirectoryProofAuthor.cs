@@ -409,7 +409,7 @@ public static class AccountDirectoryProofAuthor
         return currentView;
     }
 
-    private static Xnv1Record ValidateCurrentView(
+    internal static Xnv1Record ValidateCurrentView(
         VerifiedXPointNetworkAuthority authority,
         AccountDirectoryProofAuthoringRequest request,
         ulong trustedLower,
@@ -455,7 +455,7 @@ public static class AccountDirectoryProofAuthor
         return view;
     }
 
-    private static SignerBinding[] ValidateSigners(
+    internal static SignerBinding[] ValidateSigners(
         VerifiedXPointNetworkAuthority authority,
         IReadOnlyList<IAccountDirectoryDtt1WitnessSigner> signers)
     {
@@ -483,7 +483,7 @@ public static class AccountDirectoryProofAuthor
         return result;
     }
 
-    private static async ValueTask<AccountDirectoryDtt1> AuthorDtt1Async(
+    internal static async ValueTask<AccountDirectoryDtt1> AuthorDtt1Async(
         VerifiedXPointNetworkAuthority authority,
         AccountDirectoryAdh1 head,
         Xnv1Record currentView,
@@ -708,7 +708,7 @@ public static class AccountDirectoryProofAuthor
     private static void Fail(string code, string message) =>
         throw new AccountDirectoryProofAuthoringException(code, message);
 
-    private sealed record SignerBinding(
+    internal sealed record SignerBinding(
         IAccountDirectoryDtt1WitnessSigner Signer,
         byte[] Id,
         byte[] PublicKey);

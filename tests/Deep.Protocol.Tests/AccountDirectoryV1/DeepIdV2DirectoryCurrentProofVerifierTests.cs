@@ -43,17 +43,25 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
             minimumReader: 2);
         var exactHead = AccountDirectoryAdh1Codec.Encode(head);
         var nonce = Bytes(32, 0x31);
-        var dtt = authority.Dtt(head, nonce, observed: 1_900_000_300);
         var material = DeepIdV2DirectoryProofMaterialAuthor.Create(
             new AccountDirectoryProtectedLkg(exactHead), journal,
             [checkpoint], leaf, initialLkg);
-        var exactAdp = DeepIdV2Adp1Codec.Author(material,
-            AccountDirectoryCrypto.ComputeDtt1CoreHash(dtt)).CanonicalBytes;
+        var request = new AccountDirectoryProofAuthoringRequest(
+            authority.Network, nonce, Bytes(16, 0x44), 1_000,
+            exactHead, authority.CurrentXnv(), 1_900_000_300, 5,
+            1_900_000_300, 1_900_000_360,
+            AccountDirectoryDtt1IssuanceEpoch.Derive(
+                authority.Verified, 1_900_000_300, 5), 2);
         using var pq = DeepMlDsa65NativeProvider.LoadCandidateForCurrentProcess();
+        var package = await DeepIdV2DirectoryProofAuthor.IssueGenesisAsync(
+            authority.Verified, request, material,
+            authority.Witnesses.Take(2).Select(WitnessSigner.Valid)
+                .Cast<IAccountDirectoryDtt1WitnessSigner>().ToArray(),
+            1, pq);
 
         var verified = DeepIdV2DirectoryCurrentProofVerifier.VerifyGenesis(
-            authority.Verified, exactHead,
-            AccountDirectoryDtt1Codec.Encode(dtt), exactAdp, nonce, leaf,
+            authority.Verified, package.ExactAdh1, package.ExactDtt1,
+            package.ExactAdp1V2, nonce, leaf,
             Window(), initialLkg, 1, 2, pq);
 
         Assert.Equal(AccountDirectoryAdp1ResultKind.CurrentValue,
@@ -62,7 +70,25 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
             verified.CurrentCheckpoint!.Checkpoint.ArtifactHash.ToArray());
         Assert.Equal(exactHead, verified.NextProtectedLkg.ExactAdh1.ToArray());
         Assert.Equal(admission.ExactDab2.ToArray(),
-            DeepIdV2Adp1Codec.Decode(exactAdp.Span).ExactDab2.ToArray());
+            DeepIdV2Adp1Codec.Decode(package.ExactAdp1V2.Span).ExactDab2.ToArray());
+
+        var wrongHeadRequest = new AccountDirectoryProofAuthoringRequest(
+            authority.Network, nonce, Bytes(16, 0x44), 1_000,
+            initialLkg.ExactAdh1.Span, authority.CurrentXnv(),
+            1_900_000_300, 5, 1_900_000_300, 1_900_000_360,
+            request.IssuanceEpoch, 2);
+        var signers = authority.Witnesses.Take(2).Select(WitnessSigner.Valid)
+            .Cast<IAccountDirectoryDtt1WitnessSigner>().ToArray();
+        var wrongHead = await Assert.ThrowsAsync<AccountDirectoryProofAuthoringException>(
+            () => DeepIdV2DirectoryProofAuthor.IssueGenesisAsync(
+                authority.Verified, wrongHeadRequest, material, signers, 1, pq)
+                .AsTask());
+        Assert.Equal("ExactAdhMismatch", wrongHead.Code);
+        var duplicate = await Assert.ThrowsAsync<AccountDirectoryProofAuthoringException>(
+            () => DeepIdV2DirectoryProofAuthor.IssueGenesisAsync(
+                authority.Verified, request, material,
+                [signers[0], signers[0]], 1, pq).AsTask());
+        Assert.Equal("DuplicateOrInvalidSigner", duplicate.Code);
     }
 
     [Fact]

@@ -733,8 +733,8 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
                 U16(1),
                 Reference("XCB1", Bytes(32, 0x97)),
                 U64(1),
-                U64(1_699_999_000),
-                U64(1_700_010_000),
+                U64(checked(timeBase - 1_000)),
+                U64(checked(timeBase + 10_000)),
                 U16(1),
                 new byte[] { 2 },
                 Join(

@@ -623,7 +623,10 @@ internal static class GraphPolicy
                 "Deep.Protocol|12369|70F02D6CE8CA4AEFA1D224D1B2999A1F59CDED7397F64C5CDAC513DFE40DEFA9",
                 // Candidate public DID2 directory genesis/absence freshness verifier.
                 "Deep.Protocol|12393|7BA804788DDAEB9DD0B7D8DCE10BC25037AA3BCF466E6E6B90A599529450D8B0",
-                "Deep.Protocol|12393|24667DCCFE8EB3684082383C15BB87F41D5C53492B12DBA5F2BEC99E95FD909A"
+                "Deep.Protocol|12393|24667DCCFE8EB3684082383C15BB87F41D5C53492B12DBA5F2BEC99E95FD909A",
+                // Candidate DID2-only nonce-bound proof issuer; service cutover remains open.
+                "Deep.Protocol|12410|F9D24903B5BAC20659A1A5908C0FD8A8A8A7001C004312EDE47CF593CF237935",
+                "Deep.Protocol|12410|E03116812CE17F3DA5EAD8036978BDE3F9A790FA6AB415FA03FE79E4352DF6C7"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [
