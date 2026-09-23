@@ -1,0 +1,10 @@
+LIBRARY deep_mldsa
+EXPORTS
+    deep_mldsa_v1_seed_size
+    deep_mldsa_v1_public_key_size
+    deep_mldsa_v1_signature_size
+    deep_mldsa_v1_sign_random_size
+    deep_mldsa_v1_public_from_seed
+    deep_mldsa_v1_sign_from_seed
+    deep_mldsa_v1_verify
+    deep_mldsa_v1_zero

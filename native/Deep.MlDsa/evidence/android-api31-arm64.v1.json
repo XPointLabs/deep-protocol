@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-23",
+  "purpose": "candidate-native-abi-physical-functional-check",
+  "provider": "pq-code-package/mldsa-native",
+  "upstreamTag": "v2.0.0",
+  "upstreamCommit": "834a90d5e846ffa1e1611bd24e160bb2e9b86d35",
+  "deviceClass": "Android 12 / API 31 / arm64-v8a",
+  "compiler": "Android NDK 28.2.13676358 aarch64-linux-android26-clang",
+  "build": "portable-C, ML-DSA-65, randomized upstream API disabled",
+  "testExecutableSha256": "d5c427b0d6a844fd1baa4d3ef41c1983d305a4cf4ae868c26263bc23b45d20966",
+  "sharedLibrarySha256": "6e46e4df970f5376416af3c50fb39e580487a616d2541aa26d1d90eddf918cc9",
+  "sharedLibraryExportCount": 8,
+  "sharedLibraryExactDeepAbiExports": true,
+  "sharedLibraryPhysicalLoadAndTests": "passed",
+  "result": "passed",
+  "checks": [
+    "seed-to-public-key-repeatability",
+    "hedged-sign-and-verify",
+    "message-context-signature-tamper-rejection",
+    "fresh-randomness-signature-change",
+    "bad-length-and-null-rejection",
+    "overlapping-buffer-rejection",
+    "caller-buffer-zeroization"
+  ],
+  "testBinaryAndLibraryRemovedFromDevice": true,
+  "productionEligible": false,
+  "openGates": [
+    "Windows x64 and ARM64 native ABI tests",
+    "Android .NET/MAUI release-asset load and AOT binding",
+    "full FIPS 204 KAT and independent signing differential",
+    "native secret-lifetime and side-channel review",
+    "reproducible approved assets and SBOM",
+    "DR-0006 identity wire and consumer freeze"
+  ]
+}

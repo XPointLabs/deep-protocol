@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "status": "candidate-not-production-approved",
+  "provider": "pq-code-package/mldsa-native",
+  "upstreamUrl": "https://github.com/pq-code-package/mldsa-native",
+  "upstreamTag": "v2.0.0",
+  "upstreamCommit": "834a90d5e846ffa1e1611bd24e160bb2e9b86d35",
+  "upstreamMlDsaTreeGitSha1": "8a16ff246ec175f23827313ae8b4cde2cb801a8b",
+  "licenseExpression": "Apache-2.0 OR ISC OR MIT",
+  "upstreamFilesUnmodified": true,
+  "sourceSelection": "complete upstream mldsa directory and LICENSE, with only portable C compiled; randomized API and native assembly are excluded by build configuration",
+  "fileCount": 113,
+  "sourceSnapshotSha256": "50a66da0a22d0ef12e40c45961a213dc16d7995218dffa2da97949e7274ce878",
+  "deepConfiguration": {
+    "parameterSet": 65,
+    "backend": "portable-c",
+    "randomizedApiEnabled": false,
+    "signRandomness": "caller-supplied-32-byte-hedged",
+    "expandedPrivateKeyExport": false
+  }
+}

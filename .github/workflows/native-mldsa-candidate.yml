@@ -1,0 +1,50 @@
+name: Native ML-DSA candidate checks
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'native/Deep.MlDsa/**'
+      - 'eng/Test-DeepMlDsaVendor.ps1'
+      - '.github/workflows/native-mldsa-candidate.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  native-tests:
+    name: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner:
+          - ubuntu-24.04
+          - ubuntu-24.04-arm
+          - windows-2022
+          - windows-11-vs2026-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify pinned upstream source snapshot
+        shell: pwsh
+        run: ./eng/Test-DeepMlDsaVendor.ps1
+      - name: Configure portable ML-DSA-65
+        shell: pwsh
+        run: cmake -S native/Deep.MlDsa -B '${{ runner.temp }}/deep-mldsa-build' -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        shell: pwsh
+        run: cmake --build '${{ runner.temp }}/deep-mldsa-build' --config Release --parallel 2
+      - name: Native ABI tests
+        shell: pwsh
+        run: ctest --test-dir '${{ runner.temp }}/deep-mldsa-build' -C Release --output-on-failure
+      - name: AddressSanitizer and UBSan native ABI tests
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          cmake -S native/Deep.MlDsa -B "$RUNNER_TEMP/deep-mldsa-sanitized" \
+            -DCMAKE_BUILD_TYPE=Debug \
+            '-DCMAKE_C_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer' \
+            '-DCMAKE_SHARED_LINKER_FLAGS=-fsanitize=address,undefined' \
+            '-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined'
+          cmake --build "$RUNNER_TEMP/deep-mldsa-sanitized" --parallel 2
+          ASAN_OPTIONS=detect_leaks=1 ctest --test-dir "$RUNNER_TEMP/deep-mldsa-sanitized" --output-on-failure
