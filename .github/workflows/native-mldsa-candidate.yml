@@ -10,6 +10,16 @@ on:
       - 'eng/Test-DeepMlDsaVendor.ps1'
       - 'eng/Test-DeepIdV2Transcript.py'
       - 'registry/deep-id-v2.vectors.json'
+      - 'registry/deep-protocol-v1.registry*'
+      - 'src/Deep.Protocol/ApplicationCore/DeepIdV2*'
+      - 'src/Deep.Protocol/ApplicationCore/DeepMlDsa65*'
+      - 'src/Deep.Protocol/Identity/DeepIdV2Root.cs'
+      - 'src/Deep.Protocol/Identity/DeepRecoveryV1.cs'
+      - 'src/Deep.Protocol/runtimes/**/deep_mldsa.dll'
+      - 'src/Deep.Protocol/runtimes/**/libdeep_mldsa.so'
+      - 'tests/Deep.Protocol.Tests/ApplicationCore/**'
+      - 'tests/Deep.Protocol.Tests/Identity/DeepPqRootRecoveryV2Tests.cs'
+      - 'tests/Deep.Protocol.Tests/Identity/Dnp1IdentityAuthoringV1Tests.cs'
       - '.github/workflows/native-mldsa-candidate.yml'
   pull_request:
     paths:
@@ -17,6 +27,16 @@ on:
       - 'eng/Test-DeepMlDsaVendor.ps1'
       - 'eng/Test-DeepIdV2Transcript.py'
       - 'registry/deep-id-v2.vectors.json'
+      - 'registry/deep-protocol-v1.registry*'
+      - 'src/Deep.Protocol/ApplicationCore/DeepIdV2*'
+      - 'src/Deep.Protocol/ApplicationCore/DeepMlDsa65*'
+      - 'src/Deep.Protocol/Identity/DeepIdV2Root.cs'
+      - 'src/Deep.Protocol/Identity/DeepRecoveryV1.cs'
+      - 'src/Deep.Protocol/runtimes/**/deep_mldsa.dll'
+      - 'src/Deep.Protocol/runtimes/**/libdeep_mldsa.so'
+      - 'tests/Deep.Protocol.Tests/ApplicationCore/**'
+      - 'tests/Deep.Protocol.Tests/Identity/DeepPqRootRecoveryV2Tests.cs'
+      - 'tests/Deep.Protocol.Tests/Identity/Dnp1IdentityAuthoringV1Tests.cs'
       - '.github/workflows/native-mldsa-candidate.yml'
 
 permissions:
@@ -65,6 +85,17 @@ jobs:
           $libraryName = if ($IsWindows) { 'deep_mldsa.dll' } else { 'libdeep_mldsa.so' }
           $candidateDir = if ($IsWindows) { '${{ runner.temp }}/deep-mldsa-build/Release' } else { '${{ runner.temp }}/deep-mldsa-build' }
           python eng/Test-DeepMlDsaAcvp.py --library (Join-Path $candidateDir $libraryName)
+      - uses: actions/setup-dotnet@v4
+        if: runner.os == 'Windows'
+        with:
+          dotnet-version: '10.0.x'
+      - name: Managed exact-asset DID2/DAB2 genesis, restore and signature closure
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: >-
+          dotnet test tests/Deep.Protocol.Tests/Deep.Protocol.Tests.csproj
+          -c Release
+          --filter 'FullyQualifiedName~DeepIdV2Root_RestoreRecreatesExactCredentialAndCompactText|FullyQualifiedName~DeepIdV2Genesis_UsesSamePhraseForAccountAndPqRoot_AndRestoresExactDid2|FullyQualifiedName~Dab2_RealNativeHybridSignaturesCloseOverExactDidAndAccount|FullyQualifiedName~DeepMlDsa65NativeProviderTests'
       - name: AddressSanitizer and UBSan native ABI tests
         if: runner.os == 'Linux'
         shell: bash

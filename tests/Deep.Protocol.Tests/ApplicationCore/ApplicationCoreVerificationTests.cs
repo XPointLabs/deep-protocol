@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using Deep.Protocol.ApplicationCore;
@@ -45,6 +46,246 @@ public sealed class ApplicationCoreVerificationTests
         Assert.Same(fixture.Identity, directory.Identity);
         Assert.Same(binding, authorization.Binding);
         Assert.Same(directory, authorization.Directory);
+    }
+
+    [Fact]
+    public void Dab2_RequiresExactAccountClosureAndBothRootSignatures()
+    {
+        var fixture = VerifiedFixture.Create();
+        var pqPublicKey = ApplicationCoreFixture.Bytes(1952, 0x71);
+        var pqSignature = ApplicationCoreFixture.Bytes(3309, 0x72);
+        var did = DeepIdV2Codec.AuthorDid2(
+            fixture.AddressKey.PublicKey, pqPublicKey,
+            ApplicationCoreFixture.Bytes(16, 0x73));
+        var realm = DeepIdV2Codec.DeriveIdentityRealmId(
+            fixture.Network, VerifiedFixture.DeploymentProfileId);
+        var dpa = fixture.Account.Certificate;
+        var reference = ApplicationCoreCodec.CreateArtifactReference(
+            (ushort)dpa.ArtifactType, checked((uint)dpa.CanonicalBytes.Length),
+            dpa.CanonicalHash.Span);
+
+        ParsedDab2 Author(byte[] edSignature, byte[] pqSignatureValue, byte[] accountSignature) =>
+            DeepIdV2Codec.AuthorDab2(did.RecordHash.Span, realm, 0, new byte[32],
+                fixture.AccountId, 1, reference,
+                edSignature, pqSignatureValue, accountSignature);
+
+        var unsigned = Author(ApplicationCoreFixture.Bytes(64, 0x74), pqSignature,
+            ApplicationCoreFixture.Bytes(64, 0x75));
+        var ed = PublicKeyAuth.SignDetached(
+            unsigned.RootEd25519SignatureInput.ToArray(), fixture.AddressKey.PrivateKey);
+        var account = PublicKeyAuth.SignDetached(
+            unsigned.AccountSignatureInput.ToArray(), fixture.AccountKey.PrivateKey);
+        var valid = Author(ed, pqSignature, account);
+        var pqVerifier = new ExactTestPqVerifier(
+            pqPublicKey, valid.RootMlDsa65SignatureInput.ToArray(), pqSignature);
+        var verified = DeepIdV2Verifier.VerifyDab2(valid, did, fixture.Identity,
+            VerifiedFixture.DeploymentProfileId, pqVerifier);
+        Assert.Same(valid, verified.Record);
+        Assert.Same(did, verified.DeepId);
+
+        var directory = fixture.AuthorAndVerifyDmd1(1, new byte[32]);
+        ParsedDca1V2 AuthorContact(ReadOnlySpan<byte> accountSignature,
+            ReadOnlySpan<byte> exactDidHash, ApplicationArtifactReference dabReference) =>
+            DeepIdV2ContactAuthorizationCodec.Author(fixture.Network, fixture.AccountId,
+                reference, directory.Record.DirectoryGeneration,
+                directory.Record.RecordHash.Span,
+                ApplicationCoreFixture.Bytes(32, 0x77), fixture.DeviceId,
+                3, 100, 10, 20, accountSignature, exactDidHash, dabReference);
+        var dab2Reference = DeepIdV2Codec.CreateDab2ArtifactReference(valid);
+        var unsignedContact = AuthorContact(ApplicationCoreFixture.Bytes(64, 0x76),
+            did.RecordHash.Span, dab2Reference);
+        var contactSignature = PublicKeyAuth.SignDetached(
+            unsignedContact.SignatureInput.ToArray(), fixture.AccountKey.PrivateKey);
+        var contact = AuthorContact(contactSignature, did.RecordHash.Span, dab2Reference);
+        var contactVerified = DeepIdV2ContactAuthorizationCodec.Verify(contact, verified, directory);
+        Assert.Same(verified, contactVerified.Binding);
+        Assert.Same(directory, contactVerified.Directory);
+        var oldVersion = contact.CanonicalBytes.ToArray();
+        oldVersion[5] = 1;
+        Assert.Throws<ApplicationCoreFormatException>(() =>
+            DeepIdV2ContactAuthorizationCodec.Decode(oldVersion));
+        var oldSuite = contact.CanonicalBytes.ToArray();
+        BinaryPrimitives.WriteUInt16BigEndian(oldSuite.AsSpan(6, 2), 0x0201);
+        Assert.Throws<ApplicationCoreFormatException>(() =>
+            DeepIdV2ContactAuthorizationCodec.Decode(oldSuite));
+        var oldBindingType = contact.CanonicalBytes.ToArray();
+        BinaryPrimitives.WriteUInt16BigEndian(oldBindingType.AsSpan(435, 2),
+            ApplicationCoreCodec.Dab1ArtifactTypeCode);
+        Assert.Throws<ApplicationCoreFormatException>(() =>
+            DeepIdV2ContactAuthorizationCodec.Decode(oldBindingType));
+        Assert.Same(contactVerified,
+            DeepIdV2ContactAuthorizationCodec.RequireCurrentlyAuthoritative(contactVerified, 10));
+        AssertVerificationFailure(() => DeepIdV2ContactAuthorizationCodec.Verify(
+            AuthorContact(ApplicationCoreFixture.Bytes(64, 0x78), did.RecordHash.Span,
+                dab2Reference), verified, directory));
+        AssertVerificationFailure(() => DeepIdV2ContactAuthorizationCodec.Verify(
+            AuthorContact(contactSignature, ApplicationCoreFixture.Bytes(32, 0x79),
+                dab2Reference), verified, directory));
+        Assert.Throws<ArgumentException>(() => AuthorContact(contactSignature,
+            did.RecordHash.Span, ApplicationCoreCodec.CreateArtifactReference(
+                ApplicationCoreCodec.Dab1ArtifactTypeCode, 339, valid.RecordHash.Span)));
+        AssertVerificationFailure(() =>
+            DeepIdV2ContactAuthorizationCodec.RequireCurrentlyAuthoritative(contactVerified, 20));
+
+        AssertVerificationFailure(() => DeepIdV2Verifier.VerifyDab2(valid, did,
+            fixture.Identity, VerifiedFixture.DeploymentProfileId + 1, pqVerifier));
+        AssertVerificationFailure(() => DeepIdV2Verifier.VerifyDab2(
+            Author(ApplicationCoreFixture.Bytes(64, 0x76), pqSignature, account),
+            did, fixture.Identity, VerifiedFixture.DeploymentProfileId, pqVerifier));
+        AssertVerificationFailure(() => DeepIdV2Verifier.VerifyDab2(
+            Author(ed, ApplicationCoreFixture.Bytes(3309, 0x77), account),
+            did, fixture.Identity, VerifiedFixture.DeploymentProfileId, pqVerifier));
+        AssertVerificationFailure(() => DeepIdV2Verifier.VerifyDab2(
+            Author(ed, pqSignature, ApplicationCoreFixture.Bytes(64, 0x78)),
+            did, fixture.Identity, VerifiedFixture.DeploymentProfileId, pqVerifier));
+        AssertVerificationFailure(() => DeepIdV2Verifier.VerifyDab2(valid, did,
+            fixture.Identity, VerifiedFixture.DeploymentProfileId,
+            new ThrowingTestPqVerifier()));
+    }
+
+    private sealed class ExactTestPqVerifier(
+        byte[] expectedPublicKey, byte[] expectedMessage, byte[] expectedSignature)
+        : IDeepMlDsa65Verifier
+    {
+        public bool Verify(ReadOnlySpan<byte> publicKey1952, ReadOnlySpan<byte> message,
+            ReadOnlySpan<byte> context, ReadOnlySpan<byte> signature3309) =>
+            publicKey1952.SequenceEqual(expectedPublicKey) &&
+            message.SequenceEqual(expectedMessage) &&
+            context.SequenceEqual("Deep/DAB2/V2/root"u8) &&
+            signature3309.SequenceEqual(expectedSignature);
+    }
+
+    private sealed class ThrowingTestPqVerifier : IDeepMlDsa65Verifier
+    {
+        public bool Verify(ReadOnlySpan<byte> publicKey1952, ReadOnlySpan<byte> message,
+            ReadOnlySpan<byte> context, ReadOnlySpan<byte> signature3309) =>
+            throw new PlatformNotSupportedException("test-only unavailable provider");
+    }
+
+    [Fact]
+    public void Dab2_RealNativeHybridSignaturesCloseOverExactDidAndAccount()
+    {
+        if (!OperatingSystem.IsWindows() ||
+            RuntimeInformation.ProcessArchitecture is not (Architecture.X64 or Architecture.Arm64))
+            return;
+
+        var fixture = VerifiedFixture.Create();
+        var seed = Enumerable.Range(0, 32).Select(value => (byte)(value + 1)).ToArray();
+        using var pq = DeepMlDsa65NativeProvider.LoadCandidateForCurrentProcess();
+        try
+        {
+            var did = DeepIdV2Codec.AuthorDid2(fixture.AddressKey.PublicKey,
+                pq.DerivePublicKey(seed), ApplicationCoreFixture.Bytes(16, 0x79));
+            var account = fixture.Account.Certificate;
+            var reference = ApplicationCoreCodec.CreateArtifactReference(
+                (ushort)account.ArtifactType, checked((uint)account.CanonicalBytes.Length),
+                account.CanonicalHash.Span);
+            var realm = DeepIdV2Codec.DeriveIdentityRealmId(
+                fixture.Network, VerifiedFixture.DeploymentProfileId);
+            ParsedDab2 AuthorAt(ulong generation, byte[] predecessor,
+                byte[] ed, byte[] pqSignature, byte[] accountSignature) =>
+                DeepIdV2Codec.AuthorDab2(did.RecordHash.Span, realm, generation, predecessor,
+                    fixture.AccountId, 1, reference, ed, pqSignature, accountSignature);
+            ParsedDab2 Author(byte[] ed, byte[] pqSignature, byte[] accountSignature) =>
+                AuthorAt(0, new byte[32], ed, pqSignature, accountSignature);
+            var unsigned = Author(ApplicationCoreFixture.Bytes(64, 0x7a),
+                ApplicationCoreFixture.Bytes(3309, 0x7b), ApplicationCoreFixture.Bytes(64, 0x7c));
+            var edSignature = PublicKeyAuth.SignDetached(
+                unsigned.RootEd25519SignatureInput.ToArray(), fixture.AddressKey.PrivateKey);
+            var pqSignature = pq.Sign(seed, "Deep/DAB2/V2/root"u8,
+                unsigned.RootMlDsa65SignatureInput.Span);
+            var accountSignature = PublicKeyAuth.SignDetached(
+                unsigned.AccountSignatureInput.ToArray(), fixture.AccountKey.PrivateKey);
+            var signed = Author(edSignature, pqSignature, accountSignature);
+            var verified = DeepIdV2Verifier.VerifyDab2(signed, did, fixture.Identity,
+                VerifiedFixture.DeploymentProfileId, pq);
+            Assert.Same(signed, verified.Record);
+            var genesis = DeepIdV2Verifier.StartDab2Lineage(verified);
+            Assert.Equal(ApplicationLineageDisposition.AcceptedGenesis, genesis.Disposition);
+            Assert.Equal(ApplicationLineageDisposition.ExactReplay,
+                DeepIdV2Verifier.PrepareDab2Transition(genesis.Next, verified).Disposition);
+
+            var successorUnsigned = AuthorAt(1, signed.RecordHash.ToArray(),
+                ApplicationCoreFixture.Bytes(64, 0x7a),
+                ApplicationCoreFixture.Bytes(3309, 0x7b),
+                ApplicationCoreFixture.Bytes(64, 0x7c));
+            ParsedDab2 SignSuccessor() => AuthorAt(1, signed.RecordHash.ToArray(),
+                PublicKeyAuth.SignDetached(successorUnsigned.RootEd25519SignatureInput.ToArray(),
+                    fixture.AddressKey.PrivateKey),
+                pq.Sign(seed, "Deep/DAB2/V2/root"u8,
+                    successorUnsigned.RootMlDsa65SignatureInput.Span),
+                PublicKeyAuth.SignDetached(successorUnsigned.AccountSignatureInput.ToArray(),
+                    fixture.AccountKey.PrivateKey));
+            var successor = DeepIdV2Verifier.VerifyDab2(SignSuccessor(), did, fixture.Identity,
+                VerifiedFixture.DeploymentProfileId, pq);
+            var advanced = DeepIdV2Verifier.PrepareDab2Transition(genesis.Next, successor);
+            Assert.Equal(ApplicationLineageDisposition.AcceptedSuccessor, advanced.Disposition);
+            var competing = DeepIdV2Verifier.VerifyDab2(SignSuccessor(), did, fixture.Identity,
+                VerifiedFixture.DeploymentProfileId, pq);
+            var fork = DeepIdV2Verifier.PrepareDab2Transition(advanced.Next, competing);
+            Assert.Equal(ApplicationLineageDisposition.ForkLatched, fork.Disposition);
+            Assert.True(fork.Next.ForkLatched);
+            AssertLineageFailure(() => DeepIdV2Verifier.PrepareDab2Transition(fork.Next, successor));
+            AssertLineageFailure(() => DeepIdV2Verifier.PrepareDab2Transition(advanced.Next, verified));
+
+            var substituted = pqSignature.ToArray();
+            substituted[^1] ^= 1;
+            AssertVerificationFailure(() => DeepIdV2Verifier.VerifyDab2(
+                Author(edSignature, substituted, accountSignature), did, fixture.Identity,
+                VerifiedFixture.DeploymentProfileId, pq));
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(seed);
+        }
+    }
+
+    [Fact]
+    public void Dab2_SafetyNumberIsSymmetricAndCommitsToPqGenesisRoot()
+    {
+        static Dab2LineageState Build(VerifiedFixture fixture, byte pqKeyStart)
+        {
+            var pqPublicKey = ApplicationCoreFixture.Bytes(1952, pqKeyStart);
+            var pqSignature = ApplicationCoreFixture.Bytes(3309, 0x81);
+            var did = DeepIdV2Codec.AuthorDid2(fixture.AddressKey.PublicKey,
+                pqPublicKey, ApplicationCoreFixture.Bytes(16, 0x82));
+            var account = fixture.Account.Certificate;
+            var reference = ApplicationCoreCodec.CreateArtifactReference(
+                (ushort)account.ArtifactType, checked((uint)account.CanonicalBytes.Length),
+                account.CanonicalHash.Span);
+            var realm = DeepIdV2Codec.DeriveIdentityRealmId(
+                fixture.Network, VerifiedFixture.DeploymentProfileId);
+            ParsedDab2 Author(byte[] ed, byte[] accountSignature) =>
+                DeepIdV2Codec.AuthorDab2(did.RecordHash.Span, realm, 0, new byte[32],
+                    fixture.AccountId, 1, reference, ed, pqSignature, accountSignature);
+            var unsigned = Author(ApplicationCoreFixture.Bytes(64, 0x83),
+                ApplicationCoreFixture.Bytes(64, 0x84));
+            var signed = Author(
+                PublicKeyAuth.SignDetached(unsigned.RootEd25519SignatureInput.ToArray(),
+                    fixture.AddressKey.PrivateKey),
+                PublicKeyAuth.SignDetached(unsigned.AccountSignatureInput.ToArray(),
+                    fixture.AccountKey.PrivateKey));
+            var verifier = new ExactTestPqVerifier(
+                pqPublicKey, signed.RootMlDsa65SignatureInput.ToArray(), pqSignature);
+            var verified = DeepIdV2Verifier.VerifyDab2(signed, did, fixture.Identity,
+                VerifiedFixture.DeploymentProfileId, verifier);
+            return DeepIdV2Verifier.StartDab2Lineage(verified).Next;
+        }
+
+        var alice = VerifiedFixture.Create(accountValue: 0x22, deviceValue: 0x33);
+        var bob = VerifiedFixture.Create(accountValue: 0x44, deviceValue: 0x55);
+        var aliceOriginal = Build(alice, 0x85);
+        var aliceChangedPqRoot = Build(alice, 0x86);
+        var bobBinding = Build(bob, 0x87);
+        var original = DeepIdV2Verifier.ComputeContactSafetyNumber(aliceOriginal, bobBinding);
+        Assert.Equal(original,
+            DeepIdV2Verifier.ComputeContactSafetyNumber(bobBinding, aliceOriginal));
+        Assert.NotEqual(original,
+            DeepIdV2Verifier.ComputeContactSafetyNumber(aliceChangedPqRoot, bobBinding));
+        AssertVerificationFailure(() =>
+            DeepIdV2Verifier.ComputeContactSafetyNumber(aliceOriginal, aliceChangedPqRoot));
+        AssertLineageFailure(() => DeepIdV2Verifier.ComputeContactSafetyNumber(
+            new Dab2LineageState(aliceOriginal.Head, forkLatched: true), bobBinding));
     }
 
     [Fact]

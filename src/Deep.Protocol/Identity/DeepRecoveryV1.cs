@@ -725,8 +725,159 @@ public sealed class DeepRecoveryAccountCapabilities : IDisposable
     }
 
     /// <summary>
+    /// Candidate clean-break genesis binding. The supplied phrase must recreate
+    /// this exact account authority; V2 root seeds never leave the callback.
+    /// This does not activate the retired DID1/DAB1 consumer graph.
+    /// </summary>
+    public Dab2LineageState AuthorGenesisDab2(
+        VerifiedDeepRecoveryPhrase phrase,
+        VerifiedApplicationIdentityClosure identity,
+        ushort deploymentProfileId)
+    {
+        ArgumentNullException.ThrowIfNull(phrase);
+        ArgumentNullException.ThrowIfNull(identity);
+        if (deploymentProfileId == 0)
+            throw new ArgumentOutOfRangeException(nameof(deploymentProfileId));
+
+        lock (sync)
+        {
+            ThrowIfDisposed();
+            EnsureIdentityAuthority(identity);
+            using var recreated = DeepRecoveryV1.DeriveAccountCapabilities(
+                phrase, networkId, AccountGeneration);
+            if (!CryptographicOperations.FixedTimeEquals(
+                    accountSigningSeed, recreated.accountSigningSeed))
+                throw new CryptographicException(
+                    "The recovery phrase does not own the exact account authority.");
+            using var pq = DeepMlDsa65NativeProvider.LoadCandidateForCurrentProcess();
+            Dab2LineageState? result = null;
+            DeepPqRootRecoveryV2.UseRootMaterial(phrase, (edSeed, pqSeed, readCapability) =>
+            {
+                byte[]? edPublic = null;
+                byte[]? pqPublic = null;
+                byte[]? edSignature = null;
+                byte[]? pqSignature = null;
+                byte[]? accountSignature = null;
+                byte[]? placeholderEd = null;
+                byte[]? placeholderPq = null;
+                try
+                {
+                    edPublic = DeepIdentityCrypto.DeriveEd25519PublicKey(edSeed);
+                    pqPublic = pq.DerivePublicKey(pqSeed);
+                    var did = DeepIdV2Codec.AuthorDid2(edPublic, pqPublic, readCapability);
+                    var realm = DeepIdV2Codec.DeriveIdentityRealmId(
+                        networkId, deploymentProfileId);
+                    var dpaReference = ApplicationCoreCodec.CreateArtifactReference(
+                        (ushort)ArtifactType.Dpa1,
+                        checked((uint)identity.Account.Certificate.CanonicalBytes.Length),
+                        identity.Account.Certificate.CanonicalHash.Span);
+                    placeholderEd = Enumerable.Repeat((byte)1, 64).ToArray();
+                    placeholderPq = Enumerable.Repeat((byte)1, 3309).ToArray();
+                    var unsigned = DeepIdV2Codec.AuthorDab2(
+                        did.RecordHash.Span, realm, 0, new byte[32],
+                        identity.Account.DeepAccountIdHash.Span, AccountGeneration,
+                        dpaReference, placeholderEd, placeholderPq, placeholderEd);
+                    edSignature = SignBytes(unsigned.RootEd25519SignatureInput.Span, edSeed);
+                    pqSignature = pq.Sign(pqSeed, "Deep/DAB2/V2/root"u8,
+                        unsigned.RootMlDsa65SignatureInput.Span);
+                    accountSignature = SignBytes(
+                        unsigned.AccountSignatureInput.Span, accountSigningSeed);
+                    var authored = DeepIdV2Codec.AuthorDab2(
+                        did.RecordHash.Span, realm, 0, new byte[32],
+                        identity.Account.DeepAccountIdHash.Span, AccountGeneration,
+                        dpaReference, edSignature, pqSignature, accountSignature);
+                    var verified = DeepIdV2Verifier.VerifyDab2(
+                        authored, did, identity, deploymentProfileId, pq);
+                    result = DeepIdV2Verifier.StartDab2Lineage(verified).Next;
+                }
+                finally
+                {
+                    ZeroOwned(edPublic);
+                    ZeroOwned(pqPublic);
+                    ZeroOwned(edSignature);
+                    ZeroOwned(pqSignature);
+                    ZeroOwned(accountSignature);
+                    ZeroOwned(placeholderEd);
+                    ZeroOwned(placeholderPq);
+                }
+            });
+            return result ?? throw new CryptographicException(
+                "DID2/DAB2 genesis authoring did not produce a verified binding.");
+        }
+    }
+
+    /// <summary>
     /// Issues the initial recovery-authorized contact-publication delegation to
     /// one verified active device. The authorization ID is generated internally.
+    /// </summary>
+    public VerifiedDca1V2 AuthorGenesisDca1V2(
+        Dab2LineageState binding,
+        Dmd1LineageState directory,
+        VerifiedDeviceRelative publisherDevice,
+        ulong trustedUnixSeconds)
+    {
+        ArgumentNullException.ThrowIfNull(binding);
+        ArgumentNullException.ThrowIfNull(directory);
+        ArgumentNullException.ThrowIfNull(publisherDevice);
+        if (trustedUnixSeconds == 0 ||
+            trustedUnixSeconds > ulong.MaxValue - ContactPublicationLifetimeSeconds)
+            throw new ArgumentOutOfRangeException(nameof(trustedUnixSeconds));
+
+        lock (sync)
+        {
+            ThrowIfDisposed();
+            EnsureIdentityAuthority(binding.Head.Identity);
+            if (!ReferenceEquals(binding.Head.Identity, directory.Head.Identity) ||
+                !ReferenceEquals(publisherDevice.Identity.Account, directory.Head.Identity.Account) ||
+                !directory.Head.Record.ActiveDevices.Any(entry =>
+                    entry.DeviceId.Span.SequenceEqual(publisherDevice.Certificate.DeviceId.Span)))
+                throw new RecordException(RecordError.InvalidTransition,
+                    "Genesis DCA1 V2 requires the exact active publisher in the DAB2/DMD1 identity closure.");
+
+            byte[]? authorizationId = null;
+            byte[]? signature = null;
+            try
+            {
+                authorizationId = RandomNonzero(32);
+                var account = directory.Head.Identity.Account;
+                var dpaReference = ApplicationCoreCodec.CreateArtifactReference(
+                    (ushort)ArtifactType.Dpa1,
+                    checked((uint)account.Certificate.CanonicalBytes.Length),
+                    account.Certificate.CanonicalHash.Span);
+                var dabReference = DeepIdV2Codec.CreateDab2ArtifactReference(binding.Head.Record);
+                var expiresAt = checked(trustedUnixSeconds + ContactPublicationLifetimeSeconds);
+                var unsigned = DeepIdV2ContactAuthorizationCodec.Author(
+                    networkId, account.DeepAccountIdHash.Span, dpaReference,
+                    directory.Head.Record.DirectoryGeneration,
+                    directory.Head.Record.RecordHash.Span, authorizationId,
+                    publisherDevice.Certificate.DeviceId.Span, 0x03,
+                    MaximumGenesisContactBundleGeneration, trustedUnixSeconds,
+                    expiresAt, Enumerable.Repeat((byte)1, 64).ToArray(),
+                    binding.Head.DeepId.RecordHash.Span, dabReference);
+                signature = SignBytes(unsigned.SignatureInput.Span, accountSigningSeed);
+                var authored = DeepIdV2ContactAuthorizationCodec.Author(
+                    networkId, account.DeepAccountIdHash.Span, dpaReference,
+                    directory.Head.Record.DirectoryGeneration,
+                    directory.Head.Record.RecordHash.Span, authorizationId,
+                    publisherDevice.Certificate.DeviceId.Span, 0x03,
+                    MaximumGenesisContactBundleGeneration, trustedUnixSeconds,
+                    expiresAt, signature, binding.Head.DeepId.RecordHash.Span,
+                    dabReference);
+                var verified = DeepIdV2ContactAuthorizationCodec.Verify(
+                    authored, binding.Head, directory.Head);
+                return DeepIdV2ContactAuthorizationCodec.RequireCurrentlyAuthoritative(
+                    verified, trustedUnixSeconds);
+            }
+            finally
+            {
+                ZeroOwned(authorizationId);
+                ZeroOwned(signature);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Pre-cutover DAB1 delegation. It must not be used by a DID2 client.
     /// </summary>
     public CurrentlyAuthoritativeDca1 AuthorGenesisDca1(
         Dab1LineageState binding,
@@ -1119,7 +1270,7 @@ public sealed class DeepRecoveryAccountCapabilities : IDisposable
         }
     }
 
-    private byte[] SignBytes(ReadOnlySpan<byte> message, byte[] seed)
+    private byte[] SignBytes(ReadOnlySpan<byte> message, ReadOnlySpan<byte> seed)
     {
         if (message.Length is < 1 or > MaxCanonicalSigningBytes)
             throw new RecordException(

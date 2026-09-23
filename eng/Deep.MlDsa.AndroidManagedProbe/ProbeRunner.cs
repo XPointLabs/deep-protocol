@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Android.Content.Res;
+using Deep.Protocol.Identity;
 
 namespace Deep.MlDsa.AndroidManagedProbe;
 
@@ -40,6 +41,8 @@ internal static class ProbeRunner
                 CheckTranscript(publicFromSeed, sign, verify, zero);
                 step = "acvp";
                 var acvp = AcvpRunner.Run(assets, handle);
+                step = "did2-managed";
+                CheckManagedDid2Root();
                 return Report(true, null, acvp);
             }
             finally { NativeLibrary.Free(handle); }
@@ -52,7 +55,8 @@ internal static class ProbeRunner
 
     private static string Stage(AssetManager assets)
     {
-        var directory = Path.Combine(AppContext.BaseDirectory, "deep-mldsa-probe");
+        var directory = Path.Combine(
+            AppContext.BaseDirectory, "runtimes", "android-arm64", "native");
         Directory.CreateDirectory(directory);
         var path = Path.Combine(directory, "libdeep_mldsa.so");
         var temporary = path + ".staging";
@@ -73,6 +77,25 @@ internal static class ProbeRunner
             return path;
         }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
+    }
+
+    private static void CheckManagedDid2Root()
+    {
+        const string publicPhrase =
+            "abandon abandon abandon abandon abandon abandon abandon abandon " +
+            "abandon abandon abandon abandon abandon abandon abandon abandon " +
+            "abandon abandon abandon abandon abandon abandon abandon art";
+        using var phrase = DeepRecoveryV1.VerifyCanonicalUtf8(
+            Encoding.ASCII.GetBytes(publicPhrase));
+        var did = DeepIdV2Root.DeriveDid2(phrase);
+        if (did.CanonicalBytes.Length != 2036 || did.Text.Length != 90 ||
+            !StringComparer.Ordinal.Equals(
+                Convert.ToHexString(SHA256.HashData(did.CanonicalBytes.Span)).ToLowerInvariant(),
+                "054709aba16d7e1a4d8eeb44cbb4b5096a06b0915ce14b32e9fdb6be8968bcd6") ||
+            !StringComparer.Ordinal.Equals(
+                Convert.ToHexString(did.RecordHash.Span).ToLowerInvariant(),
+                "bea14bedff9a97c5108a5eebc3c4443192de68ea5db3270f29cf4b42da63b123"))
+            throw new CryptographicException("Managed DID2 root transcript differs from pinned vector.");
     }
 
     private static unsafe void CheckTranscript(

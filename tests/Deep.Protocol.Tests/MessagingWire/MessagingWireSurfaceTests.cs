@@ -154,7 +154,7 @@ public sealed class MessagingWireSurfaceTests
     }
 
     [Fact]
-    public void GeneratedRegistryExposesOnlyTheFrozenTargetIdentifiers()
+    public void GeneratedRegistryPreservesMessagingIdentifiersAndUnfrozenGates()
     {
         Assert.Equal("DTR2", DeepProtocolIdentifiers.Magic.DTR2);
         Assert.Equal("DTR2"u8.ToArray(), DeepProtocolIdentifiers.MagicBytes.DTR2.ToArray());
@@ -162,8 +162,8 @@ public sealed class MessagingWireSurfaceTests
             DeepProtocolRegistryGenerated.Identifiers,
             identifier => identifier.Namespace == "suite:pairwise-messaging-u16" &&
                           identifier.NumericId == 0x0201 &&
-                          identifier.Lifecycle == ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE);
-        foreach (var magic in new[] { "DPK2", "DPH2", "DTR2", "DPE2" })
+                          identifier.Lifecycle == ProtocolIdentifierLifecycle.TARGET_UNFROZEN);
+        foreach (var magic in new[] { "DPK2", "DTR2", "DPE2" })
         {
             Assert.Contains(
                 DeepProtocolRegistryGenerated.Identifiers,
@@ -171,6 +171,10 @@ public sealed class MessagingWireSurfaceTests
                               identifier.CanonicalName == magic &&
                               identifier.Lifecycle == ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE);
         }
+        Assert.Contains(DeepProtocolRegistryGenerated.Identifiers,
+            identifier => identifier.Namespace == "magic" &&
+                          identifier.CanonicalName == "DPH2" &&
+                          identifier.Lifecycle == ProtocolIdentifierLifecycle.TARGET_UNFROZEN);
     }
 
     [Fact]

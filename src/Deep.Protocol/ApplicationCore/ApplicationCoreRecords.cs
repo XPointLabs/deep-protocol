@@ -8,12 +8,12 @@ public abstract class ParsedApplicationCoreRecord
     private readonly byte[] _canonical;
     private readonly byte[] _recordHash;
 
-    internal ParsedApplicationCoreRecord(string magic, byte[] canonical)
+    internal ParsedApplicationCoreRecord(string magic, byte[] canonical, int hashGeneration = 1)
     {
         Magic = magic;
         _canonical = canonical;
         _recordHash = ApplicationCoreFormat.Sha256Domain(
-            $"Deep/Application/V1/record-hash/{magic}", _canonical);
+            $"Deep/Application/V{hashGeneration}/record-hash/{magic}", _canonical);
     }
 
     public string Magic { get; }

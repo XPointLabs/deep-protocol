@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Runtime.InteropServices;
 using System.Text;
 using Deep.Protocol.Identity;
 
@@ -88,6 +89,25 @@ public sealed class DeepPqRootRecoveryV2Tests
         Assert.Throws<ObjectDisposedException>(() =>
             DeepPqRootRecoveryV2.UseRootMaterial(phrase, (_, _, _) => called = true));
         Assert.False(called);
+    }
+
+    [Fact]
+    public void DeepIdV2Root_RestoreRecreatesExactCredentialAndCompactText()
+    {
+        if (!OperatingSystem.IsWindows() ||
+            RuntimeInformation.ProcessArchitecture is not (Architecture.X64 or Architecture.Arm64))
+            return;
+        using var original = DeepRecoveryV1.VerifyCanonicalUtf8(
+            Encoding.ASCII.GetBytes(ZeroEntropyPhrase));
+        using var restored = DeepRecoveryV1.VerifyCanonicalUtf8(
+            Encoding.ASCII.GetBytes(ZeroEntropyPhrase));
+        var first = DeepIdV2Root.DeriveDid2(original);
+        var second = DeepIdV2Root.DeriveDid2(restored);
+        Assert.Equal(first.CanonicalBytes.ToArray(), second.CanonicalBytes.ToArray());
+        Assert.Equal(first.RecordHash.ToArray(), second.RecordHash.ToArray());
+        Assert.Equal(first.Text, second.Text);
+        Assert.Equal(2036, first.CanonicalBytes.Length);
+        Assert.Equal(90, first.Text.Length);
     }
 
     private static byte[] Combine(

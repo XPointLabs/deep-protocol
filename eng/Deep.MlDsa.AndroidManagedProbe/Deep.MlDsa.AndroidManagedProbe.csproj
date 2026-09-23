@@ -24,6 +24,10 @@
                   Link="Assets\deep-mldsa\libdeep_mldsa.so" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Deep.Protocol\Deep.Protocol.csproj" />
+  </ItemGroup>
+
   <ItemGroup Condition="'$(DeepMlDsaAcvpVectorsRoot)' != ''">
     <AndroidAsset Include="$(DeepMlDsaAcvpVectorsRoot)\ML-DSA-keyGen-FIPS204\prompt.json"
                   Link="Assets\acvp\keygen-prompt.json" />

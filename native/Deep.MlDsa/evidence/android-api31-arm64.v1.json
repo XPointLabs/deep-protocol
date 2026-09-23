@@ -49,6 +49,19 @@
     "physicalResult": "success:true",
     "probeAppUninstalledFromDevice": true
   },
+  "managedDid2RootProbe": {
+    "date": "2026-09-23",
+    "signedApkSha256": "dcf1b81a27ae9f16992f77943684b72a64089c3bbc2bd483229c492e3216d741",
+    "packagedNativeAssetSha256": "6e46e4df970f5376416af3c50fb39e580487a616d2541aa26d1d90eddf918cc9",
+    "physicalDevice": "Android 12 API 31 arm64-v8a",
+    "checks": [
+      "same official ACVP 70 cases",
+      "candidate native asset staged and digest-checked at the exact .NET provider runtime path",
+      "Deep.Protocol managed V2 24-word root KDF plus DID2 authoring matches independent pinned byte and record hashes"
+    ],
+    "physicalResult": "success:true",
+    "probeAppUninstalledFromDevice": true
+  },
   "result": "passed",
   "checks": [
     "seed-to-public-key-repeatability",

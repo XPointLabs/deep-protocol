@@ -516,10 +516,15 @@ internal static class DeepIdText
     private const string Alphabet = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
 
     internal static string Encode(ReadOnlySpan<byte> publicKey32, ReadOnlySpan<byte> capability16)
+        => Encode(1, publicKey32, capability16);
+
+    internal static string Encode(
+        byte formatVersion, ReadOnlySpan<byte> identityHashOrKey32,
+        ReadOnlySpan<byte> capability16)
     {
         Span<byte> payload = stackalloc byte[49];
-        payload[0] = 1;
-        publicKey32.CopyTo(payload[1..33]);
+        payload[0] = formatVersion;
+        identityHashOrKey32.CopyTo(payload[1..33]);
         capability16.CopyTo(payload[33..]);
         var data = ConvertBits(payload, 8, 5, true);
         var checksum = CreateChecksum(Hrp, data);
@@ -535,6 +540,9 @@ internal static class DeepIdText
     }
 
     internal static byte[] Decode(string text)
+        => Decode(text, 1);
+
+    internal static byte[] Decode(string text, byte formatVersion)
     {
         if (text.Length != 90 || text != text.ToLowerInvariant() || !text.StartsWith("deep1", StringComparison.Ordinal))
             Invalid("Deep ID text must be exact lowercase Bech32m with HRP deep.");
@@ -552,11 +560,11 @@ internal static class DeepIdText
         if (Polymod(HrpExpand(Hrp).Concat(values).ToArray()) != Bech32mConstant)
             Invalid("Deep ID Bech32m checksum is invalid.");
         var payload = ConvertBits(values.AsSpan(0, values.Length - 6), 5, 8, false);
-        if (payload.Length != 49 || payload[0] != 1 ||
+        if (payload.Length != 49 || payload[0] != formatVersion ||
             ApplicationCoreFormat.IsZero(payload.AsSpan(1, 32)) ||
             ApplicationCoreFormat.IsZero(payload.AsSpan(33, 16)))
-            Invalid("Deep ID payload is not canonical version 1.");
-        var canonical = Encode(payload.AsSpan(1, 32), payload.AsSpan(33, 16));
+            Invalid("Deep ID payload is not canonical for its required version.");
+        var canonical = Encode(formatVersion, payload.AsSpan(1, 32), payload.AsSpan(33, 16));
         if (!string.Equals(canonical, text, StringComparison.Ordinal))
             Invalid("Deep ID re-encoding is not canonical.");
         return payload;

@@ -242,6 +242,7 @@ foreach ($collision in $registry.productionInventory.knownCrossNamespaceCollisio
 $expectedScopes = [ordered]@{
     'dnp1-header-u16' = 16
     'pairwise-messaging-u16' = 16
+    'deep-root-u16' = 16
     'xpoint-onion-u8' = 8
 }
 Assert-Unique @($registry.suiteScopes.name) 'suite scope'

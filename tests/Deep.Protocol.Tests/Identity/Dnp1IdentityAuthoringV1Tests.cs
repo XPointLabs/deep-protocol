@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using Deep.Protocol.AccountDirectoryV1;
@@ -631,6 +632,48 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
                 issuedAtUnixSeconds: 1_900_000_300));
         Assert.Empty(typeof(VerifiedIdentityRelative).GetConstructors());
         Assert.Empty(typeof(VerifiedDeviceRelative).GetConstructors());
+    }
+
+    [Fact]
+    public async Task DeepIdV2Genesis_UsesSamePhraseForAccountAndPqRoot_AndRestoresExactDid2()
+    {
+        if (!OperatingSystem.IsWindows() ||
+            RuntimeInformation.ProcessArchitecture is not (Architecture.X64 or Architecture.Arm64))
+            return;
+
+        using var phrase = DeepRecoveryV1.VerifyCanonicalUtf8(Encoding.ASCII.GetBytes(Mnemonic));
+        using var recovery = DeepRecoveryV1.DeriveAccountCapabilities(phrase, Network, 1);
+        var account = Dnp1IdentityAuthoringV1.AuthorGenesisAccount(
+            recovery, 1_900_000_000, 1, new FillRandom(0xa1));
+        using var device = Device();
+        var issued = await IssueDevice(recovery, account, device);
+        var closure = ApplicationCoreVerifier.CreateIdentityClosure(
+            issued.Verified.Identity, [issued.Verified]);
+
+        var binding = recovery.AuthorGenesisDab2(phrase, closure, deploymentProfileId: 1);
+        Assert.Equal(0UL, binding.Head.Record.BindingGeneration);
+        Assert.Equal(2036, binding.Head.DeepId.CanonicalBytes.Length);
+        Assert.Equal(3711, binding.Head.Record.CanonicalBytes.Length);
+        var directory = recovery.AuthorGenesisDmd1(closure, 1_900_000_200);
+        var contactAuthorization = recovery.AuthorGenesisDca1V2(
+            binding, directory, issued.Verified, 1_900_000_300);
+        Assert.Equal(binding.Head.DeepId.RecordHash.ToArray(),
+            contactAuthorization.Record.ExactDid2Hash.ToArray());
+        Assert.Equal(DeepIdV2Codec.Dab2ArtifactType,
+            contactAuthorization.Record.Dab2Reference.TypeCode);
+        Assert.Equal(2, contactAuthorization.Record.CanonicalBytes.Span[5]);
+        Assert.Equal(473, contactAuthorization.Record.CanonicalBytes.Length);
+
+        using var restoredPhrase = DeepRecoveryV1.VerifyCanonicalUtf8(
+            Encoding.ASCII.GetBytes(Mnemonic));
+        var restoredDid = DeepIdV2Root.DeriveDid2(restoredPhrase);
+        Assert.Equal(binding.Head.DeepId.CanonicalBytes.ToArray(),
+            restoredDid.CanonicalBytes.ToArray());
+        Assert.Equal(binding.Head.DeepId.Text, restoredDid.Text);
+
+        using var wrongPhrase = DeepRecoveryV1.Generate();
+        Assert.Throws<CryptographicException>(() =>
+            recovery.AuthorGenesisDab2(wrongPhrase, closure, deploymentProfileId: 1));
     }
 
     [Fact]

@@ -84,7 +84,9 @@ internal static class ApplicationCoreFormat
         ushort fieldCount,
         int minimumTotal,
         int maximumTotal,
-        Span<ApplicationFieldSlice> fields)
+        Span<ApplicationFieldSlice> fields,
+        ushort version = Version,
+        ushort suite = Suite)
     {
         if (encoded.Length < minimumTotal || encoded.Length > maximumTotal ||
             encoded.Length < HeaderLength)
@@ -95,12 +97,12 @@ internal static class ApplicationCoreFormat
         if (!encoded[..4].SequenceEqual(magic))
             throw Error(ApplicationCoreValidationStage.FixedHeader,
                 ApplicationCoreRejection.WrongMagic, "The record magic is not accepted by this codec.");
-        if (BinaryPrimitives.ReadUInt16BigEndian(encoded[4..6]) != Version)
+        if (BinaryPrimitives.ReadUInt16BigEndian(encoded[4..6]) != version)
             throw Error(ApplicationCoreValidationStage.FixedHeader,
-                ApplicationCoreRejection.WrongVersion, "Only version 1 is accepted.");
-        if (BinaryPrimitives.ReadUInt16BigEndian(encoded[6..8]) != Suite)
+                ApplicationCoreRejection.WrongVersion, "The record version is not accepted.");
+        if (BinaryPrimitives.ReadUInt16BigEndian(encoded[6..8]) != suite)
             throw Error(ApplicationCoreValidationStage.FixedHeader,
-                ApplicationCoreRejection.WrongSuite, "Only suite 0x0201 is accepted.");
+                ApplicationCoreRejection.WrongSuite, "The record suite is not accepted.");
         if (BinaryPrimitives.ReadUInt16BigEndian(encoded[8..10]) != fieldCount)
             throw Error(ApplicationCoreValidationStage.FixedHeader,
                 ApplicationCoreRejection.WrongFieldCount, "The field count is not exact.");
@@ -195,14 +197,15 @@ internal static class ApplicationCoreFormat
         return hash.GetHashAndReset();
     }
 
-    internal static byte[] SignatureInput(string label, ReadOnlySpan<byte> record)
+    internal static byte[] SignatureInput(
+        string label, ReadOnlySpan<byte> record, ushort suite = Suite)
     {
         var labelBytes = AsciiLabel(label);
         var output = new byte[labelBytes.Length + 1 + 2 + 4 + record.Length];
         labelBytes.CopyTo(output, 0);
         var offset = labelBytes.Length;
         output[offset++] = 0;
-        BinaryPrimitives.WriteUInt16BigEndian(output.AsSpan(offset, 2), Suite);
+        BinaryPrimitives.WriteUInt16BigEndian(output.AsSpan(offset, 2), suite);
         offset += 2;
         BinaryPrimitives.WriteUInt32BigEndian(output.AsSpan(offset, 4), checked((uint)record.Length));
         offset += 4;
@@ -278,14 +281,17 @@ internal ref struct ApplicationRecordWriter
     private int _offset;
     private ushort _lastTag;
 
-    internal ApplicationRecordWriter(Span<byte> destination, ReadOnlySpan<byte> magic, ushort fieldCount)
+    internal ApplicationRecordWriter(
+        Span<byte> destination, ReadOnlySpan<byte> magic, ushort fieldCount,
+        ushort version = ApplicationCoreFormat.Version,
+        ushort suite = ApplicationCoreFormat.Suite)
     {
         _destination = destination;
         _offset = ApplicationCoreFormat.HeaderLength;
         _lastTag = 0;
         magic.CopyTo(destination);
-        BinaryPrimitives.WriteUInt16BigEndian(destination[4..6], ApplicationCoreFormat.Version);
-        BinaryPrimitives.WriteUInt16BigEndian(destination[6..8], ApplicationCoreFormat.Suite);
+        BinaryPrimitives.WriteUInt16BigEndian(destination[4..6], version);
+        BinaryPrimitives.WriteUInt16BigEndian(destination[6..8], suite);
         BinaryPrimitives.WriteUInt16BigEndian(destination[8..10], fieldCount);
         BinaryPrimitives.WriteUInt16BigEndian(destination[10..12], 0);
     }

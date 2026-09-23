@@ -15,10 +15,11 @@
     "productionInventory": { "$ref": "#/$defs/productionInventory" },
     "imports": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "$ref": "#/$defs/import" } },
     "suiteScopes": {
-      "type": "array", "minItems": 3, "maxItems": 3, "items": { "$ref": "#/$defs/suiteScope" },
+      "type": "array", "minItems": 4, "maxItems": 4, "items": { "$ref": "#/$defs/suiteScope" },
       "allOf": [
         { "contains": { "type": "object", "required": ["name", "widthBits"], "properties": { "name": { "const": "dnp1-header-u16" }, "widthBits": { "const": 16 } } } },
         { "contains": { "type": "object", "required": ["name", "widthBits"], "properties": { "name": { "const": "pairwise-messaging-u16" }, "widthBits": { "const": 16 } } } },
+        { "contains": { "type": "object", "required": ["name", "widthBits"], "properties": { "name": { "const": "deep-root-u16" }, "widthBits": { "const": 16 } } } },
         { "contains": { "type": "object", "required": ["name", "widthBits"], "properties": { "name": { "const": "xpoint-onion-u8" }, "widthBits": { "const": 8 } } } }
       ]
     },
@@ -129,7 +130,7 @@
       "type": "object", "additionalProperties": false,
       "required": ["scope", "id", "symbol", "canonicalName", "lifecycle", "sourceId"],
       "properties": {
-        "scope": { "enum": ["dnp1-header-u16", "pairwise-messaging-u16", "xpoint-onion-u8"] },
+        "scope": { "enum": ["dnp1-header-u16", "pairwise-messaging-u16", "deep-root-u16", "xpoint-onion-u8"] },
         "id": { "type": "integer", "minimum": 0, "maximum": 65535 },
         "symbol": { "$ref": "#/$defs/symbol" },
         "canonicalName": { "type": "string", "pattern": "^[A-Za-z0-9-]+$", "minLength": 3, "maxLength": 96 },

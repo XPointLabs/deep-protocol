@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-23",
+  "status": "candidate-functional-evidence-not-release-approval",
+  "source": {
+    "upstreamTag": "mldsa-native-v2.0.0",
+    "upstreamCommit": "834a90d5e846ffa1e1611bd24e160bb2e9b86d35"
+  },
+  "github": {
+    "repository": "XPointLabs/deep-protocol",
+    "branch": "release-candidate/prod-20260909",
+    "nativeTranscriptRun": "https://github.com/XPointLabs/deep-protocol/actions/runs/35858379369",
+    "nativeTranscriptCommit": "9364d113d8c017c04918b46a2b4d9a01d50b4879",
+    "acvpRun": "https://github.com/XPointLabs/deep-protocol/actions/runs/35859067900",
+    "acvpCommit": "bab67818df9b506f9b5ff8d73a14e77cb2959b57"
+  },
+  "checksPerRunner": [
+    "pinned vendored-source snapshot",
+    "native ABI and upstream KAT CTest",
+    "independent Ed25519 plus native ML-DSA DID2/DAB2 transcript and mutation rejection",
+    "official ACVP v1.1.0.43 keygen 25, signing 30, verification 15 cases"
+  ],
+  "additionalLinuxChecks": ["AddressSanitizer", "UndefinedBehaviorSanitizer"],
+  "artifacts": [
+    {
+      "runner": "windows-2022",
+      "rid": "win-x64",
+      "bytes": 139264,
+      "sha256": "ee20d61aa6b0acbd048fbe9f2554b344657bfe6c412ebb7be6dd5632ea14e7d5"
+    },
+    {
+      "runner": "windows-11-vs2026-arm",
+      "rid": "win-arm64",
+      "bytes": 162816,
+      "sha256": "e9595b899e85ebf489f2b27d00ba8bf04fb33c4deb91806c4d8f8df97de1e9d3"
+    },
+    {
+      "runner": "ubuntu-24.04",
+      "rid": "linux-x64",
+      "bytes": 67448,
+      "sha256": "afa88e738bc9a342ada482398b19780b20515fe556e040c1aa847b6093e72f71"
+    },
+    {
+      "runner": "ubuntu-24.04-arm",
+      "rid": "linux-arm64",
+      "bytes": 73544,
+      "sha256": "3997e5c296373bfd6bda1fe45bb5763b1e3bf7158395c213591eef7db2235dfd"
+    }
+  ],
+  "artifactDigestCheck": "downloaded artifacts match the SHA-256 values printed in the corresponding CI logs",
+  "androidPhysicalEvidence": "android-api31-arm64.v1.json",
+  "productionEligible": false,
+  "openGates": [
+    "integrated Android MAUI managed/native binding and Android device account restore",
+    "native secret-lifetime and side-channel review",
+    "signed provenance and SBOM for release assets",
+    "DR-0006 DID2/DAB2 dependent contact/account-directory/messaging cutover"
+  ]
+}
