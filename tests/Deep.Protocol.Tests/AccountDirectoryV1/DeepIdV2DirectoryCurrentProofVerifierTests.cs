@@ -9,6 +9,40 @@ namespace Deep.Protocol.Tests.AccountDirectoryV1;
 public sealed partial class AccountDirectoryFreshnessVerificationTests
 {
     [Fact]
+    public void Did2Bootstrap_RequiresSignedExactEmptyV2Head()
+    {
+        var authority = AuthorityFixture.Create();
+        var emptyAppend = AccountDirectoryRfc6962.ComputeEmptyTreeHash();
+        var valid = authority.Head(0, new byte[32], 0, emptyAppend,
+            DeepIdV2DirectorySparseMap.EmptyMapRoot.ToArray(),
+            minimumReader: 2);
+        var exactValid = AccountDirectoryAdh1Codec.Encode(valid);
+        var validHash = AccountDirectoryCrypto.ComputeAdh1CoreHash(valid);
+        var restored = DeepIdV2DirectoryBootstrapVerifier.RestoreGenesis(
+            authority.Verified, exactValid, validHash);
+        Assert.Equal(exactValid, restored.ExactAdh1.ToArray());
+
+        var legacyMap = authority.Head(0, new byte[32], 0, emptyAppend,
+            AccountDirectorySparseMap.EmptyMapRoot.ToArray(),
+            minimumReader: 2);
+        var oldReader = authority.Head(0, new byte[32], 0, emptyAppend,
+            DeepIdV2DirectorySparseMap.EmptyMapRoot.ToArray(),
+            minimumReader: 1);
+        foreach (var wrong in new[] { legacyMap, oldReader })
+        {
+            Assert.Equal("InvalidDid2Bootstrap",
+                Assert.Throws<AccountDirectoryFreshnessVerificationException>(() =>
+                    DeepIdV2DirectoryBootstrapVerifier.RestoreGenesis(
+                        authority.Verified, AccountDirectoryAdh1Codec.Encode(wrong),
+                        AccountDirectoryCrypto.ComputeAdh1CoreHash(wrong))).Code);
+        }
+        Assert.Equal("PersistedLkgHashMismatch",
+            Assert.Throws<AccountDirectoryFreshnessVerificationException>(() =>
+                DeepIdV2DirectoryBootstrapVerifier.RestoreGenesis(
+                    authority.Verified, exactValid, Bytes(32, 0x55))).Code);
+    }
+
+    [Fact]
     public async Task Did2Verifier_RealPqGenesisClosesSignedCurrentProof()
     {
         if (!OperatingSystem.IsWindows() ||
