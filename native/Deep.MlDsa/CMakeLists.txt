@@ -65,4 +65,23 @@ if(DEEP_MLDSA_BUILD_TESTS)
     target_compile_options(deep_mldsa_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
   endif()
   add_test(NAME deep_mldsa_v1_native COMMAND deep_mldsa_tests)
+
+  add_executable(deep_mldsa_upstream_kat tests/upstream_mldsa65_kat.c)
+  set_target_properties(deep_mldsa_upstream_kat PROPERTIES
+    C_STANDARD 11 C_STANDARD_REQUIRED YES C_EXTENSIONS NO)
+  target_include_directories(deep_mldsa_upstream_kat PRIVATE "${DEEP_MLDSA_VENDOR}")
+  target_compile_definitions(deep_mldsa_upstream_kat PRIVATE
+    MLD_CONFIG_PARAMETER_SET=65 MLD_CONFIG_NO_RANDOMIZED_API=1)
+  target_link_libraries(deep_mldsa_upstream_kat PRIVATE deep_mldsa_provider)
+  if(MSVC)
+    set_property(TARGET deep_mldsa_upstream_kat PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded")
+    target_compile_options(deep_mldsa_upstream_kat PRIVATE /W4 /WX /sdl /GS /guard:cf)
+  else()
+    target_compile_options(deep_mldsa_upstream_kat PRIVATE -Wall -Wextra -Wpedantic -Werror)
+  endif()
+  add_test(NAME deep_mldsa_65_upstream_kat
+    COMMAND "${CMAKE_COMMAND}"
+      "-DKAT_EXECUTABLE=$<TARGET_FILE:deep_mldsa_upstream_kat>"
+      "-DKAT_OUTPUT=${CMAKE_CURRENT_BINARY_DIR}/deep-mldsa65-kat.txt"
+      -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/VerifyUpstreamKat.cmake")
 endif()

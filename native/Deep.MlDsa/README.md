@@ -30,3 +30,11 @@ see `evidence/android-api31-arm64.v1.json`. The candidate also passed the
 repository's exact-three production graph and immutable reference-corpus
 checks. None of these results alone approves a packaged Android or Windows
 release asset.
+
+The CMake test `deep_mldsa_65_upstream_kat` reproduces the pinned upstream
+`gen_KAT.c` transcript and checks its SHA-256 against the ML-DSA-65 value in
+the pinned upstream `META.yml`:
+`2ff0ddcd0dc08b746aa04853d6f84c82c6c8ac38783c9061aed78e29c1698ae5`.
+It passed on Linux arm64 and a physical Android API 31 arm64 device. This
+tests the selected backend against the upstream KAT, but official ACVP/FIPS
+204 coverage, independent differentials and packaged runtime load remain open.

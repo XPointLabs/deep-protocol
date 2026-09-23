@@ -1,0 +1,17 @@
+set(expected_sha256 "2ff0ddcd0dc08b746aa04853d6f84c82c6c8ac38783c9061aed78e29c1698ae5")
+if(NOT DEFINED KAT_EXECUTABLE OR NOT DEFINED KAT_OUTPUT)
+  message(FATAL_ERROR "KAT_EXECUTABLE and KAT_OUTPUT are required")
+endif()
+execute_process(COMMAND "${KAT_EXECUTABLE}"
+  OUTPUT_FILE "${KAT_OUTPUT}"
+  RESULT_VARIABLE kat_exit)
+if(NOT kat_exit EQUAL 0)
+  file(REMOVE "${KAT_OUTPUT}")
+  message(FATAL_ERROR "ML-DSA-65 upstream KAT generator failed: ${kat_exit}")
+endif()
+file(SHA256 "${KAT_OUTPUT}" actual_sha256)
+file(REMOVE "${KAT_OUTPUT}")
+if(NOT actual_sha256 STREQUAL expected_sha256)
+  message(FATAL_ERROR "ML-DSA-65 upstream KAT mismatch: ${actual_sha256}")
+endif()
+message(STATUS "ML-DSA-65 upstream KAT matches META.yml: ${actual_sha256}")
