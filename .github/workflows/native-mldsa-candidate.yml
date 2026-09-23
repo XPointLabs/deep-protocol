@@ -88,7 +88,7 @@ jobs:
       - uses: actions/setup-dotnet@v4
         if: runner.os == 'Windows'
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: '10.0.301'
       - name: Managed exact-asset DID2/DAB2 genesis, restore and signature closure
         if: runner.os == 'Windows'
         shell: pwsh
