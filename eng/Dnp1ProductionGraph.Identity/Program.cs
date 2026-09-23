@@ -605,7 +605,10 @@ internal static class GraphPolicy
                 "Deep.Protocol|12276|D7B698B588C5EB4E449742EDBFD248DAFD42635CF26CF4BDACD0498AD347BA4C",
                 // Candidate DGA1/DGR1 V2 bounded wire; service cutover remains open.
                 "Deep.Protocol|12300|D05D050E2AAA3558AEF7EC2751950397AFEAB4E5E5678F13C72AC88745AD60E1",
-                "Deep.Protocol|12300|2DAFF28F9A5C9EE557B8E61D961EAEF028B1BEB3F2CD4B4F81F7DE814FAA3803"
+                "Deep.Protocol|12300|2DAFF28F9A5C9EE557B8E61D961EAEF028B1BEB3F2CD4B4F81F7DE814FAA3803",
+                // Candidate V2 private transition journal replay, not active ADP1.
+                "Deep.Protocol|12300|BFD5AB94D22AAC60E206A7BDD10707142C972A2534A83744C58E9108187DA464",
+                "Deep.Protocol|12300|F7D75F036720CC64E85590A2BFA04E6F4CD224EC4B1F99F2C7A6FEEDF13B380B"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [
