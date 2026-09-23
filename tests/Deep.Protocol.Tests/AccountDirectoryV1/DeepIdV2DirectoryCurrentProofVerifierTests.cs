@@ -45,9 +45,10 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
     [Fact]
     public async Task Did2Verifier_RealPqGenesisClosesSignedCurrentProof()
     {
-        if (!OperatingSystem.IsWindows() ||
-            RuntimeInformation.ProcessArchitecture is not
-                (Architecture.X64 or Architecture.Arm64))
+        if (!((OperatingSystem.IsWindows() &&
+                RuntimeInformation.ProcessArchitecture is (Architecture.X64 or Architecture.Arm64)) ||
+              (OperatingSystem.IsLinux() &&
+                RuntimeInformation.ProcessArchitecture == Architecture.X64)))
             return;
 
         var (admission, checkpoint, binding) = await

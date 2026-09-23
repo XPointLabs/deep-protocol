@@ -94,8 +94,10 @@ public sealed class DeepPqRootRecoveryV2Tests
     [Fact]
     public void DeepIdV2Root_RestoreRecreatesExactCredentialAndCompactText()
     {
-        if (!OperatingSystem.IsWindows() ||
-            RuntimeInformation.ProcessArchitecture is not (Architecture.X64 or Architecture.Arm64))
+        if (!((OperatingSystem.IsWindows() &&
+                RuntimeInformation.ProcessArchitecture is (Architecture.X64 or Architecture.Arm64)) ||
+              (OperatingSystem.IsLinux() &&
+                RuntimeInformation.ProcessArchitecture == Architecture.X64)))
             return;
         using var original = DeepRecoveryV1.VerifyCanonicalUtf8(
             Encoding.ASCII.GetBytes(ZeroEntropyPhrase));

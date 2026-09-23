@@ -7,13 +7,16 @@ namespace Deep.Protocol.Tests.ApplicationCore;
 public sealed class DeepMlDsa65NativeProviderTests
 {
     [Fact]
-    public void CurrentWindowsCandidate_ExactAssetSignsVerifiesAndRejectsSubstitution()
+    public void CurrentDesktopCandidate_ExactAssetSignsVerifiesAndRejectsSubstitution()
     {
-        if (!OperatingSystem.IsWindows() ||
-            RuntimeInformation.ProcessArchitecture is not (Architecture.X64 or Architecture.Arm64))
+        if (!((OperatingSystem.IsWindows() &&
+                RuntimeInformation.ProcessArchitecture is (Architecture.X64 or Architecture.Arm64)) ||
+              (OperatingSystem.IsLinux() &&
+                RuntimeInformation.ProcessArchitecture == Architecture.X64)))
             return;
 
         using var provider = DeepMlDsa65NativeProvider.LoadCandidateForCurrentProcess();
+        using var publicVerifier = DeepMlDsa65CandidateVerifierFactory.OpenForCurrentProcess();
         var seed = Enumerable.Range(0, 32).Select(value => (byte)value).ToArray();
         var publicKey = provider.DerivePublicKey(seed);
         Assert.Equal(
@@ -27,6 +30,7 @@ public sealed class DeepMlDsa65NativeProviderTests
         Assert.Equal(3309, first.Length);
         Assert.NotEqual(first, second);
         Assert.True(provider.Verify(publicKey, message, context, first));
+        Assert.True(publicVerifier.Verify(publicKey, message, context, first));
         Assert.True(provider.Verify(publicKey, message, context, second));
         Assert.False(provider.Verify(publicKey, "tampered"u8, context, first));
         Assert.False(provider.Verify(publicKey, message, "wrong"u8, first));

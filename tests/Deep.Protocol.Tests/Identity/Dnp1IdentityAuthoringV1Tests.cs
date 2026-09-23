@@ -637,8 +637,10 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
     [Fact]
     public async Task DeepIdV2Genesis_UsesSamePhraseForAccountAndPqRoot_AndRestoresExactDid2()
     {
-        if (!OperatingSystem.IsWindows() ||
-            RuntimeInformation.ProcessArchitecture is not (Architecture.X64 or Architecture.Arm64))
+        if (!((OperatingSystem.IsWindows() &&
+                RuntimeInformation.ProcessArchitecture is (Architecture.X64 or Architecture.Arm64)) ||
+              (OperatingSystem.IsLinux() &&
+                RuntimeInformation.ProcessArchitecture == Architecture.X64)))
             return;
 
         using var phrase = DeepRecoveryV1.VerifyCanonicalUtf8(Encoding.ASCII.GetBytes(Mnemonic));

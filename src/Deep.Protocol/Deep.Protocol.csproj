@@ -79,6 +79,11 @@
              CopyToPublishDirectory="PreserveNewest"
              Pack="true"
              PackagePath="runtimes/win-arm64/native" />
+    <Content Include="runtimes\linux-x64\native\libdeep_mldsa.so"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest"
+             Pack="true"
+             PackagePath="runtimes/linux-x64/native" />
     <Content Include="runtimes\android-arm64\native\libdeep_mldsa.so"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest"

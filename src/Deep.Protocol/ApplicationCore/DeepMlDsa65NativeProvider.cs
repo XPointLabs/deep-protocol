@@ -22,6 +22,10 @@ internal static class DeepMlDsa65CandidateAssets
             RuntimeInformation.ProcessArchitecture == Architecture.Arm64)
             return new("runtimes/win-arm64/native/deep_mldsa.dll", 162816,
                 "e9595b899e85ebf489f2b27d00ba8bf04fb33c4deb91806c4d8f8df97de1e9d3");
+        if (OperatingSystem.IsLinux() &&
+            RuntimeInformation.ProcessArchitecture == Architecture.X64)
+            return new("runtimes/linux-x64/native/libdeep_mldsa.so", 67448,
+                "afa88e738bc9a342ada482398b19780b20515fe556e040c1aa847b6093e72f71");
         if (OperatingSystem.IsAndroid() &&
             RuntimeInformation.ProcessArchitecture == Architecture.Arm64)
             return new("runtimes/android-arm64/native/libdeep_mldsa.so", 79112,
@@ -35,7 +39,7 @@ internal static class DeepMlDsa65CandidateAssets
 /// Narrow, exact-asset native binding. It does not persist an expanded private
 /// key; callers retain the 32-byte seed only in protected account storage.
 /// </summary>
-internal sealed unsafe class DeepMlDsa65NativeProvider : IDeepMlDsa65Verifier, IDisposable
+internal sealed unsafe class DeepMlDsa65NativeProvider : IDeepMlDsa65VerifierLease
 {
     internal const int SeedSize = 32;
     internal const int PublicKeySize = 1952;
@@ -277,4 +281,14 @@ internal sealed unsafe class DeepMlDsa65NativeProvider : IDeepMlDsa65Verifier, I
             return true;
         }
     }
+}
+
+/// <summary>
+/// Opens the hash-pinned CI candidate for public-key verification only.
+/// Native candidate availability is not production release approval.
+/// </summary>
+public static class DeepMlDsa65CandidateVerifierFactory
+{
+    public static IDeepMlDsa65VerifierLease OpenForCurrentProcess() =>
+        DeepMlDsa65NativeProvider.LoadCandidateForCurrentProcess();
 }

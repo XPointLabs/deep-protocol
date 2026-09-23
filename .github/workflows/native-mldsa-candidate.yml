@@ -86,16 +86,16 @@ jobs:
           $candidateDir = if ($IsWindows) { '${{ runner.temp }}/deep-mldsa-build/Release' } else { '${{ runner.temp }}/deep-mldsa-build' }
           python eng/Test-DeepMlDsaAcvp.py --library (Join-Path $candidateDir $libraryName)
       - uses: actions/setup-dotnet@v4
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' || (runner.os == 'Linux' && runner.arch == 'X64')
         with:
           dotnet-version: '10.0.301'
       - name: Managed exact-asset DID2/DAB2 genesis, restore and signature closure
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' || (runner.os == 'Linux' && runner.arch == 'X64')
         shell: pwsh
         run: >-
           dotnet test tests/Deep.Protocol.Tests/Deep.Protocol.Tests.csproj
           -c Release
-          --filter 'FullyQualifiedName~DeepIdV2Root_RestoreRecreatesExactCredentialAndCompactText|FullyQualifiedName~DeepIdV2Genesis_UsesSamePhraseForAccountAndPqRoot_AndRestoresExactDid2|FullyQualifiedName~Dab2_RealNativeHybridSignaturesCloseOverExactDidAndAccount|FullyQualifiedName~DeepMlDsa65NativeProviderTests'
+          --filter 'FullyQualifiedName~DeepIdV2Root_RestoreRecreatesExactCredentialAndCompactText|FullyQualifiedName~DeepIdV2Genesis_UsesSamePhraseForAccountAndPqRoot_AndRestoresExactDid2|FullyQualifiedName~Dab2_RealNativeHybridSignaturesCloseOverExactDidAndAccount|FullyQualifiedName~Did2Verifier_RealPqGenesisClosesSignedCurrentProof|FullyQualifiedName~DeepMlDsa65NativeProviderTests'
       - name: AddressSanitizer and UBSan native ABI tests
         if: runner.os == 'Linux'
         shell: bash

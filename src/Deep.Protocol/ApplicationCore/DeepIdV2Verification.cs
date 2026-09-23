@@ -17,6 +17,14 @@ public interface IDeepMlDsa65Verifier
         ReadOnlySpan<byte> signature3309);
 }
 
+/// <summary>
+/// A verifier whose exact native asset remains pinned for the lifetime of a
+/// verification scope. Dispose it after the protected state operation ends.
+/// </summary>
+public interface IDeepMlDsa65VerifierLease : IDeepMlDsa65Verifier, IDisposable
+{
+}
+
 public sealed class VerifiedDab2
 {
     internal VerifiedDab2(

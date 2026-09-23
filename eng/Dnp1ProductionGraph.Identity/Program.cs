@@ -632,7 +632,9 @@ internal static class GraphPolicy
                 "Deep.Protocol|12420|3ECB355FD9A6FF124BB5EB31020FE9AC64448E691F2C01269954F3A16446599D",
                 // Separately pinned, signed empty V2 bootstrap head before ADA2 state.
                 "Deep.Protocol|12422|ABB3C64EF876E2FDFD0944CC4966735C47541B29A147CD9B16EE8480E9FFBC6A",
-                "Deep.Protocol|12422|E581420BE0D4ECB12B14693D515B6BE4EDCC981CA29D7E467563FCF4D3EF17F8"
+                "Deep.Protocol|12422|E581420BE0D4ECB12B14693D515B6BE4EDCC981CA29D7E467563FCF4D3EF17F8",
+                // Hash-pinned Linux x64 ML-DSA candidate and verifier-only public lease.
+                "Deep.Protocol|12427|ED84D97AC96987983690864E89CC26DD898DEB00DF28531D05DBEF6906CFB50D"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [
