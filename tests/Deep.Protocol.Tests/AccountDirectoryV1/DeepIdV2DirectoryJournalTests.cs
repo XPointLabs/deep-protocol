@@ -51,6 +51,81 @@ public sealed class DeepIdV2DirectoryJournalTests
             DeepIdV2DirectoryJournal.ReplayAndVerify(oldReader, journal));
     }
 
+    [Fact]
+    public void ProofMaterialV2_EarlierLeafClosesAgainstFinalHeadAcrossPlatforms()
+    {
+        // This test deliberately uses the internal capability test seam to
+        // isolate sparse/append proof math from platform ML-DSA issuance.
+        var first = SyntheticCheckpoint(Bytes(32, 0x10));
+        var second = SyntheticCheckpoint(Bytes(32, 0x60));
+        var map = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+        var empty = DeepIdV2DirectorySparseMap.EmptyMapRoot.ToArray();
+        map[Convert.ToHexString(first.Checkpoint.DirectoryLeafKey.Span)] =
+            first.Checkpoint.ArtifactReference.ToArray();
+        var firstRoot = DeepIdV2DirectorySparseMap.ComputeFullMapRoot(map);
+        var firstTransition = DeepIdV2DirectoryTransitionCodec.Author(0,
+            first.Checkpoint.DirectoryLeafKey.Span, new byte[38],
+            first.Checkpoint.ArtifactReference.Span, empty, firstRoot);
+        map[Convert.ToHexString(second.Checkpoint.DirectoryLeafKey.Span)] =
+            second.Checkpoint.ArtifactReference.ToArray();
+        var finalRoot = DeepIdV2DirectorySparseMap.ComputeFullMapRoot(map);
+        var secondTransition = DeepIdV2DirectoryTransitionCodec.Author(1,
+            second.Checkpoint.DirectoryLeafKey.Span, new byte[38],
+            second.Checkpoint.ArtifactReference.Span, firstRoot, finalRoot);
+        ReadOnlyMemory<byte>[] journal =
+        [firstTransition.CanonicalBytes, secondTransition.CanonicalBytes];
+        var head = Head(2, DeepIdV2DirectoryJournal.ComputeAppendRoot(journal),
+            finalRoot, minimumReader: 2);
+
+        var proof = DeepIdV2DirectoryProofMaterialAuthor.Create(head,
+            journal, [first, second], first.Checkpoint.DirectoryLeafKey.Span);
+        Assert.Equal(AccountDirectoryAdp1ResultKind.CurrentValue,
+            proof.ResultKind);
+        Assert.Equal<ulong>(0, proof.AppendLogIndex);
+        Assert.NotEqual(firstRoot, finalRoot);
+        Assert.Equal(finalRoot,
+            DeepIdV2DirectorySparseMap.ComputePresentRoot(
+                first.Checkpoint.DirectoryLeafKey.Span,
+                first.Checkpoint.ArtifactReference.Span,
+                proof.SparseMapBitmap.Span, Join(proof.SparseMapSiblings)));
+        Assert.True(AccountDirectoryRfc6962.VerifyInclusion(
+            firstTransition.AppendLogLeafHash.Span, proof.AppendLogIndex,
+            head.TreeSize, Join(proof.InclusionProofNodes),
+            head.AppendLogMerkleRoot.Span));
+        var missing = Bytes(32, 0xe0);
+        var absent = DeepIdV2DirectoryProofMaterialAuthor.Create(head,
+            journal, [first, second], missing);
+        Assert.Equal(AccountDirectoryAdp1ResultKind.NonMembership,
+            absent.ResultKind);
+        Assert.Equal(finalRoot,
+            DeepIdV2DirectorySparseMap.ComputeNonMembershipRoot(missing,
+                absent.SparseMapBitmap.Span, Join(absent.SparseMapSiblings)));
+    }
+
+    private static VerifiedAdc1V2 SyntheticCheckpoint(byte[] leaf)
+    {
+        var checkpoint = DeepIdV2AccountDirectoryCodec.Author(Bytes(16, 1),
+            leaf, 1, 0, new byte[32],
+            MagicReference("DPA1"u8, Bytes(32, 0x80)),
+            MagicReference("DRS1"u8, Bytes(32, 0x90)),
+            Bytes(32, 0xa0), Bytes(32, 0xb0),
+            DeepIdV2AccountDirectoryCodec.ComputeRevokedDcaAuthorizationIdsHash([]),
+            30, 2, Bytes(64, 0xc0));
+        return new VerifiedAdc1V2(checkpoint, null!, null!, []);
+    }
+
+    private static byte[] MagicReference(ReadOnlySpan<byte> magic, byte[] hash)
+    {
+        var result = new byte[38];
+        magic.CopyTo(result);
+        BinaryPrimitives.WriteUInt16BigEndian(result.AsSpan(4), 1);
+        hash.CopyTo(result, 6);
+        return result;
+    }
+
+    private static byte[] Join(IEnumerable<ReadOnlyMemory<byte>> values) =>
+        values.SelectMany(static value => value.ToArray()).ToArray();
+
     private static (ReadOnlyMemory<byte>[] Journal,
         AccountDirectoryProtectedLkg Head,
         Dictionary<string, byte[]> Map) Fixture()

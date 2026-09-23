@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Runtime.InteropServices;
 using System.Text;
 using Deep.Protocol.AccountDirectoryV1;
 using Deep.Protocol.ApplicationCore;
@@ -15,6 +16,9 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
     [Fact]
     public async Task Did2Admission_AdvancesThresholdHeadAndRejectsChangedPrivateJournal()
     {
+        if (!OperatingSystem.IsWindows() ||
+            RuntimeInformation.ProcessArchitecture is not (Architecture.X64 or Architecture.Arm64))
+            return;
         var network = ContactNetworkAuthorityVerifierTests.Fixture.Create();
         using var phrase = DeepRecoveryV1.VerifyCanonicalUtf8(
             Encoding.ASCII.GetBytes(Mnemonic));
@@ -122,6 +126,9 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
     [Fact]
     public async Task Did2Proof_EarlierLeafInSameBatchUsesFinalMapWithoutRewritingTransition()
     {
+        if (!OperatingSystem.IsWindows() ||
+            RuntimeInformation.ProcessArchitecture is not (Architecture.X64 or Architecture.Arm64))
+            return;
         var network = ContactNetworkAuthorityVerifierTests.Fixture.Create();
         var first = await Did2Checkpoint(Mnemonic, network.Network);
         var second = await Did2Checkpoint(OtherMnemonic, network.Network);
