@@ -80,7 +80,7 @@
       "id": "account-directory-v1",
       "kind": "normative-document",
       "path": "docs/architecture/ACCOUNT-DIRECTORY-TRANSPARENCY-V1.md",
-      "normalizedSha256": "8987e58aa6ecaf46a7d89a865954ebc212f0b7eec199272ff4766fb63506726a"
+      "normalizedSha256": "83b5a8c28c13aa36523d3f1c64547324607756c3922f684a3a4039a7e92480c0"
     },
     {
       "id": "xpoint-network-v1",
