@@ -36,9 +36,15 @@ The CMake test `deep_mldsa_65_upstream_kat` reproduces the pinned upstream
 the pinned upstream `META.yml`:
 `2ff0ddcd0dc08b746aa04853d6f84c82c6c8ac38783c9061aed78e29c1698ae5`.
 It passed on Linux arm64 and a physical Android API 31 arm64 device. This
-tests the selected backend against the upstream KAT, but official ACVP/FIPS
-204 coverage, independent differentials and production packaged runtime load
-remain open.
+tests the selected backend against the upstream KAT; platform-complete ACVP,
+independent differentials and production packaged runtime load remain open.
+
+`eng/Test-DeepMlDsaAcvp.py` checks the Deep shared-library ABI against SHA-256-
+pinned official ACVP-Server `v1.1.0.43` JSON: all 25 ML-DSA-65 keyGen cases,
+30 seed-format pure external sigGen cases (15 deterministic and 15 randomized),
+and 15 pure external sigVer cases (3 positive, 12 negative). This passed on
+Linux arm64. CI is configured to run it on Linux x64/arm64. It does not claim coverage for
+prehash, expanded-key or external-μ interfaces, which the Deep ABI excludes.
 
 An isolated `net10.0-android` Release/AOT probe packages the exact Android
 candidate `.so` by digest and exercises the Deep C ABI through .NET on the

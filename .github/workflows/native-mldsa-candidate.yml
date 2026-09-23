@@ -37,6 +37,12 @@ jobs:
       - name: Native ABI tests
         shell: pwsh
         run: ctest --test-dir '${{ runner.temp }}/deep-mldsa-build' -C Release --output-on-failure
+      - name: Pinned NIST ACVP vectors through Deep ABI
+        if: runner.os == 'Linux'
+        shell: bash
+        run: >-
+          python3 eng/Test-DeepMlDsaAcvp.py
+          --library "$RUNNER_TEMP/deep-mldsa-build/libdeep_mldsa.so"
       - name: AddressSanitizer and UBSan native ABI tests
         if: runner.os == 'Linux'
         shell: bash

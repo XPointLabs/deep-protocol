@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-23",
+  "purpose": "candidate-deep-abi-official-acvp-functional-check",
+  "provider": "pq-code-package/mldsa-native",
+  "upstreamCommit": "834a90d5e846ffa1e1611bd24e160bb2e9b86d35",
+  "acvpServerVersion": "v1.1.0.43",
+  "vectorSource": "https://github.com/usnistgov/ACVP-Server/tree/v1.1.0.43/gen-val/json-files",
+  "vectorDigestPins": "eng/Test-DeepMlDsaAcvp.py",
+  "platform": "Docker Linux arm64 / GNU C 12.2.0 / Python 3.11.2",
+  "abi": "Deep.MlDsa/v1 portable C shared library",
+  "keyGenPassed": 25,
+  "sigGenPassed": 30,
+  "sigGenDeterministicPassed": 15,
+  "sigGenRandomizedPassed": 15,
+  "sigVerPassed": 15,
+  "sigVerPositivePassed": 3,
+  "sigVerNegativePassed": 12,
+  "scope": "ML-DSA-65 seed-format, pure external signing and verification only",
+  "result": "passed",
+  "productionEligible": false,
+  "openGates": [
+    "Windows x64 and ARM64 native ABI and ACVP tests",
+    "physical Android extended ACVP and independent differential",
+    "native secret-lifetime and side-channel review",
+    "reproducible approved assets and SBOM",
+    "DR-0006 identity wire and consumer freeze"
+  ]
+}
