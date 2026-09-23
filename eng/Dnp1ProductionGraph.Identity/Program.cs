@@ -596,7 +596,10 @@ internal static class GraphPolicy
                 "Deep.Protocol|12202|F0EDF73C3E10951FFD00B416FC399497320E92E6C2C575E42097C703E3C34F69",
                 // Candidate ADL1 V2 exact DID2-derived lookup capability.
                 "Deep.Protocol|12227|EFDE92E81CB3F6E862EF6CBA68CA6A32313BAC8BE6656F96484459172F97DAB2",
-                "Deep.Protocol|12227|AE02D088E4DE04DC087926CD39BD908A1912B84185C5DAC91D2DA3F1D92D1721"
+                "Deep.Protocol|12227|AE02D088E4DE04DC087926CD39BD908A1912B84185C5DAC91D2DA3F1D92D1721",
+                // Candidate V2 witness-private transition and sparse-map primitives.
+                "Deep.Protocol|12256|83499EFF68F9C1788B26875CBD5834498CE164E5DB21B43EF4E65D02F31E1790",
+                "Deep.Protocol|12256|FD4AB5EE19D61569028022E8E9420299696746C20EF57E6ED116B02D11500EDB"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

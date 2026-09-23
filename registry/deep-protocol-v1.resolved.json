@@ -3,7 +3,7 @@
   "schemaVersion": "1.0.0",
   "registryGeneration": 1,
   "registryId": "deep-protocol-v1-resolved",
-  "sourceRegistrySha256": "4e4967618161c4be1826bd544e1b294f1c1b40b1078ffcca5e0b8d2951e1e9cf",
+  "sourceRegistrySha256": "01e67f3dca27dbb00b2ce610b2713ecc1ed5ce07187f5545c726b6e02e4b82bd",
   "dnp1ApprovedCommit": "a8456987efe031388ca2eb9006886fb78f31e06c",
   "dnp1RegistrySha256": "e036a0b6acb260e05e18ac536a723b0b8561d2ba1d813429304505b0e7a7da7b",
   "records": [
@@ -2789,6 +2789,7 @@
         "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryHeadAuthor.cs",
         "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryProofMaterialAuthor.cs",
         "src/Deep.Protocol/AccountDirectoryV1/DeepIdV2AccountDirectoryCodec.cs",
+        "src/Deep.Protocol/AccountDirectoryV1/DeepIdV2DirectoryProofPrimitives.cs",
         "src/Deep.Protocol/GroupV1/GroupCodec.cs",
         "src/Deep.Protocol/GroupV1/GroupTransitionVerifier.cs"
       ],
