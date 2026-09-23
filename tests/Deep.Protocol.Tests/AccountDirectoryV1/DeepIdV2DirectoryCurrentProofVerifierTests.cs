@@ -151,6 +151,40 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
         Assert.Equal(admission.ExactDab2.ToArray(),
             DeepIdV2Adp1Codec.Decode(package.ExactAdp1V2.Span).ExactDab2.ToArray());
 
+        var successor = authority.Head(2, verified.NextProtectedLkg.CoreHash.ToArray(),
+            1, head.AppendLogMerkleRoot.ToArray(), mapRoot, minimumReader: 2);
+        var successorBytes = AccountDirectoryAdh1Codec.Encode(successor);
+        var successorNonce = Bytes(32, 0x35);
+        var successorMaterial = DeepIdV2DirectoryProofMaterialAuthor.Create(
+            new AccountDirectoryProtectedLkg(successorBytes), journal,
+            [checkpoint], leaf, verified.NextProtectedLkg);
+        var successorRequest = new AccountDirectoryProofAuthoringRequest(
+            authority.Network, successorNonce, Bytes(16, 0x44), 1_000,
+            successorBytes, authority.CurrentXnv(), 1_900_000_300, 5,
+            1_900_000_300, 1_900_000_360,
+            AccountDirectoryDtt1IssuanceEpoch.Derive(
+                authority.Verified, 1_900_000_300, 5), 2);
+        var successorPackage = await DeepIdV2DirectoryProofAuthor.IssueGenesisAsync(
+            authority.Verified, successorRequest, successorMaterial,
+            authority.Witnesses.Take(2).Select(WitnessSigner.Valid)
+                .Cast<IAccountDirectoryDtt1WitnessSigner>().ToArray(),
+            1, pq);
+        var successorLookup = DeepIdV2AccountDirectoryLookupCodec.Author(
+            binding.DeepId, authority.Network,
+            verified.NextProtectedLkg.LogGeneration,
+            verified.NextProtectedLkg.CoreHash.Span,
+            1, new byte[38], new byte[32]);
+        var successorQuery = VerifiedDeepIdV2DirectoryQuery.VerifyBinding(
+            successorLookup, binding);
+        var verifiedSuccessor = DeepIdV2DirectoryCurrentProofVerifier.VerifyGenesis(
+            authority.Verified, successorPackage.ExactAdh1,
+            successorPackage.ExactDtt1, successorPackage.ExactAdp1V2,
+            successorNonce, successorQuery, Window(), verified.NextProtectedLkg,
+            1, 2, pq);
+        Assert.Equal(checkpoint.Checkpoint.ArtifactHash.ToArray(),
+            verifiedSuccessor.CurrentCheckpoint!.Checkpoint.ArtifactHash.ToArray());
+        Assert.Equal((ulong)2, verifiedSuccessor.NextProtectedLkg.LogGeneration);
+
         var badFloorAdl = DeepIdV2AccountDirectoryLookupCodec.Author(
             binding.DeepId, authority.Network,
             initialLkg.LogGeneration, Bytes(32, 0x5b),
@@ -235,6 +269,49 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
         Assert.Equal("UnexpectedLkg",
             Assert.Throws<AccountDirectoryFreshnessVerificationException>(() =>
                 fixture.Verify()).Code);
+    }
+
+    [Fact]
+    public void Did2Verifier_AcceptsLaterSignedSuccessorAndRejectsBrokenPredecessor()
+    {
+        var authority = AuthorityFixture.Create();
+        var emptyAppend = AccountDirectoryRfc6962.ComputeEmptyTreeHash();
+        var emptyMap = DeepIdV2DirectorySparseMap.EmptyMapRoot.ToArray();
+        var genesis = authority.Head(0, new byte[32], 0,
+            emptyAppend, emptyMap, minimumReader: 2);
+        var first = authority.Head(1,
+            AccountDirectoryCrypto.ComputeAdh1CoreHash(genesis), 0,
+            emptyAppend, emptyMap, minimumReader: 2);
+        var protectedFirst = new AccountDirectoryProtectedLkg(
+            AccountDirectoryAdh1Codec.Encode(first));
+        var nonce = Bytes(32, 0x31);
+        var leaf = Bytes(32, 0x32);
+
+        VerifiedDeepIdV2DirectoryFreshness Verify(AccountDirectoryAdh1 head)
+        {
+            var exactHead = AccountDirectoryAdh1Codec.Encode(head);
+            var dtt = authority.Dtt(head, nonce);
+            var material = DeepIdV2DirectoryProofMaterialAuthor.Create(
+                new AccountDirectoryProtectedLkg(exactHead), [], [], leaf,
+                protectedFirst);
+            var adp = DeepIdV2Adp1Codec.Author(material,
+                AccountDirectoryCrypto.ComputeDtt1CoreHash(dtt));
+            return DeepIdV2DirectoryCurrentProofVerifier.VerifyExactLeafForAuthor(
+                authority.Verified, exactHead, AccountDirectoryDtt1Codec.Encode(dtt),
+                adp.CanonicalBytes, nonce, leaf, Window(), protectedFirst,
+                1, 2, new DenyingMlDsa65Verifier());
+        }
+
+        var successor = authority.Head(2, protectedFirst.CoreHash.ToArray(), 0,
+            emptyAppend, emptyMap, minimumReader: 2);
+        var verified = Verify(successor);
+        Assert.Equal(AccountDirectoryAdp1ResultKind.NonMembership,
+            verified.ResultKind);
+        Assert.Equal((ulong)2, verified.NextProtectedLkg.LogGeneration);
+        Assert.Equal("ForwardCheckpointRequired",
+            Assert.Throws<AccountDirectoryFreshnessVerificationException>(() =>
+                Verify(authority.Head(2, Bytes(32, 0x71), 0,
+                    emptyAppend, emptyMap, minimumReader: 2))).Code);
     }
 
     [Fact]
