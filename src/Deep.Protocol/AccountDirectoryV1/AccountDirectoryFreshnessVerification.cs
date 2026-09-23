@@ -274,7 +274,7 @@ public static class AccountDirectoryCurrentProofVerifier
         }
     }
 
-    private static void VerifyAdhAuthorityAndWitnessClosure(
+    internal static void VerifyAdhAuthorityAndWitnessClosure(
         VerifiedXPointNetworkAuthority authority,
         AccountDirectoryAdh1 head,
         bool requireCurrentAuthority)
@@ -294,7 +294,7 @@ public static class AccountDirectoryCurrentProofVerifier
             thresholdCode: "WrongWitnessThreshold");
     }
 
-    private static void VerifyAuthorityClosure(
+    internal static void VerifyAuthorityClosure(
         VerifiedXPointNetworkAuthority authority,
         AccountDirectoryAdh1 head,
         AccountDirectoryDtt1 dtt,
@@ -323,7 +323,7 @@ public static class AccountDirectoryCurrentProofVerifier
             Fail("DttHashMismatch", "DTT1 core hash is invalid.");
     }
 
-    private static void VerifyWitnessThreshold(
+    internal static void VerifyWitnessThreshold(
         VerifiedXPointNetworkAuthority authority,
         IReadOnlyList<AccountDirectoryDtt1WitnessReceipt> receipts,
         ReadOnlySpan<byte> signingInput,
@@ -375,7 +375,7 @@ public static class AccountDirectoryCurrentProofVerifier
             Fail(thresholdCode, $"{magic} does not meet the exact XNA1 witness threshold.");
     }
 
-    private static (ulong Lower, ulong Upper) VerifyLiveTime(
+    internal static (ulong Lower, ulong Upper) VerifyLiveTime(
         AccountDirectoryDtt1 dtt,
         ReadOnlySpan<byte> nonce,
         AccountDirectoryMonotonicRequestWindow monotonic)
@@ -409,7 +409,7 @@ public static class AccountDirectoryCurrentProofVerifier
         return (lower, upper);
     }
 
-    private static void VerifyCurrentHeadTime(AccountDirectoryAdh1 head, ulong lower, ulong upper)
+    internal static void VerifyCurrentHeadTime(AccountDirectoryAdh1 head, ulong lower, ulong upper)
     {
         var toleratedFrom = head.ValidFrom > ArtifactBoundaryToleranceSeconds
             ? head.ValidFrom - ArtifactBoundaryToleranceSeconds
@@ -734,7 +734,7 @@ public static class AccountDirectoryCurrentProofVerifier
             ProtocolMagicBytes.ADC1, 1, AccountDirectoryCrypto.ComputeAdc1ArtifactHash(checkpoint.Checkpoint));
     }
 
-    private static byte[] Join(IReadOnlyList<ReadOnlyMemory<byte>> values)
+    internal static byte[] Join(IReadOnlyList<ReadOnlyMemory<byte>> values)
     {
         var result = new byte[checked(values.Count * 32)];
         for (var index = 0; index < values.Count; index++)

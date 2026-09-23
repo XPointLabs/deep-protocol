@@ -620,7 +620,10 @@ internal static class GraphPolicy
                 "Deep.Protocol|12367|430F765D9F1AF9528B2BD54267A89B86D04F85553AB701F84DF5C23908C8890D",
                 // ADP1 V2 exact revoked-DCA list closure and widened bounded envelope.
                 "Deep.Protocol|12369|37E83B7EEE0036C762744A5139777E7F34B3CCE62AE788968723EA7A68212C25",
-                "Deep.Protocol|12369|70F02D6CE8CA4AEFA1D224D1B2999A1F59CDED7397F64C5CDAC513DFE40DEFA9"
+                "Deep.Protocol|12369|70F02D6CE8CA4AEFA1D224D1B2999A1F59CDED7397F64C5CDAC513DFE40DEFA9",
+                // Candidate public DID2 directory genesis/absence freshness verifier.
+                "Deep.Protocol|12393|7BA804788DDAEB9DD0B7D8DCE10BC25037AA3BCF466E6E6B90A599529450D8B0",
+                "Deep.Protocol|12393|24667DCCFE8EB3684082383C15BB87F41D5C53492B12DBA5F2BEC99E95FD909A"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

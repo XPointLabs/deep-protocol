@@ -9,7 +9,7 @@ using Sodium;
 
 namespace Deep.Protocol.Tests.AccountDirectoryV1;
 
-public sealed class AccountDirectoryFreshnessVerificationTests
+public sealed partial class AccountDirectoryFreshnessVerificationTests
 {
     [Fact]
     public async Task Author_CurrentValueProducesCanonicalNonceBoundPackageWithDeterministicSigners()
@@ -647,7 +647,8 @@ public sealed class AccountDirectoryFreshnessVerificationTests
             byte[] mapRoot,
             IReadOnlyList<WitnessSigner>? signers = null,
             byte[]? authorityReference = null,
-            byte[]? witnessPolicy = null)
+            byte[]? witnessPolicy = null,
+            ushort minimumReader = 1)
         {
             var selected = (signers ?? Witnesses.Take(2).Select(WitnessSigner.Valid).ToArray())
                 .OrderBy(static signer => signer.Id, ByteArrayComparer.Instance).ToArray();
@@ -657,7 +658,7 @@ public sealed class AccountDirectoryFreshnessVerificationTests
                 Network, generation, predecessor, treeSize, appendRoot, mapRoot,
                 authorityReference ?? Verified.AuthorityCoreReference.ToArray(),
                 witnessPolicy ?? Verified.DirectoryWitnessPolicyHash.ToArray(),
-                1_700_000_000, 1_700_010_000, 1, placeholders);
+                1_700_000_000, 1_700_010_000, minimumReader, placeholders);
             var signing = AccountDirectoryCrypto.ComputeAdh1SigningInput(unsigned);
             var receipts = selected.Select(signer => new AccountDirectoryAdh1WitnessEntry(
                 signer.Id, PublicKeyAuth.SignDetached(signing, signer.PrivateKey))).ToArray();
@@ -665,7 +666,7 @@ public sealed class AccountDirectoryFreshnessVerificationTests
                 Network, generation, predecessor, treeSize, appendRoot, mapRoot,
                 authorityReference ?? Verified.AuthorityCoreReference.ToArray(),
                 witnessPolicy ?? Verified.DirectoryWitnessPolicyHash.ToArray(),
-                1_700_000_000, 1_700_010_000, 1, receipts);
+                1_700_000_000, 1_700_010_000, minimumReader, receipts);
         }
 
         internal AccountDirectoryDtt1 Dtt(
