@@ -589,7 +589,9 @@ internal static class GraphPolicy
                 "Deep.Protocol|11996|E8DEDE97019C8E26E52CECEE7ED548BCABF2EC2425885507A468E3F732D7E981",
                 // DR-0006 candidate DID2/DAB2/DCA1 V2 API, still not production-active.
                 "Deep.Protocol|12143|F57B2CAE817343B7877F63FC73DF2A8DEF6CBB1C13C9930CF67C8CFF5CF7B07F",
-                "Deep.Protocol|12144|5BC6710AAD45D372231A66A69D80F85734AEFEAACE2F72E39258E8DEEC8A5DC2"
+                "Deep.Protocol|12144|5BC6710AAD45D372231A66A69D80F85734AEFEAACE2F72E39258E8DEEC8A5DC2",
+                // Explicit restore of the existing signed genesis, never re-issuance.
+                "Deep.Protocol|12145|899F4F2E692BA657ABC873342AF6A71F89745AB3F9837981AA7CB1345F9A5750"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

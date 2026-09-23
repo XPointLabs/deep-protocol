@@ -32,4 +32,24 @@ public static class DeepIdV2Root
         });
         return did ?? throw new CryptographicException("DID2 root derivation did not complete.");
     }
+
+    /// <summary>
+    /// Restores a previously issued exact binding. Hedged ML-DSA signatures
+    /// make re-authoring genesis from the same phrase a different DAB2 fork.
+    /// </summary>
+    public static Dab2LineageState RestoreExistingGenesisDab2(
+        VerifiedDeepRecoveryPhrase phrase,
+        ReadOnlySpan<byte> exactCanonicalDab2,
+        VerifiedApplicationIdentityClosure identity,
+        ushort deploymentProfileId)
+    {
+        ArgumentNullException.ThrowIfNull(phrase);
+        ArgumentNullException.ThrowIfNull(identity);
+        var did = DeriveDid2(phrase);
+        var parsed = DeepIdV2Codec.DecodeDab2(exactCanonicalDab2);
+        using var pq = DeepMlDsa65NativeProvider.LoadCandidateForCurrentProcess();
+        var verified = DeepIdV2Verifier.VerifyDab2(
+            parsed, did, identity, deploymentProfileId, pq);
+        return DeepIdV2Verifier.StartDab2Lineage(verified).Next;
+    }
 }

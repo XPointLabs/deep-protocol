@@ -670,10 +670,23 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
         Assert.Equal(binding.Head.DeepId.CanonicalBytes.ToArray(),
             restoredDid.CanonicalBytes.ToArray());
         Assert.Equal(binding.Head.DeepId.Text, restoredDid.Text);
+        var restoredBinding = DeepIdV2Root.RestoreExistingGenesisDab2(restoredPhrase,
+            binding.Head.Record.CanonicalBytes.Span, closure, deploymentProfileId: 1);
+        Assert.Equal(binding.Head.Record.RecordHash.ToArray(),
+            restoredBinding.Head.Record.RecordHash.ToArray());
+        Assert.Equal(binding.Head.DeepId.Text, restoredBinding.Head.DeepId.Text);
+        Assert.Throws<ApplicationCoreFormatException>(() =>
+            DeepIdV2Root.RestoreExistingGenesisDab2(restoredPhrase,
+                binding.Head.Record.CanonicalBytes.Span, closure,
+                deploymentProfileId: 2));
 
         using var wrongPhrase = DeepRecoveryV1.Generate();
         Assert.Throws<CryptographicException>(() =>
             recovery.AuthorGenesisDab2(wrongPhrase, closure, deploymentProfileId: 1));
+        Assert.Throws<ApplicationCoreFormatException>(() =>
+            DeepIdV2Root.RestoreExistingGenesisDab2(wrongPhrase,
+                binding.Head.Record.CanonicalBytes.Span, closure,
+                deploymentProfileId: 1));
     }
 
     [Fact]
