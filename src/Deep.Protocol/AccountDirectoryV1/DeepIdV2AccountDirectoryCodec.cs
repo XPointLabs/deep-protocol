@@ -91,6 +91,9 @@ public sealed class VerifiedAdc1V2
     public VerifiedDab2 Binding { get; }
     public VerifiedDmd1 Directory { get; }
     public int RevokedDcaAuthorizationCount => revokedDcaAuthorizationIds.Length;
+    internal IReadOnlyList<ReadOnlyMemory<byte>> ExactRevokedDcaAuthorizationIds =>
+        revokedDcaAuthorizationIds.Select(static value =>
+            (ReadOnlyMemory<byte>)value.ToArray()).ToArray();
 
     public bool IsDcaAuthorizationRevoked(ReadOnlySpan<byte> authorizationId32)
     {

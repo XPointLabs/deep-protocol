@@ -102,6 +102,38 @@ public sealed class DeepIdV2DirectoryJournalTests
                 absent.SparseMapBitmap.Span, Join(absent.SparseMapSiblings)));
     }
 
+    [Fact]
+    public void Adp1V2_NonMembershipWireRejectsOldVersionAndAlteredRoot()
+    {
+        var head = Head(0, AccountDirectoryRfc6962.ComputeEmptyTreeHash(),
+            DeepIdV2DirectorySparseMap.EmptyMapRoot.Span, minimumReader: 2);
+        var query = Bytes(32, 0xe0);
+        var material = DeepIdV2DirectoryProofMaterialAuthor.Create(head,
+            [], [], query);
+        var encoded = DeepIdV2Adp1Codec.Author(material, Bytes(32, 0x20))
+            .CanonicalBytes.ToArray();
+        Assert.Equal((ushort)2,
+            BinaryPrimitives.ReadUInt16BigEndian(encoded.AsSpan(4)));
+        Assert.Equal((ushort)15,
+            BinaryPrimitives.ReadUInt16BigEndian(encoded.AsSpan(8)));
+        Assert.Equal(AccountDirectoryAdp1ResultKind.NonMembership,
+            DeepIdV2Adp1Codec.Decode(encoded).ResultKind);
+        Assert.Throws<AccountDirectoryAdp1FormatException>(() =>
+            AccountDirectoryAdp1Codec.Decode(encoded));
+        var oldVersion = encoded.ToArray();
+        BinaryPrimitives.WriteUInt16BigEndian(oldVersion.AsSpan(4), 1);
+        Assert.Throws<AccountDirectoryAdp1FormatException>(() =>
+            DeepIdV2Adp1Codec.Decode(oldVersion));
+        var wrongBitmap = encoded.ToArray();
+        var bitmapOffset = 12;
+        for (var tag = 1; tag < 9; tag++)
+            bitmapOffset += 8 + checked((int)BinaryPrimitives.ReadUInt32BigEndian(
+                wrongBitmap.AsSpan(bitmapOffset + 4)));
+        wrongBitmap[bitmapOffset + 8] ^= 1;
+        Assert.Throws<AccountDirectoryAdp1FormatException>(() =>
+            DeepIdV2Adp1Codec.Decode(wrongBitmap));
+    }
+
     private static VerifiedAdc1V2 SyntheticCheckpoint(byte[] leaf)
     {
         var checkpoint = DeepIdV2AccountDirectoryCodec.Author(Bytes(16, 1),

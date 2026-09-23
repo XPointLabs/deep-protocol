@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Runtime.InteropServices;
+using System.Buffers.Binary;
 using System.Text;
 using Deep.Protocol.AccountDirectoryV1;
 using Deep.Protocol.ApplicationCore;
@@ -71,6 +72,30 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
                 checkpoint.Checkpoint.ArtifactReference.Span,
                 present.SparseMapBitmap.Span,
                 JoinV2(present.SparseMapSiblings)));
+        var authoredPresent = DeepIdV2Adp1Codec.Author(present,
+            Enumerable.Repeat((byte)0x6a, 32).ToArray());
+        Assert.Equal(AccountDirectoryAdp1ResultKind.CurrentValue,
+            authoredPresent.ResultKind);
+        Assert.Equal(binding.Head.DeepId.CanonicalBytes.ToArray(),
+            authoredPresent.ExactDid2.ToArray());
+        Assert.Equal(checkpoint.Checkpoint.CanonicalBytes.ToArray(),
+            authoredPresent.ExactCurrentAdc1V2.ToArray());
+        Assert.Empty(authoredPresent.RevokedDcaAuthorizationIds);
+        Assert.Throws<AccountDirectoryAdp1FormatException>(() =>
+            AccountDirectoryAdp1Codec.Decode(
+                authoredPresent.CanonicalBytes.Span));
+        var substitutedDid = authoredPresent.CanonicalBytes.ToArray();
+        substitutedDid[V2FieldOffset(substitutedDid, 17) + 100] ^= 1;
+        Assert.Throws<AccountDirectoryAdp1FormatException>(() =>
+            DeepIdV2Adp1Codec.Decode(substitutedDid));
+        var alteredTransition = authoredPresent.CanonicalBytes.ToArray();
+        alteredTransition[V2FieldOffset(alteredTransition, 24) + 150] ^= 1;
+        Assert.Throws<AccountDirectoryAdp1FormatException>(() =>
+            DeepIdV2Adp1Codec.Decode(alteredTransition));
+        var alteredRevocations = authoredPresent.CanonicalBytes.ToArray();
+        alteredRevocations[V2FieldOffset(alteredRevocations, 28) + 1] = 1;
+        Assert.Throws<AccountDirectoryAdp1FormatException>(() =>
+            DeepIdV2Adp1Codec.Decode(alteredRevocations));
         var absentKey = Enumerable.Repeat((byte)0xe1, 32).ToArray();
         var absent = DeepIdV2DirectoryProofMaterialAuthor.Create(
             first.ProtectedHead, first.ExactAllTransitions, [checkpoint],
@@ -81,6 +106,11 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
             DeepIdV2DirectorySparseMap.ComputeNonMembershipRoot(
                 absentKey, absent.SparseMapBitmap.Span,
                 JoinV2(absent.SparseMapSiblings)));
+        var authoredAbsent = DeepIdV2Adp1Codec.Author(absent,
+            Enumerable.Repeat((byte)0x6a, 32).ToArray());
+        Assert.Equal(AccountDirectoryAdp1ResultKind.NonMembership,
+            authoredAbsent.ResultKind);
+        Assert.Empty(authoredAbsent.ExactDid2.ToArray());
 
         var refreshed = await DeepIdV2DirectoryHeadAuthor.AdvanceAsync(
             network.Authority, first.ProtectedHead,
@@ -164,6 +194,12 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
             head.ProtectedHead.TreeSize,
             JoinV2(proof.InclusionProofNodes),
             head.ProtectedHead.AppendLogMerkleRoot.Span));
+        var wire = DeepIdV2Adp1Codec.Author(proof,
+            Enumerable.Repeat((byte)0x6a, 32).ToArray());
+        Assert.Equal(AccountDirectoryAdp1ResultKind.CurrentValue,
+            wire.ResultKind);
+        Assert.Equal(earlier.Checkpoint.CanonicalBytes.ToArray(),
+            wire.ExactCurrentAdc1V2.ToArray());
     }
 
     private static async Task<VerifiedAdc1V2> Did2Checkpoint(string words,
@@ -242,4 +278,13 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
 
     private static byte[] JoinV2(IEnumerable<ReadOnlyMemory<byte>> values) =>
         values.SelectMany(static value => value.ToArray()).ToArray();
+
+    private static int V2FieldOffset(byte[] encoded, int requestedTag)
+    {
+        var offset = 12;
+        for (var tag = 1; tag < requestedTag; tag++)
+            offset += 8 + checked((int)BinaryPrimitives.ReadUInt32BigEndian(
+                encoded.AsSpan(offset + 4)));
+        return offset + 8;
+    }
 }

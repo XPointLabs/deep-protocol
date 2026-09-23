@@ -80,7 +80,7 @@
       "id": "account-directory-v1",
       "kind": "normative-document",
       "path": "docs/architecture/ACCOUNT-DIRECTORY-TRANSPARENCY-V1.md",
-      "normalizedSha256": "7f485a45005d25894c7d7b71ad612a3a18bb7c98c060cdd0f0b2bf0e9ecd26e2"
+      "normalizedSha256": "b4a4582257ee2b9eb6a87d3aa7b41c924e1ead7299aa23b7e8380d1f3fd152bf"
     },
     {
       "id": "xpoint-network-v1",
@@ -122,7 +122,7 @@
       "id": "production-wire-source",
       "kind": "production-source-scan",
       "path": "deep-protocol/src",
-      "normalizedSha256": "3f78dfdefbdcd006012d089543835ea71a07a5c7bf5001862d7746d4cc125cc8"
+      "normalizedSha256": "4e36720a6db82f2625965f019167f8c1547142d08d6fc58a5175d0328d1e0f2a"
     }
   ],
   "productionInventory": {
