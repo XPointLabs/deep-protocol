@@ -24,6 +24,21 @@
                   Link="Assets\deep-mldsa\libdeep_mldsa.so" />
   </ItemGroup>
 
+  <ItemGroup Condition="'$(DeepMlDsaAcvpVectorsRoot)' != ''">
+    <AndroidAsset Include="$(DeepMlDsaAcvpVectorsRoot)\ML-DSA-keyGen-FIPS204\prompt.json"
+                  Link="Assets\acvp\keygen-prompt.json" />
+    <AndroidAsset Include="$(DeepMlDsaAcvpVectorsRoot)\ML-DSA-keyGen-FIPS204\expectedResults.json"
+                  Link="Assets\acvp\keygen-expected.json" />
+    <AndroidAsset Include="$(DeepMlDsaAcvpVectorsRoot)\ML-DSA-sigGen-FIPS204-tr1\prompt.json"
+                  Link="Assets\acvp\siggen-prompt.json" />
+    <AndroidAsset Include="$(DeepMlDsaAcvpVectorsRoot)\ML-DSA-sigGen-FIPS204-tr1\expectedResults.json"
+                  Link="Assets\acvp\siggen-expected.json" />
+    <AndroidAsset Include="$(DeepMlDsaAcvpVectorsRoot)\ML-DSA-sigVer-FIPS204\prompt.json"
+                  Link="Assets\acvp\sigver-prompt.json" />
+    <AndroidAsset Include="$(DeepMlDsaAcvpVectorsRoot)\ML-DSA-sigVer-FIPS204\expectedResults.json"
+                  Link="Assets\acvp\sigver-expected.json" />
+  </ItemGroup>
+
   <Target Name="ValidateDeepMlDsaAndroidAsset" BeforeTargets="PrepareForBuild">
     <Error Condition="'$(DeepMlDsaAndroidAsset)' == ''"
            Text="DeepMlDsaAndroidAsset must name the physical-test candidate libdeep_mldsa.so." />
@@ -34,5 +49,9 @@
     </GetFileHash>
     <Error Condition="'%(_DeepMlDsaAndroidAssetHash.FileHash)' != '6e46e4df970f5376416af3c50fb39e580487a616d2541aa26d1d90eddf918cc9'"
            Text="The candidate Android ML-DSA asset digest differs from physical evidence." />
+    <Error Condition="'$(DeepMlDsaAcvpVectorsRoot)' == ''"
+           Text="DeepMlDsaAcvpVectorsRoot must name the pinned official ACVP v1.1.0.43 files." />
+    <Error Condition="!Exists('$(DeepMlDsaAcvpVectorsRoot)\ML-DSA-keyGen-FIPS204\prompt.json') or !Exists('$(DeepMlDsaAcvpVectorsRoot)\ML-DSA-keyGen-FIPS204\expectedResults.json') or !Exists('$(DeepMlDsaAcvpVectorsRoot)\ML-DSA-sigGen-FIPS204-tr1\prompt.json') or !Exists('$(DeepMlDsaAcvpVectorsRoot)\ML-DSA-sigGen-FIPS204-tr1\expectedResults.json') or !Exists('$(DeepMlDsaAcvpVectorsRoot)\ML-DSA-sigVer-FIPS204\prompt.json') or !Exists('$(DeepMlDsaAcvpVectorsRoot)\ML-DSA-sigVer-FIPS204\expectedResults.json')"
+           Text="One or more pinned official ACVP vector files are absent." />
   </Target>
 </Project>

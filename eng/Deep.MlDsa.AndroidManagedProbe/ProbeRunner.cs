@@ -38,13 +38,15 @@ internal static class ProbeRunner
                     throw new CryptographicException("Unexpected ML-DSA-65 ABI sizes.");
                 step = "transcript";
                 CheckTranscript(publicFromSeed, sign, verify, zero);
-                return Report(true, null);
+                step = "acvp";
+                var acvp = AcvpRunner.Run(assets, handle);
+                return Report(true, null, acvp);
             }
             finally { NativeLibrary.Free(handle); }
         }
         catch (Exception exception)
         {
-            return Report(false, $"{step}:{exception.GetType().Name}");
+            return Report(false, $"{step}:{exception.GetType().Name}", default);
         }
     }
 
@@ -134,12 +136,17 @@ internal static class ProbeRunner
     private static T Bind<T>(nint handle, string name) where T : Delegate =>
         Marshal.GetDelegateForFunctionPointer<T>(NativeLibrary.GetExport(handle, name));
 
-    private static string Report(bool success, string? error) => JsonSerializer.Serialize(new
+    private static string Report(bool success, string? error, AcvpResult acvp) => JsonSerializer.Serialize(new
     {
         schemaVersion = 1,
         probe = "Deep.MlDsa.AndroidManagedProbe",
         platform = "android-arm64",
         candidateOnly = true,
+        acvpKeyGen = acvp.KeyGen,
+        acvpSigGen = acvp.SigGen,
+        acvpSigVer = acvp.SigVer,
+        acvpPositive = acvp.Positive,
+        acvpNegative = acvp.Negative,
         success,
         error
     });

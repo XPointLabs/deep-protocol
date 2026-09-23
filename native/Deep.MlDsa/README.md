@@ -43,12 +43,14 @@ independent differentials and production packaged runtime load remain open.
 pinned official ACVP-Server `v1.1.0.43` JSON: all 25 ML-DSA-65 keyGen cases,
 30 seed-format pure external sigGen cases (15 deterministic and 15 randomized),
 and 15 pure external sigVer cases (3 positive, 12 negative). This passed on
-Linux arm64. CI is configured to run it on Linux x64/arm64. It does not claim coverage for
-prehash, expanded-key or external-μ interfaces, which the Deep ABI excludes.
+Linux arm64. CI is configured to run it on Linux x64/arm64. It does not claim
+coverage for prehash, expanded-key or external-μ interfaces, which the Deep
+ABI excludes.
 
-An isolated `net10.0-android` Release/AOT probe packages the exact Android
-candidate `.so` by digest and exercises the Deep C ABI through .NET on the
-physical API 31 arm64 device. It passed public-key/signature differential
-fixtures, verification, tamper rejection and native buffer clearing. The
-test-only APK was uninstalled. This does **not** approve an asset for the
-production client or establish Windows parity.
+The same 70 pinned cases also passed inside the Release/AOT .NET Android
+probe on a physical API 31 arm64 device. The APK bundled the exact candidate
+`.so` and official JSON assets, checked all digests on-device, then was
+uninstalled. It also passed public-key/signature differential fixtures,
+verification, tamper rejection and native buffer clearing. See
+`evidence/android-api31-arm64.v1.json`. This does **not** approve an asset
+for the production client or establish Windows parity.

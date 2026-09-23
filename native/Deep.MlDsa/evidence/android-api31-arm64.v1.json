@@ -37,6 +37,18 @@
     ],
     "probeAppUninstalledFromDevice": true
   },
+  "androidManagedAcvpProbe": {
+    "acvpServerVersion": "v1.1.0.43",
+    "signedApkSha256": "30baf96b3c7630a52851d0318efacf94044832c47bd61511e0783175e3661dce",
+    "exactNativeAssetSha256": "6e46e4df970f5376416af3c50fb39e580487a616d2541aa26d1d90eddf918cc9",
+    "keyGenPassed": 25,
+    "sigGenPassed": 30,
+    "sigVerPassed": 15,
+    "sigVerPositivePassed": 3,
+    "sigVerNegativePassed": 12,
+    "physicalResult": "success:true",
+    "probeAppUninstalledFromDevice": true
+  },
   "result": "passed",
   "checks": [
     "seed-to-public-key-repeatability",
@@ -50,9 +62,9 @@
   "testBinaryAndLibraryRemovedFromDevice": true,
   "productionEligible": false,
   "openGates": [
-    "Windows x64 and ARM64 native ABI tests",
+    "Windows x64 and ARM64 native ABI and official ACVP/FIPS 204 tests",
     "production .NET/MAUI approved-asset integration and AOT binding",
-    "official ACVP/FIPS 204 vector suite and extended independent signing differential",
+    "extended independent signing differential",
     "native secret-lifetime and side-channel review",
     "reproducible approved assets and SBOM",
     "DR-0006 identity wire and consumer freeze"
