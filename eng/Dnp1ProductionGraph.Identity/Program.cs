@@ -634,7 +634,9 @@ internal static class GraphPolicy
                 "Deep.Protocol|12422|ABB3C64EF876E2FDFD0944CC4966735C47541B29A147CD9B16EE8480E9FFBC6A",
                 "Deep.Protocol|12422|E581420BE0D4ECB12B14693D515B6BE4EDCC981CA29D7E467563FCF4D3EF17F8",
                 // Hash-pinned Linux x64 ML-DSA candidate and verifier-only public lease.
-                "Deep.Protocol|12427|ED84D97AC96987983690864E89CC26DD898DEB00DF28531D05DBEF6906CFB50D"
+                "Deep.Protocol|12427|ED84D97AC96987983690864E89CC26DD898DEB00DF28531D05DBEF6906CFB50D",
+                // Candidate DPQ2/DPP2 exact DID2-bound proof wire; public route remains disabled.
+                "Deep.Protocol|12459|FDD2AEA88FE4AFC7F5A31068A2B74A1AC400A5AC55DCDBD1700D43594D206610"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

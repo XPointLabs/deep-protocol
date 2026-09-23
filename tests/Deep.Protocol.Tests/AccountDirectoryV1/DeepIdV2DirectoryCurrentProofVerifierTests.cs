@@ -100,6 +100,44 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
             1, new byte[38], new byte[32]);
         var query = VerifiedDeepIdV2DirectoryQuery.VerifyBinding(adl, binding);
 
+        var wireRequestBytes = DeepIdV2DirectoryProofWireCodec.EncodeRequest(
+            adl, binding.DeepId, nonce, request.BootId.Span,
+            request.ClientMonotonicSendSample);
+        Assert.Equal(DeepIdV2DirectoryProofWireCodec.RequestLength,
+            wireRequestBytes.Length);
+        var wireRequest = DeepIdV2DirectoryProofWireCodec.DecodeRequest(
+            wireRequestBytes);
+        Assert.Equal(leaf, wireRequest.DirectoryLeafKey.ToArray());
+        var wireResponseBytes = DeepIdV2DirectoryProofWireCodec.EncodeResponse(
+            wireRequest, package);
+        var wireResponse = DeepIdV2DirectoryProofWireCodec.DecodeResponse(
+            wireResponseBytes, wireRequest);
+        Assert.Equal(package.ExactAdp1V2.ToArray(),
+            wireResponse.ExactAdp1V2.ToArray());
+        var tamperedRequest = wireRequestBytes.ToArray();
+        tamperedRequest[4] = 0;
+        tamperedRequest[5] = 1;
+        Assert.Throws<FormatException>(() =>
+            DeepIdV2DirectoryProofWireCodec.DecodeRequest(tamperedRequest));
+        tamperedRequest = wireRequestBytes.ToArray();
+        tamperedRequest[12 + DeepIdV2AccountDirectoryLookupCodec.CanonicalLength +
+            100] ^= 1;
+        Assert.Throws<FormatException>(() =>
+            DeepIdV2DirectoryProofWireCodec.DecodeRequest(tamperedRequest));
+        var tamperedResponse = wireResponseBytes.ToArray();
+        tamperedResponse[12 + 16 + 32] ^= 1;
+        Assert.Throws<FormatException>(() =>
+            DeepIdV2DirectoryProofWireCodec.DecodeResponse(
+                tamperedResponse, wireRequest));
+        tamperedResponse = wireResponseBytes.ToArray();
+        var adpOffset = 116 + 4 + package.ExactAdh1.Length +
+            4 + package.ExactDtt1.Length + 4;
+        tamperedResponse[adpOffset + 4] = 0;
+        tamperedResponse[adpOffset + 5] = 1;
+        Assert.Throws<AccountDirectoryAdp1FormatException>(() =>
+            DeepIdV2DirectoryProofWireCodec.DecodeResponse(
+                tamperedResponse, wireRequest));
+
         var verified = DeepIdV2DirectoryCurrentProofVerifier.VerifyGenesis(
             authority.Verified, package.ExactAdh1, package.ExactDtt1,
             package.ExactAdp1V2, nonce, query,
