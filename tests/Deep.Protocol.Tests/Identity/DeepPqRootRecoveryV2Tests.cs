@@ -65,6 +65,13 @@ public sealed class DeepPqRootRecoveryV2Tests
             }
             finally { CryptographicOperations.ZeroMemory(combined); }
             Assert.False(capability.SequenceEqual(oldCapabilities.AddressReadCapability.Span));
+            var newEdPublicKey = DeepIdentityCrypto.DeriveEd25519PublicKey(ed);
+            try
+            {
+                Assert.False(newEdPublicKey.AsSpan().SequenceEqual(
+                    oldCapabilities.AddressSigningPublicKey.Span));
+            }
+            finally { CryptographicOperations.ZeroMemory(newEdPublicKey); }
         });
 
         Assert.NotNull(firstDigest);
