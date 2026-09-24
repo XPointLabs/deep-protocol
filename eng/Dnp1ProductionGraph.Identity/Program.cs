@@ -650,7 +650,10 @@ internal static class GraphPolicy
                 "Deep.Protocol|12499|3A2D4C8A2B6DC3A7B0ED25DBC8CD4447039413B8DAC34B1AAB23F363ACE9A03A",
                 // DID2 bundle now verifies each independent XPS1 descriptor; XPI1/DPK2 remains gated.
                 "Deep.Protocol|12500|EA17BF87C7B1F77B23A33D0B08CE65BE1D6619A54CE95D4EE3C97EA0CAD4E7F9",
-                "Deep.Protocol|12500|0CF467F43186FF33314AAA92E13BC03A705D0F9FC2CD2F23F42283AEBB0DF0A2"
+                "Deep.Protocol|12500|0CF467F43186FF33314AAA92E13BC03A705D0F9FC2CD2F23F42283AEBB0DF0A2",
+                // XPI1 manifest binds DID2 DCR1/XPS1; inventory and claim remain separate gates.
+                "Deep.Protocol|12504|90230DDECAF65244751DB1C22FC8F5E4778B41CFD46D341FBE238535835A5A49",
+                "Deep.Protocol|12504|FC7C44B6859AB51A5BF4AE64C5B6AB1EA0F9A9716008C901111B2E241ACDA8D9"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

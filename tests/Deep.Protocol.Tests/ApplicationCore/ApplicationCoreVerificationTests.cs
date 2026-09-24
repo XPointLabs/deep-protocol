@@ -239,7 +239,8 @@ public sealed class ApplicationCoreVerificationTests
             fixture.Network, ApplicationCoreFixture.Bytes(32, 0x46),
             fixture.DeviceId, ContactRef("DPD1", 1,
                 fixture.Identity.ActiveDevices[0].Certificate.CanonicalHash.Span),
-            Be64(0), new byte[32], Be16(0x0201), Be16(1), Be16(1),
+            Be64(1), ApplicationCoreFixture.Bytes(32, 0x48),
+            Be16(0x0201), Be16(1), Be16(1),
             Be64(10), Be64(20), ApplicationCoreFixture.Bytes(64, 0x47),
         };
         var xps = SignXps(xpsFields, fixture.DeviceKey);
@@ -394,6 +395,43 @@ public sealed class ApplicationCoreVerificationTests
         Assert.False(DeepIdV2ResolverClosureCodec.RuntimeActivation);
         DeepIdV2ResolverClosureCodec.VerifyIdentityAndSupport(
             closure, contactVerified, 15);
+        Xpi1UnsignedFields InventoryFields(byte[] xpsHash, byte[] dmdHash,
+            ulong expiresAt = 20) => new(fixture.Network,
+            xpsFields[1].Span, fixture.DeviceId,
+            ContactRef("DPD1", 1, fixture.Identity.ActiveDevices[0]
+                .Certificate.CanonicalHash.Span), 1,
+            ContactRef("XPS1", 1, xpsHash), 1, new byte[32], 32,
+            ApplicationCoreFixture.Bytes(32, 0x49),
+            ApplicationCoreFixture.Bytes(32, 0x4a), dmdHash,
+            ContactRef("DRS1", 1,
+                fixture.Revocations.Snapshot.CanonicalHash.Span),
+            10, expiresAt);
+        Xpi1Record SignInventory(Xpi1UnsignedFields fields, KeyPair signer) =>
+            Xpi1Codec.Decode(Xpi1Codec.Encode(fields,
+                PublicKeyAuth.SignDetached(
+                    Xpi1Codec.CreateSignatureInput(fields), signer.PrivateKey)));
+        var manifest = SignInventory(InventoryFields(
+            SHA256.HashData(xps), directory.Record.RecordHash.ToArray()),
+            fixture.DeviceKey);
+        Assert.False(DeepIdV2PreKeyManifestBinding.RuntimeActivation);
+        DeepIdV2PreKeyManifestBinding.Verify(
+            closure, contactVerified, manifest, 15);
+        AssertVerificationFailure(() => DeepIdV2PreKeyManifestBinding.Verify(
+            closure, contactVerified,
+            SignInventory(InventoryFields(ApplicationCoreFixture.Bytes(32, 0x4b),
+                directory.Record.RecordHash.ToArray()), fixture.DeviceKey), 15));
+        AssertVerificationFailure(() => DeepIdV2PreKeyManifestBinding.Verify(
+            closure, contactVerified,
+            SignInventory(InventoryFields(SHA256.HashData(xps),
+                ApplicationCoreFixture.Bytes(32, 0x4c)), fixture.DeviceKey), 15));
+        AssertVerificationFailure(() => DeepIdV2PreKeyManifestBinding.Verify(
+            closure, contactVerified,
+            SignInventory(InventoryFields(SHA256.HashData(xps),
+                directory.Record.RecordHash.ToArray()), fixture.AccountKey), 15));
+        AssertVerificationFailure(() => DeepIdV2PreKeyManifestBinding.Verify(
+            closure, contactVerified,
+            SignInventory(InventoryFields(SHA256.HashData(xps),
+                directory.Record.RecordHash.ToArray(), 21), fixture.DeviceKey), 15));
         var oldClosure = closure.CanonicalBytes.ToArray();
         oldClosure[5] = 1;
         Assert.Throws<ApplicationCoreFormatException>(() =>
