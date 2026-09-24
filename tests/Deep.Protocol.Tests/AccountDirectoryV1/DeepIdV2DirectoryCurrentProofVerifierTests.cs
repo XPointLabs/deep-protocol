@@ -10,6 +10,48 @@ namespace Deep.Protocol.Tests.AccountDirectoryV1;
 public sealed partial class AccountDirectoryFreshnessVerificationTests
 {
     [Fact]
+    public async Task Did2GenesisHeadAuthor_RequiresThresholdAndExactV2EmptyRoots()
+    {
+        var fixture = AuthorityFixture.Create();
+        var signers = fixture.Witnesses.Take(2)
+            .Select(static witness =>
+                (IAccountDirectoryAdh1WitnessSigner)new GenesisHeadSigner(
+                    witness.Id, witness.Key.PrivateKey))
+            .ToArray();
+        var authored = await DeepIdV2DirectoryHeadAuthor.AuthorGenesisAsync(
+            fixture.Verified, 1_700_000_000, 1_700_010_000, signers);
+        var expected = fixture.Head(0, new byte[32], 0,
+            AccountDirectoryRfc6962.ComputeEmptyTreeHash(),
+            DeepIdV2DirectorySparseMap.EmptyMapRoot.ToArray(),
+            minimumReader: 2);
+        Assert.Equal(AccountDirectoryAdh1Codec.Encode(expected),
+            authored.ExactAdh1.ToArray());
+        Assert.Equal(0UL, authored.ProtectedHead.LogGeneration);
+        Assert.Empty(authored.ExactTransitions);
+        Assert.Empty(authored.ExactAllTransitions);
+        Assert.Equal("InsufficientSigners",
+            (await Assert.ThrowsAsync<AccountDirectoryHeadAuthoringException>(
+                async () => await DeepIdV2DirectoryHeadAuthor.AuthorGenesisAsync(
+                    fixture.Verified, 1_700_000_000, 1_700_010_000,
+                    signers[..1]))).Code);
+        Assert.Equal("TimeOutsideAuthority",
+            (await Assert.ThrowsAsync<AccountDirectoryHeadAuthoringException>(
+                async () => await DeepIdV2DirectoryHeadAuthor.AuthorGenesisAsync(
+                    fixture.Verified, 1, 2, signers))).Code);
+        var badSigners = new IAccountDirectoryAdh1WitnessSigner[]
+        {
+            new GenesisHeadSigner(fixture.Witnesses[0].Id,
+                fixture.Witnesses[0].Key.PrivateKey),
+            new InvalidGenesisHeadSigner(fixture.Witnesses[1].Id)
+        };
+        Assert.Equal("InvalidSignerResult",
+            (await Assert.ThrowsAsync<AccountDirectoryHeadAuthoringException>(
+                async () => await DeepIdV2DirectoryHeadAuthor.AuthorGenesisAsync(
+                    fixture.Verified, 1_700_000_000, 1_700_010_000,
+                    badSigners))).Code);
+    }
+
+    [Fact]
     public void Did2Bootstrap_RequiresSignedExactEmptyV2Head()
     {
         var authority = AuthorityFixture.Create();
@@ -498,5 +540,32 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
         public bool Verify(ReadOnlySpan<byte> publicKey1952,
             ReadOnlySpan<byte> message, ReadOnlySpan<byte> context,
             ReadOnlySpan<byte> signature3309) => false;
+    }
+
+    private sealed class GenesisHeadSigner(byte[] id, byte[] privateKey) :
+        IAccountDirectoryAdh1WitnessSigner
+    {
+        public ReadOnlyMemory<byte> WitnessId => id.ToArray();
+
+        public ValueTask<ReadOnlyMemory<byte>> SignAdh1Async(
+            ReadOnlyMemory<byte> signingInput,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.FromResult<ReadOnlyMemory<byte>>(
+                Sodium.PublicKeyAuth.SignDetached(signingInput.ToArray(),
+                    privateKey));
+        }
+    }
+
+    private sealed class InvalidGenesisHeadSigner(byte[] id) :
+        IAccountDirectoryAdh1WitnessSigner
+    {
+        public ReadOnlyMemory<byte> WitnessId => id.ToArray();
+
+        public ValueTask<ReadOnlyMemory<byte>> SignAdh1Async(
+            ReadOnlyMemory<byte> signingInput,
+            CancellationToken cancellationToken) =>
+            ValueTask.FromResult<ReadOnlyMemory<byte>>(new byte[64]);
     }
 }

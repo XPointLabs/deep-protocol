@@ -66,6 +66,85 @@ public sealed class DeepIdV2DirectoryHeadMutationRequest
 /// </summary>
 public static class DeepIdV2DirectoryHeadAuthor
 {
+    /// <summary>
+    /// Authors the separately pinned, empty reader-V2 genesis ADH1 from the
+    /// current XNA1 witness threshold. The result has no transitions and must
+    /// be pinned independently before an ADA2 store is provisioned.
+    /// </summary>
+    public static async ValueTask<AuthoredAccountDirectoryHeadMutation>
+        AuthorGenesisAsync(VerifiedXPointNetworkAuthority authority,
+            ulong validFromUnixSeconds, ulong validUntilUnixSeconds,
+            IReadOnlyList<IAccountDirectoryAdh1WitnessSigner> witnessSigners,
+            CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(authority);
+        ArgumentNullException.ThrowIfNull(witnessSigners);
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            if (validFromUnixSeconds < authority.NotBefore ||
+                validUntilUnixSeconds > authority.ExpiresAt ||
+                validUntilUnixSeconds <= validFromUnixSeconds ||
+                validUntilUnixSeconds - validFromUnixSeconds > 86_400)
+                Fail("TimeOutsideAuthority",
+                    "The DID2 genesis head interval is outside the XPoint authority.");
+            var signers = ValidateSigners(authority, witnessSigners);
+            AccountDirectoryAdh1 Head(
+                IReadOnlyList<AccountDirectoryAdh1WitnessEntry> receipts) =>
+                new(authority.NetworkId.Span, 0, new byte[32], 0,
+                    AccountDirectoryRfc6962.ComputeEmptyTreeHash(),
+                    DeepIdV2DirectorySparseMap.EmptyMapRoot.Span,
+                    authority.AuthorityCoreReference.Span,
+                    authority.DirectoryWitnessPolicyHash.Span,
+                    validFromUnixSeconds, validUntilUnixSeconds, 2, receipts);
+            var unsigned = Head(signers.Select(static signer =>
+                new AccountDirectoryAdh1WitnessEntry(signer.Id,
+                    Enumerable.Repeat((byte)1, 64).ToArray())).ToArray());
+            var signingInput = AccountDirectoryCrypto.ComputeAdh1SigningInput(
+                unsigned);
+            var receipts = new List<AccountDirectoryAdh1WitnessEntry>(
+                signers.Length);
+            try
+            {
+                foreach (var signer in signers)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var signature = (await signer.Signer.SignAdh1Async(
+                        signingInput.ToArray(), cancellationToken)
+                        .ConfigureAwait(false)).ToArray();
+                    try
+                    {
+                        if (signature.Length != 64 ||
+                            signature.AsSpan().IndexOfAnyExcept((byte)0) < 0 ||
+                            !PublicKeyAuth.VerifyDetached(signature, signingInput,
+                                signer.PublicKey))
+                            Fail("InvalidSignerResult",
+                                "A DID2 genesis witness returned an invalid ADH1 signature.");
+                        receipts.Add(new AccountDirectoryAdh1WitnessEntry(
+                            signer.Id, signature));
+                    }
+                    finally { CryptographicOperations.ZeroMemory(signature); }
+                }
+            }
+            finally { CryptographicOperations.ZeroMemory(signingInput); }
+            var head = Head(receipts);
+            var exact = AccountDirectoryAdh1Codec.Encode(head);
+            var coreHash = AccountDirectoryCrypto.ComputeAdh1CoreHash(head);
+            var protectedHead = DeepIdV2DirectoryBootstrapVerifier
+                .RestoreGenesis(authority, exact, coreHash);
+            return new AuthoredAccountDirectoryHeadMutation(exact, coreHash,
+                [], [], protectedHead);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (AccountDirectoryHeadAuthoringException) { throw; }
+        catch (Exception exception) when (exception is ArgumentException or
+            FormatException or CryptographicException or OverflowException)
+        {
+            throw new AccountDirectoryHeadAuthoringException("AuthoringRejected",
+                "The DID2 genesis head authoring failed closed.", exception);
+        }
+    }
+
     public static async ValueTask<AuthoredAccountDirectoryHeadMutation> AdvanceAsync(
         VerifiedXPointNetworkAuthority authority,
         AccountDirectoryProtectedLkg predecessor,

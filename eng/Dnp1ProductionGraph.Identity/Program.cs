@@ -658,7 +658,10 @@ internal static class GraphPolicy
                 "Deep.Protocol|12519|BD67CA3C49202E0711415C80A311485351ACE232832D386651022867A5BD82FD",
                 "Deep.Protocol|12519|773F3F23E1050009C536736C33FEA13779236BDCACF6F788F390C0193E4A6EBD",
                 // DR-0007 DID2 capability commitment and separately protected owner capability.
-                "Deep.Protocol|12526|A9E62C9FCB295F8195457FC6E120A6810AA9FF1B54E44A5EAD814D75309BD3BC"
+                "Deep.Protocol|12526|A9E62C9FCB295F8195457FC6E120A6810AA9FF1B54E44A5EAD814D75309BD3BC",
+                // One-time DID2 empty ADH1 authoring from exact XNA1 witness custody.
+                "Deep.Protocol|12527|D0B62D669E50F6CBEEAA07D7F2348E8860E676F97576C75D717944FBDF0F7290",
+                "Deep.Protocol|12527|A3FFCF1420A8827419FD2F21C7988C6694BD4CEA3FBF5F8F1076C759C0183F7B"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [
