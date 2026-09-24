@@ -641,7 +641,10 @@ internal static class GraphPolicy
                 "Deep.Protocol|12459|2A077D1C807119EA13E41F2445073E60F90F796ECC6617A4092536ADDE8FD45C",
                 // Isolated XIR1 V2 issuer/DCA1 candidate; contact publication remains disabled.
                 "Deep.Protocol|12473|BE9F0B42C1C81EF5A3F80394136194AE0135BDD6143CC47A5B15A9822C0691D8",
-                "Deep.Protocol|12473|BA701AC9862C463931C4669910EA243F8243BBEA986CAF8EA4AA5CB282237982"
+                "Deep.Protocol|12473|BA701AC9862C463931C4669910EA243F8243BBEA986CAF8EA4AA5CB282237982",
+                // DID2-bound DCB1 identity/issuer candidate; XPS1, DCR1 and publication remain disabled.
+                "Deep.Protocol|12488|7A2A9725A84A7991FF2713A090511C246275B9E506B39C4366A01813B9B250A6",
+                "Deep.Protocol|12488|B6BFF8A0A0BD608CA6F8A01A7207307A166E7B8965DDD3E0585BDD95FBC26475"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

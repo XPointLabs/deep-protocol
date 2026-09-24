@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using Deep.Protocol.AccountDirectoryV1;
 using Deep.Protocol.ApplicationCore;
 using Deep.Protocol.ContactV1;
 using Deep.Protocol.ContactV2;
@@ -208,6 +209,113 @@ public sealed class ApplicationCoreVerificationTests
         AssertVerificationFailure(() =>
             DeepIdV2InviteRendezvousCodec.VerifyIssuerAndDca1(
                 xir, contactVerified, 20));
+
+        var adl = DeepIdV2AccountDirectoryLookupCodec.Author(did,
+            fixture.Network, 0, ApplicationCoreFixture.Bytes(32, 0x40), 1,
+            new byte[38], new byte[32]);
+        var xpsList = new byte[357];
+        xpsList[0] = 1;
+        BinaryPrimitives.WriteUInt32BigEndian(xpsList.AsSpan(1), 352);
+        var descriptor = new byte[651];
+        Be16(1).CopyTo(descriptor, 0);
+        Be16(1).CopyTo(descriptor, 2);
+        SHA256.HashData(xir.CanonicalBytes.Span).CopyTo(descriptor, 4);
+        Be32(611).CopyTo(descriptor, 36);
+        xir.CanonicalBytes.Span.CopyTo(descriptor.AsSpan(40));
+        var bundleFields = new ReadOnlyMemory<byte>[]
+        {
+            fixture.Network, fixture.AccountId, dpa.CanonicalBytes,
+            ContactRef("DRS1", 1, fixture.Revocations.Snapshot.CanonicalHash.Span),
+            directory.Record.CanonicalBytes, contact.CanonicalBytes,
+            ApplicationCoreFixture.Bytes(32, 0x41), Be64(0), new byte[32],
+            fixture.DeviceId, new byte[] { 1 }, xpsList, new byte[] { 1 },
+            descriptor, Array.Empty<byte>(), Be32(0x0b), Be64(10), Be64(20),
+            ApplicationCoreFixture.Bytes(64, 0x42), adl.CanonicalBytes,
+            Be64(0).Concat(adl.MinimumAdhHash.ToArray()).ToArray(),
+            did.RecordHash, did.CanonicalBytes, valid.CanonicalBytes,
+        };
+        ParsedDcb1V2 SignBundle(ReadOnlyMemory<byte>[] fields, KeyPair signer)
+        {
+            var unsignedBundle = DeepIdV2ContactBundleCodec.AuthorForValidation(fields);
+            fields[18] = PublicKeyAuth.SignDetached(
+                unsignedBundle.SignatureInput.ToArray(), signer.PrivateKey);
+            return DeepIdV2ContactBundleCodec.AuthorForValidation(fields);
+        }
+        var bundle = SignBundle(bundleFields, fixture.DeviceKey);
+        Assert.Equal(9_078, bundle.CanonicalBytes.Length);
+        Assert.False(DeepIdV2ContactBundleCodec.RuntimeActivation);
+        DeepIdV2ContactBundleCodec.VerifyIdentityAndIssuer(
+            bundle, contactVerified, 15);
+        var oldBundle = bundle.CanonicalBytes.ToArray();
+        oldBundle[5] = 1;
+        Assert.Throws<ApplicationCoreFormatException>(() =>
+            DeepIdV2ContactBundleCodec.Decode(oldBundle));
+        oldBundle = bundle.CanonicalBytes.ToArray();
+        BinaryPrimitives.WriteUInt16BigEndian(oldBundle.AsSpan(6), 0x0201);
+        Assert.Throws<ApplicationCoreFormatException>(() =>
+            DeepIdV2ContactBundleCodec.Decode(oldBundle));
+        var invalidPredecessorFields = bundleFields.ToArray();
+        invalidPredecessorFields[8] = ApplicationCoreFixture.Bytes(32, 0x45);
+        Assert.Throws<ApplicationCoreFormatException>(() =>
+            DeepIdV2ContactBundleCodec.AuthorForValidation(invalidPredecessorFields));
+        var invalidWindowFields = bundleFields.ToArray();
+        invalidWindowFields[17] = Be64(10);
+        Assert.Throws<ApplicationCoreFormatException>(() =>
+            DeepIdV2ContactBundleCodec.AuthorForValidation(invalidWindowFields));
+        var wrongDidFields = bundleFields.ToArray();
+        wrongDidFields[21] = ApplicationCoreFixture.Bytes(32, 0x43);
+        AssertVerificationFailure(() =>
+            DeepIdV2ContactBundleCodec.VerifyIdentityAndIssuer(
+                SignBundle(wrongDidFields, fixture.DeviceKey),
+                contactVerified, 15));
+        var wrongPolicyFields = bundleFields.ToArray();
+        wrongPolicyFields[15] = Be32(0x02);
+        AssertVerificationFailure(() =>
+            DeepIdV2ContactBundleCodec.VerifyIdentityAndIssuer(
+                SignBundle(wrongPolicyFields, fixture.DeviceKey),
+                contactVerified, 15));
+        var unrelatedDid = DeepIdV2Codec.AuthorDid2(
+            fixture.AccountKey.PublicKey, pqPublicKey,
+            ApplicationCoreFixture.Bytes(16, 0x44));
+        var unrelatedAdl = DeepIdV2AccountDirectoryLookupCodec.Author(
+            unrelatedDid, fixture.Network, 0, adl.MinimumAdhHash.Span, 1,
+            new byte[38], new byte[32]);
+        var wrongLookupFields = bundleFields.ToArray();
+        wrongLookupFields[19] = unrelatedAdl.CanonicalBytes;
+        Assert.Throws<AccountDirectoryAdl1FormatException>(() =>
+            DeepIdV2ContactBundleCodec.VerifyIdentityAndIssuer(
+                SignBundle(wrongLookupFields, fixture.DeviceKey),
+                contactVerified, 15));
+        var wrongSignerFields = bundleFields.ToArray();
+        AssertVerificationFailure(() =>
+            DeepIdV2ContactBundleCodec.VerifyIdentityAndIssuer(
+                SignBundle(wrongSignerFields, fixture.AccountKey),
+                contactVerified, 15));
+        var wrongDescriptorFields = bundleFields.ToArray();
+        var wrongDescriptor = descriptor.ToArray();
+        wrongDescriptor[4] ^= 1;
+        wrongDescriptorFields[13] = wrongDescriptor;
+        Assert.Throws<ApplicationCoreFormatException>(() =>
+            DeepIdV2ContactBundleCodec.AuthorForValidation(wrongDescriptorFields));
+        var invalidNameFields = bundleFields.ToArray();
+        invalidNameFields[14] = new byte[] { 0xff };
+        Assert.Throws<ApplicationCoreFormatException>(() =>
+            DeepIdV2ContactBundleCodec.AuthorForValidation(invalidNameFields));
+        var malformedDirectoryFields = bundleFields.ToArray();
+        var malformedDirectory = directory.Record.CanonicalBytes.ToArray();
+        malformedDirectory[5] = 2;
+        malformedDirectoryFields[4] = malformedDirectory;
+        Assert.Throws<ApplicationCoreFormatException>(() =>
+            DeepIdV2ContactBundleCodec.AuthorForValidation(malformedDirectoryFields));
+        var oldDabFields = bundleFields.ToArray();
+        var oldDab = valid.CanonicalBytes.ToArray();
+        oldDab[5] = 1;
+        oldDabFields[23] = oldDab;
+        Assert.Throws<ApplicationCoreFormatException>(() =>
+            DeepIdV2ContactBundleCodec.AuthorForValidation(oldDabFields));
+        AssertVerificationFailure(() =>
+            DeepIdV2ContactBundleCodec.VerifyIdentityAndIssuer(
+                bundle, contactVerified, 20));
         var oldVersion = contact.CanonicalBytes.ToArray();
         oldVersion[5] = 1;
         Assert.Throws<ApplicationCoreFormatException>(() =>
