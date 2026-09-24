@@ -144,6 +144,7 @@ def native_verify(probe, public_key, message, signature):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--probe", required=True, type=Path)
+    parser.add_argument("--print-candidate", action="store_true")
     args = parser.parse_args()
     probe = args.probe.resolve()
     bip39 = hashlib.pbkdf2_hmac("sha512", MNEMONIC, b"mnemonic", 2048, 64)
@@ -154,8 +155,10 @@ def main():
     capability = derive("Deep/Recovery/V2/root-resolver-read-capability", root_prk, CONTEXT, 16)
     pq_public, _ = native_public_and_signature(probe, pq_seed, bytes(250))
     ed = SigningKey(ed_seed)
-    did = record("DID2", [bytes(ed.verify_key), pq_public, capability])
-    if len(did) != 2036:
+    capability_commitment = domain_hash(
+        "Deep/Application/V2/resolver-read-capability-commitment", capability)
+    did = record("DID2", [bytes(ed.verify_key), pq_public, capability_commitment])
+    if len(did) != 2052:
         raise ValueError("DID2 size changed")
     did_hash = domain_hash("Deep/Application/V2/record-hash/DID2", did)
     text = bech32m(b"\x02" + did_hash + capability)
@@ -215,6 +218,7 @@ def main():
     else:
         raise ValueError("Ed25519 root signature accepted changed transcript")
     actual = {
+        "readCapabilityCommitment": capability_commitment.hex(),
         "didSha256": hashlib.sha256(did).hexdigest(),
         "didRecordHash": did_hash.hex(),
         "deepIdText": text,
@@ -225,6 +229,9 @@ def main():
         "rootPqSignatureSha256": hashlib.sha256(pq_signature).hexdigest(),
         "accountSignatureSha256": hashlib.sha256(account_signature).hexdigest(),
     }
+    if args.print_candidate:
+        print(json.dumps(actual, indent=2))
+        return
     vector_path = Path(__file__).resolve().parents[1] / "registry/deep-id-v2.vectors.json"
     expected_values = json.loads(vector_path.read_text(encoding="utf-8"))["expected"]
     if set(expected_values) != set(actual):
@@ -232,7 +239,7 @@ def main():
     for key, expected in expected_values.items():
         if actual[key] != expected:
             raise ValueError(f"DID2/DAB2 pinned transcript changed: {key}")
-    print("PASS pinned DID2/DAB2 transcript (9 values), Ed/ML-DSA verification and mutation rejection")
+    print("PASS pinned DID2/DAB2 transcript (10 values), Ed/ML-DSA verification and mutation rejection")
 
 
 if __name__ == "__main__":

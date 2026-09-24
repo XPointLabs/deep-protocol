@@ -2,6 +2,7 @@
   "schemaVersion": "1",
   "status": "TRANSCRIPT_VECTOR_NOT_FULL_CLOSURE",
   "decision": "DR-0006",
+  "amendment": "DR-0007",
   "fixture": {
     "bip39EntropyHex": "0000000000000000000000000000000000000000000000000000000000000000",
     "networkIdHex": "000102030405060708090a0b0c0d0e0f",
@@ -12,21 +13,24 @@
     "mldsaSignatureRandomness": "32 zero bytes, deterministic public fixture only"
   },
   "expected": {
-    "didSha256": "054709aba16d7e1a4d8eeb44cbb4b5096a06b0915ce14b32e9fdb6be8968bcd6",
-    "didRecordHash": "bea14bedff9a97c5108a5eebc3c4443192de68ea5db3270f29cf4b42da63b123",
-    "deepIdText": "deep1q2l2zjldl7df03gs3f0whs7ygsce9hngafwmxfc09885ksk6vwcjxucsd87zcpnlnyaxcyhw8tjyu8sg4nsev",
-    "dabUnsignedSha256": "5829c1b06832ed1e914c41790c57e3454d642c7fe5c133cf26fbcbc9f73ac39d",
-    "dabSha256": "24c2cf347e1f99fc1e6f9acdf783ca5426e6bb1bc66ace9357307a1d88cda438",
-    "dabRecordHash": "8704ba997eb7e56176d0d2332e0a5d58a8d1c0f09e8d782b8ad4e5ba39e8bac3",
-    "rootEdSignatureSha256": "66564815a066f9b3c404330a201a81c2fe10aaeb0d242a6b1c9f0a165ca731c1",
-    "rootPqSignatureSha256": "2e27175fbe7704cd86a642eeae168011cd9ff8a21b04a6535f523fe4fb36ed88",
-    "accountSignatureSha256": "c68fc89fec6f242b8ab6eda35b35f8135e0391c6363309f5ce44901bedefec40"
+    "readCapabilityCommitment": "84b9f711a2953a11a2b6c4e9a00745cf7b2082c4e919c5d138bfeef533e63eae",
+    "didSha256": "9e5aeaacb97ae662a139f0055d2c606808c2a44592d36bba629bcca6a84d2f77",
+    "didRecordHash": "27aa943cb53d88217281d5a0956f5dd1d7d1d1e7f0d38083309bf9864b8bfd5c",
+    "deepIdText": "deep1qgn649puk57csgtjs826p9t0thga05w3ulcd8qyrxzdlnpjt3074cucsd87zcpnlnyaxcyhw8tjyu8sj3mf93",
+    "dabUnsignedSha256": "7c743d12969490ba6c4a81201a0739cd29e3ac4742fa6de59be9633aa993a2c2",
+    "dabSha256": "b14146819cf8a28a45175cf90345a7cfbd479bf1f2ca3079d04828e21fdb893f",
+    "dabRecordHash": "2354dc2deb9f29f7b87c9beb05bcf7e38139da310725c9aa476975b3895a306d",
+    "rootEdSignatureSha256": "c275da37f782326f8559cbb6ffefbc1cbb8270f9ee88e8554e312faf628c1a4e",
+    "rootPqSignatureSha256": "ab9f321934ba8ee9723ddd1a25b47f6d64341b33884c8bad61fe757b7c0b12ac",
+    "accountSignatureSha256": "853e7e6dd166a2a3f557871ce7ddc7eeafb164aaf45fddcb73046c7d79aba0e1"
   },
   "negativeChecks": [
     "uppercase text rejects",
     "Bech32m checksum mutation rejects",
     "Ed25519 transcript mutation rejects",
     "ML-DSA transcript mutation rejects",
-    "ML-DSA root-key substitution rejects"
+    "ML-DSA root-key substitution rejects",
+    "raw resolver capability absent from canonical DID2",
+    "wrong resolver capability commitment rejects"
   ]
 }

@@ -274,7 +274,7 @@ public sealed class ApplicationCoreVerificationTests
             return DeepIdV2ContactBundleCodec.AuthorForValidation(fields);
         }
         var bundle = SignBundle(bundleFields, fixture.DeviceKey);
-        Assert.Equal(9_078, bundle.CanonicalBytes.Length);
+        Assert.Equal(9_094, bundle.CanonicalBytes.Length);
         Assert.False(DeepIdV2ContactBundleCodec.RuntimeActivation);
         DeepIdV2ContactBundleCodec.VerifyIdentityAndIssuer(
             bundle, contactVerified, 15);

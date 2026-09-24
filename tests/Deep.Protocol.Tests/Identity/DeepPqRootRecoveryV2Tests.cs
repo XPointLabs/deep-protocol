@@ -92,7 +92,7 @@ public sealed class DeepPqRootRecoveryV2Tests
     }
 
     [Fact]
-    public void DeepIdV2Root_RestoreRecreatesExactCredentialAndCompactText()
+    public void DeepIdV2Root_RestoreRecreatesExactCredentialAndCommitment()
     {
         if (!((OperatingSystem.IsWindows() &&
                 RuntimeInformation.ProcessArchitecture is (Architecture.X64 or Architecture.Arm64)) ||
@@ -107,9 +107,13 @@ public sealed class DeepPqRootRecoveryV2Tests
         var second = DeepIdV2Root.DeriveDid2(restored);
         Assert.Equal(first.CanonicalBytes.ToArray(), second.CanonicalBytes.ToArray());
         Assert.Equal(first.RecordHash.ToArray(), second.RecordHash.ToArray());
-        Assert.Equal(first.Text, second.Text);
-        Assert.Equal(2036, first.CanonicalBytes.Length);
-        Assert.Equal(90, first.Text.Length);
+        Assert.Equal(first.ResolverReadCapabilityCommitment.ToArray(),
+            second.ResolverReadCapabilityCommitment.ToArray());
+        Assert.Equal(2052, first.CanonicalBytes.Length);
+        var firstAddress = DeepIdV2Root.DerivePermanentIdV2(original);
+        var restoredAddress = DeepIdV2Root.DerivePermanentIdV2(restored);
+        Assert.Equal(firstAddress.CanonicalText, restoredAddress.CanonicalText);
+        Assert.True(restoredAddress.MatchesExactCredential(second));
     }
 
     private static byte[] Combine(

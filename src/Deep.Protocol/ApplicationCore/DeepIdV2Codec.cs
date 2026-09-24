@@ -6,23 +6,35 @@ public sealed class ParsedDid2 : ParsedApplicationCoreRecord
 {
     private readonly byte[] edPublicKey;
     private readonly byte[] pqPublicKey;
-    private readonly byte[] readCapability;
+    private readonly byte[] readCapabilityCommitment;
 
     internal ParsedDid2(
         byte[] canonical, ReadOnlySpan<byte> edPublicKey,
-        ReadOnlySpan<byte> pqPublicKey, ReadOnlySpan<byte> readCapability)
+        ReadOnlySpan<byte> pqPublicKey,
+        ReadOnlySpan<byte> readCapabilityCommitment)
         : base(ProtocolMagic.DID2, canonical, hashGeneration: 2)
     {
         this.edPublicKey = edPublicKey.ToArray();
         this.pqPublicKey = pqPublicKey.ToArray();
-        this.readCapability = readCapability.ToArray();
-        Text = DeepIdText.Encode(2, RecordHash.Span, readCapability);
+        this.readCapabilityCommitment = readCapabilityCommitment.ToArray();
     }
 
     public ReadOnlyMemory<byte> RootEd25519PublicKey => edPublicKey.ToArray();
     public ReadOnlyMemory<byte> RootMlDsa65PublicKey => pqPublicKey.ToArray();
-    public ReadOnlyMemory<byte> ResolverReadCapability => readCapability.ToArray();
-    public string Text { get; }
+    public ReadOnlyMemory<byte> ResolverReadCapabilityCommitment =>
+        readCapabilityCommitment.ToArray();
+
+    public bool MatchesResolverReadCapability(
+        ReadOnlySpan<byte> resolverReadCapability16)
+    {
+        if (resolverReadCapability16.Length != 16 ||
+            resolverReadCapability16.IndexOfAnyExcept((byte)0) < 0)
+            return false;
+        var commitment = DeepIdV2Codec.ComputeResolverReadCapabilityCommitment(
+            resolverReadCapability16);
+        return System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+            readCapabilityCommitment, commitment);
+    }
 }
 
 public sealed class ParsedDab2 : ParsedApplicationCoreRecord
@@ -84,7 +96,7 @@ public sealed class ParsedDab2 : ParsedApplicationCoreRecord
 public static class DeepIdV2Codec
 {
     public const ushort Suite = 0x0301;
-    public const int Did2Length = 2036;
+    public const int Did2Length = 2052;
     public const int Dab2Length = 3711;
     public const ushort Dab2ArtifactType = 0x1002;
     private static ReadOnlySpan<byte> DidMagic => ProtocolMagicBytes.DID2;
@@ -97,7 +109,7 @@ public static class DeepIdV2Codec
             canonical, DidMagic, 3, Did2Length, Did2Length, fields, 2, Suite);
         ApplicationCoreFormat.ExactLength(fields, 1, 32);
         ApplicationCoreFormat.ExactLength(fields, 2, 1952);
-        ApplicationCoreFormat.ExactLength(fields, 3, 16);
+        ApplicationCoreFormat.ExactLength(fields, 3, 32);
         for (var tag = 1; tag <= 3; tag++)
             ApplicationCoreFormat.NonZero(ApplicationCoreFormat.Field(canonical, fields, tag),
                 "DID2 root field");
@@ -106,6 +118,20 @@ public static class DeepIdV2Codec
             ApplicationCoreFormat.Field(owned, fields, 1),
             ApplicationCoreFormat.Field(owned, fields, 2),
             ApplicationCoreFormat.Field(owned, fields, 3));
+    }
+
+    public static byte[] ComputeResolverReadCapabilityCommitment(
+        ReadOnlySpan<byte> resolverReadCapability16)
+    {
+        RequireLength(resolverReadCapability16, 16,
+            nameof(resolverReadCapability16));
+        if (resolverReadCapability16.IndexOfAnyExcept((byte)0) < 0)
+            throw new ArgumentException(
+                "The resolver read capability must be nonzero.",
+                nameof(resolverReadCapability16));
+        return ApplicationCoreFormat.Sha256Domain(
+            "Deep/Application/V2/resolver-read-capability-commitment",
+            resolverReadCapability16);
     }
 
     public static ParsedDid2 AuthorDid2(
@@ -120,7 +146,8 @@ public static class DeepIdV2Codec
         var writer = new ApplicationRecordWriter(canonical, DidMagic, 3, 2, Suite);
         writer.Write(1, rootEd25519PublicKey32);
         writer.Write(2, rootMlDsa65PublicKey1952);
-        writer.Write(3, resolverReadCapability16);
+        writer.Write(3, ComputeResolverReadCapabilityCommitment(
+            resolverReadCapability16));
         writer.Complete();
         return DecodeDid2(canonical);
     }

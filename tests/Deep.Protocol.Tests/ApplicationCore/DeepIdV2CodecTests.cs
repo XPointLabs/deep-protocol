@@ -9,26 +9,32 @@ public sealed class DeepIdV2CodecTests
     [Fact]
     public void Did2_RoundTripsCompactCommitment_WithoutFabricatingCredential()
     {
-        var did = DeepIdV2Codec.AuthorDid2(Pattern(32, 1), Pattern(1952, 2), Pattern(16, 3));
-        Assert.Equal(2036, did.CanonicalBytes.Length);
-        Assert.Equal(90, did.Text.Length);
+        var capability = Enumerable.Repeat((byte)0xa5, 16).ToArray();
+        var did = DeepIdV2Codec.AuthorDid2(Pattern(32, 1), Pattern(1952, 2), capability);
+        Assert.Equal(2052, did.CanonicalBytes.Length);
+        var descriptor = DeepPermanentIdV2.FromCredential(did, capability);
+        Assert.Equal(90, descriptor.CanonicalText.Length);
         Assert.Equal("DID2", did.Magic);
-        var compact = DeepIdV2Codec.DecodeDeepIdText(did.Text);
+        Assert.Equal(-1, did.CanonicalBytes.Span.IndexOf(capability));
+        Assert.True(did.MatchesResolverReadCapability(capability));
+        var compact = DeepIdV2Codec.DecodeDeepIdText(descriptor.CanonicalText);
         Assert.Equal(did.RecordHash.ToArray(), compact.Did2Hash);
-        Assert.Equal(did.ResolverReadCapability.ToArray(), compact.ReadCapability);
+        Assert.Equal(capability, compact.ReadCapability);
 
         var reparsed = DeepIdV2Codec.DecodeDid2(did.CanonicalBytes.Span);
-        Assert.Equal(did.Text, reparsed.Text);
+        Assert.True(reparsed.MatchesResolverReadCapability(capability));
         Assert.Equal(did.RecordHash.ToArray(), reparsed.RecordHash.ToArray());
         Assert.Throws<ApplicationCoreFormatException>(() =>
-            DeepIdV2Codec.DecodeDeepIdText(did.Text.ToUpperInvariant()));
-        var mutatedText = did.Text[..^1] + (did.Text[^1] == 'q' ? 'p' : 'q');
+            DeepIdV2Codec.DecodeDeepIdText(descriptor.CanonicalText.ToUpperInvariant()));
+        var text = descriptor.CanonicalText;
+        var mutatedText = text[..^1] + (text[^1] == 'q' ? 'p' : 'q');
         Assert.Throws<ApplicationCoreFormatException>(() =>
             DeepIdV2Codec.DecodeDeepIdText(mutatedText));
 
-        var descriptor = DeepPermanentIdV2.FromCredential(did);
         Assert.True(descriptor.MatchesExactCredential(did));
-        Assert.True(DeepPermanentIdV2.ParseCanonical(did.Text).MatchesExactCredential(did));
+        Assert.True(DeepPermanentIdV2.ParseCanonical(text).MatchesExactCredential(did));
+        Assert.Throws<ArgumentException>(() => DeepPermanentIdV2.FromCredential(
+            did, Pattern(16, 4)));
         var substituted = DeepIdV2Codec.AuthorDid2(
             Pattern(32, 1), Pattern(1952, 4), Pattern(16, 3));
         Assert.False(descriptor.MatchesExactCredential(substituted));
@@ -53,6 +59,12 @@ public sealed class DeepIdV2CodecTests
         canonical = did.CanonicalBytes.ToArray();
         BinaryPrimitives.WriteUInt32BigEndian(canonical.AsSpan(16, 4), 31);
         AssertRejects(ApplicationCoreRejection.UnknownTag, () => DeepIdV2Codec.DecodeDid2(canonical));
+        // The retired raw-capability candidate was 16 bytes shorter.
+        var retired = did.CanonicalBytes.Span[..2036].ToArray();
+        BinaryPrimitives.WriteUInt32BigEndian(retired.AsSpan(8), 2036);
+        BinaryPrimitives.WriteUInt32BigEndian(retired.AsSpan(2016), 16);
+        Assert.Throws<ApplicationCoreFormatException>(() =>
+            DeepIdV2Codec.DecodeDid2(retired));
     }
 
     [Fact]

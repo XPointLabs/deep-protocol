@@ -24,7 +24,11 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
         var request = new DeepIdV2GenesisAdmissionWireRequest(
             Enumerable.Repeat((byte)0x91, 32).ToArray(), admission);
         var exact = DeepIdV2GenesisAdmissionWireCodec.EncodeRequest(request);
-        Assert.Equal(8482, exact.Length);
+        Assert.Equal(8498, exact.Length);
+        var fixtureOutput = Environment.GetEnvironmentVariable(
+            "DEEP_DID2_GENESIS_FIXTURE_OUTPUT");
+        if (!string.IsNullOrWhiteSpace(fixtureOutput))
+            await File.WriteAllBytesAsync(fixtureOutput, exact);
         var decoded = DeepIdV2GenesisAdmissionWireCodec.DecodeRequest(exact);
         using var verifier = DeepMlDsa65CandidateVerifierFactory
             .OpenForCurrentProcess();

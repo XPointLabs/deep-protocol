@@ -39,12 +39,12 @@ public sealed class ParsedDcb1V2
 /// </summary>
 public static class DeepIdV2ContactBundleCodec
 {
-    public const int MinimumLength = 9_078;
-    public const int MaximumLength = 15_596;
+    public const int MinimumLength = 9_094;
+    public const int MaximumLength = 15_612;
     public static bool RuntimeActivation => false;
     private static ReadOnlySpan<int> FieldLengths =>
         [16, 32, 644, 38, -1, 473, 32, 8, 32, 32, 1, -1, 1, 651,
-         -1, 4, 8, 8, 64, 228, 40, 32, 2036, 3711];
+         -1, 4, 8, 8, 64, 228, 40, 32, DeepIdV2Codec.Did2Length, 3711];
 
     public static ParsedDcb1V2 Decode(ReadOnlySpan<byte> canonical)
     {

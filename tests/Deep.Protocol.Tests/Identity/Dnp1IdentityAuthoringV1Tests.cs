@@ -654,7 +654,8 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
 
         var binding = recovery.AuthorGenesisDab2(phrase, closure, deploymentProfileId: 1);
         Assert.Equal(0UL, binding.Head.Record.BindingGeneration);
-        Assert.Equal(2036, binding.Head.DeepId.CanonicalBytes.Length);
+        Assert.Equal(DeepIdV2Codec.Did2Length,
+            binding.Head.DeepId.CanonicalBytes.Length);
         Assert.Equal(3711, binding.Head.Record.CanonicalBytes.Length);
         var directory = recovery.AuthorGenesisDmd1(closure, 1_900_000_200);
         var contactAuthorization = recovery.AuthorGenesisDca1V2(
@@ -751,12 +752,14 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
         var restoredDid = DeepIdV2Root.DeriveDid2(restoredPhrase);
         Assert.Equal(binding.Head.DeepId.CanonicalBytes.ToArray(),
             restoredDid.CanonicalBytes.ToArray());
-        Assert.Equal(binding.Head.DeepId.Text, restoredDid.Text);
+        Assert.Equal(binding.Head.DeepId.ResolverReadCapabilityCommitment.ToArray(),
+            restoredDid.ResolverReadCapabilityCommitment.ToArray());
         var restoredBinding = DeepIdV2Root.RestoreExistingGenesisDab2(restoredPhrase,
             binding.Head.Record.CanonicalBytes.Span, closure, deploymentProfileId: 1);
         Assert.Equal(binding.Head.Record.RecordHash.ToArray(),
             restoredBinding.Head.Record.RecordHash.ToArray());
-        Assert.Equal(binding.Head.DeepId.Text, restoredBinding.Head.DeepId.Text);
+        Assert.Equal(binding.Head.DeepId.CanonicalBytes.ToArray(),
+            restoredBinding.Head.DeepId.CanonicalBytes.ToArray());
         Assert.Throws<ApplicationCoreFormatException>(() =>
             DeepIdV2Root.RestoreExistingGenesisDab2(restoredPhrase,
                 binding.Head.Record.CanonicalBytes.Span, closure,

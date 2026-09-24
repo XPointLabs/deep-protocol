@@ -2,6 +2,7 @@
   "schemaVersion": "1",
   "registryId": "deep-id-v2-clean-break",
   "decision": "DR-0006",
+  "amendment": "DR-0007",
   "lifecycle": "TARGET_UNFROZEN_DEPENDENT_CLOSURES",
   "releaseEncode": false,
   "suite": {
@@ -21,13 +22,14 @@
   },
   "records": {
     "DID2": {
-      "totalBytes": 2036,
+      "totalBytes": 2052,
       "fields": [
         { "tag": 1, "name": "rootEd25519PublicKey", "bytes": 32 },
         { "tag": 2, "name": "rootMlDsa65PublicKey", "bytes": 1952 },
-        { "tag": 3, "name": "resolverReadCapability", "bytes": 16 }
+        { "tag": 3, "name": "resolverReadCapabilityCommitment", "bytes": 32 }
       ],
-      "hashDomain": "Deep/Application/V2/record-hash/DID2"
+      "hashDomain": "Deep/Application/V2/record-hash/DID2",
+      "readCapabilityCommitmentDomain": "Deep/Application/V2/resolver-read-capability-commitment"
     },
     "DAB2": {
       "totalBytes": 3711,
@@ -63,7 +65,8 @@
     "payloadBytes": 49,
     "textCharacters": 90,
     "payload": "0x02 || exactDID2RecordHash32 || resolverReadCapability16",
-    "mustFetchAndVerifyExactDid2BeforeTrust": true
+    "mustFetchAndVerifyExactDid2BeforeTrust": true,
+    "mustVerifyReadCapabilityCommitment": true
   },
   "retiredReject": ["DID1", "DAB1", "artifactType:0x1001"],
   "dependentReFreezeRequired": [

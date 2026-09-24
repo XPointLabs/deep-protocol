@@ -88,13 +88,18 @@ internal static class ProbeRunner
         using var phrase = DeepRecoveryV1.VerifyCanonicalUtf8(
             Encoding.ASCII.GetBytes(publicPhrase));
         var did = DeepIdV2Root.DeriveDid2(phrase);
-        if (did.CanonicalBytes.Length != 2036 || did.Text.Length != 90 ||
+        var address = DeepIdV2Root.DerivePermanentIdV2(phrase);
+        if (did.CanonicalBytes.Length != DeepIdV2Codec.Did2Length ||
+            address.CanonicalText.Length != 90 ||
+            !address.MatchesExactCredential(did) ||
+            !StringComparer.Ordinal.Equals(address.CanonicalText,
+                "deep1qgn649puk57csgtjs826p9t0thga05w3ulcd8qyrxzdlnpjt3074cucsd87zcpnlnyaxcyhw8tjyu8sj3mf93") ||
             !StringComparer.Ordinal.Equals(
                 Convert.ToHexString(SHA256.HashData(did.CanonicalBytes.Span)).ToLowerInvariant(),
-                "054709aba16d7e1a4d8eeb44cbb4b5096a06b0915ce14b32e9fdb6be8968bcd6") ||
+                "9e5aeaacb97ae662a139f0055d2c606808c2a44592d36bba629bcca6a84d2f77") ||
             !StringComparer.Ordinal.Equals(
                 Convert.ToHexString(did.RecordHash.Span).ToLowerInvariant(),
-                "bea14bedff9a97c5108a5eebc3c4443192de68ea5db3270f29cf4b42da63b123"))
+                "27aa943cb53d88217281d5a0956f5dd1d7d1d1e7f0d38083309bf9864b8bfd5c"))
             throw new CryptographicException("Managed DID2 root transcript differs from pinned vector.");
     }
 

@@ -23,11 +23,19 @@ public sealed class DeepPermanentIdV2 : IEquatable<DeepPermanentIdV2>
     public ReadOnlyMemory<byte> ExactDid2Hash => did2Hash.ToArray();
     public ReadOnlyMemory<byte> ResolverReadCapability => readCapability.ToArray();
 
-    public static DeepPermanentIdV2 FromCredential(ParsedDid2 exactDid2)
+    public static DeepPermanentIdV2 FromCredential(ParsedDid2 exactDid2,
+        ReadOnlySpan<byte> resolverReadCapability16)
     {
         ArgumentNullException.ThrowIfNull(exactDid2);
-        return new DeepPermanentIdV2(exactDid2.Text,
-            exactDid2.RecordHash.Span, exactDid2.ResolverReadCapability.Span);
+        if (!exactDid2.MatchesResolverReadCapability(
+                resolverReadCapability16))
+            throw new ArgumentException(
+                "The read capability does not match the exact DID2 commitment.",
+                nameof(resolverReadCapability16));
+        return new DeepPermanentIdV2(
+            DeepIdText.Encode(2, exactDid2.RecordHash.Span,
+                resolverReadCapability16), exactDid2.RecordHash.Span,
+            resolverReadCapability16);
     }
 
     public static DeepPermanentIdV2 ParseCanonical(string text)
@@ -40,7 +48,7 @@ public sealed class DeepPermanentIdV2 : IEquatable<DeepPermanentIdV2>
     public bool MatchesExactCredential(ParsedDid2 exactDid2) =>
         exactDid2 is not null &&
         did2Hash.AsSpan().SequenceEqual(exactDid2.RecordHash.Span) &&
-        readCapability.AsSpan().SequenceEqual(exactDid2.ResolverReadCapability.Span);
+        exactDid2.MatchesResolverReadCapability(readCapability);
 
     public bool Equals(DeepPermanentIdV2? other) =>
         other is not null &&

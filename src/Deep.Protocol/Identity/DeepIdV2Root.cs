@@ -9,6 +9,23 @@ namespace Deep.Protocol.Identity;
 /// </summary>
 public static class DeepIdV2Root
 {
+    /// <summary>
+    /// Restores the holder's compact address without embedding its resolver
+    /// read capability in the public DID2 credential.
+    /// </summary>
+    public static DeepPermanentIdV2 DerivePermanentIdV2(
+        VerifiedDeepRecoveryPhrase phrase)
+    {
+        ArgumentNullException.ThrowIfNull(phrase);
+        var did = DeriveDid2(phrase);
+        DeepPermanentIdV2? permanentId = null;
+        DeepPqRootRecoveryV2.UseRootMaterial(phrase,
+            (_, _, capability) => permanentId =
+                DeepPermanentIdV2.FromCredential(did, capability));
+        return permanentId ?? throw new CryptographicException(
+            "The DID2 resolver read capability was not derived.");
+    }
+
     public static ParsedDid2 DeriveDid2(VerifiedDeepRecoveryPhrase phrase)
     {
         ArgumentNullException.ThrowIfNull(phrase);

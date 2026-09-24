@@ -85,6 +85,8 @@ public static class DeepProtocolIdentifiers
         public const string DPK2 = "DPK2";
         public const string DPL1 = "DPL1";
         public const string DPM1 = "DPM1";
+        public const string DPP2 = "DPP2";
+        public const string DPQ2 = "DPQ2";
         public const string DPR1 = "DPR1";
         public const string DPS1 = "DPS1";
         public const string DRA1 = "DRA1";
@@ -310,6 +312,8 @@ public static class DeepProtocolIdentifiers
         public static System.ReadOnlySpan<byte> DPK2 => "DPK2"u8;
         public static System.ReadOnlySpan<byte> DPL1 => "DPL1"u8;
         public static System.ReadOnlySpan<byte> DPM1 => "DPM1"u8;
+        public static System.ReadOnlySpan<byte> DPP2 => "DPP2"u8;
+        public static System.ReadOnlySpan<byte> DPQ2 => "DPQ2"u8;
         public static System.ReadOnlySpan<byte> DPR1 => "DPR1"u8;
         public static System.ReadOnlySpan<byte> DPS1 => "DPS1"u8;
         public static System.ReadOnlySpan<byte> DRA1 => "DRA1"u8;
@@ -534,7 +538,7 @@ internal readonly record struct GeneratedRegistryIdentifier(
 
 internal static class DeepProtocolRegistryGenerated
 {
-    internal const string RegistrySha256 = "e5f00794d9d91b1a4f512cc1acc689524f9c38e183f6eb3077494c5e16a4a4d4";
+    internal const string RegistrySha256 = "9a100432b71529b1db7c98e482a910fb67a037001fbb0b1c8edc2dc50a337193";
     internal const string Dnp1RegistrySha256 = "e036a0b6acb260e05e18ac536a723b0b8561d2ba1d813429304505b0e7a7da7b";
     internal const string Dnp1ApprovedCommit = "a8456987efe031388ca2eb9006886fb78f31e06c";
 
@@ -601,6 +605,8 @@ internal static class DeepProtocolRegistryGenerated
         new("magic", "DPK2", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "DPL1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "DPM1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
+        new("magic", "DPP2", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
+        new("magic", "DPQ2", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "DPR1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "DPS1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "DRA1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
@@ -734,7 +740,7 @@ internal static class DeepProtocolRegistryGenerated
         new("magic", "XIB1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "XIC1", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "XIQ1", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
-        new("magic", "XIR1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
+        new("magic", "XIR1", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "XIS1", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "XMC1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "XMG1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),

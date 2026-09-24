@@ -75,8 +75,8 @@ public static class DeepIdV2DirectoryProofWireCodec
         "application/vnd.deep.directory-proof-request.v2+octet-stream";
     public const string ResponseMediaType =
         "application/vnd.deep.directory-proof.v2+octet-stream";
-    private static ReadOnlySpan<byte> RequestMagic => "DPQ2"u8;
-    private static ReadOnlySpan<byte> ResponseMagic => "DPP2"u8;
+    private static ReadOnlySpan<byte> RequestMagic => ProtocolMagicBytes.DPQ2;
+    private static ReadOnlySpan<byte> ResponseMagic => ProtocolMagicBytes.DPP2;
 
     public static byte[] EncodeRequest(ParsedAdl1V2 lookup,
         ParsedDid2 deepId, ReadOnlySpan<byte> nonce32,

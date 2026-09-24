@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using Deep.Protocol.AccountDirectoryV1;
+using Deep.Protocol.ApplicationCore;
 
 namespace Deep.Protocol.Tests.AccountDirectoryV1;
 
@@ -10,7 +11,7 @@ public sealed class DeepIdV2GenesisAdmissionWireCodecTests
     {
         var request = new DeepIdV2GenesisAdmissionWireRequest(Bytes(32, 1),
             new DeepIdV2GenesisAdmissionRequest(Bytes(644, 2), Bytes(356, 3),
-                [Bytes(776, 4)], Bytes(2036, 5), Bytes(3711, 6),
+                [Bytes(776, 4)], Bytes(DeepIdV2Codec.Did2Length, 5), Bytes(3711, 6),
                 Bytes(426, 7), Bytes(458, 8), []));
         var encoded = DeepIdV2GenesisAdmissionWireCodec.EncodeRequest(request);
         var decoded = DeepIdV2GenesisAdmissionWireCodec.DecodeRequest(encoded);
@@ -37,7 +38,7 @@ public sealed class DeepIdV2GenesisAdmissionWireCodecTests
         var encoded = DeepIdV2GenesisAdmissionWireCodec.EncodeRequest(
             new DeepIdV2GenesisAdmissionWireRequest(Bytes(32, 1),
                 new DeepIdV2GenesisAdmissionRequest(Bytes(644, 2),
-                    Bytes(356, 3), [Bytes(776, 4)], Bytes(2036, 5),
+                    Bytes(356, 3), [Bytes(776, 4)], Bytes(DeepIdV2Codec.Did2Length, 5),
                     Bytes(3711, 6), Bytes(426, 7), Bytes(458, 8), [])));
         var mutations = new Action<byte[]>[]
         {
@@ -71,7 +72,7 @@ public sealed class DeepIdV2GenesisAdmissionWireCodecTests
         }).ToArray();
         var request = new DeepIdV2GenesisAdmissionWireRequest(Bytes(32, 1),
             new DeepIdV2GenesisAdmissionRequest(Bytes(644, 2), Bytes(356, 3),
-                [Bytes(776, 4)], Bytes(2036, 5), Bytes(3711, 6),
+                [Bytes(776, 4)], Bytes(DeepIdV2Codec.Did2Length, 5), Bytes(3711, 6),
                 Bytes(426, 7), Bytes(458, 8), revoked));
         var encoded = DeepIdV2GenesisAdmissionWireCodec.EncodeRequest(request);
 

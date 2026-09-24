@@ -656,7 +656,9 @@ internal static class GraphPolicy
                 "Deep.Protocol|12504|FC7C44B6859AB51A5BF4AE64C5B6AB1EA0F9A9716008C901111B2E241ACDA8D9",
                 // Non-forgeable DID2 directory/DCA1 V2 time-interval authority; runtime stays gated.
                 "Deep.Protocol|12519|BD67CA3C49202E0711415C80A311485351ACE232832D386651022867A5BD82FD",
-                "Deep.Protocol|12519|773F3F23E1050009C536736C33FEA13779236BDCACF6F788F390C0193E4A6EBD"
+                "Deep.Protocol|12519|773F3F23E1050009C536736C33FEA13779236BDCACF6F788F390C0193E4A6EBD",
+                // DR-0007 DID2 capability commitment and separately protected owner capability.
+                "Deep.Protocol|12526|A9E62C9FCB295F8195457FC6E120A6810AA9FF1B54E44A5EAD814D75309BD3BC"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [
