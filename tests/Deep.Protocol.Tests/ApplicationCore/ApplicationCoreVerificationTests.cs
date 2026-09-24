@@ -316,6 +316,56 @@ public sealed class ApplicationCoreVerificationTests
         AssertVerificationFailure(() =>
             DeepIdV2ContactBundleCodec.VerifyIdentityAndIssuer(
                 bundle, contactVerified, 20));
+        static byte[] DcrSupport(ushort kind, ReadOnlySpan<byte> canonical)
+        {
+            var entry = new byte[6 + canonical.Length];
+            BinaryPrimitives.WriteUInt16BigEndian(entry, kind);
+            BinaryPrimitives.WriteUInt32BigEndian(entry.AsSpan(2),
+                checked((uint)canonical.Length));
+            canonical.CopyTo(entry.AsSpan(6));
+            return entry;
+        }
+        var drsSupport = DcrSupport(1,
+            fixture.Revocations.Snapshot.CanonicalBytes.Span);
+        var dpdSupport = DcrSupport(2,
+            fixture.Identity.ActiveDevices[0].Certificate.CanonicalBytes.Span);
+        var support = drsSupport.Concat(dpdSupport).ToArray();
+        var closure = DeepIdV2ResolverClosureCodec.AuthorForValidation(
+            fixture.Network, bundle.CanonicalBytes.Span, 2, support);
+        Assert.False(DeepIdV2ResolverClosureCodec.RuntimeActivation);
+        DeepIdV2ResolverClosureCodec.VerifyIdentityAndSupport(
+            closure, contactVerified, 15);
+        var oldClosure = closure.CanonicalBytes.ToArray();
+        oldClosure[5] = 1;
+        Assert.Throws<ApplicationCoreFormatException>(() =>
+            DeepIdV2ResolverClosureCodec.Decode(oldClosure));
+        oldClosure = closure.CanonicalBytes.ToArray();
+        BinaryPrimitives.WriteUInt16BigEndian(oldClosure.AsSpan(6), 0x0201);
+        Assert.Throws<ApplicationCoreFormatException>(() =>
+            DeepIdV2ResolverClosureCodec.Decode(oldClosure));
+        var oldInnerBundle = bundle.CanonicalBytes.ToArray();
+        oldInnerBundle[5] = 1;
+        Assert.Throws<ApplicationCoreFormatException>(() =>
+            DeepIdV2ResolverClosureCodec.AuthorForValidation(
+                fixture.Network, oldInnerBundle, 2, support));
+        Assert.Throws<ApplicationCoreFormatException>(() =>
+            DeepIdV2ResolverClosureCodec.AuthorForValidation(
+                ApplicationCoreFixture.Bytes(16, 0x46),
+                bundle.CanonicalBytes.Span, 2, support));
+        Assert.Throws<ApplicationCoreFormatException>(() =>
+            DeepIdV2ResolverClosureCodec.AuthorForValidation(
+                fixture.Network, bundle.CanonicalBytes.Span, 3, support));
+        Assert.Throws<ApplicationCoreFormatException>(() =>
+            DeepIdV2ResolverClosureCodec.AuthorForValidation(
+                fixture.Network, bundle.CanonicalBytes.Span, 2,
+                dpdSupport.Concat(drsSupport).ToArray()));
+        Assert.Throws<ApplicationCoreFormatException>(() =>
+            DeepIdV2ResolverClosureCodec.AuthorForValidation(
+                fixture.Network, bundle.CanonicalBytes.Span, 2,
+                support[..^1]));
+        AssertVerificationFailure(() =>
+            DeepIdV2ResolverClosureCodec.VerifyIdentityAndSupport(
+                closure, contactVerified, 20));
         var oldVersion = contact.CanonicalBytes.ToArray();
         oldVersion[5] = 1;
         Assert.Throws<ApplicationCoreFormatException>(() =>
