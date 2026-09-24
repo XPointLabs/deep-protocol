@@ -192,6 +192,63 @@ public static class DeepIdV2ContactBundleCodec
             Reject("DCB1 V2 issuer signature is invalid.");
     }
 
+    /// <summary>
+    /// Requires one current, device-signed XPS1 per active DMD1 device. XPS1
+    /// remains independently versioned; this does not claim inventory XPI1 or
+    /// service publication authority.
+    /// </summary>
+    public static void VerifyPreKeyServices(ParsedDcb1V2 bundle,
+        VerifiedDca1V2 authorization, ulong trustedUnixSeconds)
+    {
+        VerifyIdentityAndIssuer(bundle, authorization, trustedUnixSeconds);
+        var directory = authorization.Directory.Record;
+        var identity = authorization.Binding.Identity;
+        var list = bundle.FieldSpan(12);
+        var offset = 1;
+        var issued = U64(bundle.FieldSpan(17));
+        var expiry = U64(bundle.FieldSpan(18));
+        Span<ApplicationFieldSlice> xps = stackalloc ApplicationFieldSlice[12];
+        for (var index = 0; index < directory.ActiveDevices.Count; index++)
+        {
+            if (list.Length - offset < 4 ||
+                BinaryPrimitives.ReadUInt32BigEndian(list[offset..]) != 352 ||
+                list.Length - offset - 4 < 352)
+                Invalid(ApplicationCoreRejection.InvalidFieldLength,
+                    "DCB1 V2 XPS1 list entry is not exactly 352 bytes.");
+            var canonical = list.Slice(offset + 4, 352);
+            PreflightXps1(canonical, xps);
+            var entry = directory.ActiveDevices[index];
+            var device = identity.ActiveDevices.SingleOrDefault(candidate =>
+                candidate.Certificate.DeviceId.Span.SequenceEqual(entry.DeviceId.Span));
+            if (device is null)
+            {
+                Reject("DCB1 V2 XPS1 device is not active.");
+                return;
+            }
+            if (!Get(canonical, xps, 1).SequenceEqual(bundle.FieldSpan(1)) ||
+                !Get(canonical, xps, 3).SequenceEqual(entry.DeviceId.Span) ||
+                !Get(canonical, xps, 4).SequenceEqual(ReferenceBytes(
+                    ProtocolMagicBytes.DPD1, 1,
+                    device.Certificate.CanonicalHash.Span)) ||
+                U64(Get(canonical, xps, 10)) > issued ||
+                U64(Get(canonical, xps, 11)) < expiry ||
+                trustedUnixSeconds < U64(Get(canonical, xps, 10)) ||
+                trustedUnixSeconds >= U64(Get(canonical, xps, 11)))
+                Reject("DCB1 V2 XPS1 coverage or validity differs from the verified device.");
+            var unsigned = canonical[..280].ToArray();
+            BinaryPrimitives.WriteUInt16BigEndian(unsigned.AsSpan(8), 11);
+            var input = ApplicationCoreFormat.SignatureInput(
+                "Deep/ContactResolver/V1/prekey-service", unsigned, 0x0201);
+            if (!PublicKeyAuth.VerifyDetached(Get(canonical, xps, 12).ToArray(), input,
+                    device.Certificate.DeviceEd25519PublicKey.ToArray()))
+                Reject("DCB1 V2 XPS1 device signature is invalid.");
+            offset += 356;
+        }
+        if (offset != list.Length)
+            Invalid(ApplicationCoreRejection.InvalidFieldLength,
+                "DCB1 V2 XPS1 list has trailing bytes.");
+    }
+
 #if DEEP_PROTOCOL_RECOVERY_TEST_SEAM
     internal static ParsedDcb1V2 AuthorForValidation(
         IReadOnlyList<ReadOnlyMemory<byte>> fields)
@@ -215,6 +272,31 @@ public static class DeepIdV2ContactBundleCodec
     private static ReadOnlySpan<byte> Get(ReadOnlySpan<byte> canonical,
         ReadOnlySpan<ApplicationFieldSlice> slices, int tag) =>
         ApplicationCoreFormat.Field(canonical, slices, tag);
+
+    private static void PreflightXps1(ReadOnlySpan<byte> canonical,
+        Span<ApplicationFieldSlice> slices)
+    {
+        ApplicationCoreFormat.Preflight(canonical, ProtocolMagicBytes.XPS1, 12,
+            352, 352, slices, 1, 0x0201);
+        ReadOnlySpan<int> lengths = [16, 32, 32, 38, 8, 32, 2, 2, 2, 8, 8, 64];
+        for (var tag = 1; tag <= lengths.Length; tag++)
+            ApplicationCoreFormat.ExactLength(slices, tag, lengths[tag - 1]);
+        foreach (var tag in new[] { 1, 2, 3, 12 })
+            ApplicationCoreFormat.NonZero(Get(canonical, slices, tag),
+                "XPS1 required field");
+        var reference = Get(canonical, slices, 4);
+        if (!reference[..4].SequenceEqual(ProtocolMagicBytes.DPD1) ||
+            BinaryPrimitives.ReadUInt16BigEndian(reference[4..6]) != 1 ||
+            ApplicationCoreFormat.IsZero(reference[6..]) ||
+            BinaryPrimitives.ReadUInt16BigEndian(Get(canonical, slices, 7)) != 0x0201 ||
+            BinaryPrimitives.ReadUInt16BigEndian(Get(canonical, slices, 8)) == 0 ||
+            BinaryPrimitives.ReadUInt16BigEndian(Get(canonical, slices, 9)) == 0 ||
+            U64(Get(canonical, slices, 10)) >= U64(Get(canonical, slices, 11)) ||
+            ApplicationCoreFormat.IsZero(Get(canonical, slices, 6)) !=
+            (U64(Get(canonical, slices, 5)) == 0))
+            Invalid(ApplicationCoreRejection.InvalidReference,
+                "XPS1 is not a canonical independent prekey-service descriptor.");
+    }
 
     private static ulong U64(ReadOnlySpan<byte> value) =>
         BinaryPrimitives.ReadUInt64BigEndian(value);

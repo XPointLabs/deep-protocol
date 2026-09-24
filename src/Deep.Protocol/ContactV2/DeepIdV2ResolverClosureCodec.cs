@@ -126,15 +126,16 @@ public static class DeepIdV2ResolverClosureCodec
     }
 
     /// <summary>
-    /// Requires byte-identical verified DRS1/DPD1 custody and DCB1 issuer.
-    /// Fresh ADH1/ADP1 and contact-service evidence are still mandatory.
+    /// Requires byte-identical verified DRS1/DPD1 custody, DCB1 issuer and
+    /// each signed XPS1 descriptor. Fresh ADH1/ADP1, XPI1/DPK2 and
+    /// contact-service evidence are still mandatory.
     /// </summary>
     public static void VerifyIdentityAndSupport(ParsedDcr1V2 closure,
         VerifiedDca1V2 authorization, ulong trustedUnixSeconds)
     {
         ArgumentNullException.ThrowIfNull(closure);
         ArgumentNullException.ThrowIfNull(authorization);
-        DeepIdV2ContactBundleCodec.VerifyIdentityAndIssuer(
+        DeepIdV2ContactBundleCodec.VerifyPreKeyServices(
             closure.Bundle, authorization, trustedUnixSeconds);
         var canonical = closure.CanonicalBytes.ToArray();
         Span<ApplicationFieldSlice> slices = stackalloc ApplicationFieldSlice[4];

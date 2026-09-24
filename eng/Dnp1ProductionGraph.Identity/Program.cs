@@ -647,7 +647,10 @@ internal static class GraphPolicy
                 "Deep.Protocol|12488|B6BFF8A0A0BD608CA6F8A01A7207307A166E7B8965DDD3E0585BDD95FBC26475",
                 // Exact DID2 DCR1 support candidate; freshness and publication remain disabled.
                 "Deep.Protocol|12499|93C48D3BEBB1245DA15EDBE06D473C911188C50562B3589AA348FEB63CDB8A4C",
-                "Deep.Protocol|12499|3A2D4C8A2B6DC3A7B0ED25DBC8CD4447039413B8DAC34B1AAB23F363ACE9A03A"
+                "Deep.Protocol|12499|3A2D4C8A2B6DC3A7B0ED25DBC8CD4447039413B8DAC34B1AAB23F363ACE9A03A",
+                // DID2 bundle now verifies each independent XPS1 descriptor; XPI1/DPK2 remains gated.
+                "Deep.Protocol|12500|EA17BF87C7B1F77B23A33D0B08CE65BE1D6619A54CE95D4EE3C97EA0CAD4E7F9",
+                "Deep.Protocol|12500|0CF467F43186FF33314AAA92E13BC03A705D0F9FC2CD2F23F42283AEBB0DF0A2"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

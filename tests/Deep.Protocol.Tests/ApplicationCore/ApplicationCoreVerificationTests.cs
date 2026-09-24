@@ -213,9 +213,40 @@ public sealed class ApplicationCoreVerificationTests
         var adl = DeepIdV2AccountDirectoryLookupCodec.Author(did,
             fixture.Network, 0, ApplicationCoreFixture.Bytes(32, 0x40), 1,
             new byte[38], new byte[32]);
+        static byte[] WriteXps(IReadOnlyList<ReadOnlyMemory<byte>> fields)
+        {
+            var bytes = new byte[352];
+            var writer = new ApplicationRecordWriter(bytes,
+                Encoding.ASCII.GetBytes("XPS1"), 12, 1, 0x0201);
+            for (ushort tag = 1; tag <= 12; tag++)
+                writer.Write(tag, fields[tag - 1].Span);
+            writer.Complete();
+            return bytes;
+        }
+        static byte[] SignXps(ReadOnlyMemory<byte>[] fields, KeyPair signer)
+        {
+            var unsigned = WriteXps(fields);
+            var projection = unsigned[..280];
+            BinaryPrimitives.WriteUInt16BigEndian(projection.AsSpan(8), 11);
+            fields[11] = PublicKeyAuth.SignDetached(
+                ApplicationCoreFormat.SignatureInput(
+                    "Deep/ContactResolver/V1/prekey-service", projection, 0x0201),
+                signer.PrivateKey);
+            return WriteXps(fields);
+        }
+        var xpsFields = new ReadOnlyMemory<byte>[]
+        {
+            fixture.Network, ApplicationCoreFixture.Bytes(32, 0x46),
+            fixture.DeviceId, ContactRef("DPD1", 1,
+                fixture.Identity.ActiveDevices[0].Certificate.CanonicalHash.Span),
+            Be64(0), new byte[32], Be16(0x0201), Be16(1), Be16(1),
+            Be64(10), Be64(20), ApplicationCoreFixture.Bytes(64, 0x47),
+        };
+        var xps = SignXps(xpsFields, fixture.DeviceKey);
         var xpsList = new byte[357];
         xpsList[0] = 1;
         BinaryPrimitives.WriteUInt32BigEndian(xpsList.AsSpan(1), 352);
+        xps.CopyTo(xpsList, 5);
         var descriptor = new byte[651];
         Be16(1).CopyTo(descriptor, 0);
         Be16(1).CopyTo(descriptor, 2);
@@ -246,6 +277,34 @@ public sealed class ApplicationCoreVerificationTests
         Assert.False(DeepIdV2ContactBundleCodec.RuntimeActivation);
         DeepIdV2ContactBundleCodec.VerifyIdentityAndIssuer(
             bundle, contactVerified, 15);
+        DeepIdV2ContactBundleCodec.VerifyPreKeyServices(
+            bundle, contactVerified, 15);
+        var forgedXpsList = xpsList.ToArray();
+        forgedXpsList[^1] ^= 1;
+        var forgedXpsFields = bundleFields.ToArray();
+        forgedXpsFields[11] = forgedXpsList;
+        AssertVerificationFailure(() =>
+            DeepIdV2ContactBundleCodec.VerifyPreKeyServices(
+                SignBundle(forgedXpsFields, fixture.DeviceKey),
+                contactVerified, 15));
+        var wrongXpsLength = xpsList.ToArray();
+        BinaryPrimitives.WriteUInt32BigEndian(wrongXpsLength.AsSpan(1), 351);
+        var wrongXpsLengthFields = bundleFields.ToArray();
+        wrongXpsLengthFields[11] = wrongXpsLength;
+        Assert.Throws<ApplicationCoreFormatException>(() =>
+            DeepIdV2ContactBundleCodec.VerifyPreKeyServices(
+                SignBundle(wrongXpsLengthFields, fixture.DeviceKey),
+                contactVerified, 15));
+        var staleXpsFields = xpsFields.ToArray();
+        staleXpsFields[10] = Be64(19);
+        var staleXpsList = xpsList.ToArray();
+        SignXps(staleXpsFields, fixture.DeviceKey).CopyTo(staleXpsList, 5);
+        var staleXpsBundleFields = bundleFields.ToArray();
+        staleXpsBundleFields[11] = staleXpsList;
+        AssertVerificationFailure(() =>
+            DeepIdV2ContactBundleCodec.VerifyPreKeyServices(
+                SignBundle(staleXpsBundleFields, fixture.DeviceKey),
+                contactVerified, 15));
         var oldBundle = bundle.CanonicalBytes.ToArray();
         oldBundle[5] = 1;
         Assert.Throws<ApplicationCoreFormatException>(() =>
