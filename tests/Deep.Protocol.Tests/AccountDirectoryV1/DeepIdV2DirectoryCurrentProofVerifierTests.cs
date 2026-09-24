@@ -1,5 +1,6 @@
 using Deep.Protocol.AccountDirectoryV1;
 using Deep.Protocol.ApplicationCore;
+using Deep.Protocol.ContactV2;
 using Deep.Protocol.MessagingCrypto;
 using Deep.Protocol.Tests.Identity;
 using System.Runtime.InteropServices;
@@ -51,8 +52,8 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
                 RuntimeInformation.ProcessArchitecture == Architecture.X64)))
             return;
 
-        var (admission, checkpoint, binding) = await
-            Dnp1IdentityAuthoringV1Tests.CreateRealDid2DirectoryGenesisAsync();
+        var (admission, checkpoint, binding, authorization) = await
+            Dnp1IdentityAuthoringV1Tests.CreateRealDid2DirectoryGenesisWithDcaAsync();
         var authority = AuthorityFixture.Create(
             networkOverride: checkpoint.Checkpoint.NetworkId.ToArray(),
             timeBase: 1_900_000_000);
@@ -150,6 +151,35 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
         Assert.Equal(exactHead, verified.NextProtectedLkg.ExactAdh1.ToArray());
         Assert.Equal(admission.ExactDab2.ToArray(),
             DeepIdV2Adp1Codec.Decode(package.ExactAdp1V2.Span).ExactDab2.ToArray());
+        Assert.True(verified.TrustedLowerUnixSeconds <= verified.TrustedUpperUnixSeconds);
+        var currentAuthorization = DeepIdV2CurrentContactAuthorizationVerifier.Verify(
+            verified, authorization, Window().BootId.Span, Window().CurrentSample);
+        Assert.Same(authorization, currentAuthorization.Authorization);
+        Assert.Equal(verified.TrustedLowerUnixSeconds,
+            currentAuthorization.TrustedLowerUnixSeconds);
+        var advanced = DeepIdV2CurrentContactAuthorizationVerifier.Verify(
+            verified, authorization, Window().BootId.Span,
+            Window().CurrentSample + 3);
+        Assert.Equal(verified.TrustedLowerUnixSeconds + 3,
+            advanced.TrustedLowerUnixSeconds);
+        var (_, _, _, otherAuthorization) = await
+            Dnp1IdentityAuthoringV1Tests.CreateRealDid2DirectoryGenesisWithDcaAsync(
+                networkOverride: Bytes(16, 0x66));
+        Assert.Equal("AuthorizationIdentityMismatch",
+            Assert.Throws<AccountDirectoryFreshnessVerificationException>(() =>
+                DeepIdV2CurrentContactAuthorizationVerifier.Verify(
+                    verified, otherAuthorization, Window().BootId.Span,
+                    Window().CurrentSample)).Code);
+        Assert.Equal("DirectoryFreshnessExpired",
+            Assert.Throws<AccountDirectoryFreshnessVerificationException>(() =>
+                DeepIdV2CurrentContactAuthorizationVerifier.Verify(
+                    verified, authorization, Bytes(16, 0x55),
+                    Window().CurrentSample)).Code);
+        Assert.Equal("DirectoryFreshnessExpired",
+            Assert.Throws<AccountDirectoryFreshnessVerificationException>(() =>
+                DeepIdV2CurrentContactAuthorizationVerifier.Verify(
+                    verified, authorization, Window().BootId.Span,
+                    verified.FreshnessDeadlineMonotonicSeconds)).Code);
 
         var successor = authority.Head(2, verified.NextProtectedLkg.CoreHash.ToArray(),
             1, head.AppendLogMerkleRoot.ToArray(), mapRoot, minimumReader: 2);

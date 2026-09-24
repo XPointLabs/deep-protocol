@@ -653,7 +653,10 @@ internal static class GraphPolicy
                 "Deep.Protocol|12500|0CF467F43186FF33314AAA92E13BC03A705D0F9FC2CD2F23F42283AEBB0DF0A2",
                 // XPI1 manifest binds DID2 DCR1/XPS1; inventory and claim remain separate gates.
                 "Deep.Protocol|12504|90230DDECAF65244751DB1C22FC8F5E4778B41CFD46D341FBE238535835A5A49",
-                "Deep.Protocol|12504|FC7C44B6859AB51A5BF4AE64C5B6AB1EA0F9A9716008C901111B2E241ACDA8D9"
+                "Deep.Protocol|12504|FC7C44B6859AB51A5BF4AE64C5B6AB1EA0F9A9716008C901111B2E241ACDA8D9",
+                // Non-forgeable DID2 directory/DCA1 V2 time-interval authority; runtime stays gated.
+                "Deep.Protocol|12519|BD67CA3C49202E0711415C80A311485351ACE232832D386651022867A5BD82FD",
+                "Deep.Protocol|12519|773F3F23E1050009C536736C33FEA13779236BDCACF6F788F390C0193E4A6EBD"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

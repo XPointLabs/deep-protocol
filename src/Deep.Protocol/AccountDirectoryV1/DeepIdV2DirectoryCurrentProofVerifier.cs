@@ -70,6 +70,8 @@ public sealed class VerifiedDeepIdV2DirectoryFreshness
         ReadOnlySpan<byte> queriedLeaf,
         AccountDirectoryMonotonicRequestWindow monotonic,
         ulong freshnessDeadlineMonotonicSeconds,
+        ulong trustedLowerUnixSeconds,
+        ulong trustedUpperUnixSeconds,
         AccountDirectoryAdp1ResultKind resultKind,
         VerifiedAdc1V2? currentCheckpoint)
     {
@@ -81,6 +83,8 @@ public sealed class VerifiedDeepIdV2DirectoryFreshness
         bootId = monotonic.BootId.ToArray();
         MonotonicSample = monotonic.CurrentSample;
         FreshnessDeadlineMonotonicSeconds = freshnessDeadlineMonotonicSeconds;
+        TrustedLowerUnixSeconds = trustedLowerUnixSeconds;
+        TrustedUpperUnixSeconds = trustedUpperUnixSeconds;
         ResultKind = resultKind;
         CurrentCheckpoint = currentCheckpoint;
         NextProtectedLkg = new AccountDirectoryProtectedLkg(exactAdh1);
@@ -96,6 +100,8 @@ public sealed class VerifiedDeepIdV2DirectoryFreshness
     public AccountDirectoryProtectedLkg NextProtectedLkg { get; }
     public ulong MonotonicSample { get; }
     public ulong FreshnessDeadlineMonotonicSeconds { get; }
+    public ulong TrustedLowerUnixSeconds { get; }
+    public ulong TrustedUpperUnixSeconds { get; }
 
     public bool IsCurrentAtMonotonic(ReadOnlySpan<byte> currentBootId,
         ulong currentSample) =>
@@ -236,7 +242,7 @@ public static class DeepIdV2DirectoryCurrentProofVerifier
             return new VerifiedDeepIdV2DirectoryFreshness(exactAdh1.Span,
                 exactDtt1.Span, exactAdp1V2.Span, authority.NetworkId.Span,
                 queriedDirectoryLeafKey, monotonic, deadline,
-                proof.ResultKind, current);
+                lower, upper, proof.ResultKind, current);
         }
         catch (AccountDirectoryFreshnessVerificationException) { throw; }
         catch (Exception exception) when (exception is FormatException or

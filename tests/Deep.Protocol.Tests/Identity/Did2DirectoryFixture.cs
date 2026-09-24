@@ -36,8 +36,20 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
 
     internal static async Task<(DeepIdV2GenesisAdmissionRequest Admission,
         VerifiedAdc1V2 Checkpoint, VerifiedDab2 Binding)> CreateRealDid2DirectoryGenesisAsync(
-            byte[]? networkOverride = null, ulong epoch = 1_900_000_000,
-            string? mnemonicOverride = null)
+        byte[]? networkOverride = null, ulong epoch = 1_900_000_000,
+        string? mnemonicOverride = null)
+    {
+        var (admission, checkpoint, binding, _) = await
+            CreateRealDid2DirectoryGenesisWithDcaAsync(
+                networkOverride, epoch, mnemonicOverride);
+        return (admission, checkpoint, binding);
+    }
+
+    internal static async Task<(DeepIdV2GenesisAdmissionRequest Admission,
+        VerifiedAdc1V2 Checkpoint, VerifiedDab2 Binding,
+        VerifiedDca1V2 Authorization)> CreateRealDid2DirectoryGenesisWithDcaAsync(
+        byte[]? networkOverride = null, ulong epoch = 1_900_000_000,
+        string? mnemonicOverride = null)
     {
         var network = networkOverride ?? Network;
         using var phrase = DeepRecoveryV1.VerifyCanonicalUtf8(
@@ -53,6 +65,8 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
             issued.Verified.Identity, [issued.Verified]);
         var binding = recovery.AuthorGenesisDab2(phrase, closure, 1);
         var directory = recovery.AuthorGenesisDmd1(closure, checked(epoch + 200));
+        var authorization = recovery.AuthorGenesisDca1V2(binding, directory,
+            issued.Verified, checked(epoch + 250));
         var checkpoint = recovery.AuthorGenesisAdc1V2(binding, directory,
             checked(epoch + 300));
         var admission = new DeepIdV2GenesisAdmissionRequest(
@@ -61,6 +75,6 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
             binding.Head.Record.CanonicalBytes.Span,
             directory.Head.Record.CanonicalBytes.Span,
             checkpoint.Checkpoint.CanonicalBytes.Span, []);
-        return (admission, checkpoint, binding.Head);
+        return (admission, checkpoint, binding.Head, authorization);
     }
 }
