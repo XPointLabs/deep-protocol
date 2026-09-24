@@ -81,12 +81,34 @@ public static class DeepIdV2Adp1Codec
 
     public static ParsedAdp1V2 Author(DeepIdV2DirectoryProofMaterial material,
         ReadOnlySpan<byte> liveDtt1CoreHash32) =>
-        AuthorWithForward(material, liveDtt1CoreHash32, default);
+        AuthorCore(material, liveDtt1CoreHash32, default,
+            AccountDirectoryAdp1HistoryMode.ConsistencyOrGenesis, null);
 
     internal static ParsedAdp1V2 AuthorWithForward(
         DeepIdV2DirectoryProofMaterial material,
         ReadOnlySpan<byte> liveDtt1CoreHash32,
-        ReadOnlySpan<byte> exactAfp1)
+        ReadOnlySpan<byte> exactAfp1) =>
+        AuthorCore(material, liveDtt1CoreHash32, exactAfp1,
+            AccountDirectoryAdp1HistoryMode.ForwardCheckpoint, null);
+
+    internal static ParsedAdp1V2 AuthorWithForwardTail(
+        DeepIdV2DirectoryProofMaterial material,
+        ReadOnlySpan<byte> liveDtt1CoreHash32,
+        ReadOnlySpan<byte> exactAnchorAfp1,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactTailHeads,
+        IReadOnlyList<ReadOnlyMemory<byte>> anchorConsistencyNodes) =>
+        AuthorCore(material, liveDtt1CoreHash32,
+            DeepIdV2ForwardTailCodec.Encode(exactAnchorAfp1,
+                exactTailHeads),
+            (AccountDirectoryAdp1HistoryMode)DeepIdV2ForwardTailCodec.HistoryMode,
+            anchorConsistencyNodes);
+
+    private static ParsedAdp1V2 AuthorCore(
+        DeepIdV2DirectoryProofMaterial material,
+        ReadOnlySpan<byte> liveDtt1CoreHash32,
+        ReadOnlySpan<byte> historyBytes,
+        AccountDirectoryAdp1HistoryMode historyMode,
+        IReadOnlyList<ReadOnlyMemory<byte>>? anchorConsistencyNodes)
     {
         ArgumentNullException.ThrowIfNull(material);
         if (liveDtt1CoreHash32.Length != 32 ||
@@ -94,10 +116,19 @@ public static class DeepIdV2Adp1Codec
             throw new ArgumentException("Live DTT1 core hash must be nonzero and 32 bytes.",
                 nameof(liveDtt1CoreHash32));
         var caller = material.CallerProtectedLkg;
-        var forward = !exactAfp1.IsEmpty;
-        if (forward && caller is null)
+        var forward = historyMode !=
+            AccountDirectoryAdp1HistoryMode.ConsistencyOrGenesis;
+        if (forward && (caller is null || historyBytes.IsEmpty))
             throw new ArgumentException("A DID2 forward checkpoint requires a protected caller LKG.",
-                nameof(exactAfp1));
+                nameof(historyBytes));
+        var consistency = historyMode ==
+                AccountDirectoryAdp1HistoryMode.ForwardCheckpoint
+            ? Array.Empty<ReadOnlyMemory<byte>>()
+            : anchorConsistencyNodes ?? material.ConsistencyProofNodes;
+        if (consistency.Count > 64 ||
+            consistency.Any(static value => value.Length != 32))
+            throw new ArgumentException("DID2 consistency nodes are invalid.",
+                nameof(anchorConsistencyNodes));
         var fields = new List<byte[]>
         {
             material.CurrentHead.Head.NetworkId.ToArray(),
@@ -106,16 +137,14 @@ public static class DeepIdV2Adp1Codec
             material.CurrentHead.ExactAdh1.ToArray(),
             U64(caller?.TreeSize ?? 0),
             caller?.CoreHash.ToArray() ?? new byte[32],
-            new byte[] { forward ? (byte)0 : checked((byte)material.ConsistencyProofNodes.Count) },
-            forward ? [] : Flatten(material.ConsistencyProofNodes),
+            new byte[] { checked((byte)consistency.Count) },
+            Flatten(consistency),
             material.SparseMapBitmap.ToArray(),
             U16(checked((ushort)material.SparseMapSiblings.Count)),
             Flatten(material.SparseMapSiblings),
             new byte[] { caller is null ? (byte)0 : (byte)1 },
-            new byte[] { (byte)(forward
-                ? AccountDirectoryAdp1HistoryMode.ForwardCheckpoint
-                : AccountDirectoryAdp1HistoryMode.ConsistencyOrGenesis) },
-            exactAfp1.ToArray(),
+            new byte[] { (byte)historyMode },
+            historyBytes.ToArray(),
             liveDtt1CoreHash32.ToArray()
         };
         if (material.CurrentCheckpoint is { } current)
@@ -229,6 +258,23 @@ public static class DeepIdV2Adp1Codec
             {
                 AccountDirectoryAdp1Codec.ValidateAfp1(fields[13], fields[0],
                     head, lkgSize, fields[5], fields[14]);
+            }
+            catch (AccountDirectoryAdp1FormatException exception)
+            { throw Invalid(exception.Message); }
+        }
+        else if ((byte)historyMode == DeepIdV2ForwardTailCodec.HistoryMode)
+        {
+            if (hasLkg == 0 || fields[13].Length == 0)
+                throw Invalid("ADP1 V2 mode-2 history shape is invalid.");
+            var tail = DeepIdV2ForwardTailCodec.Decode(fields[13]);
+            if (tail.AnchorHead.MinimumReader < 2 ||
+                !Fixed(tail.ExactTailHeads[^1].Span, fields[3]))
+                throw Invalid("ADP1 V2 mode-2 anchor or current head differs.");
+            try
+            {
+                AccountDirectoryAdp1Codec.ValidateAfp1(
+                    tail.ExactAnchorAfp1.Span, fields[0],
+                    tail.AnchorHead, lkgSize, fields[5], fields[14]);
             }
             catch (AccountDirectoryAdp1FormatException exception)
             { throw Invalid(exception.Message); }

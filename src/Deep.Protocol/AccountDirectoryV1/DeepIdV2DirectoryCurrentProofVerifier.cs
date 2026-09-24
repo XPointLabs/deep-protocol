@@ -312,6 +312,12 @@ public static class DeepIdV2DirectoryCurrentProofVerifier
                 lkg, trustedUpper, supportedReader, minimumReaderFloor: 2);
             return;
         }
+        if ((byte)proof.HistoryMode == DeepIdV2ForwardTailCodec.HistoryMode)
+        {
+            VerifyForwardTail(authority, proof, head, headHash, dttHash,
+                lkg, trustedUpper, supportedReader);
+            return;
+        }
         if (head.LogGeneration == lkg.LogGeneration)
         {
             if (!Fixed(headHash, lkg.CoreHash.Span))
@@ -331,6 +337,55 @@ public static class DeepIdV2DirectoryCurrentProofVerifier
                 head.TreeSize, lkg.AppendLogMerkleRoot.Span,
                 head.AppendLogMerkleRoot.Span, consistency))
             Fail("InvalidConsistencyProof", "ADP1 V2 does not prove append-log consistency.");
+    }
+
+    private static void VerifyForwardTail(
+        VerifiedXPointNetworkAuthority authority,
+        ParsedAdp1V2 proof, AccountDirectoryAdh1 currentHead,
+        ReadOnlySpan<byte> currentHash, ReadOnlySpan<byte> dttHash,
+        AccountDirectoryProtectedLkg lkg, ulong trustedUpper,
+        ushort supportedReader)
+    {
+        var tail = DeepIdV2ForwardTailCodec.Decode(proof.ExactAfp1.Span);
+        var anchor = tail.AnchorHead;
+        var anchorHash = AccountDirectoryCrypto.ComputeAdh1CoreHash(anchor);
+        AccountDirectoryCurrentProofVerifier.VerifyForwardCheckpoint(
+            authority, tail.ExactAnchorAfp1.Span, anchor, anchorHash,
+            dttHash, lkg, trustedUpper, supportedReader,
+            minimumReaderFloor: 2);
+        var previous = anchor;
+        var previousHash = anchorHash;
+        foreach (var exact in tail.ExactTailHeads)
+        {
+            var next = AccountDirectoryAdh1Codec.Decode(exact.Span);
+            if (next.MinimumReader < 2 ||
+                next.MinimumReader > supportedReader ||
+                next.ValidFrom > trustedUpper ||
+                previous.LogGeneration == ulong.MaxValue ||
+                next.LogGeneration != previous.LogGeneration + 1 ||
+                next.TreeSize < previous.TreeSize ||
+                !Fixed(next.PredecessorAdh1CoreHash.Span, previousHash) ||
+                next.TreeSize == previous.TreeSize &&
+                    (!Fixed(next.AppendLogMerkleRoot.Span,
+                        previous.AppendLogMerkleRoot.Span) ||
+                     !Fixed(next.CurrentValueMapRoot.Span,
+                        previous.CurrentValueMapRoot.Span)))
+                Fail("InvalidForwardTail", "DID2 successor tail is not an exact monotonic ADH1 lineage.");
+            AccountDirectoryCurrentProofVerifier
+                .VerifyAdhAuthorityAndWitnessClosure(authority, next,
+                    requireCurrentAuthority: false);
+            previous = next;
+            previousHash = AccountDirectoryCrypto.ComputeAdh1CoreHash(next);
+        }
+        if (!Fixed(previousHash, currentHash) ||
+            !Fixed(AccountDirectoryAdh1Codec.Encode(previous),
+                AccountDirectoryAdh1Codec.Encode(currentHead)))
+            Fail("InvalidForwardTail", "DID2 successor tail does not end at the current DTT1 head.");
+        if (!AccountDirectoryRfc6962.VerifyConsistency(anchor.TreeSize,
+                currentHead.TreeSize, anchor.AppendLogMerkleRoot.Span,
+                currentHead.AppendLogMerkleRoot.Span,
+                proof.ExactField(8).Span))
+            Fail("InvalidForwardTail", "DID2 successor tail does not preserve the anchored append log.");
     }
 
     private static ReadOnlyMemory<byte>[] ExactDevices(ParsedAdp1V2 proof)

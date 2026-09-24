@@ -331,6 +331,66 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
             secondAfterMutation.CurrentCheckpoint!.Checkpoint.ArtifactHash.ToArray());
         Assert.Equal(firstAfterMutation.NextProtectedLkg.CoreHash.ToArray(),
             secondAfterMutation.NextProtectedLkg.CoreHash.ToArray());
+
+        // A periodic root checkpoint may anchor the first admission while
+        // signed direct successors carry a later second account to the sole
+        // current DTT1 head, without re-signing an intermediate head as now.
+        var tailNonce = Bytes(32, 0x38);
+        var tailDtt = authority.Dtt(expandedHead, tailNonce,
+            observed: 1_900_000_300);
+        var tailDttHash = AccountDirectoryCrypto.ComputeDtt1CoreHash(tailDtt);
+        var anchorHash = AccountDirectoryCrypto.ComputeAdh1CoreHash(head);
+        var sourceLeaf = CoveredHeadLeaf(initialLkg.LogGeneration,
+            initialLkg.TreeSize, initialLkg.CoreHash.Span);
+        var anchorAdf = authority.SignedAdf(0, new byte[32],
+            0, 0, 1, sourceLeaf, anchorHash, head.TreeSize,
+            head.AppendLogMerkleRoot.ToArray(),
+            head.CurrentValueMapRoot.ToArray(), minimumReader: 2);
+        var anchorAfp = AccountDirectoryAfp1Codec.Encode(
+            new AccountDirectoryAfp1(authority.Network,
+                initialLkg.LogGeneration, initialLkg.TreeSize,
+                initialLkg.CoreHash.Span, anchorHash,
+                [authority.ExactXna1],
+                [AccountDirectoryAdf1Codec.Encode(anchorAdf)],
+                [exactHead], 0, [], tailDttHash));
+        var sourceMaterial = DeepIdV2DirectoryProofMaterialAuthor.Create(
+            expandedLkg, expandedJournal, [checkpoint, secondCheckpoint],
+            secondLeaf, initialLkg);
+        byte[][] appendLeaves =
+            [transition.AppendLogLeafHash.ToArray(),
+                secondTransition.AppendLogLeafHash.ToArray()];
+        var anchorConsistency = AccountDirectoryProofMaterialAuthor
+            .BuildConsistencyProof(
+                new AccountDirectoryProtectedLkg(exactHead), expandedLkg,
+                appendLeaves);
+        var tailAdp = DeepIdV2Adp1Codec.AuthorWithForwardTail(
+            sourceMaterial, tailDttHash, anchorAfp,
+            [successorBytes, expandedHeadBytes], anchorConsistency);
+        var tailLookup = DeepIdV2AccountDirectoryLookupCodec.Author(
+            secondBinding.DeepId, authority.Network,
+            initialLkg.LogGeneration, initialLkg.CoreHash.Span,
+            1, new byte[38], new byte[32]);
+        var tailQuery = VerifiedDeepIdV2DirectoryQuery.VerifyBinding(
+            tailLookup, secondBinding);
+        var tailVerified = DeepIdV2DirectoryCurrentProofVerifier.VerifyGenesis(
+            authority.Verified, expandedHeadBytes,
+            AccountDirectoryDtt1Codec.Encode(tailDtt),
+            tailAdp.CanonicalBytes, tailNonce, tailQuery,
+            Window(), initialLkg, 1, 2, pq);
+        Assert.Equal(secondCheckpoint.Checkpoint.ArtifactHash.ToArray(),
+            tailVerified.CurrentCheckpoint!.Checkpoint.ArtifactHash.ToArray());
+        Assert.Equal((ulong)3, tailVerified.NextProtectedLkg.LogGeneration);
+        Assert.Equal("InvalidForwardTail",
+            Assert.Throws<AccountDirectoryFreshnessVerificationException>(() =>
+                DeepIdV2DirectoryCurrentProofVerifier.VerifyGenesis(
+                    authority.Verified, expandedHeadBytes,
+                    AccountDirectoryDtt1Codec.Encode(tailDtt),
+                    DeepIdV2Adp1Codec.AuthorWithForwardTail(sourceMaterial,
+                        tailDttHash, anchorAfp,
+                        [successorBytes, expandedHeadBytes], []).CanonicalBytes,
+                    tailNonce, tailQuery, Window(), initialLkg,
+                    1, 2, pq)).Code);
+
         Assert.Throws<System.Security.Cryptography.CryptographicException>(() =>
             DeepIdV2DirectoryProofMaterialAuthor.Create(expandedLkg,
                 journal, [checkpoint, secondCheckpoint], leaf,
@@ -531,6 +591,44 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
 
         var verified = Verify(ForwardBytes());
         Assert.Equal((ulong)2, verified.NextProtectedLkg.LogGeneration);
+
+        var anchorHash = AccountDirectoryCrypto.ComputeAdh1CoreHash(first);
+        var anchorCheckpoint = authority.SignedAdf(0, new byte[32],
+            0, 0, 1, sourceLeaf, anchorHash, 0, appendRoot, mapRoot,
+            minimumReader: 2);
+        var anchorAfp = AccountDirectoryAfp1Codec.Encode(
+            new AccountDirectoryAfp1(authority.Network, floor.LogGeneration,
+                floor.TreeSize, floor.CoreHash.Span, anchorHash,
+                [authority.ExactXna1],
+                [AccountDirectoryAdf1Codec.Encode(anchorCheckpoint)],
+                [AccountDirectoryAdh1Codec.Encode(first)], 0, [], dttHash));
+        VerifiedDeepIdV2DirectoryFreshness VerifyTail(
+            IReadOnlyList<ReadOnlyMemory<byte>> heads)
+        {
+            var adp = DeepIdV2Adp1Codec.AuthorWithForwardTail(material,
+                dttHash, anchorAfp, heads, []);
+            return DeepIdV2DirectoryCurrentProofVerifier.VerifyExactLeafForAuthor(
+                authority.Verified, exactTarget, exactDtt,
+                adp.CanonicalBytes, nonce, leaf, Window(), floor,
+                1, 2, new DenyingMlDsa65Verifier());
+        }
+        var verifiedTail = VerifyTail([exactTarget]);
+        Assert.Equal((ulong)2,
+            verifiedTail.NextProtectedLkg.LogGeneration);
+        var tailBytes = DeepIdV2ForwardTailCodec.Encode(anchorAfp,
+            [exactTarget]);
+        Assert.Throws<AccountDirectoryAdp1FormatException>(() =>
+            DeepIdV2ForwardTailCodec.Decode(tailBytes[..^1]));
+        tailBytes[4 + anchorAfp.Length] = 65;
+        Assert.Throws<AccountDirectoryAdp1FormatException>(() =>
+            DeepIdV2ForwardTailCodec.Decode(tailBytes));
+        var substituted = authority.Head(2, Bytes(32, 0x71), 0,
+            appendRoot, mapRoot, minimumReader: 2);
+        Assert.Equal("InvalidForwardTail",
+            Assert.Throws<AccountDirectoryFreshnessVerificationException>(
+                () => VerifyTail([AccountDirectoryAdh1Codec.Encode(substituted),
+                    exactTarget])).Code);
+
         Assert.Equal("InvalidForwardCheckpoint",
             Assert.Throws<AccountDirectoryFreshnessVerificationException>(
                 () => Verify(ForwardBytes(invalidSignature: true))).Code);

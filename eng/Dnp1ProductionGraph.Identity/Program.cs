@@ -664,7 +664,9 @@ internal static class GraphPolicy
                 "Deep.Protocol|12527|A3FFCF1420A8827419FD2F21C7988C6694BD4CEA3FBF5F8F1076C759C0183F7B",
                 // DID2 V2 account can retain the exact verifier-issued device relative for DPH2.
                 "Deep.Protocol|12529|F48EBBB1832129AA85B1B1373146474609218832CBC3050D4A2F4FEDBFAAAA21",
-                "Deep.Protocol|12529|9184558DD070A4B2ECDB6F045E42EB538AD210FF3EE94AAC30CFB4615FC4DEC4"
+                "Deep.Protocol|12529|9184558DD070A4B2ECDB6F045E42EB538AD210FF3EE94AAC30CFB4615FC4DEC4",
+                // Internal DID2 anchor-AFP1 successor-tail verifier; no public API expansion.
+                "Deep.Protocol|12529|EC9F8A89C0B49C1204C2D07C9C71C4DDF3E46851E242BD0CE4EED6F601CD1C5C"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [
