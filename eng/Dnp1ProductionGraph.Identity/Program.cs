@@ -638,7 +638,10 @@ internal static class GraphPolicy
                 // Candidate DPQ2/DPP2 exact DID2-bound proof wire; public route remains disabled.
                 // Both exact Release and Debug metadata snapshots are pinned.
                 "Deep.Protocol|12459|FDD2AEA88FE4AFC7F5A31068A2B74A1AC400A5AC55DCDBD1700D43594D206610",
-                "Deep.Protocol|12459|2A077D1C807119EA13E41F2445073E60F90F796ECC6617A4092536ADDE8FD45C"
+                "Deep.Protocol|12459|2A077D1C807119EA13E41F2445073E60F90F796ECC6617A4092536ADDE8FD45C",
+                // Isolated XIR1 V2 issuer/DCA1 candidate; contact publication remains disabled.
+                "Deep.Protocol|12473|BE9F0B42C1C81EF5A3F80394136194AE0135BDD6143CC47A5B15A9822C0691D8",
+                "Deep.Protocol|12473|BA701AC9862C463931C4669910EA243F8243BBEA986CAF8EA4AA5CB282237982"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

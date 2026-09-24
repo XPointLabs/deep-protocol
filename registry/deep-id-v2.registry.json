@@ -67,7 +67,7 @@
   },
   "retiredReject": ["DID1", "DAB1", "artifactType:0x1001"],
   "dependentReFreezeRequired": [
-    "DCA1", "DCB1", "DCR1", "DPH2", "DAO1", "ADP1",
+    "DCA1", "XIR1", "DCB1", "DCR1", "DPH2", "DAO1", "ADP1",
     "contact locator", "contact safety number", "QR", "client database"
   ],
   "transcriptVectors": "deep-id-v2.vectors.json"

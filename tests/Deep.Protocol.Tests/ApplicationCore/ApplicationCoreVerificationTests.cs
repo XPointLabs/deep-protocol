@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Deep.Protocol.ApplicationCore;
 using Deep.Protocol.ContactV1;
+using Deep.Protocol.ContactV2;
 using Deep.Protocol.DeepNative;
 using Deep.Protocol.MessagingWire;
 using Sodium;
@@ -100,6 +101,113 @@ public sealed class ApplicationCoreVerificationTests
         var contactVerified = DeepIdV2ContactAuthorizationCodec.Verify(contact, verified, directory);
         Assert.Same(verified, contactVerified.Binding);
         Assert.Same(directory, contactVerified.Directory);
+
+        static byte[] Be64(ulong value)
+        {
+            var bytes = new byte[8];
+            BinaryPrimitives.WriteUInt64BigEndian(bytes, value);
+            return bytes;
+        }
+        static byte[] Be32(uint value)
+        {
+            var bytes = new byte[4];
+            BinaryPrimitives.WriteUInt32BigEndian(bytes, value);
+            return bytes;
+        }
+        static byte[] Be16(ushort value)
+        {
+            var bytes = new byte[2];
+            BinaryPrimitives.WriteUInt16BigEndian(bytes, value);
+            return bytes;
+        }
+        static byte[] ContactRef(string magic, ushort version,
+            ReadOnlySpan<byte> hash)
+        {
+            var bytes = new byte[38];
+            Encoding.ASCII.GetBytes(magic).CopyTo(bytes, 0);
+            BinaryPrimitives.WriteUInt16BigEndian(bytes.AsSpan(4), version);
+            hash.CopyTo(bytes.AsSpan(6));
+            return bytes;
+        }
+        var xirFields = new ReadOnlyMemory<byte>[]
+        {
+            fixture.Network, ApplicationCoreFixture.Bytes(32, 0x31),
+            Be64(0), new byte[32],
+            ContactRef("PMT2", 1, ApplicationCoreFixture.Bytes(32, 0x32)),
+            ApplicationCoreFixture.Bytes(32, 0x33),
+            ApplicationCoreFixture.Bytes(32, 0x34),
+            ApplicationCoreFixture.Bytes(32, 0x35),
+            new byte[] { 1 }, Be32(0), Be16(1),
+            ApplicationCoreFixture.Bytes(32, 0x36), Be64(10), Be64(20),
+            ContactRef("DPD1", 1, fixture.Identity.ActiveDevices[0]
+                .Certificate.CanonicalHash.Span),
+            ContactRef("DCA1", 2, contact.RecordHash.Span),
+            ApplicationCoreFixture.Bytes(64, 0x37),
+            ContactRef("XRA1", 1, ApplicationCoreFixture.Bytes(32, 0x38)),
+        };
+        var unsignedXir = DeepIdV2InviteRendezvousCodec.AuthorForValidation(xirFields);
+        xirFields[16] = PublicKeyAuth.SignDetached(
+            unsignedXir.SignatureInput.ToArray(), fixture.DeviceKey.PrivateKey);
+        var xir = DeepIdV2InviteRendezvousCodec.AuthorForValidation(xirFields);
+        Assert.Equal(611, xir.CanonicalBytes.Length);
+        Assert.False(DeepIdV2InviteRendezvousCodec.RuntimeActivation);
+        DeepIdV2InviteRendezvousCodec.VerifyIssuerAndDca1(
+            xir, contactVerified, 15);
+        var oldXir = xir.CanonicalBytes.ToArray();
+        oldXir[5] = 1;
+        Assert.Throws<ApplicationCoreFormatException>(() =>
+            DeepIdV2InviteRendezvousCodec.Decode(oldXir));
+        oldXir = xir.CanonicalBytes.ToArray();
+        BinaryPrimitives.WriteUInt16BigEndian(oldXir.AsSpan(6), 0x0201);
+        Assert.Throws<ApplicationCoreFormatException>(() =>
+            DeepIdV2InviteRendezvousCodec.Decode(oldXir));
+        oldXir = xir.CanonicalBytes.ToArray();
+        var dcaRefOffset = 12 +
+            new[] { 16, 32, 8, 32, 38, 32, 32, 32, 1, 4, 2, 32, 8, 8, 38 }
+                .Sum(value => 8 + value) + 8;
+        BinaryPrimitives.WriteUInt16BigEndian(oldXir.AsSpan(dcaRefOffset + 4), 1);
+        Assert.Throws<ApplicationCoreFormatException>(() =>
+            DeepIdV2InviteRendezvousCodec.Decode(oldXir));
+        var wrongDcaFields = xirFields.ToArray();
+        wrongDcaFields[15] = ContactRef("DCA1", 2,
+            SHA256.HashData(contact.CanonicalBytes.Span));
+        var wrongDcaUnsigned = DeepIdV2InviteRendezvousCodec
+            .AuthorForValidation(wrongDcaFields);
+        wrongDcaFields[16] = PublicKeyAuth.SignDetached(
+            wrongDcaUnsigned.SignatureInput.ToArray(), fixture.DeviceKey.PrivateKey);
+        AssertVerificationFailure(() =>
+            DeepIdV2InviteRendezvousCodec.VerifyIssuerAndDca1(
+                DeepIdV2InviteRendezvousCodec.AuthorForValidation(wrongDcaFields),
+                contactVerified, 15));
+        var wrongIssuerFields = xirFields.ToArray();
+        wrongIssuerFields[16] = PublicKeyAuth.SignDetached(
+            xir.SignatureInput.ToArray(), fixture.AccountKey.PrivateKey);
+        AssertVerificationFailure(() =>
+            DeepIdV2InviteRendezvousCodec.VerifyIssuerAndDca1(
+                DeepIdV2InviteRendezvousCodec.AuthorForValidation(wrongIssuerFields),
+                contactVerified, 15));
+        var wrongLineageFields = xirFields.ToArray();
+        wrongLineageFields[3] = ApplicationCoreFixture.Bytes(32, 0x3a);
+        Assert.Throws<ApplicationCoreFormatException>(() =>
+            DeepIdV2InviteRendezvousCodec.AuthorForValidation(wrongLineageFields));
+        var wrongWindowFields = xirFields.ToArray();
+        wrongWindowFields[13] = Be64(10);
+        Assert.Throws<ApplicationCoreFormatException>(() =>
+            DeepIdV2InviteRendezvousCodec.AuthorForValidation(wrongWindowFields));
+        var outsideDcaFields = xirFields.ToArray();
+        outsideDcaFields[13] = Be64(21);
+        var outsideDcaUnsigned = DeepIdV2InviteRendezvousCodec
+            .AuthorForValidation(outsideDcaFields);
+        outsideDcaFields[16] = PublicKeyAuth.SignDetached(
+            outsideDcaUnsigned.SignatureInput.ToArray(),
+            fixture.DeviceKey.PrivateKey);
+        AssertVerificationFailure(() =>
+            DeepIdV2InviteRendezvousCodec.VerifyIssuerAndDca1(
+                DeepIdV2InviteRendezvousCodec.AuthorForValidation(outsideDcaFields),
+                contactVerified, 15));
+        AssertVerificationFailure(() =>
+            DeepIdV2InviteRendezvousCodec.VerifyIssuerAndDca1(
+                xir, contactVerified, 20));
         var oldVersion = contact.CanonicalBytes.ToArray();
         oldVersion[5] = 1;
         Assert.Throws<ApplicationCoreFormatException>(() =>
