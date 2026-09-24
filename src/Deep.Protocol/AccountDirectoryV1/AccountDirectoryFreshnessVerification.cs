@@ -450,7 +450,8 @@ public static class AccountDirectoryCurrentProofVerifier
 
         if (proof.HistoryMode == AccountDirectoryAdp1HistoryMode.ForwardCheckpoint)
         {
-            VerifyForwardCheckpoint(authority, proof, head, headHash, dttHash, lkg, trustedUpper, supportedReader);
+            VerifyForwardCheckpoint(authority, proof.ExactAfp1.Span, head,
+                headHash, dttHash, lkg, trustedUpper, supportedReader);
             return;
         }
 
@@ -479,18 +480,19 @@ public static class AccountDirectoryCurrentProofVerifier
             Fail("InvalidConsistencyProof", "ADP1 does not prove append-log consistency from the protected LKG.");
     }
 
-    private static void VerifyForwardCheckpoint(
+    internal static void VerifyForwardCheckpoint(
         VerifiedXPointNetworkAuthority authority,
-        AccountDirectoryAdp1 proof,
+        ReadOnlySpan<byte> exactAfp1,
         AccountDirectoryAdh1 head,
         ReadOnlySpan<byte> headHash,
         ReadOnlySpan<byte> dttHash,
         AccountDirectoryProtectedLkg lkg,
         ulong trustedUpper,
-        ushort supportedReader)
+        ushort supportedReader,
+        ushort minimumReaderFloor = 1)
     {
         AccountDirectoryAfp1 afp;
-        try { afp = AccountDirectoryAfp1Codec.Decode(proof.ExactAfp1.Span); }
+        try { afp = AccountDirectoryAfp1Codec.Decode(exactAfp1); }
         catch (Exception exception) when (exception is FormatException or ArgumentException)
         { throw new AccountDirectoryFreshnessVerificationException("InvalidForwardCheckpoint", exception.Message, exception); }
 
@@ -564,7 +566,10 @@ public static class AccountDirectoryCurrentProofVerifier
             if (authorityIndex < 0 || authorityIndex < previousAuthorityIndex)
                 Fail("InvalidForwardCheckpoint", "ADF1 authorities are absent from or move backwards in the exact XNA1 lineage.");
             var authorizing = suppliedAuthorities[authorityIndex];
-            if (adf.MinimumReader > supportedReader || adf.IssuedAt < authorizing.NotBefore ||
+            if (adf.MinimumReader < minimumReaderFloor ||
+                adf.MinimumReader > supportedReader ||
+                targetHead.MinimumReader < minimumReaderFloor ||
+                adf.IssuedAt < authorizing.NotBefore ||
                 adf.IssuedAt > authorizing.ExpiresAt || adf.IssuedAt > trustedUpper)
                 Fail("InvalidForwardCheckpoint", "ADF1 reader or authority-time closure is invalid.");
             VerifyRootThreshold(authorizing, adf);

@@ -209,7 +209,8 @@ public static class DeepIdV2DirectoryCurrentProofVerifier
                 !Fixed(proof.ExactField(4).Span, exactAdh1.Span) ||
                 !Fixed(proof.LiveDtt1CoreHash.Span, dttHash))
                 Fail("AdpCrossLinkMismatch", "ADP1 V2 does not bind the exact head, query and DTT1.");
-            VerifyHistory(authority, proof, head, headHash, protectedLkg);
+            VerifyHistory(authority, proof, head, headHash, dttHash,
+                protectedLkg, upper, supportedReader);
             if (boundQuery is not null)
                 VerifyQueryFloor(boundQuery, authority, head, headHash,
                     protectedLkg, queriedDirectoryLeafKey);
@@ -277,8 +278,9 @@ public static class DeepIdV2DirectoryCurrentProofVerifier
 
     private static void VerifyHistory(VerifiedXPointNetworkAuthority authority,
         ParsedAdp1V2 proof, AccountDirectoryAdh1 head,
-        ReadOnlySpan<byte> headHash,
-        AccountDirectoryProtectedLkg? lkg)
+        ReadOnlySpan<byte> headHash, ReadOnlySpan<byte> dttHash,
+        AccountDirectoryProtectedLkg? lkg, ulong trustedUpper,
+        ushort supportedReader)
     {
         var claimedSize = BinaryPrimitives.ReadUInt64BigEndian(
             proof.ExactField(5).Span);
@@ -303,6 +305,13 @@ public static class DeepIdV2DirectoryCurrentProofVerifier
         if (head.LogGeneration < lkg.LogGeneration ||
             head.TreeSize < lkg.TreeSize)
             Fail("LkgRollback", "ADH1 rolls back the protected DID2 directory floor.");
+        if (proof.HistoryMode == AccountDirectoryAdp1HistoryMode.ForwardCheckpoint)
+        {
+            AccountDirectoryCurrentProofVerifier.VerifyForwardCheckpoint(
+                authority, proof.ExactAfp1.Span, head, headHash, dttHash,
+                lkg, trustedUpper, supportedReader, minimumReaderFloor: 2);
+            return;
+        }
         if (head.LogGeneration == lkg.LogGeneration)
         {
             if (!Fixed(headHash, lkg.CoreHash.Span))

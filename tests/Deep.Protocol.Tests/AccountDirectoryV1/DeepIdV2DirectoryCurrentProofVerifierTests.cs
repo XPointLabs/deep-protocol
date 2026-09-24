@@ -466,6 +466,92 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
     }
 
     [Fact]
+    public void Did2Verifier_RequiresExactRootAuthorizedForwardCheckpointForSkippedHeads()
+    {
+        var authority = AuthorityFixture.Create();
+        var appendRoot = AccountDirectoryRfc6962.ComputeEmptyTreeHash();
+        var mapRoot = DeepIdV2DirectorySparseMap.EmptyMapRoot.ToArray();
+        var genesis = authority.Head(0, new byte[32], 0,
+            appendRoot, mapRoot, minimumReader: 2);
+        var floor = new AccountDirectoryProtectedLkg(
+            AccountDirectoryAdh1Codec.Encode(genesis));
+        var first = authority.Head(1, floor.CoreHash.ToArray(), 0,
+            appendRoot, mapRoot, minimumReader: 2);
+        var target = authority.Head(2,
+            AccountDirectoryCrypto.ComputeAdh1CoreHash(first), 0,
+            appendRoot, mapRoot, minimumReader: 2);
+        var exactTarget = AccountDirectoryAdh1Codec.Encode(target);
+        var targetHash = AccountDirectoryCrypto.ComputeAdh1CoreHash(target);
+        var current = new AccountDirectoryProtectedLkg(exactTarget);
+        var leaf = Bytes(32, 0x32);
+        var nonce = Bytes(32, 0x31);
+        var dtt = authority.Dtt(target, nonce);
+        var exactDtt = AccountDirectoryDtt1Codec.Encode(dtt);
+        var dttHash = AccountDirectoryCrypto.ComputeDtt1CoreHash(dtt);
+        var material = DeepIdV2DirectoryProofMaterialAuthor.Create(
+            current, [], [], leaf, floor);
+        var sourceLeaf = CoveredHeadLeaf(floor.LogGeneration,
+            floor.TreeSize, floor.CoreHash.Span);
+
+        byte[] ForwardBytes(bool invalidSignature = false,
+            bool invalidSource = false, bool legacyReader = false)
+        {
+            var checkpoint = authority.SignedAdf(0, new byte[32],
+                0, 0, 1,
+                invalidSource ? Bytes(32, 0x6d) : sourceLeaf,
+                targetHash, 0, appendRoot, mapRoot,
+                invalidSignature,
+                minimumReader: legacyReader ? (ushort)1 : (ushort)2);
+            var afp = new AccountDirectoryAfp1(authority.Network,
+                floor.LogGeneration, floor.TreeSize, floor.CoreHash.Span,
+                targetHash, [authority.ExactXna1],
+                [AccountDirectoryAdf1Codec.Encode(checkpoint)],
+                [exactTarget], 0, [], dttHash);
+            return AccountDirectoryAfp1Codec.Encode(afp);
+        }
+
+        var noCheckpoint = DeepIdV2Adp1Codec.Author(material, dttHash);
+        Assert.Equal("ForwardCheckpointRequired",
+            Assert.Throws<AccountDirectoryFreshnessVerificationException>(() =>
+                DeepIdV2DirectoryCurrentProofVerifier.VerifyExactLeafForAuthor(
+                    authority.Verified, exactTarget, exactDtt,
+                    noCheckpoint.CanonicalBytes, nonce, leaf, Window(),
+                    floor, 1, 2, new DenyingMlDsa65Verifier())).Code);
+
+        VerifiedDeepIdV2DirectoryFreshness Verify(byte[] afp)
+        {
+            var adp = DeepIdV2Adp1Codec.AuthorWithForward(material, dttHash, afp);
+            Assert.Equal(AccountDirectoryAdp1HistoryMode.ForwardCheckpoint,
+                adp.HistoryMode);
+            return DeepIdV2DirectoryCurrentProofVerifier.VerifyExactLeafForAuthor(
+                authority.Verified, exactTarget, exactDtt,
+                adp.CanonicalBytes, nonce, leaf, Window(), floor,
+                1, 2, new DenyingMlDsa65Verifier());
+        }
+
+        var verified = Verify(ForwardBytes());
+        Assert.Equal((ulong)2, verified.NextProtectedLkg.LogGeneration);
+        Assert.Equal("InvalidForwardCheckpoint",
+            Assert.Throws<AccountDirectoryFreshnessVerificationException>(
+                () => Verify(ForwardBytes(invalidSignature: true))).Code);
+        Assert.Equal("InvalidForwardCheckpoint",
+            Assert.Throws<AccountDirectoryFreshnessVerificationException>(
+                () => Verify(ForwardBytes(legacyReader: true))).Code);
+        Assert.Throws<AccountDirectoryAdp1FormatException>(() =>
+            DeepIdV2Adp1Codec.AuthorWithForward(material, dttHash,
+                ForwardBytes(invalidSource: true)));
+        var wrongDtt = ForwardBytes();
+        wrongDtt[^1] ^= 1;
+        Assert.Throws<AccountDirectoryAdp1FormatException>(() =>
+            DeepIdV2Adp1Codec.AuthorWithForward(material, dttHash, wrongDtt));
+        var withoutFloor = DeepIdV2DirectoryProofMaterialAuthor.Create(
+            current, [], [], leaf);
+        Assert.Throws<ArgumentException>(() =>
+            DeepIdV2Adp1Codec.AuthorWithForward(withoutFloor, dttHash,
+                ForwardBytes()));
+    }
+
+    [Fact]
     public void Did2Verifier_RejectsV1PacketAndTamperedSignedTime()
     {
         var fixture = Did2EmptyFixture.Create();

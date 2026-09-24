@@ -402,7 +402,7 @@ public static class AccountDirectoryAdp1Codec
             didHash, didAddress, transitionBytes, transition, appendIndex, SplitNodes(Field(canonical, fields[27])));
     }
 
-    private static void ValidateAfp1(
+    internal static void ValidateAfp1(
         ReadOnlySpan<byte> value,
         ReadOnlySpan<byte> network,
         AccountDirectoryAdh1 head,

@@ -30,6 +30,9 @@ public sealed class ParsedAdp1V2
     public AccountDirectoryAdp1ResultKind ResultKind { get; }
     public ReadOnlyMemory<byte> QueriedDirectoryLeafKey => fields[2].ToArray();
     public ReadOnlyMemory<byte> LiveDtt1CoreHash => fields[14].ToArray();
+    internal AccountDirectoryAdp1HistoryMode HistoryMode =>
+        (AccountDirectoryAdp1HistoryMode)fields[12][0];
+    internal ReadOnlyMemory<byte> ExactAfp1 => fields[13].ToArray();
     public ReadOnlyMemory<byte> ExactCurrentAdc1V2 =>
         fields.Length == DeepIdV2Adp1Codec.CurrentValueFieldCount
             ? fields[15].ToArray() : ReadOnlyMemory<byte>.Empty;
@@ -77,7 +80,13 @@ public static class DeepIdV2Adp1Codec
     public const int MaximumLength = 512 * 1024;
 
     public static ParsedAdp1V2 Author(DeepIdV2DirectoryProofMaterial material,
-        ReadOnlySpan<byte> liveDtt1CoreHash32)
+        ReadOnlySpan<byte> liveDtt1CoreHash32) =>
+        AuthorWithForward(material, liveDtt1CoreHash32, default);
+
+    internal static ParsedAdp1V2 AuthorWithForward(
+        DeepIdV2DirectoryProofMaterial material,
+        ReadOnlySpan<byte> liveDtt1CoreHash32,
+        ReadOnlySpan<byte> exactAfp1)
     {
         ArgumentNullException.ThrowIfNull(material);
         if (liveDtt1CoreHash32.Length != 32 ||
@@ -85,6 +94,10 @@ public static class DeepIdV2Adp1Codec
             throw new ArgumentException("Live DTT1 core hash must be nonzero and 32 bytes.",
                 nameof(liveDtt1CoreHash32));
         var caller = material.CallerProtectedLkg;
+        var forward = !exactAfp1.IsEmpty;
+        if (forward && caller is null)
+            throw new ArgumentException("A DID2 forward checkpoint requires a protected caller LKG.",
+                nameof(exactAfp1));
         var fields = new List<byte[]>
         {
             material.CurrentHead.Head.NetworkId.ToArray(),
@@ -93,14 +106,16 @@ public static class DeepIdV2Adp1Codec
             material.CurrentHead.ExactAdh1.ToArray(),
             U64(caller?.TreeSize ?? 0),
             caller?.CoreHash.ToArray() ?? new byte[32],
-            new byte[] { checked((byte)material.ConsistencyProofNodes.Count) },
-            Flatten(material.ConsistencyProofNodes),
+            new byte[] { forward ? (byte)0 : checked((byte)material.ConsistencyProofNodes.Count) },
+            forward ? [] : Flatten(material.ConsistencyProofNodes),
             material.SparseMapBitmap.ToArray(),
             U16(checked((ushort)material.SparseMapSiblings.Count)),
             Flatten(material.SparseMapSiblings),
             new byte[] { caller is null ? (byte)0 : (byte)1 },
-            new byte[] { (byte)AccountDirectoryAdp1HistoryMode.ConsistencyOrGenesis },
-            Array.Empty<byte>(),
+            new byte[] { (byte)(forward
+                ? AccountDirectoryAdp1HistoryMode.ForwardCheckpoint
+                : AccountDirectoryAdp1HistoryMode.ConsistencyOrGenesis) },
+            exactAfp1.ToArray(),
             liveDtt1CoreHash32.ToArray()
         };
         if (material.CurrentCheckpoint is { } current)
@@ -197,11 +212,28 @@ public static class DeepIdV2Adp1Codec
             throw Invalid("ADP1 V2 caller LKG shape is invalid.");
         var consistencyCount = fields[6][0];
         Nodes(fields[7], consistencyCount, 64);
-        if (fields[12][0] != (byte)AccountDirectoryAdp1HistoryMode.ConsistencyOrGenesis ||
-            fields[13].Length != 0 ||
-            hasLkg == 0 && consistencyCount != 0 ||
-            hasLkg == 1 && lkgSize == 0 && consistencyCount != 0)
-            throw Invalid("ADP1 V2 history shape is invalid.");
+        var historyMode = (AccountDirectoryAdp1HistoryMode)fields[12][0];
+        if (historyMode == AccountDirectoryAdp1HistoryMode.ConsistencyOrGenesis)
+        {
+            if (fields[13].Length != 0 ||
+                hasLkg == 0 && consistencyCount != 0 ||
+                hasLkg == 1 && lkgSize == 0 && consistencyCount != 0)
+                throw Invalid("ADP1 V2 mode-0 history shape is invalid.");
+        }
+        else if (historyMode == AccountDirectoryAdp1HistoryMode.ForwardCheckpoint)
+        {
+            if (hasLkg == 0 || consistencyCount != 0 ||
+                fields[7].Length != 0 || fields[13].Length == 0)
+                throw Invalid("ADP1 V2 mode-1 history shape is invalid.");
+            try
+            {
+                AccountDirectoryAdp1Codec.ValidateAfp1(fields[13], fields[0],
+                    head, lkgSize, fields[5], fields[14]);
+            }
+            catch (AccountDirectoryAdp1FormatException exception)
+            { throw Invalid(exception.Message); }
+        }
+        else throw Invalid("ADP1 V2 history mode is unknown.");
         var sparseCount = BinaryPrimitives.ReadUInt16BigEndian(fields[9]);
         Nodes(fields[10], sparseCount, 256);
         var popCount = 0;

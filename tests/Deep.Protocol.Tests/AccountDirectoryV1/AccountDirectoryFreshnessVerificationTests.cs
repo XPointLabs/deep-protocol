@@ -900,7 +900,7 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
             return new ProofFixture(this, targetHead, targetBytes, dtt, dttBytes, adp, nonce, query, lkg, null);
         }
 
-        private AccountDirectoryAdf1 SignedAdf(
+        internal AccountDirectoryAdf1 SignedAdf(
             ulong generation,
             byte[] predecessor,
             ulong coveredFirst,
@@ -911,14 +911,17 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
             ulong targetTreeSize,
             byte[] targetAppendRoot,
             byte[] targetMapRoot,
-            bool invalidSignature = false)
+            bool invalidSignature = false,
+            ushort minimumReader = 1)
         {
             var rootId = Bytes(32, 0x20);
             var placeholder = new[] { new AccountDirectoryAdf1RootReceipt(rootId, Bytes(64, 0xaa)) };
             var unsigned = new AccountDirectoryAdf1(
                 Network, generation, predecessor, coveredFirst, coveredLast, coveredCount, coveredRoot,
                 Reference("ADH1", targetHash), targetTreeSize, targetAppendRoot, targetMapRoot,
-                Verified.AuthorityCoreReference.Span, 1_700_000_150, 1, placeholder);
+                Verified.AuthorityCoreReference.Span, checked(timeBase + 150),
+                minimumReader,
+                placeholder);
             var signer = invalidSignature
                 ? PublicKeyAuth.GenerateKeyPair(Bytes(32, 0xab)).PrivateKey
                 : root.PrivateKey;
@@ -927,7 +930,8 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
             return new AccountDirectoryAdf1(
                 Network, generation, predecessor, coveredFirst, coveredLast, coveredCount, coveredRoot,
                 Reference("ADH1", targetHash), targetTreeSize, targetAppendRoot, targetMapRoot,
-                Verified.AuthorityCoreReference.Span, 1_700_000_150, 1,
+                Verified.AuthorityCoreReference.Span, checked(timeBase + 150),
+                minimumReader,
                 [new AccountDirectoryAdf1RootReceipt(rootId, signature)]);
         }
 
