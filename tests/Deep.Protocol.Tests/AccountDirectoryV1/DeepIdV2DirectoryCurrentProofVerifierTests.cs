@@ -188,6 +188,9 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
 
         Assert.Equal(AccountDirectoryAdp1ResultKind.CurrentValue,
             verified.ResultKind);
+        Assert.False(verified.HasRootAuthorizedForwardLineage);
+        Assert.Equal(initialLkg.ExactAdh1.ToArray(),
+            verified.VerifiedProtectedLkgExactAdh1.ToArray());
         Assert.Equal(checkpoint.Checkpoint.ArtifactHash.ToArray(),
             verified.CurrentCheckpoint!.Checkpoint.ArtifactHash.ToArray());
         Assert.Equal(exactHead, verified.NextProtectedLkg.ExactAdh1.ToArray());
@@ -365,6 +368,7 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
                 appendLeaves);
         var tailAdp = DeepIdV2Adp1Codec.AuthorWithForwardTail(
             sourceMaterial, tailDttHash, anchorAfp,
+            initialLkg.ExactAdh1.Span, 0, 0, [],
             [successorBytes, expandedHeadBytes], anchorConsistency);
         var tailLookup = DeepIdV2AccountDirectoryLookupCodec.Author(
             secondBinding.DeepId, authority.Network,
@@ -387,6 +391,7 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
                     AccountDirectoryDtt1Codec.Encode(tailDtt),
                     DeepIdV2Adp1Codec.AuthorWithForwardTail(sourceMaterial,
                         tailDttHash, anchorAfp,
+                        initialLkg.ExactAdh1.Span, 0, 0, [],
                         [successorBytes, expandedHeadBytes], []).CanonicalBytes,
                     tailNonce, tailQuery, Window(), initialLkg,
                     1, 2, pq)).Code);
@@ -606,7 +611,8 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
             IReadOnlyList<ReadOnlyMemory<byte>> heads)
         {
             var adp = DeepIdV2Adp1Codec.AuthorWithForwardTail(material,
-                dttHash, anchorAfp, heads, []);
+                dttHash, anchorAfp, floor.ExactAdh1.Span,
+                0, 0, [], heads, []);
             return DeepIdV2DirectoryCurrentProofVerifier.VerifyExactLeafForAuthor(
                 authority.Verified, exactTarget, exactDtt,
                 adp.CanonicalBytes, nonce, leaf, Window(), floor,
@@ -616,10 +622,11 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
         Assert.Equal((ulong)2,
             verifiedTail.NextProtectedLkg.LogGeneration);
         var tailBytes = DeepIdV2ForwardTailCodec.Encode(anchorAfp,
-            [exactTarget]);
+            floor.ExactAdh1.Span, 0, 0, [], [exactTarget]);
         Assert.Throws<AccountDirectoryAdp1FormatException>(() =>
             DeepIdV2ForwardTailCodec.Decode(tailBytes[..^1]));
-        tailBytes[4 + anchorAfp.Length] = 65;
+        tailBytes[4 + anchorAfp.Length + 4 + floor.ExactAdh1.Length +
+            1 + 8 + 1] = 65;
         Assert.Throws<AccountDirectoryAdp1FormatException>(() =>
             DeepIdV2ForwardTailCodec.Decode(tailBytes));
         var substituted = authority.Head(2, Bytes(32, 0x71), 0,
@@ -647,6 +654,155 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
         Assert.Throws<ArgumentException>(() =>
             DeepIdV2Adp1Codec.AuthorWithForward(withoutFloor, dttHash,
                 ForwardBytes()));
+    }
+
+    [Fact]
+    public async Task Did2Verifier_RecoversProtectedFloorCreatedAfterFirstRootCheckpoint()
+    {
+        var authority = AuthorityFixture.Create();
+        var appendRoot = AccountDirectoryRfc6962.ComputeEmptyTreeHash();
+        var mapRoot = DeepIdV2DirectorySparseMap.EmptyMapRoot.ToArray();
+        var heads = new AccountDirectoryAdh1[5];
+        var hashes = new byte[5][];
+        var exactHeads = new byte[5][];
+        for (var index = 0; index < heads.Length; index++)
+        {
+            heads[index] = authority.Head((ulong)index,
+                index == 0 ? new byte[32] : hashes[index - 1],
+                0, appendRoot, mapRoot, minimumReader: 2);
+            hashes[index] = AccountDirectoryCrypto
+                .ComputeAdh1CoreHash(heads[index]);
+            exactHeads[index] = AccountDirectoryAdh1Codec.Encode(heads[index]);
+        }
+        var source = new AccountDirectoryProtectedLkg(exactHeads[2]);
+        var current = new AccountDirectoryProtectedLkg(exactHeads[4]);
+        var chainSource = new AccountDirectoryProtectedLkg(exactHeads[0]);
+        var source0Leaf = CoveredHeadLeaf(0, 0, hashes[0]);
+        var source1Leaf = CoveredHeadLeaf(1, 0, hashes[1]);
+        var source2Leaf = CoveredHeadLeaf(2, 0, hashes[2]);
+        var first = authority.SignedAdf(0, new byte[32],
+            0, 0, 1, source0Leaf, hashes[1], 0,
+            appendRoot, mapRoot, minimumReader: 2);
+        var second = authority.SignedAdf(1,
+            AccountDirectoryCrypto.ComputeAdf1CoreHash(first),
+            1, 2, 2,
+            AccountDirectoryRfc6962.ComputeNodeHash(
+                source1Leaf, source2Leaf),
+            hashes[3], 0, appendRoot, mapRoot,
+            minimumReader: 2);
+        var nonce = Bytes(32, 0x31);
+        var leaf = Bytes(32, 0x32);
+        var dtt = authority.Dtt(heads[4], nonce);
+        var dttHash = AccountDirectoryCrypto.ComputeDtt1CoreHash(dtt);
+        var afp = AccountDirectoryAfp1Codec.Encode(
+            new AccountDirectoryAfp1(authority.Network,
+                chainSource.LogGeneration, chainSource.TreeSize,
+                chainSource.CoreHash.Span, hashes[3],
+                [authority.ExactXna1],
+                [AccountDirectoryAdf1Codec.Encode(first),
+                    AccountDirectoryAdf1Codec.Encode(second)],
+                [exactHeads[1], exactHeads[3]],
+                0, [], dttHash));
+        var material = DeepIdV2DirectoryProofMaterialAuthor.Create(
+            current, [], [], leaf, source);
+
+        VerifiedDeepIdV2DirectoryFreshness Verify(byte checkpointIndex,
+            ReadOnlyMemory<byte> sibling)
+        {
+            var adp = DeepIdV2Adp1Codec.AuthorWithForwardTail(
+                material, dttHash, afp, exactHeads[0],
+                checkpointIndex, 1, [sibling], [exactHeads[4]], []);
+            return DeepIdV2DirectoryCurrentProofVerifier.VerifyExactLeafForAuthor(
+                authority.Verified, exactHeads[4],
+                AccountDirectoryDtt1Codec.Encode(dtt),
+                adp.CanonicalBytes, nonce, leaf, Window(), source,
+                1, 2, new DenyingMlDsa65Verifier());
+        }
+
+        var verified = Verify(1, source1Leaf);
+        Assert.Equal((ulong)4, verified.NextProtectedLkg.LogGeneration);
+        var anchorNonce = Bytes(32, 0x33);
+        var anchorDtt = authority.Dtt(heads[3], anchorNonce);
+        var anchorDttHash = AccountDirectoryCrypto.ComputeDtt1CoreHash(
+            anchorDtt);
+        var currentAnchorAfp = AccountDirectoryAfp1Codec.Encode(
+            new AccountDirectoryAfp1(authority.Network,
+                chainSource.LogGeneration, chainSource.TreeSize,
+                chainSource.CoreHash.Span, hashes[3],
+                [authority.ExactXna1],
+                [AccountDirectoryAdf1Codec.Encode(first),
+                    AccountDirectoryAdf1Codec.Encode(second)],
+                [exactHeads[1], exactHeads[3]],
+                0, [], anchorDttHash));
+        var currentAnchorMaterial = DeepIdV2DirectoryProofMaterialAuthor.Create(
+            new AccountDirectoryProtectedLkg(exactHeads[3]),
+            [], [], leaf, source);
+        var currentAnchorAdp = DeepIdV2Adp1Codec.AuthorWithForwardTail(
+            currentAnchorMaterial, anchorDttHash, currentAnchorAfp,
+            exactHeads[0], 1, 1, [source1Leaf], [], []);
+        Assert.Equal((ulong)3,
+            DeepIdV2DirectoryCurrentProofVerifier.VerifyExactLeafForAuthor(
+                authority.Verified, exactHeads[3],
+                AccountDirectoryDtt1Codec.Encode(anchorDtt),
+                currentAnchorAdp.CanonicalBytes, anchorNonce, leaf,
+                Window(), source, 1, 2,
+                new DenyingMlDsa65Verifier())
+                .NextProtectedLkg.LogGeneration);
+        var history = exactHeads.Select(static value =>
+            new AccountDirectoryProtectedLkg(value)).ToArray();
+        var forwardInput = DeepIdV2ForwardTailMaterialAuthor.Create(
+            authority.Verified, history,
+            [], [], leaf, source,
+            [AccountDirectoryAdf1Codec.Encode(first),
+                AccountDirectoryAdf1Codec.Encode(second)]);
+        Assert.Equal((byte)1, forwardInput.SourceCheckpointIndex);
+        Assert.Single(forwardInput.ExactTailHeads);
+        var issuedNonce = Bytes(32, 0x34);
+        var authorRequest = new AccountDirectoryProofAuthoringRequest(
+            authority.Network, issuedNonce, Bytes(16, 0x44), 1_000,
+            exactHeads[4], authority.CurrentXnv(), 1_700_000_300, 5,
+            1_700_000_300, 1_700_000_360,
+            AccountDirectoryDtt1IssuanceEpoch.Derive(
+                authority.Verified, 1_700_000_300, 5), 2);
+        var issued = await DeepIdV2DirectoryProofAuthor
+            .IssueWithForwardTailAsync(authority.Verified, authorRequest,
+                material, forwardInput,
+                authority.Witnesses.Take(2).Select(WitnessSigner.Valid)
+                    .Cast<IAccountDirectoryDtt1WitnessSigner>().ToArray(),
+                1, new DenyingMlDsa65Verifier());
+        var issuedVerified =
+            DeepIdV2DirectoryCurrentProofVerifier.VerifyExactLeafForAuthor(
+                authority.Verified, issued.ExactAdh1, issued.ExactDtt1,
+                issued.ExactAdp1V2, issuedNonce, leaf, Window(), source,
+                1, 2, new DenyingMlDsa65Verifier());
+        Assert.Equal((ulong)4, issuedVerified.NextProtectedLkg.LogGeneration);
+        Assert.True(issuedVerified.HasRootAuthorizedForwardLineage);
+        Assert.Equal(source.ExactAdh1.ToArray(),
+            issuedVerified.VerifiedProtectedLkgExactAdh1.ToArray());
+        var invalidRootFirst = authority.SignedAdf(0, new byte[32],
+            0, 0, 1, source0Leaf, hashes[1], 0,
+            appendRoot, mapRoot, invalidSignature: true,
+            minimumReader: 2);
+        var invalidRootInput = DeepIdV2ForwardTailMaterialAuthor.Create(
+            authority.Verified, history, [], [], leaf, source,
+            [AccountDirectoryAdf1Codec.Encode(invalidRootFirst),
+                AccountDirectoryAdf1Codec.Encode(second)]);
+        Assert.Equal("Did2ProofRejected",
+            (await Assert.ThrowsAsync<AccountDirectoryProofAuthoringException>(
+                async () => await DeepIdV2DirectoryProofAuthor
+                    .IssueWithForwardTailAsync(authority.Verified,
+                        authorRequest, material, invalidRootInput,
+                        authority.Witnesses.Take(2)
+                            .Select(WitnessSigner.Valid)
+                            .Cast<IAccountDirectoryDtt1WitnessSigner>()
+                            .ToArray(),
+                        1, new DenyingMlDsa65Verifier()))).Code);
+        Assert.Equal("InvalidForwardTail",
+            Assert.Throws<AccountDirectoryFreshnessVerificationException>(
+                () => Verify(0, source1Leaf)).Code);
+        Assert.Equal("InvalidForwardTail",
+            Assert.Throws<AccountDirectoryFreshnessVerificationException>(
+                () => Verify(1, Bytes(32, 0x72))).Code);
     }
 
     [Fact]

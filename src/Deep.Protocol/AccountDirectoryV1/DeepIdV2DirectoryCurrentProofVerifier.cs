@@ -63,6 +63,7 @@ public sealed class VerifiedDeepIdV2DirectoryFreshness
     private readonly byte[] networkId;
     private readonly byte[] queriedLeaf;
     private readonly byte[] bootId;
+    private readonly byte[] verifiedProtectedLkgExactAdh1;
 
     internal VerifiedDeepIdV2DirectoryFreshness(
         ReadOnlySpan<byte> exactAdh1, ReadOnlySpan<byte> exactDtt1,
@@ -73,13 +74,17 @@ public sealed class VerifiedDeepIdV2DirectoryFreshness
         ulong trustedLowerUnixSeconds,
         ulong trustedUpperUnixSeconds,
         AccountDirectoryAdp1ResultKind resultKind,
-        VerifiedAdc1V2? currentCheckpoint)
+        VerifiedAdc1V2? currentCheckpoint,
+        bool hasRootAuthorizedForwardLineage,
+        AccountDirectoryProtectedLkg? verifiedProtectedLkg)
     {
         this.exactAdh1 = exactAdh1.ToArray();
         this.exactDtt1 = exactDtt1.ToArray();
         this.exactAdp1 = exactAdp1.ToArray();
         this.networkId = networkId.ToArray();
         this.queriedLeaf = queriedLeaf.ToArray();
+        verifiedProtectedLkgExactAdh1 = verifiedProtectedLkg?.ExactAdh1.ToArray()
+            ?? [];
         bootId = monotonic.BootId.ToArray();
         MonotonicSample = monotonic.CurrentSample;
         FreshnessDeadlineMonotonicSeconds = freshnessDeadlineMonotonicSeconds;
@@ -87,6 +92,7 @@ public sealed class VerifiedDeepIdV2DirectoryFreshness
         TrustedUpperUnixSeconds = trustedUpperUnixSeconds;
         ResultKind = resultKind;
         CurrentCheckpoint = currentCheckpoint;
+        HasRootAuthorizedForwardLineage = hasRootAuthorizedForwardLineage;
         NextProtectedLkg = new AccountDirectoryProtectedLkg(exactAdh1);
     }
 
@@ -98,6 +104,9 @@ public sealed class VerifiedDeepIdV2DirectoryFreshness
     public AccountDirectoryAdp1ResultKind ResultKind { get; }
     public VerifiedAdc1V2? CurrentCheckpoint { get; }
     public AccountDirectoryProtectedLkg NextProtectedLkg { get; }
+    public bool HasRootAuthorizedForwardLineage { get; }
+    public ReadOnlyMemory<byte> VerifiedProtectedLkgExactAdh1 =>
+        verifiedProtectedLkgExactAdh1.ToArray();
     public ulong MonotonicSample { get; }
     public ulong FreshnessDeadlineMonotonicSeconds { get; }
     public ulong TrustedLowerUnixSeconds { get; }
@@ -243,7 +252,10 @@ public static class DeepIdV2DirectoryCurrentProofVerifier
             return new VerifiedDeepIdV2DirectoryFreshness(exactAdh1.Span,
                 exactDtt1.Span, exactAdp1V2.Span, authority.NetworkId.Span,
                 queriedDirectoryLeafKey, monotonic, deadline,
-                lower, upper, proof.ResultKind, current);
+                lower, upper, proof.ResultKind, current,
+                proof.HistoryMode == AccountDirectoryAdp1HistoryMode.ForwardCheckpoint ||
+                (byte)proof.HistoryMode == DeepIdV2ForwardTailCodec.HistoryMode,
+                protectedLkg);
         }
         catch (AccountDirectoryFreshnessVerificationException) { throw; }
         catch (Exception exception) when (exception is FormatException or
@@ -349,10 +361,31 @@ public static class DeepIdV2DirectoryCurrentProofVerifier
         var tail = DeepIdV2ForwardTailCodec.Decode(proof.ExactAfp1.Span);
         var anchor = tail.AnchorHead;
         var anchorHash = AccountDirectoryCrypto.ComputeAdh1CoreHash(anchor);
+        var chainSource = new AccountDirectoryProtectedLkg(
+            tail.ExactChainSourceHead.Span);
+        AccountDirectoryCurrentProofVerifier
+            .VerifyAdhAuthorityAndWitnessClosure(authority,
+                chainSource.Head, requireCurrentAuthority: false);
         AccountDirectoryCurrentProofVerifier.VerifyForwardCheckpoint(
             authority, tail.ExactAnchorAfp1.Span, anchor, anchorHash,
-            dttHash, lkg, trustedUpper, supportedReader,
+            dttHash, chainSource, trustedUpper, supportedReader,
             minimumReaderFloor: 2);
+        var sourceCheckpoint = AccountDirectoryAdf1Codec.Decode(
+            tail.AnchorProof.CheckpointChain[tail.SourceCheckpointIndex].Span);
+        if (lkg.LogGeneration < sourceCheckpoint.CoveredFirstAdhGeneration ||
+            lkg.LogGeneration > sourceCheckpoint.CoveredLastAdhGeneration ||
+            lkg.LogGeneration >= anchor.LogGeneration ||
+            tail.SourceLeafIndex >= sourceCheckpoint.CoveredHeadCount)
+            Fail("InvalidForwardTail", "Protected DID2 floor is outside its root-signed covered set.");
+        var sourceLeaf = AccountDirectoryCurrentProofVerifier
+            .ComputeCoveredHeadLeaf(lkg.LogGeneration, lkg.TreeSize,
+                lkg.CoreHash.Span);
+        if (!AccountDirectoryRfc6962.VerifyInclusion(sourceLeaf,
+                tail.SourceLeafIndex, sourceCheckpoint.CoveredHeadCount,
+                AccountDirectoryCurrentProofVerifier.Join(
+                    tail.SourceMembershipNodes),
+                sourceCheckpoint.CoveredHeadMerkleRoot.Span))
+            Fail("InvalidForwardTail", "Protected DID2 floor is not a member of its root-signed checkpoint.");
         var previous = anchor;
         var previousHash = anchorHash;
         foreach (var exact in tail.ExactTailHeads)

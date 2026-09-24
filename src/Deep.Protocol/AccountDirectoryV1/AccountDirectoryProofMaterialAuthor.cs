@@ -284,7 +284,7 @@ public static class AccountDirectoryProofMaterialAuthor
         return levels;
     }
 
-    private static byte[] TreeHash(IReadOnlyList<byte[]> leaves, int offset, int count)
+    internal static byte[] TreeHash(IReadOnlyList<byte[]> leaves, int offset, int count)
     {
         if (count == 1)
             return leaves[offset].ToArray();

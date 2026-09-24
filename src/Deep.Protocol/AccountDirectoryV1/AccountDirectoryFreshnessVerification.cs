@@ -640,7 +640,7 @@ public static class AccountDirectoryCurrentProofVerifier
         return -1;
     }
 
-    private static byte[] ComputeCoveredHeadLeaf(
+    internal static byte[] ComputeCoveredHeadLeaf(
         ulong generation,
         ulong treeSize,
         ReadOnlySpan<byte> exactAdh1CoreHash)

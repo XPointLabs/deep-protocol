@@ -16,29 +16,49 @@ internal static class DeepIdV2ForwardTailCodec
         ReadOnlyMemory<byte> exactAnchorAfp1,
         AccountDirectoryAfp1 anchorProof,
         AccountDirectoryAdh1 anchorHead,
+        ReadOnlyMemory<byte> exactChainSourceHead,
+        byte sourceCheckpointIndex,
+        ulong sourceLeafIndex,
+        IReadOnlyList<ReadOnlyMemory<byte>> sourceMembershipNodes,
         IReadOnlyList<ReadOnlyMemory<byte>> exactTailHeads)
     {
         internal ReadOnlyMemory<byte> ExactAnchorAfp1 { get; } =
             exactAnchorAfp1.ToArray();
         internal AccountDirectoryAfp1 AnchorProof { get; } = anchorProof;
         internal AccountDirectoryAdh1 AnchorHead { get; } = anchorHead;
+        internal ReadOnlyMemory<byte> ExactChainSourceHead { get; } =
+            exactChainSourceHead.ToArray();
+        internal byte SourceCheckpointIndex { get; } = sourceCheckpointIndex;
+        internal ulong SourceLeafIndex { get; } = sourceLeafIndex;
+        internal IReadOnlyList<ReadOnlyMemory<byte>> SourceMembershipNodes { get; } =
+            sourceMembershipNodes.Select(static value =>
+                (ReadOnlyMemory<byte>)value.ToArray()).ToArray();
         internal IReadOnlyList<ReadOnlyMemory<byte>> ExactTailHeads { get; } =
             exactTailHeads.Select(static value =>
                 (ReadOnlyMemory<byte>)value.ToArray()).ToArray();
     }
 
     internal static byte[] Encode(ReadOnlySpan<byte> exactAnchorAfp1,
+        ReadOnlySpan<byte> exactChainSourceHead,
+        byte sourceCheckpointIndex, ulong sourceLeafIndex,
+        IReadOnlyList<ReadOnlyMemory<byte>> sourceMembershipNodes,
         IReadOnlyList<ReadOnlyMemory<byte>> exactTailHeads)
     {
+        ArgumentNullException.ThrowIfNull(sourceMembershipNodes);
         ArgumentNullException.ThrowIfNull(exactTailHeads);
         if (exactAnchorAfp1.Length is < 12 or > DeepIdV2Adp1Codec.MaximumLength ||
-            exactTailHeads.Count is < 1 or > MaximumTailHeads)
+            exactChainSourceHead.Length is < 12 or > 4096 ||
+            sourceMembershipNodes.Count > 64 ||
+            exactTailHeads.Count > MaximumTailHeads)
             throw new AccountDirectoryAdp1FormatException(
                 "DID2 forward-tail framing exceeds its bounds.");
-        if (exactTailHeads.Any(static value => value.Length is < 12 or > 4096))
+        if (sourceMembershipNodes.Any(static value => value.Length != 32) ||
+            exactTailHeads.Any(static value => value.Length is < 12 or > 4096))
             throw new AccountDirectoryAdp1FormatException(
                 "DID2 successor-tail head exceeds its bounds.");
-        var length = checked(4 + exactAnchorAfp1.Length + 1 +
+        var length = checked(4 + exactAnchorAfp1.Length +
+            4 + exactChainSourceHead.Length + 1 + 8 + 1 +
+            sourceMembershipNodes.Count * 32 + 1 +
             exactTailHeads.Sum(static value => 4 + value.Length));
         if (length > DeepIdV2Adp1Codec.MaximumLength)
             throw new AccountDirectoryAdp1FormatException(
@@ -47,6 +67,21 @@ internal static class DeepIdV2ForwardTailCodec
         BinaryPrimitives.WriteUInt32BigEndian(output, (uint)exactAnchorAfp1.Length);
         exactAnchorAfp1.CopyTo(output.AsSpan(4));
         var offset = 4 + exactAnchorAfp1.Length;
+        BinaryPrimitives.WriteUInt32BigEndian(output.AsSpan(offset),
+            checked((uint)exactChainSourceHead.Length));
+        offset += 4;
+        exactChainSourceHead.CopyTo(output.AsSpan(offset));
+        offset += exactChainSourceHead.Length;
+        output[offset++] = sourceCheckpointIndex;
+        BinaryPrimitives.WriteUInt64BigEndian(output.AsSpan(offset),
+            sourceLeafIndex);
+        offset += 8;
+        output[offset++] = checked((byte)sourceMembershipNodes.Count);
+        foreach (var node in sourceMembershipNodes)
+        {
+            node.Span.CopyTo(output.AsSpan(offset));
+            offset += 32;
+        }
         output[offset++] = checked((byte)exactTailHeads.Count);
         foreach (var head in exactTailHeads)
         {
@@ -62,11 +97,11 @@ internal static class DeepIdV2ForwardTailCodec
 
     internal static Parsed Decode(ReadOnlySpan<byte> encoded)
     {
-        if (encoded.Length is < 17 or > DeepIdV2Adp1Codec.MaximumLength)
+        if (encoded.Length is < 43 or > DeepIdV2Adp1Codec.MaximumLength)
             throw new AccountDirectoryAdp1FormatException(
                 "DID2 forward-tail framing length is invalid.");
         var afpLength = BinaryPrimitives.ReadUInt32BigEndian(encoded);
-        if (afpLength < 12 || afpLength > encoded.Length - 5)
+        if (afpLength < 12 || afpLength > encoded.Length - 31)
             throw new AccountDirectoryAdp1FormatException(
                 "DID2 anchor AFP1 length is invalid.");
         var exactAfp = encoded.Slice(4, checked((int)afpLength));
@@ -81,8 +116,54 @@ internal static class DeepIdV2ForwardTailCodec
         var anchorBytes = afp.TargetHeadChain[^1];
         var anchor = AccountDirectoryAdh1Codec.Decode(anchorBytes.Span);
         var offset = 4 + checked((int)afpLength);
+        if (encoded.Length - offset < 4)
+            throw new AccountDirectoryAdp1FormatException(
+                "DID2 chain-source head length is truncated.");
+        var sourceLength = BinaryPrimitives.ReadUInt32BigEndian(
+            encoded.Slice(offset, 4));
+        offset += 4;
+        if (sourceLength is < 12 or > 4096 ||
+            sourceLength > encoded.Length - offset)
+            throw new AccountDirectoryAdp1FormatException(
+                "DID2 chain-source head length is invalid.");
+        var exactSource = encoded.Slice(offset, checked((int)sourceLength));
+        AccountDirectoryAdh1 sourceHead;
+        try { sourceHead = AccountDirectoryAdh1Codec.Decode(exactSource); }
+        catch (Exception exception) when (exception is FormatException or
+            ArgumentException)
+        {
+            throw new AccountDirectoryAdp1FormatException(
+                $"DID2 chain-source head is invalid: {exception.Message}");
+        }
+        offset += checked((int)sourceLength);
+        if (encoded.Length - offset < 11 ||
+            sourceHead.MinimumReader < 2 ||
+            sourceHead.LogGeneration != afp.SourceAdhGeneration ||
+            sourceHead.TreeSize != afp.SourceTreeSize ||
+            !AccountDirectoryCrypto.ComputeAdh1CoreHash(sourceHead)
+                .AsSpan().SequenceEqual(afp.SourceAdh1CoreHash.Span))
+            throw new AccountDirectoryAdp1FormatException(
+                "DID2 chain-source head differs from the embedded AFP1.");
+        var sourceCheckpointIndex = encoded[offset++];
+        if (sourceCheckpointIndex >= afp.CheckpointChain.Count)
+            throw new AccountDirectoryAdp1FormatException(
+                "DID2 source checkpoint index is outside the signed chain.");
+        var sourceLeafIndex = BinaryPrimitives.ReadUInt64BigEndian(
+            encoded.Slice(offset, 8));
+        offset += 8;
+        var membershipCount = encoded[offset++];
+        if (membershipCount > 64 ||
+            encoded.Length - offset < membershipCount * 32 + 1)
+            throw new AccountDirectoryAdp1FormatException(
+                "DID2 source membership path is invalid.");
+        var membership = new ReadOnlyMemory<byte>[membershipCount];
+        for (var index = 0; index < membershipCount; index++)
+        {
+            membership[index] = encoded.Slice(offset, 32).ToArray();
+            offset += 32;
+        }
         var count = encoded[offset++];
-        if (count is < 1 or > MaximumTailHeads)
+        if (count > MaximumTailHeads)
             throw new AccountDirectoryAdp1FormatException(
                 "DID2 successor-tail count is invalid.");
         var exactHeads = new ReadOnlyMemory<byte>[count];
@@ -112,6 +193,8 @@ internal static class DeepIdV2ForwardTailCodec
         if (offset != encoded.Length)
             throw new AccountDirectoryAdp1FormatException(
                 "DID2 successor-tail contains trailing bytes.");
-        return new Parsed(exactAfp.ToArray(), afp, anchor, exactHeads);
+        return new Parsed(exactAfp.ToArray(), afp, anchor,
+            exactSource.ToArray(), sourceCheckpointIndex, sourceLeafIndex,
+            membership, exactHeads);
     }
 }

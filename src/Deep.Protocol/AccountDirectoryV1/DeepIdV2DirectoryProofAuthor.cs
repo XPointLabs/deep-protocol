@@ -41,20 +41,129 @@ public sealed class AuthoredDeepIdV2DirectoryProofPackage
 }
 
 /// <summary>
+/// Untrusted offline-root artifacts and exact successor heads for DID2 mode 2.
+/// The proof issuer authenticates all of these inputs against the current
+/// nonce-bound DTT1 before returning any package.
+/// </summary>
+public sealed class DeepIdV2ForwardTailAuthoringInput
+{
+    private readonly ReadOnlyMemory<byte>[] authorities;
+    private readonly ReadOnlyMemory<byte>[] checkpoints;
+    private readonly ReadOnlyMemory<byte>[] checkpointTargets;
+    private readonly ReadOnlyMemory<byte>[] chainSourceMembership;
+    private readonly ReadOnlyMemory<byte>[] sourceMembership;
+    private readonly ReadOnlyMemory<byte>[] tailHeads;
+    private readonly ReadOnlyMemory<byte>[] anchorConsistency;
+
+    public DeepIdV2ForwardTailAuthoringInput(
+        AccountDirectoryProtectedLkg chainSourceHead,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactAuthorityChain,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactAdf1Chain,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactAdfTargetHeadChain,
+        ulong chainSourceLeafIndex,
+        IReadOnlyList<ReadOnlyMemory<byte>> chainSourceMembershipNodes,
+        byte sourceCheckpointIndex, ulong sourceLeafIndex,
+        IReadOnlyList<ReadOnlyMemory<byte>> sourceMembershipNodes,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactTailHeads,
+        IReadOnlyList<ReadOnlyMemory<byte>> anchorConsistencyNodes)
+    {
+        ChainSourceHead = chainSourceHead ??
+            throw new ArgumentNullException(nameof(chainSourceHead));
+        authorities = Copy(exactAuthorityChain, 1, 64, 16_384);
+        checkpoints = Copy(exactAdf1Chain, 1, 64, 16_384);
+        checkpointTargets = Copy(exactAdfTargetHeadChain, 1, 64, 4096);
+        chainSourceMembership = Copy(chainSourceMembershipNodes, 0, 64, 32);
+        sourceMembership = Copy(sourceMembershipNodes, 0, 64, 32);
+        tailHeads = Copy(exactTailHeads, 0, 64, 4096);
+        anchorConsistency = Copy(anchorConsistencyNodes, 0, 64, 32);
+        if (checkpoints.Length != checkpointTargets.Length ||
+            sourceCheckpointIndex >= checkpoints.Length ||
+            chainSourceMembership.Any(static value => value.Length != 32) ||
+            sourceMembership.Any(static value => value.Length != 32) ||
+            anchorConsistency.Any(static value => value.Length != 32))
+            throw new ArgumentException("DID2 forward-tail authoring shape is invalid.");
+        ChainSourceLeafIndex = chainSourceLeafIndex;
+        SourceCheckpointIndex = sourceCheckpointIndex;
+        SourceLeafIndex = sourceLeafIndex;
+    }
+
+    public AccountDirectoryProtectedLkg ChainSourceHead { get; }
+    public IReadOnlyList<ReadOnlyMemory<byte>> ExactAuthorityChain => Own(authorities);
+    public IReadOnlyList<ReadOnlyMemory<byte>> ExactAdf1Chain => Own(checkpoints);
+    public IReadOnlyList<ReadOnlyMemory<byte>> ExactAdfTargetHeadChain =>
+        Own(checkpointTargets);
+    public ulong ChainSourceLeafIndex { get; }
+    public IReadOnlyList<ReadOnlyMemory<byte>> ChainSourceMembershipNodes =>
+        Own(chainSourceMembership);
+    public byte SourceCheckpointIndex { get; }
+    public ulong SourceLeafIndex { get; }
+    public IReadOnlyList<ReadOnlyMemory<byte>> SourceMembershipNodes =>
+        Own(sourceMembership);
+    public IReadOnlyList<ReadOnlyMemory<byte>> ExactTailHeads => Own(tailHeads);
+    public IReadOnlyList<ReadOnlyMemory<byte>> AnchorConsistencyNodes =>
+        Own(anchorConsistency);
+
+    private static ReadOnlyMemory<byte>[] Copy(
+        IReadOnlyList<ReadOnlyMemory<byte>> values,
+        int minimum, int maximum, int maximumLength)
+    {
+        ArgumentNullException.ThrowIfNull(values);
+        if (values.Count < minimum || values.Count > maximum ||
+            values.Any(value => value.Length is < 1 ||
+                value.Length > maximumLength))
+            throw new ArgumentException("DID2 forward-tail artifact list exceeds its bounds.");
+        return Own(values);
+    }
+
+    private static ReadOnlyMemory<byte>[] Own(
+        IReadOnlyList<ReadOnlyMemory<byte>> values) =>
+        values.Select(static value =>
+            (ReadOnlyMemory<byte>)value.ToArray()).ToArray();
+}
+
+/// <summary>
 /// DID2-only proof issuance. The shared DTT1/XNV1 witness primitives are
 /// identity-neutral; the proof material, wire and self-verification are V2.
 /// This cannot issue a V1 ADP1 or admit a DID1 account.
 /// </summary>
 public static class DeepIdV2DirectoryProofAuthor
 {
-    public static async ValueTask<AuthoredDeepIdV2DirectoryProofPackage> IssueGenesisAsync(
+    public static ValueTask<AuthoredDeepIdV2DirectoryProofPackage> IssueGenesisAsync(
         VerifiedXPointNetworkAuthority authority,
         AccountDirectoryProofAuthoringRequest request,
         DeepIdV2DirectoryProofMaterial material,
         IReadOnlyList<IAccountDirectoryDtt1WitnessSigner> witnessSigners,
         ushort deploymentProfileId,
         IDeepMlDsa65Verifier mlDsa65,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        IssueCoreAsync(authority, request, material, null,
+            witnessSigners, deploymentProfileId, mlDsa65, cancellationToken);
+
+    public static ValueTask<AuthoredDeepIdV2DirectoryProofPackage>
+        IssueWithForwardTailAsync(
+        VerifiedXPointNetworkAuthority authority,
+        AccountDirectoryProofAuthoringRequest request,
+        DeepIdV2DirectoryProofMaterial material,
+        DeepIdV2ForwardTailAuthoringInput forward,
+        IReadOnlyList<IAccountDirectoryDtt1WitnessSigner> witnessSigners,
+        ushort deploymentProfileId,
+        IDeepMlDsa65Verifier mlDsa65,
+        CancellationToken cancellationToken = default) =>
+        IssueCoreAsync(authority, request, material,
+            forward ?? throw new ArgumentNullException(nameof(forward)),
+            witnessSigners, deploymentProfileId, mlDsa65,
+            cancellationToken);
+
+    private static async ValueTask<AuthoredDeepIdV2DirectoryProofPackage>
+        IssueCoreAsync(
+        VerifiedXPointNetworkAuthority authority,
+        AccountDirectoryProofAuthoringRequest request,
+        DeepIdV2DirectoryProofMaterial material,
+        DeepIdV2ForwardTailAuthoringInput? forward,
+        IReadOnlyList<IAccountDirectoryDtt1WitnessSigner> witnessSigners,
+        ushort deploymentProfileId,
+        IDeepMlDsa65Verifier mlDsa65,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(authority);
         ArgumentNullException.ThrowIfNull(request);
@@ -68,6 +177,9 @@ public static class DeepIdV2DirectoryProofAuthor
             if (request.SupportedReader < 2 || head.Head.MinimumReader < 2 ||
                 deploymentProfileId == 0)
                 Fail("UnsupportedReader", "DID2 proof issuance requires reader V2 and a deployment profile.");
+            if (forward is not null && material.CallerProtectedLkg is null)
+                Fail("ForwardFloorRequired",
+                    "DID2 forward-tail issuance requires a protected caller floor.");
             if (!Fixed(authority.NetworkId.Span, request.NetworkId.Span) ||
                 !Fixed(head.Head.NetworkId.Span, request.NetworkId.Span) ||
                 !Fixed(request.ExactCurrentAdh1.Span, head.ExactAdh1.Span))
@@ -99,8 +211,10 @@ public static class DeepIdV2DirectoryProofAuthor
                     cancellationToken)
                 .ConfigureAwait(false);
             var exactDtt = AccountDirectoryDtt1Codec.Encode(dtt);
-            var proof = DeepIdV2Adp1Codec.Author(material,
-                AccountDirectoryCrypto.ComputeDtt1CoreHash(dtt));
+            var dttHash = AccountDirectoryCrypto.ComputeDtt1CoreHash(dtt);
+            var proof = forward is null
+                ? DeepIdV2Adp1Codec.Author(material, dttHash)
+                : AuthorForwardTail(material, forward, dttHash);
             var exactAdp = proof.CanonicalBytes.ToArray();
 
             _ = DeepIdV2DirectoryCurrentProofVerifier.VerifyExactLeafForAuthor(
@@ -124,6 +238,33 @@ public static class DeepIdV2DirectoryProofAuthor
             throw new AccountDirectoryProofAuthoringException("Did2ProofRejected",
                 "The exact DID2 proof could not be issued and self-verified.", exception);
         }
+    }
+
+    private static ParsedAdp1V2 AuthorForwardTail(
+        DeepIdV2DirectoryProofMaterial material,
+        DeepIdV2ForwardTailAuthoringInput forward,
+        ReadOnlySpan<byte> liveDtt1CoreHash)
+    {
+        var targetHead = AccountDirectoryAdh1Codec.Decode(
+            forward.ExactAdfTargetHeadChain[^1].Span);
+        var targetHash = AccountDirectoryCrypto.ComputeAdh1CoreHash(
+            targetHead);
+        var source = forward.ChainSourceHead;
+        var afp = new AccountDirectoryAfp1(
+            material.CurrentHead.Head.NetworkId.Span,
+            source.LogGeneration, source.TreeSize, source.CoreHash.Span,
+            targetHash, forward.ExactAuthorityChain,
+            forward.ExactAdf1Chain,
+            forward.ExactAdfTargetHeadChain,
+            forward.ChainSourceLeafIndex,
+            forward.ChainSourceMembershipNodes,
+            liveDtt1CoreHash);
+        return DeepIdV2Adp1Codec.AuthorWithForwardTail(material,
+            liveDtt1CoreHash, AccountDirectoryAfp1Codec.Encode(afp),
+            source.ExactAdh1.Span,
+            forward.SourceCheckpointIndex, forward.SourceLeafIndex,
+            forward.SourceMembershipNodes, forward.ExactTailHeads,
+            forward.AnchorConsistencyNodes);
     }
 
     private static bool Fixed(ReadOnlySpan<byte> left,

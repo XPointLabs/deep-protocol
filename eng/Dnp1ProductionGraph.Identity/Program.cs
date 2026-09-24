@@ -666,7 +666,11 @@ internal static class GraphPolicy
                 "Deep.Protocol|12529|F48EBBB1832129AA85B1B1373146474609218832CBC3050D4A2F4FEDBFAAAA21",
                 "Deep.Protocol|12529|9184558DD070A4B2ECDB6F045E42EB538AD210FF3EE94AAC30CFB4615FC4DEC4",
                 // Internal DID2 anchor-AFP1 successor-tail verifier; no public API expansion.
-                "Deep.Protocol|12529|EC9F8A89C0B49C1204C2D07C9C71C4DDF3E46851E242BD0CE4EED6F601CD1C5C"
+                "Deep.Protocol|12529|EC9F8A89C0B49C1204C2D07C9C71C4DDF3E46851E242BD0CE4EED6F601CD1C5C",
+                // DID2 root-signed forward-tail authoring and exact protected-floor witness API.
+                "Deep.Protocol|12556|6F31320F7530592A49B1799F0EA55C3C9F6A46EC3C80F17C13391F3261E170A8",
+                // Verifier-issued exact protected floor and root-forward lineage for client LKG CAS.
+                "Deep.Protocol|12560|BBCD821526FCBD636863480EC1E309679D9026F5A31D70C4CA8909AB106917D7"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

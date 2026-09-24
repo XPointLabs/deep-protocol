@@ -95,11 +95,15 @@ public static class DeepIdV2Adp1Codec
         DeepIdV2DirectoryProofMaterial material,
         ReadOnlySpan<byte> liveDtt1CoreHash32,
         ReadOnlySpan<byte> exactAnchorAfp1,
+        ReadOnlySpan<byte> exactChainSourceHead,
+        byte sourceCheckpointIndex, ulong sourceLeafIndex,
+        IReadOnlyList<ReadOnlyMemory<byte>> sourceMembershipNodes,
         IReadOnlyList<ReadOnlyMemory<byte>> exactTailHeads,
         IReadOnlyList<ReadOnlyMemory<byte>> anchorConsistencyNodes) =>
         AuthorCore(material, liveDtt1CoreHash32,
             DeepIdV2ForwardTailCodec.Encode(exactAnchorAfp1,
-                exactTailHeads),
+                exactChainSourceHead, sourceCheckpointIndex,
+                sourceLeafIndex, sourceMembershipNodes, exactTailHeads),
             (AccountDirectoryAdp1HistoryMode)DeepIdV2ForwardTailCodec.HistoryMode,
             anchorConsistencyNodes);
 
@@ -267,14 +271,21 @@ public static class DeepIdV2Adp1Codec
             if (hasLkg == 0 || fields[13].Length == 0)
                 throw Invalid("ADP1 V2 mode-2 history shape is invalid.");
             var tail = DeepIdV2ForwardTailCodec.Decode(fields[13]);
+            var exactFinal = tail.ExactTailHeads.Count == 0
+                ? tail.AnchorProof.TargetHeadChain[^1]
+                : tail.ExactTailHeads[^1];
             if (tail.AnchorHead.MinimumReader < 2 ||
-                !Fixed(tail.ExactTailHeads[^1].Span, fields[3]))
+                !Fixed(exactFinal.Span, fields[3]))
                 throw Invalid("ADP1 V2 mode-2 anchor or current head differs.");
             try
             {
+                var chainSource = AccountDirectoryAdh1Codec.Decode(
+                    tail.ExactChainSourceHead.Span);
                 AccountDirectoryAdp1Codec.ValidateAfp1(
                     tail.ExactAnchorAfp1.Span, fields[0],
-                    tail.AnchorHead, lkgSize, fields[5], fields[14]);
+                    tail.AnchorHead, chainSource.TreeSize,
+                    AccountDirectoryCrypto.ComputeAdh1CoreHash(chainSource),
+                    fields[14]);
             }
             catch (AccountDirectoryAdp1FormatException exception)
             { throw Invalid(exception.Message); }
