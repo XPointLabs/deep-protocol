@@ -661,7 +661,9 @@ internal static class GraphPolicy
                 "Deep.Protocol|12526|A9E62C9FCB295F8195457FC6E120A6810AA9FF1B54E44A5EAD814D75309BD3BC",
                 // One-time DID2 empty ADH1 authoring from exact XNA1 witness custody.
                 "Deep.Protocol|12527|D0B62D669E50F6CBEEAA07D7F2348E8860E676F97576C75D717944FBDF0F7290",
-                "Deep.Protocol|12527|A3FFCF1420A8827419FD2F21C7988C6694BD4CEA3FBF5F8F1076C759C0183F7B"
+                "Deep.Protocol|12527|A3FFCF1420A8827419FD2F21C7988C6694BD4CEA3FBF5F8F1076C759C0183F7B",
+                // DID2 V2 account can retain the exact verifier-issued device relative for DPH2.
+                "Deep.Protocol|12529|F48EBBB1832129AA85B1B1373146474609218832CBC3050D4A2F4FEDBFAAAA21"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

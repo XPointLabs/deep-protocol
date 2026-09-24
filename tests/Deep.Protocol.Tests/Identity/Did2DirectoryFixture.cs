@@ -36,6 +36,14 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
             decoded.Admission, 1_700_000_405, 1, 2, verifier);
         Assert.Equal(checkpoint.Checkpoint.ArtifactHash.ToArray(),
             admitted.Checkpoint.ArtifactHash.ToArray());
+        var relative = Assert.Single(admitted.Binding.Identity.ActiveDeviceRelatives);
+        Assert.Equal(admission.ExactDpd1.Single().ToArray(),
+            relative.Certificate.CanonicalBytes.ToArray());
+        var factsOnly = ApplicationCoreVerifier.CreateIdentityClosure(
+            admitted.Binding.Identity.Account,
+            admitted.Binding.Identity.Revocations,
+            admitted.Binding.Identity.ActiveDevices);
+        Assert.Empty(factsOnly.ActiveDeviceRelatives);
     }
 
     internal static async Task<(DeepIdV2GenesisAdmissionRequest Admission,

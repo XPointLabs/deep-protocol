@@ -15,14 +15,17 @@ namespace Deep.Protocol.ApplicationCore;
 public sealed class VerifiedApplicationIdentityClosure
 {
     private readonly Dictionary<string, VerifiedDevice> devices;
+    private readonly VerifiedDeviceRelative[] deviceRelatives;
 
     internal VerifiedApplicationIdentityClosure(
         VerifiedAccount account,
         VerifiedRevocationState revocations,
-        IReadOnlyList<VerifiedDevice> activeDevices)
+        IReadOnlyList<VerifiedDevice> activeDevices,
+        IReadOnlyList<VerifiedDeviceRelative>? activeDeviceRelatives = null)
     {
         Account = account;
         Revocations = revocations;
+        deviceRelatives = activeDeviceRelatives?.ToArray() ?? [];
         devices = new Dictionary<string, VerifiedDevice>(StringComparer.Ordinal);
         foreach (var device in activeDevices)
             devices.Add(Convert.ToHexString(device.Certificate.DeviceId.Span), device);
@@ -31,6 +34,14 @@ public sealed class VerifiedApplicationIdentityClosure
     public VerifiedAccount Account { get; }
     public VerifiedRevocationState Revocations { get; }
     public IReadOnlyList<VerifiedDevice> ActiveDevices => devices.Values.ToArray();
+
+    /// <summary>
+    /// Exact DNP1-relative device evidence when this closure was built from
+    /// verifier-issued relative capabilities. Lower-level verified facts do
+    /// not mint relative capabilities.
+    /// </summary>
+    public IReadOnlyList<VerifiedDeviceRelative> ActiveDeviceRelatives =>
+        Array.AsReadOnly(deviceRelatives.ToArray());
 
     internal bool TryGetDevice(ReadOnlySpan<byte> deviceId, out VerifiedDevice? device) =>
         devices.TryGetValue(Convert.ToHexString(deviceId), out device);
@@ -196,7 +207,10 @@ public static class ApplicationCoreVerifier
                 Reject("A verified device belongs to a different DPA1/DRS1 identity result.");
             verified[index] = device.Device;
         }
-        return CreateIdentityClosure(identity.Account, identity.Revocations, verified);
+        var closure = CreateIdentityClosure(identity.Account, identity.Revocations,
+            verified);
+        return new VerifiedApplicationIdentityClosure(closure.Account,
+            closure.Revocations, verified, activeDevices);
     }
 
     public static VerifiedApplicationIdentityClosure CreateIdentityClosure(
