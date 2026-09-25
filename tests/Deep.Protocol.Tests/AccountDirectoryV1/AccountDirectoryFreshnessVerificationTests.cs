@@ -625,6 +625,9 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
         internal byte[] ExactXna1 { get; }
         internal VerifiedXPointNetworkAuthority Verified { get; }
 
+        internal IAccountDirectoryAdf1RootSigner InitialAdf1Signer() =>
+            new TestAdf1RootSigner(Verified.RootKeys[0].Id, root.PrivateKey);
+
         internal static AuthorityFixture Create(byte networkMarker = 0x11,
             byte seedOffset = 0, byte[]? networkOverride = null,
             ulong timeBase = 1_700_000_000)

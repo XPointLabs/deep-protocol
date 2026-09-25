@@ -672,7 +672,9 @@ internal static class GraphPolicy
                 // Verifier-issued exact protected floor and root-forward lineage for client LKG CAS.
                 "Deep.Protocol|12560|BBCD821526FCBD636863480EC1E309679D9026F5A31D70C4CA8909AB106917D7",
                 // DID2-only peer lookup with exact identity binding; no caller-supplied DAB2.
-                "Deep.Protocol|12564|DA02B42C0553A77ED902363BAC9CA6C341865E58C39489E6F87CF7430708901C"
+                "Deep.Protocol|12564|DA02B42C0553A77ED902363BAC9CA6C341865E58C39489E6F87CF7430708901C",
+                // Initial offline-root DID2 ADF1 authoring from exact signed heads.
+                "Deep.Protocol|12570|CB998E79C27503A42B356EB675C047840C7DDBB7F62308246E6DF1FE9D5A7E7D"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [
