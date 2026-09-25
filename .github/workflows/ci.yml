@@ -54,10 +54,6 @@ jobs:
       - name: Build
         run: dotnet build Deep.Protocol.slnx --configuration Release --no-restore
 
-      - name: Offline reference corpus gate
-        shell: pwsh
-        run: ./eng/Test-LegacyReferenceCorpus.ps1
-
       - name: Exact-three actual assembly/resource/public API graph
         shell: pwsh
         run: ./eng/Test-ProductionProtocolGraph.ps1 -Configuration Release

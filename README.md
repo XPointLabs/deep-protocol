@@ -21,8 +21,8 @@ contain no compatibility shims, aliases or fallback runtime paths.
 - `Deep.Protocol.ProfileCarrier`: bounded self-hosted profile carrier contracts.
 
 The former `Deep.Protocol.Native` dark identity path has been clean-break promoted into
-`Deep.Protocol.Identity` and removed. `reference/session-compatibility-v0/` remains immutable offline
-evidence and must never be packaged or executed by a client, service or node.
+`Deep.Protocol.Identity` and removed. The pre-user Session compatibility corpus has
+also been removed; Git history is sufficient if an old implementation must be audited.
 
 ## Verify
 
@@ -30,6 +30,5 @@ evidence and must never be packaged or executed by a client, service or node.
 dotnet restore Deep.Protocol.slnx
 dotnet build Deep.Protocol.slnx --no-restore
 dotnet test Deep.Protocol.slnx --no-build
-./eng/Test-LegacyReferenceCorpus.ps1
 ./eng/Test-ProductionProtocolGraph.ps1 -Configuration Debug
 ```

@@ -51,9 +51,9 @@ release API or durability claim.
 
 - `Deep.Protocol.Native*` and its dark solution no longer exist. Production and
   lock/package gates reject any reintroduced project edge, source token or build artifact.
-- Session, protobuf, P03A compatibility, DPB/DPE, Nearby and LoRa material is
-  retained only in `reference/session-compatibility-v0` as immutable offline
-  evidence. It is not compiled, embedded, packed or loaded at runtime.
+- Retired Session, protobuf, P03A compatibility, DPB/DPE, Nearby and LoRa
+  source/vector corpus has been removed from the release checkout. It is
+  available only in Git history, not compiled, embedded, packed or loaded.
 - Shared/MAUI legacy Session messaging is not made DNP1-native by renaming old
   bytes and is excluded from the clean production composition. Exact DPH2/DPE2
   message/ratchet primitives now exist in the production package and a protected

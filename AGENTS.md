@@ -15,8 +15,8 @@ change reviewed D--G bytes/domains/APIs without a separately frozen authorizatio
 ## Repository rules
 
 - No Session shim, migration, type forward, alias, reflection bridge or compatibility fallback.
-- `reference/session-compatibility-v0/**` is immutable offline evidence only; it never builds,
-  packages or executes in production.
+- No retired Session compatibility corpus or positive legacy vectors are kept
+  in the release checkout. Git history is the audit record.
 - Ed25519 signing and X25519 agreement keys are independent; conversion is forbidden.
 - Unknown suites/generations, non-canonical encodings and hostile sizes reject before allocation,
   mutation or callbacks as required by the frozen registry.
@@ -32,7 +32,6 @@ change reviewed D--G bytes/domains/APIs without a separately frozen authorizatio
 dotnet restore Deep.Protocol.slnx
 dotnet build Deep.Protocol.slnx --no-restore
 dotnet test Deep.Protocol.slnx --no-build
-./eng/Test-LegacyReferenceCorpus.ps1
 ./eng/Test-ProductionProtocolGraph.ps1 -Configuration Debug
 ```
 
