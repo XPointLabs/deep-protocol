@@ -674,7 +674,9 @@ internal static class GraphPolicy
                 // DID2-only peer lookup with exact identity binding; no caller-supplied DAB2.
                 "Deep.Protocol|12564|DA02B42C0553A77ED902363BAC9CA6C341865E58C39489E6F87CF7430708901C",
                 // Initial offline-root DID2 ADF1 authoring from exact signed heads.
-                "Deep.Protocol|12570|CB998E79C27503A42B356EB675C047840C7DDBB7F62308246E6DF1FE9D5A7E7D"
+                "Deep.Protocol|12570|CB998E79C27503A42B356EB675C047840C7DDBB7F62308246E6DF1FE9D5A7E7D",
+                // Initial ADF1 covers every authenticated head through the target predecessor.
+                "Deep.Protocol|12571|B7A58300C701F92F4F5E271589B0CB3673D62AFDB36BDD52884E03A5A0D2D4D6"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [
