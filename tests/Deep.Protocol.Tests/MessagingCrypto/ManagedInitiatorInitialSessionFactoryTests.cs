@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Reflection;
 using System.Security.Cryptography;
+using Deep.Protocol.AccountDirectoryV1;
 using Deep.Protocol.ApplicationCore;
 using Deep.Protocol.ContactV1;
 using Deep.Protocol.Identity;
@@ -313,7 +314,8 @@ public sealed class ManagedInitiatorInitialSessionFactoryTests
             static method => method.Name == nameof(ManagedInitiatorInitialSessionFactory.CompleteClaim));
         Assert.Equal(
             [typeof(LocalDeviceX25519AgreementAuthority), typeof(Dmd1LineageState),
-             typeof(Dab1LineageState)],
+             typeof(VerifiedDeepIdV2DirectoryFreshness),
+             typeof(ReadOnlySpan<byte>), typeof(ulong)],
             begin.GetParameters().Select(static parameter => parameter.ParameterType).ToArray());
         Assert.Equal(
             [typeof(InitiatorDph2PreKeyClaim), typeof(VerifiedDpk2Offering),

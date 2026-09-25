@@ -6,6 +6,7 @@ using Deep.Protocol.ContactV1;
 using Deep.Protocol.DeepExtension.PrivacyRouting;
 using Deep.Protocol.MessagingCrypto;
 using Deep.Protocol.MessagingWire;
+using Deep.Protocol.Tests.Identity;
 using Deep.Protocol.XPointNetworkV1;
 using Sodium;
 
@@ -338,11 +339,11 @@ public sealed class Xpc1PreKeyClaimReceiptVerifierTests
 
             var fakeReceipt = fixture.BuildResult(request, fixture.Dpk2,
                 fakeReplicaSignature: true);
+            var (nonMatchingFreshness, _) = await fixture.CreateInitiatorV2Async();
             await Assert.ThrowsAsync<CryptographicException>(() =>
                 new Dph2InitialClaimPreview(preClaim, preview.Request, preview.Result)
-                    .VerifyCurrentAsync(
-                        fixture.Core.Freshness, fixture.Placement,
-                        fixture.Authority, fixture.Bundle,
+                    .VerifyCurrentInitiatorAsync(
+                        nonMatchingFreshness,
                         new OnionTrustedTimeAuthority(new FixedClock(
                             new OnionMonotonicReading(fixture.Core.BootId, 1_003))))
                     .AsTask());
@@ -427,53 +428,54 @@ public sealed class Xpc1PreKeyClaimReceiptVerifierTests
     }
 
     [Fact]
-    public async Task CurrentInitiatorCheckpointIsRequiredForProductionClaimPromotion()
+    public async Task CurrentDid2InitiatorCanBeCheckedButV1RecipientCannotPromoteProductionClaim()
     {
         var fixture = await Fixture.CreateAsync();
-        var preliminary = fixture.BuildDph2(Bytes(32, 0xb1), currentInitiator: true);
+        var (freshness, checkpoint) = await fixture.CreateInitiatorV2Async();
+        var preliminary = fixture.BuildDph2(Bytes(32, 0xb1),
+            currentInitiatorCheckpoint: checkpoint);
         var commitment = MessagingWireCryptographicInputs.ComputeSenderEphemeralCommitment(preliminary);
         var request = fixture.BuildRequest(senderEphemeralCommitment: commitment);
         var result = fixture.BuildResult(request, fixture.Dpk2);
         var verifiedClaim = await fixture.VerifyAsync(request: request, result: result);
         var dph2 = fixture.BuildDph2(
-            result.Field(18).ToArray(), request, currentInitiator: true);
-        var initiator = fixture.Core.Identity.VerifiedRecipient.Certificate;
-        var directory = fixture.Core.Identity.Directory.Record;
+            result.Field(18).ToArray(), request,
+            currentInitiatorCheckpoint: checkpoint);
+        var initiator = Assert.Single(checkpoint.Binding.Identity.ActiveDeviceRelatives)
+            .Certificate;
+        var directory = checkpoint.Directory.Record;
         var header = Dph2VerificationPlan.Create(dph2, verifiedClaim.Offering)
             .Prevalidate(new Dph2ResolvedInitiator(
                 initiator.DeviceX25519PublicKey.Span, directory.RecordHash.Span));
-        var sourceFreshness = fixture.Core.Identity.Freshness;
-        VerifiedAccountDirectoryFreshness WithDeadline(ulong deadline) => new(
-            sourceFreshness.ExactAdh1.Span,
-            AccountDirectoryAdh1Codec.Decode(sourceFreshness.ExactAdh1.Span),
-            sourceFreshness.ExactAdh1CoreHash.Span,
-            sourceFreshness.ExactDtt1.Span,
-            sourceFreshness.ExactDtt1CoreHash.Span,
-            sourceFreshness.ExactAdp1.Span,
-            sourceFreshness.ExactAdp1Hash.Span,
-            AccountDirectoryAdp1Codec.Decode(sourceFreshness.ExactAdp1.Span),
-            sourceFreshness.ExactAdc1Reference.Span,
-            sourceFreshness.TrustedLowerUnixSeconds,
-            sourceFreshness.TrustedUpperUnixSeconds,
-            new AccountDirectoryMonotonicRequestWindow(
-                fixture.Core.BootId, 1_000, 1_002, 1_003),
-            deadline,
-            sourceFreshness.CurrentCheckpoint);
-        var freshness = WithDeadline(1_050);
         var verified = await new Dph2InitialClaimPreview(header, request, result)
-            .VerifyCurrentAsync(
-                freshness, fixture.Placement, fixture.Authority, fixture.Bundle,
+            .VerifyCurrentInitiatorAsync(
+                freshness,
                 new OnionTrustedTimeAuthority(new FixedClock(
                     new OnionMonotonicReading(fixture.Core.BootId, 1_003))));
-        Assert.Equal(dph2.SessionId.ToArray(), verified.Initiation.SessionId.ToArray());
-        Assert.Equal(result.Field(18).ToArray(), verified.Claim.ClaimReceiptHash.ToArray());
-        Assert.Same(freshness.CurrentCheckpoint, verified.InitiatorCheckpoint);
-        Assert.Same(fixture.Bundle, verified.RecipientBundle);
+        Assert.Same(checkpoint, verified);
+        Assert.DoesNotContain(typeof(Dph2InitialClaimPreview)
+            .GetMethods(BindingFlags.Public | BindingFlags.Instance),
+            method => method.Name == "VerifyCurrentAsync");
 
+        var alternateDid2 = Deep.Protocol.ApplicationCore.DeepIdV2Codec.AuthorDid2(
+            Bytes(32, 0xd1), Bytes(1952, 0xd2), Bytes(16, 0xd3)).CanonicalBytes.ToArray();
+        var substituted = fixture.BuildDph2(result.Field(18).ToArray(), request,
+            currentInitiatorCheckpoint: checkpoint, initiatorDid2Override: alternateDid2);
+        var substitutedHeader = Dph2VerificationPlan.Create(substituted,
+            verifiedClaim.Offering).Prevalidate(new Dph2ResolvedInitiator(
+                initiator.DeviceX25519PublicKey.Span, directory.RecordHash.Span));
+        await Assert.ThrowsAsync<CryptographicException>(() =>
+            new Dph2InitialClaimPreview(substitutedHeader, request, result)
+                .VerifyCurrentInitiatorAsync(freshness,
+                    new OnionTrustedTimeAuthority(new FixedClock(
+                        new OnionMonotonicReading(fixture.Core.BootId, 1_003))))
+                .AsTask());
+
+        var (expiredFreshness, _) = await fixture.CreateInitiatorV2Async(1_003);
         await Assert.ThrowsAsync<CryptographicException>(() =>
             new Dph2InitialClaimPreview(header, request, result)
-                .VerifyCurrentAsync(
-                    WithDeadline(1_003), fixture.Placement, fixture.Authority, fixture.Bundle,
+                .VerifyCurrentInitiatorAsync(
+                    expiredFreshness,
                     new OnionTrustedTimeAuthority(new FixedClock(
                         new OnionMonotonicReading(fixture.Core.BootId, 1_003))))
                 .AsTask());
@@ -593,6 +595,24 @@ public sealed class Xpc1PreKeyClaimReceiptVerifierTests
             fixture.Request = fixture.BuildRequest();
             fixture.Result = fixture.BuildResult(fixture.Request, fixture.Dpk2);
             return fixture;
+        }
+
+        internal async Task<(VerifiedDeepIdV2DirectoryFreshness Freshness,
+            VerifiedAdc1V2 Checkpoint)> CreateInitiatorV2Async(ulong deadline = 1_050)
+        {
+            var (_, checkpoint, _) = await
+                Dnp1IdentityAuthoringV1Tests.CreateRealDid2DirectoryGenesisAsync(
+                    Core.Network);
+            var monotonic = new AccountDirectoryMonotonicRequestWindow(
+                Core.BootId, 1_000, 1_002, 1_003);
+            var freshness = new VerifiedDeepIdV2DirectoryFreshness(
+                Core.Identity.Freshness.ExactAdh1.Span,
+                [], [], Core.Network,
+                checkpoint.Checkpoint.DirectoryLeafKey.Span,
+                monotonic, deadline, 1_900_000_300, 1_900_000_400,
+                AccountDirectoryAdp1ResultKind.CurrentValue,
+                checkpoint, false, null);
+            return (freshness, checkpoint);
         }
 
         internal ValueTask<VerifiedXpc1PreKeyClaimReceipt> VerifyAsync(
@@ -727,26 +747,33 @@ public sealed class Xpc1PreKeyClaimReceiptVerifierTests
             byte[] claimReceiptHash,
             Xpk1Request? request = null,
             byte[]? initialCiphertext = null,
-            bool currentInitiator = false)
+            VerifiedAdc1V2? currentInitiatorCheckpoint = null,
+            byte[]? initiatorDid2Override = null)
         {
             request ??= Request;
-            var initiator = Core.Identity.VerifiedRecipient.Certificate;
-            var directory = Core.Identity.Directory.Record;
+            var initiator = currentInitiatorCheckpoint?.Binding.Identity
+                .ActiveDeviceRelatives.Single().Certificate;
+            var directory = currentInitiatorCheckpoint?.Directory.Record;
             return new Dph2Record(
                 Core.Network,
-                currentInitiator ? directory.DeepAccountId.Span : Bytes(32, 0xc1),
-                currentInitiator ? initiator.DeviceId.Span : Bytes(32, 0xc2),
-                currentInitiator ? initiator.DeviceGeneration : 1,
-                currentInitiator
+                directory is not null ? directory.DeepAccountId.Span : Bytes(32, 0xc1),
+                initiator is not null ? initiator.DeviceId.Span : Bytes(32, 0xc2),
+                initiator?.DeviceGeneration ?? 1,
+                directory is not null
                     ? directory.ActiveDevices[0].Dpd1Reference.CanonicalBytes.Span
                     : Reference("DPD1", 0xc3),
-                Deep.Protocol.ApplicationCore.ApplicationCoreCodec.AuthorDid1(
-                    Bytes(32, 0xca), Bytes(16, 0xcb)).CanonicalBytes.Span,
+                initiatorDid2Override is not null
+                    ? initiatorDid2Override
+                    : currentInitiatorCheckpoint is not null
+                    ? currentInitiatorCheckpoint.Binding.DeepId.CanonicalBytes.Span
+                    : Deep.Protocol.ApplicationCore.DeepIdV2Codec.AuthorDid2(
+                        Bytes(32, 0xca), Bytes(1952, 0xcc),
+                        Bytes(16, 0xcb)).CanonicalBytes.Span,
                 Dpk2.ResponderAccountId.Span, Dpk2.ResponderDeviceId.Span,
                 Dpk2.ResponderDeviceGeneration,
                 MessagingWireCryptographicInputs.ComputeExactDpk2Hash(Dpk2),
                 request.OperationId.Span, claimReceiptHash, 0,
-                currentInitiator ? initiator.DeviceX25519PublicKey.Span : Bytes(32, 0xc4),
+                initiator is not null ? initiator.DeviceX25519PublicKey.Span : Bytes(32, 0xc4),
                 Bytes(32, 0xc5),
                 Dph2SelectedPrekey.OneTime(
                     Dpk2.SignedX25519PrekeyId.Span,

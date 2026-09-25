@@ -75,8 +75,9 @@ internal static class MessagingWireFixtures
             Bytes(32, 0x22),
             17,
             Bytes(38, 0x32),
-            Deep.Protocol.ApplicationCore.ApplicationCoreCodec.AuthorDid1(
-                Bytes(32, 0x33), Bytes(16, 0x34)).CanonicalBytes.Span,
+            Deep.Protocol.ApplicationCore.DeepIdV2Codec.AuthorDid2(
+                Bytes(32, 0x33), Bytes(1952, 0x35),
+                Bytes(16, 0x34)).CanonicalBytes.Span,
             offering.ResponderAccountId.Span,
             offering.ResponderDeviceId.Span,
             offering.ResponderDeviceGeneration,
@@ -160,7 +161,8 @@ internal static class ManualMessagingWire
         var length = 12 + fields.Sum(static field => 8 + field.Value.Length);
         var output = new byte[length];
         Encoding.ASCII.GetBytes(magic).CopyTo(output, 0);
-        BinaryPrimitives.WriteUInt16BigEndian(output.AsSpan(4, 2), 1);
+        BinaryPrimitives.WriteUInt16BigEndian(output.AsSpan(4, 2),
+            magic == "DPH2" ? (ushort)2 : (ushort)1);
         BinaryPrimitives.WriteUInt16BigEndian(output.AsSpan(6, 2), 0x0201);
         BinaryPrimitives.WriteUInt16BigEndian(output.AsSpan(8, 2), checked((ushort)fields.Length));
         var offset = 12;
@@ -235,7 +237,7 @@ internal static class ManualMessagingWire
             (17, record.ActualMlKem768Ciphertext.ToArray()),
             (18, record.InitiatorInitialRatchetX25519PublicKey.ToArray()),
             (19, record.InitialPayloadNonce.ToArray()),
-            (20, record.InitiatorDid1.ToArray()),
+            (20, record.InitiatorDid2.ToArray()),
             (21, ciphertext),
         ];
     }

@@ -32,22 +32,18 @@ public sealed class Dph2InitialClaimPreview
     public Xpc1Result Result => _result;
 
     /// <summary>
-    /// Verifies the exact AEAD-opened claim with current two-replica placement,
-    /// recipient publication and trusted time before promoting DPH2. Neither
-    /// this result nor the preview commits local state or authorizes an ACK.
+    /// Checks only the DID2 initiator side of an initial claim against a
+    /// current, nonce-bound V2 directory proof. This deliberately cannot
+    /// promote a session: the recipient publication and XPC1 path are still
+    /// V1 and must be replaced before production promotion is exposed.
     /// </summary>
-    public async ValueTask<VerifiedDph2InitialClaim> VerifyCurrentAsync(
-        VerifiedAccountDirectoryFreshness initiatorFreshness,
-        VerifiedContactServicePlacement placement,
-        VerifiedContactNetworkAuthority recipientAuthority,
-        VerifiedContactBundleClosure recipientBundle,
+    internal async ValueTask<VerifiedAdc1V2> VerifyCurrentInitiatorAsync(
+        VerifiedDeepIdV2DirectoryFreshness initiatorFreshness,
         OnionTrustedTimeAuthority trustedTimeAuthority,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(initiatorFreshness);
-        var claim = await Xpc1PreKeyClaimReceiptVerifier.VerifyAsync(
-            _request, _result, placement, recipientAuthority, recipientBundle,
-            trustedTimeAuthority, cancellationToken).ConfigureAwait(false);
+        ArgumentNullException.ThrowIfNull(trustedTimeAuthority);
         var reading = await trustedTimeAuthority.ReadCurrentAsync(cancellationToken)
             .ConfigureAwait(false);
         var current = initiatorFreshness.CurrentCheckpoint;
@@ -61,11 +57,12 @@ public sealed class Dph2InitialClaimPreview
             !Fixed(current.Directory.Record.DeepAccountId.Span,
                 _header.Record.InitiatorAccountId.Span) ||
             !Fixed(current.Directory.Record.RecordHash.Span,
-                _header.InitiatorDirectoryHeadHash))
+                _header.InitiatorDirectoryHeadHash) ||
+            !Fixed(current.Binding.DeepId.CanonicalBytes.Span,
+                _header.Record.InitiatorDid2.Span))
             throw new CryptographicException(
                 "The DPH2 initiator directory is not the current verified account-directory value.");
-        return new VerifiedDph2InitialClaim(
-            claim, Promote(claim), current, recipientBundle);
+        return current;
     }
 
     // Narrow protocol tests may independently exercise the threshold verifier
@@ -125,7 +122,7 @@ public sealed class VerifiedDph2InitialClaim
     internal VerifiedDph2InitialClaim(
         VerifiedXpc1PreKeyClaimReceipt claim,
         VerifiedDph2Initiation initiation,
-        VerifiedAccountDirectoryCheckpoint? initiatorCheckpoint,
+        VerifiedAdc1V2? initiatorCheckpoint,
         VerifiedContactBundleClosure? recipientBundle)
     {
         Claim = claim;
@@ -136,8 +133,8 @@ public sealed class VerifiedDph2InitialClaim
 
     public VerifiedXpc1PreKeyClaimReceipt Claim { get; }
     public VerifiedDph2Initiation Initiation { get; }
-    /// <summary>The current initiator DAB1/DMD1 closure used at promotion.</summary>
-    public VerifiedAccountDirectoryCheckpoint? InitiatorCheckpoint { get; }
+    /// <summary>The current initiator DID2/DAB2/ADC1 V2/DMD1 closure used at promotion.</summary>
+    public VerifiedAdc1V2? InitiatorCheckpoint { get; }
     /// <summary>The exact recipient publication verified with XPC1.</summary>
     public VerifiedContactBundleClosure? RecipientBundle { get; }
 }

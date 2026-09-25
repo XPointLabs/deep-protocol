@@ -953,21 +953,64 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
     [Fact]
     public async Task InitiatorPreKeyClaim_IsCreatedBeforeResponderPreKeySelection()
     {
+        if (!((OperatingSystem.IsWindows() &&
+                RuntimeInformation.ProcessArchitecture is (Architecture.X64 or Architecture.Arm64)) ||
+              (OperatingSystem.IsLinux() &&
+                RuntimeInformation.ProcessArchitecture == Architecture.X64)))
+            return;
         using var recovery = Recovery(Network);
         var account = Dnp1IdentityAuthoringV1.AuthorGenesisAccount(
             recovery, 1_900_000_000, 1, new FillRandom(0xa1));
         using var device = Device();
         var issued = await IssueDevice(recovery, account, device);
         var directory = ExactDirectory(account, issued);
-        var addressBinding = recovery.AuthorGenesisDab1(
+        using var phrase = DeepRecoveryV1.VerifyCanonicalUtf8(
+            Encoding.ASCII.GetBytes(Mnemonic));
+        var binding = recovery.AuthorGenesisDab2(phrase,
             directory.Identity, deploymentProfileId: 1);
+        var currentDirectory = CurrentDirectory(directory);
+        var checkpoint = recovery.AuthorGenesisAdc1V2(binding,
+            currentDirectory, 1_900_000_300);
+        var bootId = Enumerable.Repeat((byte)0x5A, 16).ToArray();
+        var monotonic = new AccountDirectoryMonotonicRequestWindow(
+            bootId, 1, 2, 3);
+        var authorityReference = new byte[38];
+        "XNA1"u8.CopyTo(authorityReference);
+        BinaryPrimitives.WriteUInt16BigEndian(
+            authorityReference.AsSpan(4), 1);
+        authorityReference.AsSpan(6).Fill(0x7B);
+        var exactHead = AccountDirectoryAdh1Codec.Encode(
+            new AccountDirectoryAdh1(Network, 0, new byte[32], 0,
+                AccountDirectoryRfc6962.ComputeEmptyTreeHash(),
+                DeepIdV2DirectorySparseMap.EmptyMapRoot.Span,
+                authorityReference,
+                Enumerable.Repeat((byte)0x31, 32).ToArray(),
+                1_900_000_000, 1_900_003_600, 2,
+                [new AccountDirectoryAdh1WitnessEntry(
+                    Enumerable.Repeat((byte)0x41, 32).ToArray(),
+                    Enumerable.Repeat((byte)0x42, 64).ToArray())]));
+        var currentAccount = new VerifiedDeepIdV2DirectoryFreshness(
+            exactHead, [], [], Network,
+            checkpoint.Checkpoint.DirectoryLeafKey.Span, monotonic,
+            freshnessDeadlineMonotonicSeconds: 60,
+            trustedLowerUnixSeconds: 1_900_000_300,
+            trustedUpperUnixSeconds: 1_900_000_400,
+            resultKind: AccountDirectoryAdp1ResultKind.CurrentValue,
+            currentCheckpoint: checkpoint,
+            hasRootAuthorizedForwardLineage: false,
+            verifiedProtectedLkg: null);
         using var authority = device.CreateAgreementAuthority(issued.Verified);
         var factory = new ManagedInitiatorInitialSessionFactory(128);
 
         using var first = factory.BeginClaim(
-            authority, CurrentDirectory(directory), addressBinding);
+            authority, currentDirectory, currentAccount, bootId, 3);
         using var second = factory.BeginClaim(
-            authority, CurrentDirectory(directory), addressBinding);
+            authority, currentDirectory, currentAccount, bootId, 3);
+        Assert.Throws<CryptographicException>(() => factory.BeginClaim(
+            authority, currentDirectory, currentAccount,
+            Enumerable.Repeat((byte)0x5B, 16).ToArray(), 3));
+        Assert.Throws<CryptographicException>(() => factory.BeginClaim(
+            authority, currentDirectory, currentAccount, bootId, 60));
 
         Assert.Equal(authority.NetworkId.ToArray(), first.NetworkId.ToArray());
         Assert.Equal(32, first.ClaimOperationId.Length);

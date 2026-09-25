@@ -99,6 +99,33 @@ public sealed class MessagingWireNegativeTests
     }
 
     [Fact]
+    public void Dph2Did2CleanBreakRejectsOldVersionSizeAndEmbeddedCredential()
+    {
+        var offering = MessagingWireFixtures.Dpk2(Dpk2PrekeyKind.OneTime);
+        var current = Dph2Codec.Encode(MessagingWireFixtures.Dph2(offering, 4112));
+        Assert.Equal(Dph2Codec.SmallTotalBytes, current.Length);
+
+        var oldVersion = current.ToArray();
+        BinaryPrimitives.WriteUInt16BigEndian(oldVersion.AsSpan(4, 2), 1);
+        AssertReject(() => Dph2Codec.Decode(oldVersion),
+            MessagingWirePrevalidationStage.FixedHeader,
+            MessagingWireRejection.WrongVersion);
+
+        AssertReject(() => Dph2Codec.Decode(current[..6001]),
+            MessagingWirePrevalidationStage.ExactTotalSize,
+            MessagingWireRejection.InvalidTotalSize);
+
+        var badDid2 = current.ToArray();
+        var did2 = LocateValue(badDid2, 20);
+        Assert.Equal(Deep.Protocol.ApplicationCore.DeepIdV2Codec.Did2Length,
+            did2.Length);
+        "DID1"u8.CopyTo(badDid2.AsSpan(did2.Offset));
+        AssertReject(() => Dph2Codec.Decode(badDid2),
+            MessagingWirePrevalidationStage.SemanticFields,
+            MessagingWireRejection.EmbeddedRecordRejected);
+    }
+
+    [Fact]
     public void UnknownDuplicateOutOfOrderAndFieldReservedTagsReject()
     {
         var valid = Dpk2Codec.Encode(MessagingWireFixtures.Dpk2(Dpk2PrekeyKind.OneTime));

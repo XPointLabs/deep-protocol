@@ -286,7 +286,7 @@ public sealed class MessagingWireGoldenTests
 
         Assert.Equal(
             "822840758e93aa2e9d735eb33ed2958aa23b812c50085a14ce53fbdbe89b189c:" +
-            "324d6ace684f0dd153f3a1d2561daf939b45b5f443ea11f387b6040bc529f961:" +
+            "961b05428ac06273cfe9335529489e6165b72cd467adb4887c9b83579caa0789:" +
             "9f8db23191cf78c31cfd2dba5747f9b59d9ea60ed9d8442d22140b1a8a9a12b3:" +
             "bf9d9aa5058683b1ae64a352ccefd03d9416e7166d8685e53ccb2f909ce33e24",
             actual);

@@ -118,7 +118,7 @@ public sealed class Dph2Record
     private readonly byte[] _initiatorAccountId;
     private readonly byte[] _initiatorDeviceId;
     private readonly byte[] _initiatorDpd1Ref;
-    private readonly byte[] _initiatorDid1;
+    private readonly byte[] _initiatorDid2;
     private readonly byte[] _responderAccountId;
     private readonly byte[] _responderDeviceId;
     private readonly byte[] _exactDpk2Hash;
@@ -137,7 +137,7 @@ public sealed class Dph2Record
         ReadOnlySpan<byte> initiatorDeviceId,
         ulong initiatorDeviceGeneration,
         ReadOnlySpan<byte> initiatorDpd1Ref,
-        ReadOnlySpan<byte> initiatorDid1,
+        ReadOnlySpan<byte> initiatorDid2,
         ReadOnlySpan<byte> responderAccountId,
         ReadOnlySpan<byte> responderDeviceId,
         ulong responderDeviceGeneration,
@@ -158,7 +158,7 @@ public sealed class Dph2Record
             initiatorDeviceId,
             initiatorDeviceGeneration,
             initiatorDpd1Ref,
-            initiatorDid1,
+            initiatorDid2,
             responderAccountId,
             responderDeviceId,
             responderDeviceGeneration,
@@ -184,7 +184,7 @@ public sealed class Dph2Record
         ReadOnlySpan<byte> initiatorDeviceId,
         ulong initiatorDeviceGeneration,
         ReadOnlySpan<byte> initiatorDpd1Ref,
-        ReadOnlySpan<byte> initiatorDid1,
+        ReadOnlySpan<byte> initiatorDid2,
         ReadOnlySpan<byte> responderAccountId,
         ReadOnlySpan<byte> responderDeviceId,
         ulong responderDeviceGeneration,
@@ -210,7 +210,7 @@ public sealed class Dph2Record
             initiatorDeviceId,
             initiatorDeviceGeneration,
             initiatorDpd1Ref,
-            initiatorDid1,
+            initiatorDid2,
             responderAccountId,
             responderDeviceId,
             responderDeviceGeneration,
@@ -232,7 +232,7 @@ public sealed class Dph2Record
         _initiatorDeviceId = initiatorDeviceId.ToArray();
         InitiatorDeviceGeneration = initiatorDeviceGeneration;
         _initiatorDpd1Ref = initiatorDpd1Ref.ToArray();
-        _initiatorDid1 = initiatorDid1.ToArray();
+        _initiatorDid2 = initiatorDid2.ToArray();
         _responderAccountId = responderAccountId.ToArray();
         _responderDeviceId = responderDeviceId.ToArray();
         ResponderDeviceGeneration = responderDeviceGeneration;
@@ -272,7 +272,7 @@ public sealed class Dph2Record
     public ReadOnlyMemory<byte> InitiatorDeviceId => MessagingWireOwned.PublicCopy(_initiatorDeviceId);
     public ulong InitiatorDeviceGeneration { get; }
     public ReadOnlyMemory<byte> InitiatorDpd1Ref => MessagingWireOwned.PublicCopy(_initiatorDpd1Ref);
-    public ReadOnlyMemory<byte> InitiatorDid1 => MessagingWireOwned.PublicCopy(_initiatorDid1);
+    public ReadOnlyMemory<byte> InitiatorDid2 => MessagingWireOwned.PublicCopy(_initiatorDid2);
     public ReadOnlyMemory<byte> ResponderAccountId => MessagingWireOwned.PublicCopy(_responderAccountId);
     public ReadOnlyMemory<byte> ResponderDeviceId => MessagingWireOwned.PublicCopy(_responderDeviceId);
     public ulong ResponderDeviceGeneration { get; }
@@ -293,7 +293,7 @@ public sealed class Dph2Record
     internal ReadOnlySpan<byte> InitiatorAccountIdSpan => _initiatorAccountId;
     internal ReadOnlySpan<byte> InitiatorDeviceIdSpan => _initiatorDeviceId;
     internal ReadOnlySpan<byte> InitiatorDpd1RefSpan => _initiatorDpd1Ref;
-    internal ReadOnlySpan<byte> InitiatorDid1Span => _initiatorDid1;
+    internal ReadOnlySpan<byte> InitiatorDid2Span => _initiatorDid2;
     internal ReadOnlySpan<byte> ResponderAccountIdSpan => _responderAccountId;
     internal ReadOnlySpan<byte> ResponderDeviceIdSpan => _responderDeviceId;
     internal ReadOnlySpan<byte> ExactDpk2HashSpan => _exactDpk2Hash;
@@ -315,7 +315,7 @@ public sealed class Dph2Record
         _initiatorAccountId,
         _initiatorDeviceId,
         _initiatorDpd1Ref,
-        _initiatorDid1,
+        _initiatorDid2,
         _initiatorDeviceAgreementPublicKey,
         _initiatorEphemeralX25519PublicKey,
         _initiatorInitialRatchetX25519PublicKey);
@@ -334,7 +334,7 @@ public sealed class Dph2Record
             _initiatorDeviceId,
             initiatorGeneration.ToArray(),
             _initiatorDpd1Ref,
-            _initiatorDid1,
+            _initiatorDid2,
             _responderAccountId,
             _responderDeviceId,
             responderGeneration.ToArray(),
@@ -354,7 +354,7 @@ public sealed class Dph2Record
         ReadOnlySpan<byte> initiatorDeviceId,
         ulong initiatorDeviceGeneration,
         ReadOnlySpan<byte> initiatorDpd1Ref,
-        ReadOnlySpan<byte> initiatorDid1,
+        ReadOnlySpan<byte> initiatorDid2,
         ReadOnlySpan<byte> responderAccountId,
         ReadOnlySpan<byte> responderDeviceId,
         ulong responderDeviceGeneration,
@@ -376,8 +376,9 @@ public sealed class Dph2Record
         NonZeroExact(initiatorDeviceId, 32, nameof(initiatorDeviceId));
         Generation(initiatorDeviceGeneration, nameof(initiatorDeviceGeneration));
         Exact(initiatorDpd1Ref, 38, nameof(initiatorDpd1Ref));
-        Exact(initiatorDid1, 76, nameof(initiatorDid1));
-        _ = Deep.Protocol.ApplicationCore.ApplicationCoreCodec.DecodeDid1(initiatorDid1);
+        Exact(initiatorDid2, Deep.Protocol.ApplicationCore.DeepIdV2Codec.Did2Length,
+            nameof(initiatorDid2));
+        _ = Deep.Protocol.ApplicationCore.DeepIdV2Codec.DecodeDid2(initiatorDid2);
         NonZeroExact(responderAccountId, 32, nameof(responderAccountId));
         NonZeroExact(responderDeviceId, 32, nameof(responderDeviceId));
         Generation(responderDeviceGeneration, nameof(responderDeviceGeneration));
@@ -436,7 +437,7 @@ public sealed class Dph2Record
         ReadOnlySpan<byte> initiatorDeviceId,
         ulong initiatorDeviceGeneration,
         ReadOnlySpan<byte> initiatorDpd1Ref,
-        ReadOnlySpan<byte> initiatorDid1,
+        ReadOnlySpan<byte> initiatorDid2,
         ReadOnlySpan<byte> responderAccountId,
         ReadOnlySpan<byte> responderDeviceId,
         ulong responderDeviceGeneration,
@@ -458,7 +459,7 @@ public sealed class Dph2Record
             initiatorDeviceId,
             initiatorDeviceGeneration,
             initiatorDpd1Ref,
-            initiatorDid1,
+            initiatorDid2,
             responderAccountId,
             responderDeviceId,
             responderDeviceGeneration,
@@ -479,9 +480,10 @@ public sealed class Dph2Record
 
 public static class Dph2Codec
 {
-    public const int SmallTotalBytes = 6001;
-    public const int MediumTotalBytes = 18289;
-    public const int LargeTotalBytes = 34673;
+    public const int SmallTotalBytes = 7977;
+    public const int MediumTotalBytes = 20265;
+    public const int LargeTotalBytes = 36649;
+    private const ushort Version = 2;
     private const ushort FieldCount = 21;
 
     private static ReadOnlySpan<byte> Magic => ProtocolMagicBytes.DPH2;
@@ -498,7 +500,7 @@ public static class Dph2Codec
             _ => throw new InvalidOperationException("The owned DPH2 ciphertext has an impossible length."),
         };
         var output = new byte[totalLength];
-        var writer = new MessagingWireWriter(output, Magic, FieldCount);
+        var writer = new MessagingWireWriter(output, Magic, FieldCount, Version);
         WriteHeaderFields(ref writer, record);
         writer.Write(21, record.InitialCiphertext.Span);
         writer.Complete();
@@ -508,12 +510,14 @@ public static class Dph2Codec
     public static Dph2Record Decode(ReadOnlySpan<byte> encoded)
     {
         Span<MessagingWireFieldSlice> fields = stackalloc MessagingWireFieldSlice[FieldCount];
-        MessagingWireFraming.Preflight(encoded, Magic, FieldCount, AllowedTotalSizes, fields);
+        MessagingWireFraming.Preflight(encoded, Magic, FieldCount, AllowedTotalSizes,
+            fields, Version);
         ValidateLengths(fields);
         ValidateSemanticFields(encoded, fields);
 
         var owned = encoded.ToArray();
-        MessagingWireFraming.Preflight(owned, Magic, FieldCount, AllowedTotalSizes, fields);
+        MessagingWireFraming.Preflight(owned, Magic, FieldCount, AllowedTotalSizes,
+            fields, Version);
         ValidateLengths(fields);
         ValidateSemanticFields(owned, fields);
         var selected = Dph2SelectedPrekey.DecodeValidated(Value(owned, fields, 16));
@@ -591,8 +595,8 @@ public static class Dph2Codec
     public static byte[] GetHandshakeHeader(Dph2Record record)
     {
         ArgumentNullException.ThrowIfNull(record);
-        var output = new byte[1881];
-        var writer = new MessagingWireWriter(output, Magic, 20);
+        var output = new byte[3857];
+        var writer = new MessagingWireWriter(output, Magic, 20, Version);
         WriteHeaderFields(ref writer, record);
         writer.Complete();
         return output;
@@ -622,7 +626,7 @@ public static class Dph2Codec
         writer.Write(17, record.ActualMlKem768CiphertextSpan);
         writer.Write(18, record.InitiatorInitialRatchetX25519PublicKeySpan);
         writer.Write(19, record.InitialPayloadNonceSpan);
-        writer.Write(20, record.InitiatorDid1Span);
+        writer.Write(20, record.InitiatorDid2Span);
     }
 
     private static void ValidateLengths(ReadOnlySpan<MessagingWireFieldSlice> fields)
@@ -630,7 +634,8 @@ public static class Dph2Codec
         ReadOnlySpan<int> exact = [16, 32, 32, 8, 38, 32, 32, 8, 32, 32, 32, 2, 32, 32, 32, 97, 1088, 32, 24];
         for (var tag = 1; tag <= exact.Length; tag++)
             MessagingWireFraming.RequireLength(fields, tag, exact[tag - 1]);
-        MessagingWireFraming.RequireLength(fields, 20, 76);
+        MessagingWireFraming.RequireLength(fields, 20,
+            Deep.Protocol.ApplicationCore.DeepIdV2Codec.Did2Length);
         MessagingWireFraming.RequireLengthIn(fields, 21, [4112, 16400, 32784]);
     }
 
@@ -650,6 +655,18 @@ public static class Dph2Codec
         RequireNonZero(encoded, fields, 14, "initiatorDeviceAgreementPublicKey");
         RequireNonZero(encoded, fields, 15, "initiatorEphemeralX25519PublicKey");
         RequireNonZero(encoded, fields, 18, "initiatorInitialRatchetX25519PublicKey");
+        try
+        {
+            _ = Deep.Protocol.ApplicationCore.DeepIdV2Codec.DecodeDid2(
+                Value(encoded, fields, 20));
+        }
+        catch (FormatException exception)
+        {
+            throw MessagingWireFraming.Error(
+                MessagingWirePrevalidationStage.SemanticFields,
+                MessagingWireRejection.EmbeddedRecordRejected,
+                "DPH2 tag 20 is not an exact canonical DID2.", exception);
+        }
 
         var tuple = Value(encoded, fields, 16);
         MessagingWireFraming.RequireNonZero(tuple[..32], "selected signed X25519 prekey ID");

@@ -502,7 +502,7 @@ public sealed class MessagingWireVerificationPlanTests
             source.InitiatorDeviceId.Span,
             source.InitiatorDeviceGeneration,
             source.InitiatorDpd1Ref.Span,
-            source.InitiatorDid1.Span,
+            source.InitiatorDid2.Span,
             source.ResponderAccountId.Span,
             source.ResponderDeviceId.Span,
             source.ResponderDeviceGeneration,

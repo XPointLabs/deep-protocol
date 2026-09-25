@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
+using Deep.Protocol.AccountDirectoryV1;
 using Deep.Protocol.ApplicationCore;
 using Deep.Protocol.ContactV1;
 using Deep.Protocol.Identity;
@@ -48,21 +49,29 @@ public sealed class ManagedInitiatorInitialSessionFactory
     public InitiatorDph2PreKeyClaim BeginClaim(
         LocalDeviceX25519AgreementAuthority localAuthority,
         Dmd1LineageState exactCurrentDirectory,
-        Dab1LineageState exactCurrentAddressBinding)
+        VerifiedDeepIdV2DirectoryFreshness currentAccount,
+        ReadOnlySpan<byte> currentBootId,
+        ulong currentMonotonicSample)
     {
         ArgumentNullException.ThrowIfNull(localAuthority);
         ArgumentNullException.ThrowIfNull(exactCurrentDirectory);
-        ArgumentNullException.ThrowIfNull(exactCurrentAddressBinding);
+        ArgumentNullException.ThrowIfNull(currentAccount);
         var directory = localAuthority
             .RequireActiveDirectoryForProtocolOperation(exactCurrentDirectory)
             .Record;
-        if (exactCurrentAddressBinding.ForkLatched ||
-            !ReferenceEquals(
-                exactCurrentAddressBinding.Head.Identity,
-                exactCurrentDirectory.Head.Identity))
+        var checkpoint = currentAccount.CurrentCheckpoint;
+        if (checkpoint is null ||
+            currentAccount.ResultKind != AccountDirectoryAdp1ResultKind.CurrentValue ||
+            !currentAccount.IsCurrentAtMonotonic(currentBootId,
+                currentMonotonicSample) ||
+            !Fixed(currentAccount.NetworkId.Span, localAuthority.NetworkId.Span) ||
+            !Fixed(checkpoint.Directory.Record.CanonicalBytes.Span,
+                directory.CanonicalBytes.Span) ||
+            !Fixed(checkpoint.Binding.Identity.Account.Certificate.NetworkId.Span,
+                localAuthority.NetworkId.Span))
         {
             throw new CryptographicException(
-                "The current DID1 address binding and DMD1 directory do not share exact authority.");
+                "The current DID2 proof and local DMD1 directory do not share exact authority.");
         }
         var operationId = RandomNonzero32();
         return BeginClaimCore(
@@ -70,7 +79,7 @@ public sealed class ManagedInitiatorInitialSessionFactory
                 localAuthority,
                 directory.DirectoryGeneration,
                 directory.RecordHash.Span,
-                exactCurrentAddressBinding.Head.DeepId.CanonicalBytes.Span,
+                checkpoint.Binding.DeepId.CanonicalBytes.Span,
                 operationId),
             FillProductionEntropy);
     }
@@ -194,7 +203,7 @@ public sealed class ManagedInitiatorInitialSessionFactory
         try
         {
             var leased = InitiatorAgreementFacts.FromLease(
-                lease, material.Local.ExactDid1);
+                lease, material.Local.ExactDid2);
             material.Local.RequireSame(leased);
             RequireOfferingAndLocalBinding(verifiedOffering, verifiedOffering.Record, leased);
             ephemeralPrivate = material.CopyEphemeralPrivate();
@@ -261,7 +270,7 @@ public sealed class ManagedInitiatorInitialSessionFactory
                 local.AccountId,
                 local.DeviceId,
                 Dpd1Reference(local.ExactDpd1Hash),
-                local.ExactDid1,
+                local.ExactDid2,
                 local.AgreementPublicKey,
                 ephemeralPublic,
                 ratchetPublic);
@@ -320,7 +329,7 @@ public sealed class ManagedInitiatorInitialSessionFactory
                 local.AccountId,
                 local.DeviceId,
                 Dpd1Reference(local.ExactDpd1Hash),
-                local.ExactDid1,
+                local.ExactDid2,
                 local.AgreementPublicKey,
                 ephemeralPublic,
                 ratchetPublic);
@@ -424,6 +433,13 @@ public sealed class ManagedInitiatorInitialSessionFactory
     }
 
 #if DEEP_PROTOCOL_RECOVERY_TEST_SEAM
+    private static byte[] TestDid2MlDsaPublicKey()
+    {
+        var publicKey = new byte[1952];
+        publicKey.AsSpan().Fill(0xA5);
+        return publicKey;
+    }
+
     private sealed class TestAgreement : IDisposable
     {
         private readonly SecretBuffer _privateScalar;
@@ -450,13 +466,14 @@ public sealed class ManagedInitiatorInitialSessionFactory
         {
             var privateCopy = agreementPrivateScalar.ToArray();
             byte[]? publicKey = null;
-            byte[]? exactDid1 = null;
+            byte[]? exactDid2 = null;
             try
             {
                 MessagingCryptoValidation.NonZeroExact(privateCopy, 32, nameof(agreementPrivateScalar));
                 publicKey = ScalarMult.Base(privateCopy);
-                exactDid1 = ApplicationCoreCodec.AuthorDid1(
+                exactDid2 = DeepIdV2Codec.AuthorDid2(
                     exactDirectoryHash,
+                    TestDid2MlDsaPublicKey(),
                     exactDpd1Hash[..16]).CanonicalBytes.ToArray();
                 var facts = new InitiatorAgreementFacts(
                     networkId,
@@ -466,7 +483,7 @@ public sealed class ManagedInitiatorInitialSessionFactory
                     exactDpd1Hash,
                     directoryGeneration,
                     exactDirectoryHash,
-                    exactDid1,
+                    exactDid2,
                     publicKey,
                     operationBinding);
                 return new TestAgreement(
@@ -477,7 +494,7 @@ public sealed class ManagedInitiatorInitialSessionFactory
             {
                 Zero(privateCopy);
                 Zero(publicKey);
-                Zero(exactDid1);
+                Zero(exactDid2);
             }
         }
 
@@ -918,7 +935,7 @@ public sealed class InitiatorDph2ClaimPreparation : IDisposable
             _local.DeviceId,
             _local.DeviceGeneration,
             Dpd1Reference(_local.ExactDpd1Hash),
-            _local.ExactDid1,
+            _local.ExactDid2,
             offering.ResponderAccountIdSpan,
             offering.ResponderDeviceIdSpan,
             offering.ResponderDeviceGeneration,
@@ -1335,7 +1352,7 @@ internal sealed class InitiatorAgreementFacts
         ReadOnlySpan<byte> exactDpd1Hash,
         ulong directoryGeneration,
         ReadOnlySpan<byte> exactDirectoryHash,
-        ReadOnlySpan<byte> exactDid1,
+        ReadOnlySpan<byte> exactDid2,
         ReadOnlySpan<byte> agreementPublicKey,
         ReadOnlySpan<byte> operationBinding)
     {
@@ -1344,7 +1361,7 @@ internal sealed class InitiatorAgreementFacts
         MessagingCryptoValidation.NonZeroExact(deviceId, 32, nameof(deviceId));
         MessagingCryptoValidation.NonZeroExact(exactDpd1Hash, 32, nameof(exactDpd1Hash));
         MessagingCryptoValidation.NonZeroExact(exactDirectoryHash, 32, nameof(exactDirectoryHash));
-        _ = ApplicationCoreCodec.DecodeDid1(exactDid1);
+        _ = DeepIdV2Codec.DecodeDid2(exactDid2);
         MessagingCryptoValidation.NonZeroExact(agreementPublicKey, 32, nameof(agreementPublicKey));
         MessagingCryptoValidation.NonZeroExact(operationBinding, 32, nameof(operationBinding));
         if (deviceGeneration == 0 || directoryGeneration == 0)
@@ -1356,7 +1373,7 @@ internal sealed class InitiatorAgreementFacts
         ExactDpd1Hash = exactDpd1Hash.ToArray();
         DirectoryGeneration = directoryGeneration;
         ExactDirectoryHash = exactDirectoryHash.ToArray();
-        ExactDid1 = exactDid1.ToArray();
+        ExactDid2 = exactDid2.ToArray();
         AgreementPublicKey = agreementPublicKey.ToArray();
         OperationBinding = operationBinding.ToArray();
     }
@@ -1368,7 +1385,7 @@ internal sealed class InitiatorAgreementFacts
     internal byte[] ExactDpd1Hash { get; }
     internal ulong DirectoryGeneration { get; }
     internal byte[] ExactDirectoryHash { get; }
-    internal byte[] ExactDid1 { get; }
+    internal byte[] ExactDid2 { get; }
     internal byte[] AgreementPublicKey { get; }
     internal byte[] OperationBinding { get; }
 
@@ -1376,7 +1393,7 @@ internal sealed class InitiatorAgreementFacts
         LocalDeviceX25519AgreementAuthority authority,
         ulong directoryGeneration,
         ReadOnlySpan<byte> exactDirectoryHash,
-        ReadOnlySpan<byte> exactDid1,
+        ReadOnlySpan<byte> exactDid2,
         ReadOnlySpan<byte> operationBinding)
     {
         ArgumentNullException.ThrowIfNull(authority);
@@ -1388,14 +1405,14 @@ internal sealed class InitiatorAgreementFacts
             authority.ExactDpd1Hash.Span,
             directoryGeneration,
             exactDirectoryHash,
-            exactDid1,
+            exactDid2,
             authority.AgreementPublicKey.Span,
             operationBinding);
     }
 
     internal static InitiatorAgreementFacts FromLease(
         LocalDeviceX25519AgreementLease lease,
-        ReadOnlySpan<byte> exactDid1) =>
+        ReadOnlySpan<byte> exactDid2) =>
         new(
             lease.NetworkId.Span,
             lease.AccountId.Span,
@@ -1404,7 +1421,7 @@ internal sealed class InitiatorAgreementFacts
             lease.ExactDpd1Hash.Span,
             lease.DirectoryGeneration,
             lease.ExactDirectoryHash.Span,
-            exactDid1,
+            exactDid2,
             lease.AgreementPublicKey.Span,
             lease.OperationBinding.Span);
 
@@ -1418,7 +1435,7 @@ internal sealed class InitiatorAgreementFacts
             !Fixed(DeviceId, other.DeviceId) ||
             !Fixed(ExactDpd1Hash, other.ExactDpd1Hash) ||
             !Fixed(ExactDirectoryHash, other.ExactDirectoryHash) ||
-            !Fixed(ExactDid1, other.ExactDid1) ||
+            !Fixed(ExactDid2, other.ExactDid2) ||
             !Fixed(AgreementPublicKey, other.AgreementPublicKey) ||
             !Fixed(OperationBinding, other.OperationBinding))
         {

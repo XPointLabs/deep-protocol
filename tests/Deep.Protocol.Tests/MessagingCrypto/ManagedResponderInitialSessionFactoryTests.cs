@@ -565,8 +565,9 @@ public sealed class ManagedResponderInitialSessionFactoryTests
                 Bytes(32, 0x22),
                 17,
                 Bytes(38, 0x32),
-                ApplicationCoreCodec.AuthorDid1(
-                    Bytes(32, 0x33), Bytes(16, 0x34)).CanonicalBytes.Span,
+                DeepIdV2Codec.AuthorDid2(
+                    Bytes(32, 0x33), Bytes(1952, 0x35),
+                    Bytes(16, 0x34)).CanonicalBytes.Span,
                 offering.ResponderAccountId.Span,
                 offering.ResponderDeviceId.Span,
                 offering.ResponderDeviceGeneration,
