@@ -16,32 +16,44 @@ public interface IAccountDirectoryAdf1RootSigner
 }
 
 /// <summary>
-/// Authors the initial, single-covered-head DID2 forward checkpoint. Both
-/// exact heads are re-authenticated against the verified network authority;
-/// the caller cannot supply a raw hash, leaf, authority reference or receipt.
-/// Later periodic checkpoints require a separate covered-set authoring path.
+/// Authors the initial DID2 forward checkpoint over a complete, contiguous
+/// signed-head lineage from genesis through the target's predecessor. Exact
+/// heads are re-authenticated against the verified network authority; the
+/// caller cannot supply a raw hash, leaf, authority reference or receipt.
+/// Later periodic checkpoints require a separate authoring path.
 /// </summary>
 public static class AccountDirectoryAdf1OfflineAuthor
 {
-    public static async ValueTask<byte[]> AuthorInitialAsync(
+    public static ValueTask<byte[]> AuthorInitialAsync(
         VerifiedXPointNetworkAuthority authority,
         AccountDirectoryProtectedLkg protectedSource,
+        AccountDirectoryProtectedLkg target,
+        ulong issuedAtUnixSeconds, ushort minimumReader,
+        IReadOnlyList<IAccountDirectoryAdf1RootSigner> rootSigners,
+        CancellationToken cancellationToken = default) =>
+        AuthorInitialAsync(authority, [protectedSource], target,
+            issuedAtUnixSeconds, minimumReader, rootSigners,
+            cancellationToken);
+
+    public static async ValueTask<byte[]> AuthorInitialAsync(
+        VerifiedXPointNetworkAuthority authority,
+        IReadOnlyList<AccountDirectoryProtectedLkg> coveredHeads,
         AccountDirectoryProtectedLkg target,
         ulong issuedAtUnixSeconds, ushort minimumReader,
         IReadOnlyList<IAccountDirectoryAdf1RootSigner> rootSigners,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(authority);
-        ArgumentNullException.ThrowIfNull(protectedSource);
+        ArgumentNullException.ThrowIfNull(coveredHeads);
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(rootSigners);
         cancellationToken.ThrowIfCancellationRequested();
-        if (rootSigners.Count < authority.RootThreshold ||
+        if (coveredHeads.Count is < 1 or > 4096 ||
+            coveredHeads.Any(static head => head is null) ||
+            rootSigners.Count < authority.RootThreshold ||
             rootSigners.Count > authority.RootKeys.Count ||
             minimumReader < 2 || target.Head.MinimumReader < 2 ||
             minimumReader < target.Head.MinimumReader ||
-            protectedSource.LogGeneration != 0 || protectedSource.TreeSize != 0 ||
-            target.LogGeneration <= protectedSource.LogGeneration ||
             target.TreeSize == 0 ||
             issuedAtUnixSeconds < target.Head.ValidFrom ||
             issuedAtUnixSeconds >= target.Head.ValidUntil ||
@@ -50,8 +62,34 @@ public static class AccountDirectoryAdf1OfflineAuthor
             throw new CryptographicException(
                 "The initial ADF1 source, target, signer threshold, reader or issue time is invalid.");
 
+        var source = coveredHeads[0];
+        if (source.LogGeneration != 0 || source.TreeSize != 0)
+            throw new CryptographicException(
+                "The initial ADF1 covered set must begin at DID2 genesis.");
         _ = DeepIdV2DirectoryBootstrapVerifier.RestoreGenesis(authority,
-            protectedSource.ExactAdh1, protectedSource.CoreHash.Span);
+            source.ExactAdh1, source.CoreHash.Span);
+        for (var index = 1; index < coveredHeads.Count; index++)
+        {
+            var previous = coveredHeads[index - 1];
+            var current = coveredHeads[index];
+            _ = AccountDirectoryProtectedLkgFactory.Restore(authority,
+                current.ExactAdh1, current.CoreHash.Span);
+            if (current.LogGeneration != (ulong)index ||
+                current.TreeSize < previous.TreeSize ||
+                !CryptographicOperations.FixedTimeEquals(
+                    current.Head.PredecessorAdh1CoreHash.Span,
+                    previous.CoreHash.Span))
+                throw new CryptographicException(
+                    "The initial ADF1 covered-head lineage is incomplete.");
+        }
+        var lastCovered = coveredHeads[^1];
+        if (target.LogGeneration != (ulong)coveredHeads.Count ||
+            target.TreeSize < lastCovered.TreeSize ||
+            !CryptographicOperations.FixedTimeEquals(
+                target.Head.PredecessorAdh1CoreHash.Span,
+                lastCovered.CoreHash.Span))
+            throw new CryptographicException(
+                "The initial ADF1 target is not the next signed head.");
         AccountDirectoryCurrentProofVerifier.VerifyAdhAuthorityAndWitnessClosure(
             authority, target.Head, requireCurrentAuthority: true);
 
@@ -75,17 +113,20 @@ public static class AccountDirectoryAdf1OfflineAuthor
         selected.Sort(static (left, right) =>
             left.Id.AsSpan().SequenceCompareTo(right.Id));
 
-        var coveredRoot = AccountDirectoryCurrentProofVerifier
-            .ComputeCoveredHeadLeaf(protectedSource.LogGeneration,
-                protectedSource.TreeSize, protectedSource.CoreHash.Span);
+        var coveredLeaves = coveredHeads.Select(static head =>
+            AccountDirectoryCurrentProofVerifier.ComputeCoveredHeadLeaf(
+                head.LogGeneration, head.TreeSize, head.CoreHash.Span)).ToArray();
+        var coveredRoot = AccountDirectoryProofMaterialAuthor.TreeHash(
+            coveredLeaves, 0, coveredLeaves.Length);
         var targetReference = AccountDirectoryCrypto.CreateReference(
             ProtocolMagicBytes.ADH1, 1, target.CoreHash.Span);
         var placeholders = selected.Select(static item =>
             new AccountDirectoryAdf1RootReceipt(item.Id,
                 Enumerable.Repeat((byte)1, 64).ToArray())).ToArray();
         var unsigned = new AccountDirectoryAdf1(authority.NetworkId.Span,
-            0, new byte[32], protectedSource.LogGeneration,
-            protectedSource.LogGeneration, 1, coveredRoot, targetReference,
+            0, new byte[32], 0,
+            lastCovered.LogGeneration, (ulong)coveredHeads.Count,
+            coveredRoot, targetReference,
             target.TreeSize, target.AppendLogMerkleRoot.Span,
             target.CurrentValueMapRoot.Span,
             authority.AuthorityCoreReference.Span, issuedAtUnixSeconds,
@@ -114,8 +155,9 @@ public static class AccountDirectoryAdf1OfflineAuthor
                 finally { CryptographicOperations.ZeroMemory(signature); }
             }
             var signed = new AccountDirectoryAdf1(authority.NetworkId.Span,
-                0, new byte[32], protectedSource.LogGeneration,
-                protectedSource.LogGeneration, 1, coveredRoot, targetReference,
+                0, new byte[32], 0,
+                lastCovered.LogGeneration, (ulong)coveredHeads.Count,
+                coveredRoot, targetReference,
                 target.TreeSize, target.AppendLogMerkleRoot.Span,
                 target.CurrentValueMapRoot.Span,
                 authority.AuthorityCoreReference.Span, issuedAtUnixSeconds,

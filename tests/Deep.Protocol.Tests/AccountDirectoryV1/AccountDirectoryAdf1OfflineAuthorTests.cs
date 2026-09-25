@@ -7,6 +7,48 @@ namespace Deep.Protocol.Tests.AccountDirectoryV1;
 public sealed partial class AccountDirectoryFreshnessVerificationTests
 {
     [Fact]
+    public async Task InitialAdf1OfflineAuthor_CoversEveryPriorSignedHead()
+    {
+        var fixture = AuthorityFixture.Create();
+        AccountDirectoryProtectedLkg Restore(AccountDirectoryAdh1 head) =>
+            AccountDirectoryProtectedLkgFactory.Restore(fixture.Verified,
+                AccountDirectoryAdh1Codec.Encode(head),
+                AccountDirectoryCrypto.ComputeAdh1CoreHash(head));
+        var genesis = Restore(fixture.Head(0, new byte[32], 0,
+            AccountDirectoryRfc6962.ComputeEmptyTreeHash(),
+            DeepIdV2DirectorySparseMap.EmptyMapRoot.ToArray(),
+            minimumReader: 2));
+        var covered = new List<AccountDirectoryProtectedLkg> { genesis };
+        for (ulong generation = 1; generation <= 3; generation++)
+            covered.Add(Restore(fixture.Head(generation,
+                covered[^1].CoreHash.ToArray(), generation,
+                Bytes(32, checked((byte)(0x70 + generation))),
+                Bytes(32, checked((byte)(0x80 + generation))),
+                minimumReader: 2)));
+        var target = Restore(fixture.Head(4,
+            covered[^1].CoreHash.ToArray(), 3,
+            covered[^1].AppendLogMerkleRoot.ToArray(),
+            covered[^1].CurrentValueMapRoot.ToArray(),
+            minimumReader: 2));
+        var exact = await AccountDirectoryAdf1OfflineAuthor.AuthorInitialAsync(
+            fixture.Verified, covered, target, 1_700_000_400, 2,
+            [fixture.InitialAdf1Signer()]);
+        var checkpoint = AccountDirectoryAdf1Codec.Decode(exact);
+        Assert.Equal(0UL, checkpoint.CoveredFirstAdhGeneration);
+        Assert.Equal(3UL, checkpoint.CoveredLastAdhGeneration);
+        Assert.Equal(4UL, checkpoint.CoveredHeadCount);
+        var leaves = covered.Select(static head =>
+            AccountDirectoryCurrentProofVerifier.ComputeCoveredHeadLeaf(
+                head.LogGeneration, head.TreeSize, head.CoreHash.Span)).ToArray();
+        Assert.Equal(AccountDirectoryProofMaterialAuthor.TreeHash(leaves, 0,
+                leaves.Length), checkpoint.CoveredHeadMerkleRoot.ToArray());
+        await Assert.ThrowsAsync<CryptographicException>(async () =>
+            await AccountDirectoryAdf1OfflineAuthor.AuthorInitialAsync(
+                fixture.Verified, [genesis, covered[2], covered[3]], target,
+                1_700_000_400, 2, [fixture.InitialAdf1Signer()]));
+    }
+
+    [Fact]
     public async Task InitialAdf1OfflineAuthor_BindsExactVerifiedHeadsAndRootReceipt()
     {
         var fixture = AuthorityFixture.Create();
