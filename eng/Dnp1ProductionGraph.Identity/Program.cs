@@ -676,7 +676,10 @@ internal static class GraphPolicy
                 // Initial offline-root DID2 ADF1 authoring from exact signed heads.
                 "Deep.Protocol|12570|CB998E79C27503A42B356EB675C047840C7DDBB7F62308246E6DF1FE9D5A7E7D",
                 // Initial ADF1 covers every authenticated head through the target predecessor.
-                "Deep.Protocol|12571|B7A58300C701F92F4F5E271589B0CB3673D62AFDB36BDD52884E03A5A0D2D4D6"
+                "Deep.Protocol|12571|B7A58300C701F92F4F5E271589B0CB3673D62AFDB36BDD52884E03A5A0D2D4D6",
+                // Internal per-codec frame-version selection for the DID2 DPH2 cutover.
+                // The public API/member count is unchanged; Debug metadata is repinned.
+                "Deep.Protocol|12571|FFEB3C54E51BF437DD32F5FC90EF8A2CB5FD02E6B521263708A4E83C7F739864"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

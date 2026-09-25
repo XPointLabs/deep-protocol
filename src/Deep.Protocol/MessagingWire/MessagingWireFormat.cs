@@ -81,7 +81,8 @@ internal static class MessagingWireFraming
         ReadOnlySpan<byte> expectedMagic,
         ushort expectedFieldCount,
         ReadOnlySpan<int> allowedTotalSizes,
-        Span<MessagingWireFieldSlice> fields)
+        Span<MessagingWireFieldSlice> fields,
+        ushort expectedVersion = Version)
     {
         if (!Contains(allowedTotalSizes, encoded.Length))
         {
@@ -102,12 +103,12 @@ internal static class MessagingWireFraming
                 "The record magic is not accepted by this clean-break decoder.");
         }
 
-        if (BinaryPrimitives.ReadUInt16BigEndian(encoded[4..6]) != Version)
+        if (BinaryPrimitives.ReadUInt16BigEndian(encoded[4..6]) != expectedVersion)
         {
             throw Error(
                 MessagingWirePrevalidationStage.FixedHeader,
                 MessagingWireRejection.WrongVersion,
-                "The record version is not frozen version 1.");
+                "The record version is not the exact version selected by this codec.");
         }
 
         if (BinaryPrimitives.ReadUInt16BigEndian(encoded[6..8]) != Suite)
@@ -286,14 +287,15 @@ internal ref struct MessagingWireWriter
     internal MessagingWireWriter(
         Span<byte> destination,
         ReadOnlySpan<byte> magic,
-        ushort fieldCount)
+        ushort fieldCount,
+        ushort version = MessagingWireFraming.Version)
     {
         _destination = destination;
         _fieldCount = fieldCount;
         _offset = MessagingWireFraming.RecordHeaderLength;
         _nextField = 0;
         magic.CopyTo(destination);
-        BinaryPrimitives.WriteUInt16BigEndian(destination[4..6], MessagingWireFraming.Version);
+        BinaryPrimitives.WriteUInt16BigEndian(destination[4..6], version);
         BinaryPrimitives.WriteUInt16BigEndian(destination[6..8], MessagingWireFraming.Suite);
         BinaryPrimitives.WriteUInt16BigEndian(destination[8..10], fieldCount);
         BinaryPrimitives.WriteUInt16BigEndian(destination[10..12], 0);
