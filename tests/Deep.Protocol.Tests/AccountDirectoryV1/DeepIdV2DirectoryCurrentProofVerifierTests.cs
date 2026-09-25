@@ -142,6 +142,10 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
             initialLkg.LogGeneration, initialLkg.CoreHash.Span,
             1, new byte[38], new byte[32]);
         var query = VerifiedDeepIdV2DirectoryQuery.VerifyBinding(adl, binding);
+        var did2Query = VerifiedDeepIdV2DirectoryQuery.VerifyDid2(adl,
+            binding.DeepId);
+        Assert.Equal(query.DirectoryLeafKey.ToArray(),
+            did2Query.DirectoryLeafKey.ToArray());
 
         var wireRequestBytes = DeepIdV2DirectoryProofWireCodec.EncodeRequest(
             adl, binding.DeepId, nonce, request.BootId.Span,
@@ -185,6 +189,13 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
             authority.Verified, package.ExactAdh1, package.ExactDtt1,
             package.ExactAdp1V2, nonce, query,
             Window(), initialLkg, 1, 2, pq);
+        var resolvedByDid2 =
+            DeepIdV2DirectoryCurrentProofVerifier.VerifyRequestedDid2(
+                authority.Verified, package.ExactAdh1, package.ExactDtt1,
+                package.ExactAdp1V2, nonce, did2Query,
+                Window(), initialLkg, 1, 2, pq);
+        Assert.Equal(binding.DeepId.CanonicalBytes.ToArray(),
+            resolvedByDid2.CurrentCheckpoint!.Binding.DeepId.CanonicalBytes.ToArray());
 
         Assert.Equal(AccountDirectoryAdp1ResultKind.CurrentValue,
             verified.ResultKind);
@@ -207,9 +218,13 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
             Window().CurrentSample + 3);
         Assert.Equal(verified.TrustedLowerUnixSeconds + 3,
             advanced.TrustedLowerUnixSeconds);
-        var (_, _, _, otherAuthorization) = await
+        var (_, _, otherBinding, otherAuthorization) = await
             Dnp1IdentityAuthoringV1Tests.CreateRealDid2DirectoryGenesisWithDcaAsync(
-                networkOverride: Bytes(16, 0x66));
+                networkOverride: Bytes(16, 0x66),
+                mnemonicOverride: Dnp1IdentityAuthoringV1Tests.OtherMnemonic);
+        Assert.Throws<AccountDirectoryAdl1FormatException>(() =>
+            VerifiedDeepIdV2DirectoryQuery.VerifyDid2(adl,
+                otherBinding.DeepId));
         Assert.Equal("AuthorizationIdentityMismatch",
             Assert.Throws<AccountDirectoryFreshnessVerificationException>(() =>
                 DeepIdV2CurrentContactAuthorizationVerifier.Verify(

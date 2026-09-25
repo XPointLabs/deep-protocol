@@ -670,7 +670,9 @@ internal static class GraphPolicy
                 // DID2 root-signed forward-tail authoring and exact protected-floor witness API.
                 "Deep.Protocol|12556|6F31320F7530592A49B1799F0EA55C3C9F6A46EC3C80F17C13391F3261E170A8",
                 // Verifier-issued exact protected floor and root-forward lineage for client LKG CAS.
-                "Deep.Protocol|12560|BBCD821526FCBD636863480EC1E309679D9026F5A31D70C4CA8909AB106917D7"
+                "Deep.Protocol|12560|BBCD821526FCBD636863480EC1E309679D9026F5A31D70C4CA8909AB106917D7",
+                // DID2-only peer lookup with exact identity binding; no caller-supplied DAB2.
+                "Deep.Protocol|12564|DA02B42C0553A77ED902363BAC9CA6C341865E58C39489E6F87CF7430708901C"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

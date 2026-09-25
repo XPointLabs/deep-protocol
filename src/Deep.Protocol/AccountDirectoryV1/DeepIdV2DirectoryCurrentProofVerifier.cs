@@ -15,18 +15,21 @@ public sealed class VerifiedDeepIdV2DirectoryQuery
     private readonly byte[] networkId;
     private readonly byte[] leaf;
     private readonly byte[] minimumAdhHash;
+    private readonly byte[] exactDid2;
 
     private VerifiedDeepIdV2DirectoryQuery(ParsedAdl1V2 adl1,
-        ReadOnlySpan<byte> directoryLeafKey)
+        ReadOnlySpan<byte> directoryLeafKey, ParsedDid2 did2)
     {
         networkId = adl1.NetworkId.ToArray();
         leaf = directoryLeafKey.ToArray();
+        exactDid2 = did2.CanonicalBytes.ToArray();
         MinimumAdhGeneration = adl1.MinimumAdhGeneration;
         minimumAdhHash = adl1.MinimumAdhHash.ToArray();
     }
 
     public ReadOnlyMemory<byte> NetworkId => networkId.ToArray();
     public ReadOnlyMemory<byte> DirectoryLeafKey => leaf.ToArray();
+    public ReadOnlyMemory<byte> ExactDid2 => exactDid2.ToArray();
     public ulong MinimumAdhGeneration { get; }
     public ReadOnlyMemory<byte> MinimumAdhHash => minimumAdhHash.ToArray();
 
@@ -44,16 +47,27 @@ public sealed class VerifiedDeepIdV2DirectoryQuery
                 "DID2 ADL1 network differs from the verified account network.");
         var leaf = DeepIdV2AccountDirectoryLookupCodec
             .VerifyAndGetDirectoryLeafKey(adl1, trustedBinding);
-        return new VerifiedDeepIdV2DirectoryQuery(adl1, leaf);
+        return new VerifiedDeepIdV2DirectoryQuery(adl1, leaf,
+            trustedBinding.DeepId);
+    }
+
+    public static VerifiedDeepIdV2DirectoryQuery VerifyDid2(
+        ParsedAdl1V2 adl1, ParsedDid2 requestedDid2)
+    {
+        ArgumentNullException.ThrowIfNull(adl1);
+        ArgumentNullException.ThrowIfNull(requestedDid2);
+        var leaf = DeepIdV2AccountDirectoryLookupCodec.MatchExactDid2(
+            adl1, requestedDid2);
+        return new VerifiedDeepIdV2DirectoryQuery(adl1, leaf,
+            requestedDid2);
     }
 }
 
 /// <summary>
 /// Non-forgeable, nonce-bound DID2 directory result. The positive closure is
-/// currently limited to exact generation-zero account/binding/checkpoint
-/// admissions. Direct signed successor heads (including new genesis leaves)
-/// are accepted with append consistency; beyond-horizon forward checkpoints
-/// still fail closed.
+/// limited to exact generation-zero account/binding/checkpoint admissions.
+/// Direct signed successors and root-authorized forward checkpoint chains are
+/// accepted only with the protected-floor and append consistency proofs.
 /// </summary>
 public sealed class VerifiedDeepIdV2DirectoryFreshness
 {
@@ -143,6 +157,25 @@ public static class DeepIdV2DirectoryCurrentProofVerifier
         return VerifyCore(authority, exactAdh1, exactDtt1, exactAdp1V2,
             callerNonce, query.DirectoryLeafKey.Span, monotonic, protectedLkg,
             deploymentProfileId, supportedReader, mlDsa65, query);
+    }
+
+    public static VerifiedDeepIdV2DirectoryFreshness VerifyRequestedDid2(
+        VerifiedXPointNetworkAuthority authority,
+        ReadOnlyMemory<byte> exactAdh1,
+        ReadOnlyMemory<byte> exactDtt1,
+        ReadOnlyMemory<byte> exactAdp1V2,
+        ReadOnlySpan<byte> callerNonce,
+        VerifiedDeepIdV2DirectoryQuery query,
+        AccountDirectoryMonotonicRequestWindow monotonic,
+        AccountDirectoryProtectedLkg? protectedLkg,
+        ushort deploymentProfileId, ushort supportedReader,
+        IDeepMlDsa65Verifier mlDsa65)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        return VerifyCore(authority, exactAdh1, exactDtt1, exactAdp1V2,
+            callerNonce, query.DirectoryLeafKey.Span, monotonic,
+            protectedLkg, deploymentProfileId, supportedReader, mlDsa65,
+            query);
     }
 
     internal static VerifiedDeepIdV2DirectoryFreshness VerifyExactLeafForAuthor(
@@ -236,8 +269,11 @@ public static class DeepIdV2DirectoryCurrentProofVerifier
                 current = DeepIdV2GenesisAdmissionVerifier.Verify(admission,
                     upper, deploymentProfileId, supportedReader, mlDsa65);
                 if (!Fixed(current.Checkpoint.DirectoryLeafKey.Span,
-                        queriedDirectoryLeafKey))
-                    Fail("CurrentValueMismatch", "Verified ADC1 V2 leaf differs from the requested DID2 leaf.");
+                        queriedDirectoryLeafKey) ||
+                    boundQuery is not null && !Fixed(
+                        current.Binding.DeepId.CanonicalBytes.Span,
+                        boundQuery.ExactDid2.Span))
+                    Fail("CurrentValueMismatch", "Verified ADC1 V2 identity differs from the requested DID2.");
             }
 
             var remaining = head.ValidUntil > upper ? head.ValidUntil - upper : 0;
