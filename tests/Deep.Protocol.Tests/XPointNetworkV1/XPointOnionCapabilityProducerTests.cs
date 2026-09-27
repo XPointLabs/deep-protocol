@@ -17,6 +17,156 @@ namespace Deep.Protocol.Tests.XPointNetworkV1;
 public sealed class XPointOnionCapabilityProducerTests
 {
     [Fact]
+    public async Task Did2Xpc1Claim_RequiresBothCurrentSelectedReplicaSignatures()
+    {
+        var context = await Fixture.Create(networkMarker: 0x01).VerifyAsync();
+        var fixture = Deep.Protocol.Tests.ContactV2
+            .DeepIdV2PreKeyClaimCommitmentTests.Build(Dpk2PrekeyKind.LastResort);
+        var original = DeepIdV2PreKeyClaimRequestCodec.Decode(fixture.Request);
+        var sourceOffering = DeepIdV2Dpk2Codec.Decode(fixture.Offering).Record;
+        // This test owns selected-replica signatures, not DPK2 issuer authority.
+        var scopedOffering = new Dpk2Record(context.NetworkId.Span,
+            sourceOffering.ResponderAccountId.Span,
+            sourceOffering.ResponderDeviceId.Span,
+            sourceOffering.ResponderDeviceGeneration,
+            sourceOffering.ResponderDpd1Ref.Span,
+            sourceOffering.DeviceDirectoryGeneration,
+            sourceOffering.DeviceDirectoryHeadHash.Span,
+            sourceOffering.PrekeyServiceGeneration,
+            sourceOffering.InventoryEpoch, sourceOffering.BundleId.Span,
+            sourceOffering.PolicyGeneration, sourceOffering.NotBefore,
+            sourceOffering.IssuedAt, sourceOffering.ExpiresAt,
+            sourceOffering.DeviceAgreementPublicKey.Span,
+            sourceOffering.SignedX25519PrekeyId.Span,
+            sourceOffering.SignedX25519PrekeyPublic.Span,
+            sourceOffering.SignedX25519PrekeySignature.Span,
+            sourceOffering.OneTimeX25519PrekeyId.Span,
+            sourceOffering.OneTimeX25519PrekeyPublic.Span,
+            sourceOffering.MlKemPrekeyId.Span,
+            sourceOffering.MlKem768EncapsulationKey.Span,
+            sourceOffering.MlKemKind, sourceOffering.ReuseLimit,
+            sourceOffering.MlKemPrekeySignature.Span,
+            sourceOffering.BundleSignature.Span);
+        var offeringBytes = DeepIdV2Dpk2Codec.Encode(scopedOffering);
+        var sourceManifest = DeepIdV2PreKeyManifestCodec.Decode(fixture.Manifest);
+        var manifestFields = Enumerable.Range(1, 15)
+            .Select(sourceManifest.Field).ToArray();
+        manifestFields[0] = context.NetworkId;
+        manifestFields[10] = DeepIdV2Dpk2Codec.Decode(offeringBytes).ExactHash;
+        var manifestBytes = DeepIdV2PreKeyManifestCodec.Encode(manifestFields,
+            sourceManifest.Field(16).Span);
+        var manifest = DeepIdV2PreKeyManifestCodec.Decode(manifestBytes);
+        var placement = ContactServicePlacementFactory.Create(context,
+            ContactServiceRequestKind.ClaimPreKey, manifest.Field(2));
+        var requestBytes = DeepIdV2PreKeyClaimRequestCodec.Encode(
+            context.NetworkId.Span, original.Field(2).Span,
+            placement.ViewHash.Span, placement.PlacementHash.Span,
+            BinaryPrimitives.ReadUInt64BigEndian(original.Field(5).Span),
+            BinaryPrimitives.ReadUInt64BigEndian(original.Field(6).Span),
+            original.Field(16).Span, original.Field(17).Span,
+            original.Field(18).Span, original.Field(19).Span,
+            original.Field(21).Span);
+        var request = DeepIdV2PreKeyClaimRequestCodec.Decode(requestBytes);
+        foreach (var tag in new[] { 2, 5, 6, 16, 17, 18, 19, 20, 21, 22 })
+            Assert.Equal(original.Field(tag).ToArray(), request.Field(tag).ToArray());
+        Assert.Equal(DeepIdV2PreKeyClaimCommitment.TupleLength,
+            DeepIdV2PreKeyClaimCommitment.CreateTuple(requestBytes,
+                offeringBytes, manifestBytes, 3, 1).Length);
+        var payload = Deep.Protocol.Tests.ContactV2
+            .DeepIdV2PreKeyClaimResultCodecTests.SuccessPayload(
+                (requestBytes, offeringBytes, manifestBytes));
+        var rows = new byte[193];
+        rows[0] = 2;
+        var input = DeepIdV2PreKeyClaimCommitment.CreateReplicaSignatureInput(
+            requestBytes, offeringBytes, manifestBytes, 3, 1);
+        try
+        {
+            var ordered = placement.RankedReplicaNodeIds
+                .OrderBy(static id => Convert.ToHexString(id.Span))
+                .ToArray();
+            for (var index = 0; index < ordered.Length; index++)
+            {
+                var nodeId = ordered[index];
+                var offset = 1 + index * 96;
+                nodeId.Span.CopyTo(rows.AsSpan(offset, 32));
+                var nodeIndex = nodeId.Span[0] - 0x10;
+                var pair = PublicKeyAuth.GenerateKeyPair(Bytes(32,
+                    checked((byte)(0x90 + nodeIndex * 8))));
+                try
+                {
+                    PublicKeyAuth.SignDetached(input, pair.PrivateKey)
+                        .CopyTo(rows, offset + 32);
+                }
+                finally { CryptographicOperations.ZeroMemory(pair.PrivateKey); }
+            }
+        }
+        finally { CryptographicOperations.ZeroMemory(input); }
+        payload[9] = rows;
+        ParsedXpc1V2 Result() => DeepIdV2PreKeyClaimResultCodec.Decode(
+            DeepIdV2PreKeyClaimResultCodec.Encode(requestBytes,
+                Xpc1V2Status.Claimed,
+                Xpc1V2MutationOutcome.DurablyCommitted, 123, 0, payload),
+            requestBytes);
+        var result = Result();
+        var verified = DeepIdV2PreKeyClaimReplicaSignatureVerifier.Verify(
+            request, result, placement);
+        Assert.False(DeepIdV2PreKeyClaimReplicaSignatureVerifier.RuntimeActivation);
+        Assert.Equal(requestBytes, verified.ExactRequest.ToArray());
+        Assert.Equal(result.WireBytes.ToArray(), verified.ExactResult.ToArray());
+        Assert.Empty(typeof(VerifiedXpc1V2ReplicaSignatures).GetConstructors());
+
+        var oldDomainRows = rows.ToArray();
+        var oldDomainInput = Deep.Protocol.ApplicationCore.ApplicationCoreFormat
+            .SignatureInput("Deep/ContactResolver/V1/prekey-claim-commit",
+                DeepIdV2PreKeyClaimCommitment.CreateTuple(requestBytes,
+                    offeringBytes, manifestBytes, 3, 1), 0x0201);
+        try
+        {
+            for (var index = 0; index < 2; index++)
+            {
+                var offset = 1 + index * 96;
+                var nodeIndex = oldDomainRows[offset] - 0x10;
+                var pair = PublicKeyAuth.GenerateKeyPair(Bytes(32,
+                    checked((byte)(0x90 + nodeIndex * 8))));
+                try
+                {
+                    PublicKeyAuth.SignDetached(oldDomainInput, pair.PrivateKey)
+                        .CopyTo(oldDomainRows, offset + 32);
+                }
+                finally { CryptographicOperations.ZeroMemory(pair.PrivateKey); }
+            }
+        }
+        finally { CryptographicOperations.ZeroMemory(oldDomainInput); }
+        payload[9] = oldDomainRows;
+        Assert.Throws<Deep.Protocol.ApplicationCore.ApplicationCoreFormatException>(() =>
+            DeepIdV2PreKeyClaimReplicaSignatureVerifier.Verify(
+                request, Result(), placement));
+
+        var changed = rows.ToArray();
+        changed[^1] ^= 1;
+        payload[9] = changed;
+        Assert.Throws<Deep.Protocol.ApplicationCore.ApplicationCoreFormatException>(() =>
+            DeepIdV2PreKeyClaimReplicaSignatureVerifier.Verify(
+                request, Result(), placement));
+        var failure = DeepIdV2PreKeyClaimResultCodec.Decode(
+            DeepIdV2PreKeyClaimResultCodec.Encode(requestBytes,
+                Xpc1V2Status.PreKeysUnavailable,
+                Xpc1V2MutationOutcome.None, 123, 0, []), requestBytes);
+        Assert.Throws<Deep.Protocol.ApplicationCore.ApplicationCoreFormatException>(() =>
+            DeepIdV2PreKeyClaimReplicaSignatureVerifier.Verify(
+                request, failure, placement));
+        Assert.Throws<Deep.Protocol.ApplicationCore.ApplicationCoreFormatException>(() =>
+            DeepIdV2PreKeyClaimReplicaSignatureVerifier.Verify(
+                request, result, new VerifiedContactServicePlacement(context,
+                    placement.RequestKind, placement.ServiceClass,
+                    placement.ViewHash.Span, Bytes(32, 0xe1),
+                    manifest.Field(2).Span, placement.SelectionEpoch,
+                    placement.ValidUntilUnixSeconds,
+                    placement.RankedReplicaNodeIds.Select(static id =>
+                        id.ToArray()), placement.PolicyGeneration)));
+    }
+
+    [Fact]
     public async Task Did2Xic1Pair_RequiresBothCurrentSelectedReplicaSignatures()
     {
         var fixture = Fixture.Create(networkMarker: 0x01);

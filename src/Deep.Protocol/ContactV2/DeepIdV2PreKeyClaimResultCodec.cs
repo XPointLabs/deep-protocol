@@ -5,7 +5,7 @@ using Deep.Protocol.MessagingWire;
 
 namespace Deep.Protocol.ContactV2;
 
-internal enum Xpc1V2Status : ushort
+public enum Xpc1V2Status : ushort
 {
     Claimed = 1,
     Replay = 2,
@@ -17,7 +17,7 @@ internal enum Xpc1V2Status : ushort
     OutcomeUnknown = 8,
 }
 
-internal enum Xpc1V2MutationOutcome : byte
+public enum Xpc1V2MutationOutcome : byte
 {
     None = 0,
     DurablyCommitted = 1,
@@ -28,7 +28,7 @@ internal enum Xpc1V2MutationOutcome : byte
 /// Parsed padded XPC1 V2 wire. This is not an authenticated replica result:
 /// PMT2 placement, both replica signatures and durable CAS are external gates.
 /// </summary>
-internal sealed class ParsedXpc1V2
+public sealed class ParsedXpc1V2
 {
     private readonly byte[] canonical;
     private readonly byte[] wire;
@@ -45,11 +45,11 @@ internal sealed class ParsedXpc1V2
         MutationOutcome = mutationOutcome;
     }
 
-    internal ReadOnlyMemory<byte> CanonicalBytes => canonical.ToArray();
-    internal ReadOnlyMemory<byte> WireBytes => wire.ToArray();
-    internal Xpc1V2Status Status { get; }
-    internal Xpc1V2MutationOutcome MutationOutcome { get; }
-    internal ReadOnlyMemory<byte> Field(int tag) => fields.TryGetValue(tag,
+    public ReadOnlyMemory<byte> CanonicalBytes => canonical.ToArray();
+    public ReadOnlyMemory<byte> WireBytes => wire.ToArray();
+    public Xpc1V2Status Status { get; }
+    public Xpc1V2MutationOutcome MutationOutcome { get; }
+    public ReadOnlyMemory<byte> Field(int tag) => fields.TryGetValue(tag,
         out var value) ? value.ToArray() : ReadOnlyMemory<byte>.Empty;
 }
 
@@ -57,12 +57,12 @@ internal sealed class ParsedXpc1V2
 /// Closed DID2 XPC1 result grammar. It validates exact V2 claim bindings and
 /// inventory inclusion but cannot turn unsigned bytes into claim authority.
 /// </summary>
-internal static class DeepIdV2PreKeyClaimResultCodec
+public static class DeepIdV2PreKeyClaimResultCodec
 {
     private static ReadOnlySpan<int> PaddingBuckets => [256, 1024, 4096, 16384];
-    internal static bool RuntimeActivation => false;
+    public static bool RuntimeActivation => false;
 
-    internal static byte[] Encode(ReadOnlySpan<byte> exactXpk1,
+    public static byte[] Encode(ReadOnlySpan<byte> exactXpk1,
         Xpc1V2Status status, Xpc1V2MutationOutcome outcome,
         ulong serverTime, uint retryAfter,
         IReadOnlyList<ReadOnlyMemory<byte>> payload)
@@ -104,7 +104,7 @@ internal static class DeepIdV2PreKeyClaimResultCodec
         return wire;
     }
 
-    internal static ParsedXpc1V2 Decode(ReadOnlySpan<byte> exactWire,
+    public static ParsedXpc1V2 Decode(ReadOnlySpan<byte> exactWire,
         ReadOnlySpan<byte> exactXpk1)
     {
         var request = DeepIdV2PreKeyClaimRequestCodec.Decode(exactXpk1);

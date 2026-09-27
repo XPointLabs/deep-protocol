@@ -737,7 +737,10 @@ internal static class GraphPolicy
                 "Deep.Protocol|12751|627FBF29C1C4F8ED0366670706F96C654A4AD6306B3E399A4E01CE3886F743B3",
                 // V2 threshold also binds the live DID2 head and trusted time; not publication authority.
                 "Deep.Protocol|12751|D5E191DEE2AFC6EF5658431264CFE76AF5011D3C131CC7CF2C65212307E6F252",
-                "Deep.Protocol|12751|AE84930F20787269261F8BDCAABBD55A4EFDBC8CC8DA78987BED0FE78251F49A"
+                "Deep.Protocol|12751|AE84930F20787269261F8BDCAABBD55A4EFDBC8CC8DA78987BED0FE78251F49A",
+                // DID2-only XPC1 authoring and selected-replica signature evidence; not durable claim authority.
+                "Deep.Protocol|12799|6121D294CCB876300B07B5B9DEDC5F1BB1B40707539921F363806E181198109C",
+                "Deep.Protocol|12799|DFA9F24A22B338FFB9FA9CCF316B7A1FA0499FD0F9C2533FC4052EBC67E6DBA1"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

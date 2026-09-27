@@ -10,7 +10,7 @@ namespace Deep.Protocol.ContactV2;
 /// bytes; they do not prove publication, placement, replica signatures or a
 /// durable claim. The caller must verify those separately.
 /// </summary>
-internal static class DeepIdV2PreKeyClaimCommitment
+public static class DeepIdV2PreKeyClaimCommitment
 {
     public const int TupleLength = 138;
     public static bool RuntimeActivation => false;

@@ -124,7 +124,7 @@ public sealed class DeepIdV2PreKeyClaimResultCodecTests
                 fixture.Request));
     }
 
-    private static ReadOnlyMemory<byte>[] SuccessPayload(
+    internal static ReadOnlyMemory<byte>[] SuccessPayload(
         (byte[] Request, byte[] Offering, byte[] Manifest) fixture,
         ushort counter = 1)
     {
