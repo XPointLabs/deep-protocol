@@ -743,7 +743,10 @@ internal static class GraphPolicy
                 "Deep.Protocol|12799|DFA9F24A22B338FFB9FA9CCF316B7A1FA0499FD0F9C2533FC4052EBC67E6DBA1",
                 // Bounded DID2 publication manifest carries a committed public publisher hint.
                 "Deep.Protocol|12801|6E79CCA1DDEB0F67815566C5DCD249FB6FDE8B1129A583763BABACADC03AE4B8",
-                "Deep.Protocol|12801|9AED126AF3A3F0146A32CE14D161A02267BDD8F0EA683D41482A9B9111FB55D6"
+                "Deep.Protocol|12801|9AED126AF3A3F0146A32CE14D161A02267BDD8F0EA683D41482A9B9111FB55D6",
+                // Account-bound local DID2 DPK2/XPI1/XPP1 author; no replica commit.
+                "Deep.Protocol|12814|7ADD16BC91E65DAEEAAAF3BB001575739560C1BB3F07AF95F475E619FADFF12C",
+                "Deep.Protocol|12814|CF8AA742B5EAC1DECE37529B02D1B870EAC097434A07E24782F4436CA6B303A4"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

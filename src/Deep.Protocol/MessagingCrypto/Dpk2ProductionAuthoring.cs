@@ -60,7 +60,7 @@ public sealed class Dpk2AuthoringContext
 /// offerings. The call selects a closed envelope and signature suite; callers
 /// cannot supply private keys, an arbitrary suite or a crypto provider.
 /// </summary>
-public sealed class Dpk2AuthoringAuthority : IDisposable
+public sealed partial class Dpk2AuthoringAuthority : IDisposable
 {
     private readonly object _gate = new();
     private readonly LocalDeviceX25519AgreementAuthority _deviceAgreement;

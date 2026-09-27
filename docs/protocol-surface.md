@@ -106,6 +106,12 @@ release API or durability claim.
   times. Neither surface reconstructs durable XNode state, verifies the
   inventory's current DID2 authority, or authorizes a pre-key claim; those
   consumers must use this package at its exact commit before activation.
+- `Dpk2AuthoringAuthority.AuthorInventoryV2` locally authors a complete
+  ordered V2 DPK2 inventory, device-signed XPI1 and exact aggregate XPP1 only
+  when a verified DID2 DAB2 belongs to the active DMD1 account. It retains
+  each opaque private pre-key capability until the Shared account owner takes
+  and durably seals it. This local output is neither a two-replica XIC1 commit
+  nor permission to dispatch XPP1 before the durable secret transaction.
 
 ## DNP1 classical Wave 1
 
