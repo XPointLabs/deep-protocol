@@ -714,7 +714,11 @@ internal static class GraphPolicy
                 // DID2-only padded XPC1 V2 structural claim/inventory binding.
                 // No receipt authority is minted without PMT2-bound replica signatures.
                 "Deep.Protocol|12698|76ED62CED4C91063155D3AFC129FE69747ACFF0D7D689CB4292FF326F4BD2E31",
-                "Deep.Protocol|12698|32720E2C31EA707A3171968B310CD6420091FCB1ED75572F2276B385ABB35F8C"
+                "Deep.Protocol|12698|32720E2C31EA707A3171968B310CD6420091FCB1ED75572F2276B385ABB35F8C",
+                // DID2 V2 bounded manifest/chunk/commit carriage for exact XPP1.
+                // XNode reconstruction and signed XIC1 publication remain gated.
+                "Deep.Protocol|12747|63A47413F71B56297B091E03C046DA2AD64B38084CF063FA85EA16972F9AE846",
+                "Deep.Protocol|12747|205A0BFF448CE1631F0466910A22B208F367016EBA0C242F5F6666A744624CD2"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

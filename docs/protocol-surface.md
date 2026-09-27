@@ -97,6 +97,13 @@ release API or durability claim.
   production capability producers, asynchronous public API and runtime composition
   are absent/inactive. PMA2/PMT2/PMS2 route-authority activation remains a separate
   producer gate; codec presence cannot substitute for it.
+- The DID2 XPP1 version-2/suite-0x0301 surface now has two mutually rejecting
+  closed shapes: the five-tag exact aggregate and a twelve-tag bounded
+  manifest/chunk/commit transport carrier. The carrier verifies exact slice
+  lengths, V2 domain-separated hashes, descriptor commitments and the
+  65,861-byte request ceiling. It does not reconstruct durable XNode state,
+  verify final XIC1 receipts, or authorize a pre-key claim; those consumers
+  must use this package at its exact commit before activation.
 
 ## DNP1 classical Wave 1
 
