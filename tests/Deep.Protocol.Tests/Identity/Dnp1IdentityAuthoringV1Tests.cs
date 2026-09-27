@@ -962,8 +962,13 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
         var account = Dnp1IdentityAuthoringV1.AuthorGenesisAccount(
             recovery, 1_900_000_000, 1, new FillRandom(0xa1));
         using var device = Device();
-        var issued = await IssueDevice(recovery, account, device);
-        var directory = ExactDirectory(account, issued);
+        using var otherDevice = OtherDevice();
+        var issuanceState = new DurableState();
+        var issued = await IssueDevice(recovery, account, device, issuanceState);
+        var otherIssued = await IssueDevice(recovery, account, otherDevice,
+            issuanceState, 0x10);
+        var directory = ExactDirectory(account,
+            [issued.Verified, otherIssued.Verified], 1, null);
         using var phrase = DeepRecoveryV1.VerifyCanonicalUtf8(
             Encoding.ASCII.GetBytes(Mnemonic));
         var binding = recovery.AuthorGenesisDab2(phrase,
@@ -1000,6 +1005,8 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
             hasRootAuthorizedForwardLineage: false,
             verifiedProtectedLkg: null);
         using var authority = device.CreateAgreementAuthority(issued.Verified);
+        using var otherAuthority = otherDevice.CreateAgreementAuthority(
+            otherIssued.Verified);
         var factory = new ManagedInitiatorInitialSessionFactory(128);
 
         using var first = factory.BeginClaim(
@@ -1008,6 +1015,9 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
             authority, currentDirectory, currentAccount, bootId, 3);
         first.RequireCurrentInitiator(authority, currentDirectory,
             currentAccount, bootId, 3);
+        Assert.Throws<CryptographicException>(() =>
+            first.RequireCurrentInitiator(otherAuthority, currentDirectory,
+                currentAccount, bootId, 3));
         Assert.Throws<CryptographicException>(() =>
             first.RequireCurrentInitiator(authority, currentDirectory,
                 currentAccount, Enumerable.Repeat((byte)0x5B, 16).ToArray(), 3));
