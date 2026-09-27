@@ -755,7 +755,11 @@ internal static class GraphPolicy
                 // in bounded XPP1 and a current-proof inventory verifier.
                 // Final two-replica commit and claim remain disabled.
                 "Deep.Protocol|12828|D6CB1C329EAC9DD8F6823AC1C415ABF37A2A297F023959D330A8AF6CFDEB7B50",
-                "Deep.Protocol|12828|98397D663957DDABB876C1625302856178DD43DEC1F6F2B3D0E97709640AF76E"
+                "Deep.Protocol|12828|98397D663957DDABB876C1625302856178DD43DEC1F6F2B3D0E97709640AF76E",
+                // V2 XPI1 successor check requires the exact, durably accepted
+                // predecessor and unchanged pre-key service identity.
+                "Deep.Protocol|12832|B6A5B402D0A4F7D6F6989EA46BB4A3AEDA946B4EF9BD28E2C6E8043114B85306",
+                "Deep.Protocol|12832|6B681F3D909E0D2132194D230A04843504AC3B1BB6A9CB3E840B251074118E16"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

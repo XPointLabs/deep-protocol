@@ -103,7 +103,10 @@ release API or durability claim.
   lengths, V2 domain-separated hashes, DID2/DCA1/XPS1 public-support
   commitments and the 65,861-byte request ceiling. A separate verifier checks
   complete XPI1/DPK2 against nonce-fresh current DID2 and signed XPS1 without
-  requiring plaintext DCR1 at the selected replica. The XIC1 pair verifier checks both
+  requiring plaintext DCR1 at the selected replica. A separate XPI1 lineage
+  verifier requires an exact, durably accepted predecessor for every successor
+  epoch and rejects a changed service identity; it does not own that durable
+  predecessor or activate the service. The XIC1 pair verifier checks both
   selected NETCODEC node signatures, exact XPP1/placement binding and receipt
   times. Neither surface reconstructs durable XNode state, verifies the
   inventory's current DID2 authority at a final runtime commit, or authorizes
