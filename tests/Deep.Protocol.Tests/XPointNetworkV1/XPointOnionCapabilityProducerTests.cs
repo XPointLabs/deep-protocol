@@ -5,7 +5,9 @@ using System.Security.Cryptography;
 using System.Text;
 using Deep.Protocol.AccountDirectoryV1;
 using Deep.Protocol.ContactV1;
+using Deep.Protocol.ContactV2;
 using Deep.Protocol.DeepExtension.PrivacyRouting;
+using Deep.Protocol.MessagingWire;
 using Deep.Protocol.GroupV1;
 using Deep.Protocol.XPointNetworkV1;
 using Sodium;
@@ -14,6 +16,113 @@ namespace Deep.Protocol.Tests.XPointNetworkV1;
 
 public sealed class XPointOnionCapabilityProducerTests
 {
+    [Fact]
+    public async Task Did2Xic1Pair_RequiresBothCurrentSelectedReplicaSignatures()
+    {
+        var fixture = Fixture.Create(networkMarker: 0x01);
+        var context = await fixture.VerifyAsync();
+        var oneTime = Deep.Protocol.Tests.ContactV2
+            .DeepIdV2PreKeyClaimCommitmentTests.Build(Dpk2PrekeyKind.OneTime);
+        var lastResort = Deep.Protocol.Tests.ContactV2
+            .DeepIdV2PreKeyClaimCommitmentTests.Build(Dpk2PrekeyKind.LastResort);
+        ParsedDpk2V2 OnNetwork(byte[] exact)
+        {
+            var record = DeepIdV2Dpk2Codec.Decode(exact).Record;
+            var scoped = new Dpk2Record(context.NetworkId.Span,
+                record.ResponderAccountId.Span, record.ResponderDeviceId.Span,
+                record.ResponderDeviceGeneration, record.ResponderDpd1Ref.Span,
+                record.DeviceDirectoryGeneration,
+                record.DeviceDirectoryHeadHash.Span,
+                record.PrekeyServiceGeneration, record.InventoryEpoch,
+                record.BundleId.Span, record.PolicyGeneration, record.NotBefore,
+                record.IssuedAt, record.ExpiresAt,
+                record.DeviceAgreementPublicKey.Span,
+                record.SignedX25519PrekeyId.Span,
+                record.SignedX25519PrekeyPublic.Span,
+                record.SignedX25519PrekeySignature.Span,
+                record.OneTimeX25519PrekeyId.Span,
+                record.OneTimeX25519PrekeyPublic.Span,
+                record.MlKemPrekeyId.Span,
+                record.MlKem768EncapsulationKey.Span,
+                record.MlKemKind, record.ReuseLimit,
+                record.MlKemPrekeySignature.Span,
+                record.BundleSignature.Span);
+            return DeepIdV2Dpk2Codec.Decode(DeepIdV2Dpk2Codec.Encode(scoped));
+        }
+        var member = OnNetwork(oneTime.Offering);
+        var last = OnNetwork(lastResort.Offering);
+        var sourceManifest = DeepIdV2PreKeyManifestCodec.Decode(oneTime.Manifest);
+        var manifestFields = Enumerable.Range(1, 15)
+            .Select(sourceManifest.Field).ToArray();
+        manifestFields[0] = context.NetworkId;
+        manifestFields[10] = last.ExactHash;
+        // This structural inventory fixture is intentionally not an authorized
+        // inventory; this test owns only the signed two-replica receipt gate.
+        manifestFields[13] = U64(100);
+        manifestFields[14] = U64(300);
+        var manifest = DeepIdV2PreKeyManifestCodec.Decode(
+            DeepIdV2PreKeyManifestCodec.Encode(manifestFields,
+                sourceManifest.Field(16).Span));
+        var placement = ContactServicePlacementFactory.Create(context,
+            ContactServiceRequestKind.PublishPreKeyInventory, manifest.Field(2));
+        var publication = DeepIdV2PreKeyPublicationCodec.Decode(
+            DeepIdV2PreKeyPublicationCodec.Encode(context.NetworkId.Span,
+                Bytes(32, 0xd1), placement.PlacementHash.Span, manifest,
+                Enumerable.Repeat(member, 32).ToArray(), last));
+
+        ParsedXic1V2 Receipt(ReadOnlyMemory<byte> nodeId, ulong time)
+        {
+            ReadOnlyMemory<byte>[] fields =
+            [
+                publication.NetworkId, publication.PublicationOperationId,
+                publication.Manifest.ExactHash, publication.PlacementHash,
+                nodeId, U64(time)
+            ];
+            var index = nodeId.Span[0] - 0x10;
+            var pair = PublicKeyAuth.GenerateKeyPair(Bytes(32,
+                checked((byte)(0x90 + index * 8))));
+            try
+            {
+                var signature = PublicKeyAuth.SignDetached(
+                    DeepIdV2PreKeyCommitReceiptCodec.CreateSignatureInput(fields),
+                    pair.PrivateKey);
+                return DeepIdV2PreKeyCommitReceiptCodec.Decode(
+                    DeepIdV2PreKeyCommitReceiptCodec.Encode(fields, signature));
+            }
+            finally { CryptographicOperations.ZeroMemory(pair.PrivateKey); }
+        }
+
+        var replicas = placement.RankedReplicaNodeIds;
+        var first = Receipt(replicas[0], 200);
+        var second = Receipt(replicas[1], 201);
+        Assert.False(DeepIdV2PreKeyCommitReceiptVerifier.RuntimeActivation);
+        DeepIdV2PreKeyCommitReceiptVerifier.VerifyPair(
+            publication, placement, first, second);
+        DeepIdV2PreKeyCommitReceiptVerifier.VerifyPair(
+            publication, placement, second, first);
+        Assert.Throws<Deep.Protocol.ApplicationCore.ApplicationCoreFormatException>(() =>
+            DeepIdV2PreKeyCommitReceiptVerifier.VerifyPair(
+                publication, placement, first, first));
+        Assert.Throws<Deep.Protocol.ApplicationCore.ApplicationCoreFormatException>(() =>
+            DeepIdV2PreKeyCommitReceiptVerifier.VerifyPair(
+                publication, placement, first,
+                Receipt(replicas[1], 99)));
+        var substituted = second.CanonicalBytes.ToArray();
+        substituted[^1] ^= 1;
+        Assert.Throws<Deep.Protocol.ApplicationCore.ApplicationCoreFormatException>(() =>
+            DeepIdV2PreKeyCommitReceiptVerifier.VerifyPair(
+                publication, placement, first,
+                DeepIdV2PreKeyCommitReceiptCodec.Decode(substituted)));
+        var wrongPlacement = new VerifiedContactServicePlacement(context,
+            placement.RequestKind, placement.ServiceClass, placement.ViewHash.Span,
+            Bytes(32, 0xe1), manifest.Field(2).Span,
+            placement.SelectionEpoch, placement.ValidUntilUnixSeconds,
+            replicas.Select(static id => id.ToArray()), placement.PolicyGeneration);
+        Assert.Throws<Deep.Protocol.ApplicationCore.ApplicationCoreFormatException>(() =>
+            DeepIdV2PreKeyCommitReceiptVerifier.VerifyPair(
+                publication, wrongPlacement, first, second));
+    }
+
     [Fact]
     public async Task ExactClosure_MintsPlacementPathAndReceiveCapabilities()
     {

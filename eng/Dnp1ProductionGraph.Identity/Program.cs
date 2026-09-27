@@ -718,7 +718,11 @@ internal static class GraphPolicy
                 // DID2 V2 bounded manifest/chunk/commit carriage for exact XPP1.
                 // XNode reconstruction and signed XIC1 publication remain gated.
                 "Deep.Protocol|12747|63A47413F71B56297B091E03C046DA2AD64B38084CF063FA85EA16972F9AE846",
-                "Deep.Protocol|12747|205A0BFF448CE1631F0466910A22B208F367016EBA0C242F5F6666A744624CD2"
+                "Deep.Protocol|12747|205A0BFF448CE1631F0466910A22B208F367016EBA0C242F5F6666A744624CD2",
+                // Exact DID2 XIC1 pair signature and current placement verification.
+                // Receipt verification remains distinct from full inventory authorization.
+                "Deep.Protocol|12751|B18EF2BF04878E3CC63199520CF7DADC5553D83A7B3B9FE73156FAEDFF0BCD4E",
+                "Deep.Protocol|12751|F5FEFFE75DF957901D3EA90CF280FB44BB9F0836FDD9F24EDE220A0DD3208963"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

@@ -101,9 +101,11 @@ release API or durability claim.
   closed shapes: the five-tag exact aggregate and a twelve-tag bounded
   manifest/chunk/commit transport carrier. The carrier verifies exact slice
   lengths, V2 domain-separated hashes, descriptor commitments and the
-  65,861-byte request ceiling. It does not reconstruct durable XNode state,
-  verify final XIC1 receipts, or authorize a pre-key claim; those consumers
-  must use this package at its exact commit before activation.
+  65,861-byte request ceiling. The separate XIC1 pair verifier checks both
+  selected NETCODEC node signatures, exact XPP1/placement binding and receipt
+  times. Neither surface reconstructs durable XNode state, verifies the
+  inventory's current DID2 authority, or authorizes a pre-key claim; those
+  consumers must use this package at its exact commit before activation.
 
 ## DNP1 classical Wave 1
 
