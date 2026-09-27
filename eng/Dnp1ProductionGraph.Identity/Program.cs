@@ -722,7 +722,10 @@ internal static class GraphPolicy
                 // Exact DID2 XIC1 pair signature and current placement verification.
                 // Receipt verification remains distinct from full inventory authorization.
                 "Deep.Protocol|12751|B18EF2BF04878E3CC63199520CF7DADC5553D83A7B3B9FE73156FAEDFF0BCD4E",
-                "Deep.Protocol|12751|F5FEFFE75DF957901D3EA90CF280FB44BB9F0836FDD9F24EDE220A0DD3208963"
+                "Deep.Protocol|12751|F5FEFFE75DF957901D3EA90CF280FB44BB9F0836FDD9F24EDE220A0DD3208963",
+                // Internal DID2 locator/read-key candidate; no release runtime activation.
+                "Deep.Protocol|12751|00ABCFEB5A3136C97C38FBA67B24C213D0026DB9E53C971E1867F0DCDC2F87A1",
+                "Deep.Protocol|12751|684FE4870F2CAA971C8D4AB7C5DD17714EB0A797D260A35A9FAC49CE26664026"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [
