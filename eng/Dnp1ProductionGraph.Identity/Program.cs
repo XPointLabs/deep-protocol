@@ -707,7 +707,10 @@ internal static class GraphPolicy
                 "Deep.Protocol|12673|DCF29DDE02D23DD2FC9041DA793E5FD7340881C8AD5AC13EE13871F9D418D0E4",
                 "Deep.Protocol|12686|19320DC11F52773A81BAFBEB095247FB56A57AF079758657D665524A932FEF19",
                 // Normalized package-witness build of the same bounded V2 codecs.
-                "Deep.Protocol|12686|BEF3075BDD78803E8895B15968B7810B8EC1AA9C6EB874CF8F42F08AABF54C3D"
+                "Deep.Protocol|12686|BEF3075BDD78803E8895B15968B7810B8EC1AA9C6EB874CF8F42F08AABF54C3D",
+                // DID2-only fixed XPK1 V2 request and V2 request-hash domain.
+                "Deep.Protocol|12698|16818057151EC38148238BDEB0D11F9E3FF41AABC2C07E61493C902A7EEC7F34",
+                "Deep.Protocol|12698|CC93CDAEB253C85C2AEF04870C3F0F1158DCFE6315ED2B59D91A69DBC954D754"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [
