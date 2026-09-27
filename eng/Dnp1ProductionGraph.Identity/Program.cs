@@ -746,7 +746,11 @@ internal static class GraphPolicy
                 "Deep.Protocol|12801|9AED126AF3A3F0146A32CE14D161A02267BDD8F0EA683D41482A9B9111FB55D6",
                 // Account-bound local DID2 DPK2/XPI1/XPP1 author; no replica commit.
                 "Deep.Protocol|12814|7ADD16BC91E65DAEEAAAF3BB001575739560C1BB3F07AF95F475E619FADFF12C",
-                "Deep.Protocol|12814|CF8AA742B5EAC1DECE37529B02D1B870EAC097434A07E24782F4436CA6B303A4"
+                "Deep.Protocol|12814|CF8AA742B5EAC1DECE37529B02D1B870EAC097434A07E24782F4436CA6B303A4",
+                // Exact DID2 publisher hint and complete current inventory gate;
+                // placement, durable commit and claim remain independently gated.
+                "Deep.Protocol|12818|F4D155E607F3C85C25D770772BC57CE43DF350B132059C46058D32E9261C5B78",
+                "Deep.Protocol|12818|E6201B62A79BDC4B6E488552DEB0FCA9329E22813E315EACE35B4DF04DDBD0D0"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

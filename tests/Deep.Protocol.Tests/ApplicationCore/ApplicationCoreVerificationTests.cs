@@ -642,6 +642,12 @@ public sealed class ApplicationCoreVerificationTests
         DeepIdV2PreKeyInventoryVerifier.VerifyComplete(closure, currentContact,
             publication.Manifest, publication.OneTimeMembers,
             publication.LastResortMember, bootId, 3);
+        Assert.False(DeepIdV2PreKeyPublicationAuthorizationVerifier.RuntimeActivation);
+        DeepIdV2PreKeyPublicationAuthorizationVerifier.Verify(did, closure,
+            currentContact, publication, bootId, 3);
+        AssertVerificationFailure(() =>
+            DeepIdV2PreKeyPublicationAuthorizationVerifier.Verify(unrelatedDid,
+                closure, currentContact, publication, bootId, 3));
         var oldPublicationEnvelope = publication.CanonicalBytes.ToArray();
         BinaryPrimitives.WriteUInt16BigEndian(oldPublicationEnvelope.AsSpan(4, 2), 1);
         Assert.Equal(ApplicationCoreRejection.WrongVersion,
@@ -706,6 +712,14 @@ public sealed class ApplicationCoreVerificationTests
         AssertVerificationFailure(() => DeepIdV2PreKeyInventoryVerifier.VerifyComplete(
             closure, currentContact, wrongRootManifest, oneTimeMembers,
             lastResortMember, bootId, 3));
+        var wrongRootPublication = DeepIdV2PreKeyPublicationCodec.Decode(
+            DeepIdV2PreKeyPublicationCodec.Encode(fixture.Network,
+                publication.PublicationOperationId.Span,
+                publication.PlacementHash.Span, wrongRootManifest,
+                oneTimeMembers, lastResortMember));
+        AssertVerificationFailure(() =>
+            DeepIdV2PreKeyPublicationAuthorizationVerifier.Verify(did, closure,
+                currentContact, wrongRootPublication, bootId, 3));
         var wrongLastResortManifest = SignInventory(InventoryFields(
             SHA256.HashData(xps), directory.Record.RecordHash.ToArray(),
             root: inventoryRoot,
