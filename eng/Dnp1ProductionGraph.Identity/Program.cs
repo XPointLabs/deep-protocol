@@ -679,7 +679,10 @@ internal static class GraphPolicy
                 "Deep.Protocol|12571|B7A58300C701F92F4F5E271589B0CB3673D62AFDB36BDD52884E03A5A0D2D4D6",
                 // Internal per-codec frame-version selection for the DID2 DPH2 cutover.
                 // The public API/member count is unchanged; Debug metadata is repinned.
-                "Deep.Protocol|12571|FFEB3C54E51BF437DD32F5FC90EF8A2CB5FD02E6B521263708A4E83C7F739864"
+                "Deep.Protocol|12571|FFEB3C54E51BF437DD32F5FC90EF8A2CB5FD02E6B521263708A4E83C7F739864",
+                // Exact-current DID2/DMD1 pre-lease claim binding (Release, Debug).
+                "Deep.Protocol|12571|782B5A1C62D34534080490BE01E3BE185D0CB769FCCD9B1E1FD40A71086FF96B",
+                "Deep.Protocol|12571|8BAA921C477A147153B47A5B16964240E01A392732CC5EE86CCBFAAF0445BCC2"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

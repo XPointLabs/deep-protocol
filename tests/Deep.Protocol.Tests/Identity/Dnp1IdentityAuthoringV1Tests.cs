@@ -1006,6 +1006,14 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
             authority, currentDirectory, currentAccount, bootId, 3);
         using var second = factory.BeginClaim(
             authority, currentDirectory, currentAccount, bootId, 3);
+        first.RequireCurrentInitiator(authority, currentDirectory,
+            currentAccount, bootId, 3);
+        Assert.Throws<CryptographicException>(() =>
+            first.RequireCurrentInitiator(authority, currentDirectory,
+                currentAccount, Enumerable.Repeat((byte)0x5B, 16).ToArray(), 3));
+        Assert.Throws<CryptographicException>(() =>
+            first.RequireCurrentInitiator(authority, currentDirectory,
+                currentAccount, bootId, 60));
         Assert.Throws<CryptographicException>(() => factory.BeginClaim(
             authority, currentDirectory, currentAccount,
             Enumerable.Repeat((byte)0x5B, 16).ToArray(), 3));
@@ -1021,6 +1029,10 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
         Assert.NotEqual(
             first.SenderEphemeralCommitment.ToArray(),
             second.SenderEphemeralCommitment.ToArray());
+        second.Dispose();
+        Assert.Throws<InvalidOperationException>(() =>
+            second.RequireCurrentInitiator(authority, currentDirectory,
+                currentAccount, bootId, 3));
     }
 
     [Fact]

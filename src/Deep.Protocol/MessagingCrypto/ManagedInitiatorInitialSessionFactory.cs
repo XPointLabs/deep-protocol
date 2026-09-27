@@ -573,6 +573,49 @@ public sealed class InitiatorDph2PreKeyClaim : IDisposable
     public ReadOnlyMemory<byte> ClaimOperationId => _local.OperationBinding.ToArray();
     public ReadOnlyMemory<byte> SenderEphemeralCommitment => _senderCommitment.ToArray();
 
+    /// <summary>
+    /// Rechecks the exact current DID2/DMD1 initiator before a caller burns a
+    /// protected one-shot device operation. A claim created for another local
+    /// account, device or directory head cannot be redeemed by this authority.
+    /// </summary>
+    public void RequireCurrentInitiator(
+        LocalDeviceX25519AgreementAuthority localAuthority,
+        Dmd1LineageState exactCurrentDirectory,
+        VerifiedDeepIdV2DirectoryFreshness currentAccount,
+        ReadOnlySpan<byte> currentBootId,
+        ulong currentMonotonicSample)
+    {
+        ArgumentNullException.ThrowIfNull(localAuthority);
+        ArgumentNullException.ThrowIfNull(exactCurrentDirectory);
+        ArgumentNullException.ThrowIfNull(currentAccount);
+        var directory = localAuthority
+            .RequireActiveDirectoryForProtocolOperation(exactCurrentDirectory)
+            .Record;
+        var checkpoint = currentAccount.CurrentCheckpoint;
+        if (checkpoint is null ||
+            currentAccount.ResultKind != AccountDirectoryAdp1ResultKind.CurrentValue ||
+            !currentAccount.IsCurrentAtMonotonic(currentBootId,
+                currentMonotonicSample) ||
+            !Fixed(currentAccount.NetworkId.Span, localAuthority.NetworkId.Span) ||
+            !Fixed(checkpoint.Directory.Record.CanonicalBytes.Span,
+                directory.CanonicalBytes.Span) ||
+            !Fixed(checkpoint.Binding.Identity.Account.Certificate.NetworkId.Span,
+                localAuthority.NetworkId.Span))
+            throw new CryptographicException(
+                "The current DID2 proof and local DMD1 directory do not share exact authority.");
+        var current = InitiatorAgreementFacts.FromAuthority(localAuthority,
+            directory.DirectoryGeneration, directory.RecordHash.Span,
+            checkpoint.Binding.DeepId.CanonicalBytes.Span,
+            _local.OperationBinding);
+        lock (_gate)
+        {
+            if (_state != 0)
+                throw new InvalidOperationException(
+                    "The pre-XPK1 DPH2 claim is no longer available.");
+            _local.RequireSame(current);
+        }
+    }
+
     internal InitiatorDph2PreKeyClaimMaterial Consume()
     {
         lock (_gate)
@@ -614,6 +657,10 @@ public sealed class InitiatorDph2PreKeyClaim : IDisposable
             if (ratchet is not null) CryptographicOperations.ZeroMemory(ratchet);
         }
     }
+
+    private static bool Fixed(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right) =>
+        left.Length == right.Length &&
+        CryptographicOperations.FixedTimeEquals(left, right);
 }
 
 internal sealed class InitiatorDph2PreKeyClaimMaterial : IDisposable
