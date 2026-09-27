@@ -120,7 +120,7 @@ public sealed class DeepIdV2ContactPublicationCodecTests
             xpuFields));
     }
 
-    private static (byte[] Xpu, byte[] Xpa, byte[] BodyHash,
+    internal static (byte[] Xpu, byte[] Xpa, byte[] BodyHash,
         byte[][] Fields, byte[][] XpaFields) Pair(
         int ciphertextLength, int routeLength, int witnesses)
     {
@@ -165,7 +165,7 @@ public sealed class DeepIdV2ContactPublicationCodecTests
             xpu), exactXpa, bodyHash, xpu, xpa);
     }
 
-    private static byte[] Build(string magic, ReadOnlySpan<ushort> tags,
+    internal static byte[] Build(string magic, ReadOnlySpan<ushort> tags,
         byte[][] fields)
     {
         var size = 12 + fields.Sum(static value => 8 + value.Length);

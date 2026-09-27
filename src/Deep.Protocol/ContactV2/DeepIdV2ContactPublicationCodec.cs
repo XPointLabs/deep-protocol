@@ -40,6 +40,8 @@ internal sealed class ParsedXpa1V2
     public ReadOnlyMemory<byte> Field(int tag) =>
         DeepIdV2ContactPublicationCodec.Field(fields, tag,
             DeepIdV2ContactPublicationCodec.XpaTags);
+    public ReadOnlyMemory<byte> WitnessSigningInput =>
+        DeepIdV2ContactPublicationCodec.CreateWitnessSigningInput(fields);
 }
 
 /// <summary>
@@ -135,6 +137,22 @@ internal static class DeepIdV2ContactPublicationCodec
         var fields = Parse(exactXpu1, XpuMagic, XpuTags,
             MinimumXpuLength, MaximumXpuLength);
         return BodyHash(fields);
+    }
+
+    internal static byte[] CreateWitnessSigningInput(byte[][] fields)
+    {
+        var length = 12;
+        for (var index = 0; index < 20; index++)
+            length = checked(length + 8 + fields[index].Length);
+        var unsigned = new byte[length];
+        var writer = new ApplicationRecordWriter(unsigned, XpaMagic,
+            20, 2, DeepIdV2Codec.Suite);
+        for (ushort tag = 1; tag <= 20; tag++)
+            writer.Write(tag, fields[tag - 1]);
+        writer.Complete();
+        return ApplicationCoreFormat.SignatureInput(
+            "Deep/ContactResolver/V2/publication-authorization",
+            unsigned, DeepIdV2Codec.Suite);
     }
 
     private static void BindXpa1(byte[][] xpu, ParsedXpa1V2 parsed)
