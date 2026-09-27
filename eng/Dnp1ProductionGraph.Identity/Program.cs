@@ -710,7 +710,11 @@ internal static class GraphPolicy
                 "Deep.Protocol|12686|BEF3075BDD78803E8895B15968B7810B8EC1AA9C6EB874CF8F42F08AABF54C3D",
                 // DID2-only fixed XPK1 V2 request and V2 request-hash domain.
                 "Deep.Protocol|12698|16818057151EC38148238BDEB0D11F9E3FF41AABC2C07E61493C902A7EEC7F34",
-                "Deep.Protocol|12698|CC93CDAEB253C85C2AEF04870C3F0F1158DCFE6315ED2B59D91A69DBC954D754"
+                "Deep.Protocol|12698|CC93CDAEB253C85C2AEF04870C3F0F1158DCFE6315ED2B59D91A69DBC954D754",
+                // DID2-only padded XPC1 V2 structural claim/inventory binding.
+                // No receipt authority is minted without PMT2-bound replica signatures.
+                "Deep.Protocol|12698|76ED62CED4C91063155D3AFC129FE69747ACFF0D7D689CB4292FF326F4BD2E31",
+                "Deep.Protocol|12698|32720E2C31EA707A3171968B310CD6420091FCB1ED75572F2276B385ABB35F8C"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [
