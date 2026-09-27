@@ -444,14 +444,15 @@ public sealed class ApplicationCoreVerificationTests
             return bytes;
         }
         ReadOnlyMemory<byte>[] InventoryFields(byte[] xpsHash, byte[] dmdHash,
-            ulong expiresAt = 20) =>
+            ulong expiresAt = 20, byte[]? root = null,
+            byte[]? lastResortHash = null) =>
         [
             fixture.Network, xpsFields[1], fixture.DeviceId,
             ContactRef("DPD1", 1, fixture.Identity.ActiveDevices[0]
                 .Certificate.CanonicalHash.Span), InventoryU64(1),
             ContactRef("XPS1", 1, xpsHash), InventoryU64(1), new byte[32],
-            InventoryU16(32), ApplicationCoreFixture.Bytes(32, 0x49),
-            ApplicationCoreFixture.Bytes(32, 0x4a), dmdHash,
+            InventoryU16(32), root ?? ApplicationCoreFixture.Bytes(32, 0x49),
+            lastResortHash ?? ApplicationCoreFixture.Bytes(32, 0x4a), dmdHash,
             ContactRef("DRS1", 1,
                 fixture.Revocations.Snapshot.CanonicalHash.Span),
             InventoryU64(10), InventoryU64(expiresAt)
@@ -505,7 +506,10 @@ public sealed class ApplicationCoreVerificationTests
         DeepIdV2PreKeyManifestBinding.Verify(
             closure, currentContact, manifest, bootId, 5);
         Dpk2Record Dpk2Member(byte[] xSignature, byte[] mlKemSignature,
-            byte[] bundleSignature, byte[]? dmdHash = null) => new(
+            byte[] bundleSignature, byte[]? dmdHash = null,
+            byte prekeySeed = 0x91,
+            Dpk2PrekeyKind kind = Dpk2PrekeyKind.OneTime,
+            ushort reuseLimit = 1) => new(
             fixture.Network, bundle.Field(2).Span, fixture.DeviceId, fixture.Identity
                 .ActiveDevices[0].Certificate.DeviceGeneration,
             manifest.Field(4).Span, directory.Record.DirectoryGeneration,
@@ -514,16 +518,21 @@ public sealed class ApplicationCoreVerificationTests
             fixture.Identity.ActiveDevices[0].Certificate.DeviceX25519PublicKey.Span,
             ApplicationCoreFixture.Bytes(32, 0x71),
             ApplicationCoreFixture.Bytes(32, 0x81), xSignature,
-            ApplicationCoreFixture.Bytes(32, 0x91),
-            ApplicationCoreFixture.Bytes(32, 0xa1),
+            kind == Dpk2PrekeyKind.OneTime
+                ? ApplicationCoreFixture.Bytes(32, prekeySeed) : [],
+            kind == Dpk2PrekeyKind.OneTime
+                ? ApplicationCoreFixture.Bytes(32, 0xa1) : [],
             ApplicationCoreFixture.Bytes(32, 0xb1),
             ApplicationCoreFixture.Bytes(1184, 0xc1),
-            Dpk2PrekeyKind.OneTime, 0, mlKemSignature, bundleSignature);
+            kind, kind == Dpk2PrekeyKind.OneTime ? (ushort)0 : reuseLimit,
+            mlKemSignature, bundleSignature);
         ParsedDpk2V2 SignedMember(bool oldSignatureDomain = false,
-            byte[]? dmdHash = null)
+            byte[]? dmdHash = null, byte prekeySeed = 0x91,
+            Dpk2PrekeyKind kind = Dpk2PrekeyKind.OneTime,
+            ushort reuseLimit = 1)
         {
             var placeholder = Dpk2Member(new byte[64], new byte[64],
-                new byte[64], dmdHash);
+                new byte[64], dmdHash, prekeySeed, kind, reuseLimit);
             var xInput = oldSignatureDomain
                 ? MessagingWireCryptographicInputs
                     .GetX25519SignedPrekeySignatureInput(placeholder)
@@ -538,7 +547,7 @@ public sealed class ApplicationCoreVerificationTests
             var mlSignature = PublicKeyAuth.SignDetached(mlInput,
                 fixture.DeviceKey.PrivateKey);
             var partial = Dpk2Member(xSignature, mlSignature, new byte[64],
-                dmdHash);
+                dmdHash, prekeySeed, kind, reuseLimit);
             var bundleInput = oldSignatureDomain
                 ? MessagingWireCryptographicInputs
                     .GetPrekeyBundleSignatureInput(partial)
@@ -547,7 +556,7 @@ public sealed class ApplicationCoreVerificationTests
                 fixture.DeviceKey.PrivateKey);
             return DeepIdV2Dpk2Codec.Decode(DeepIdV2Dpk2Codec.Encode(
                 Dpk2Member(xSignature, mlSignature, bundleSignature,
-                    dmdHash)));
+                    dmdHash, prekeySeed, kind, reuseLimit)));
         }
         var member = SignedMember();
         Assert.False(DeepIdV2Dpk2MemberBinding.RuntimeActivation);
@@ -559,6 +568,46 @@ public sealed class ApplicationCoreVerificationTests
         AssertVerificationFailure(() => DeepIdV2Dpk2MemberBinding.Verify(
             closure, currentContact, manifest,
             SignedMember(dmdHash: ApplicationCoreFixture.Bytes(32, 0x4c)),
+            bootId, 3));
+        var oneTimeMembers = Enumerable.Range(0, 32)
+            .Select(index => SignedMember(prekeySeed: checked((byte)(0x10 + index))))
+            .ToArray();
+        var lastResortMember = SignedMember(kind: Dpk2PrekeyKind.LastResort);
+        var inventoryRoot = DeepIdV2PreKeyInventoryVerifier.ComputeRoot(
+            oneTimeMembers.Select(member => member.ExactHash.ToArray()).ToArray());
+        var completeManifest = SignInventory(InventoryFields(
+            SHA256.HashData(xps), directory.Record.RecordHash.ToArray(),
+            root: inventoryRoot,
+            lastResortHash: lastResortMember.ExactHash.ToArray()),
+            fixture.DeviceKey);
+        Assert.False(DeepIdV2PreKeyInventoryVerifier.RuntimeActivation);
+        DeepIdV2PreKeyInventoryVerifier.VerifyComplete(closure, currentContact,
+            completeManifest, oneTimeMembers, lastResortMember, bootId, 3);
+        AssertVerificationFailure(() => DeepIdV2PreKeyInventoryVerifier.VerifyComplete(
+            closure, currentContact, completeManifest,
+            oneTimeMembers.Reverse().ToArray(), lastResortMember, bootId, 3));
+        AssertVerificationFailure(() => DeepIdV2PreKeyInventoryVerifier.VerifyComplete(
+            closure, currentContact, completeManifest,
+            oneTimeMembers[..^1], lastResortMember, bootId, 3));
+        var wrongRootManifest = SignInventory(InventoryFields(
+            SHA256.HashData(xps), directory.Record.RecordHash.ToArray(),
+            root: ApplicationCoreFixture.Bytes(32, 0x49),
+            lastResortHash: lastResortMember.ExactHash.ToArray()),
+            fixture.DeviceKey);
+        AssertVerificationFailure(() => DeepIdV2PreKeyInventoryVerifier.VerifyComplete(
+            closure, currentContact, wrongRootManifest, oneTimeMembers,
+            lastResortMember, bootId, 3));
+        var wrongLastResortManifest = SignInventory(InventoryFields(
+            SHA256.HashData(xps), directory.Record.RecordHash.ToArray(),
+            root: inventoryRoot,
+            lastResortHash: ApplicationCoreFixture.Bytes(32, 0x4a)),
+            fixture.DeviceKey);
+        AssertVerificationFailure(() => DeepIdV2PreKeyInventoryVerifier.VerifyComplete(
+            closure, currentContact, wrongLastResortManifest, oneTimeMembers,
+            lastResortMember, bootId, 3));
+        AssertVerificationFailure(() => DeepIdV2PreKeyInventoryVerifier.VerifyComplete(
+            closure, currentContact, completeManifest, oneTimeMembers,
+            SignedMember(kind: Dpk2PrekeyKind.LastResort, reuseLimit: 2),
             bootId, 3));
         var shortenedManifest = SignInventory(InventoryFields(
             SHA256.HashData(xps), directory.Record.RecordHash.ToArray(), 19),

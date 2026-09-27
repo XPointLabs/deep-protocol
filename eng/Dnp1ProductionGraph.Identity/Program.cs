@@ -693,7 +693,10 @@ internal static class GraphPolicy
                 "Deep.Protocol|12590|ECFAA9A4B98F81A2711E3C25909160E703704F4D885E14E7FBCFFDE819B428C9",
                 "Deep.Protocol|12590|670701577CA0742E16DAACFC882751010CA726E63DE56B137AE60B6A08B44507",
                 // DID2 DPK2 V2 envelope, current member binding and legacy-wire rejection.
-                "Deep.Protocol|12639|C82C295F539C3889B205DD763F1C936950F8D3D6335D370BC6DFC8EF00B75989"
+                "Deep.Protocol|12639|C82C295F539C3889B205DD763F1C936950F8D3D6335D370BC6DFC8EF00B75989",
+                // Complete DID2 XPI1/DPK2 ordered inventory and V2 Merkle commitment.
+                "Deep.Protocol|12643|CDB8BFCEA1E5377F379AB5903862A8C22FC1B7150DEE343AFCDB3D7AF71C74F8",
+                "Deep.Protocol|12643|962D61807370221D0BB0168BEF133D47542EF6DA1667D826E2311BACC24C3AFE"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

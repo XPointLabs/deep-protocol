@@ -20,7 +20,13 @@ public static class DeepIdV2Dpk2MemberBinding
         ArgumentNullException.ThrowIfNull(offering);
         DeepIdV2PreKeyManifestBinding.Verify(closure, currentAuthorization,
             manifest, currentBootId, currentMonotonicSample);
+        VerifyAfterManifest(closure, currentAuthorization, manifest, offering);
+    }
 
+    internal static void VerifyAfterManifest(ParsedDcr1V2 closure,
+        DeepIdV2CurrentContactAuthorization currentAuthorization,
+        ParsedXpi1V2 manifest, ParsedDpk2V2 offering)
+    {
         var record = offering.Record;
         var directory = currentAuthorization.Authorization.Directory.Record;
         var signer = currentAuthorization.Authorization.Binding.Identity
