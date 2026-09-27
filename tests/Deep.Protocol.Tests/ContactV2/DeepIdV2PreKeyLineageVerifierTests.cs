@@ -63,7 +63,8 @@ public sealed class DeepIdV2PreKeyLineageVerifierTests
     {
         var bytes = new byte[38];
         Encoding.ASCII.GetBytes(magic).CopyTo(bytes, 0);
-        BinaryPrimitives.WriteUInt16BigEndian(bytes.AsSpan(4, 2), 1);
+        BinaryPrimitives.WriteUInt16BigEndian(bytes.AsSpan(4, 2),
+            magic == "XPS1" ? (ushort)2 : (ushort)1);
         Bytes(32, hash).CopyTo(bytes, 6);
         return bytes;
     }

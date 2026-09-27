@@ -119,7 +119,8 @@ public sealed class DeepIdV2PreKeyClaimCommitmentTests
     {
         var bytes = new byte[38];
         Encoding.ASCII.GetBytes(magic).CopyTo(bytes, 0);
-        BinaryPrimitives.WriteUInt16BigEndian(bytes.AsSpan(4, 2), 1);
+        BinaryPrimitives.WriteUInt16BigEndian(bytes.AsSpan(4, 2),
+            magic == "XPS1" ? (ushort)2 : (ushort)1);
         hash.CopyTo(bytes.AsSpan(6));
         return bytes;
     }

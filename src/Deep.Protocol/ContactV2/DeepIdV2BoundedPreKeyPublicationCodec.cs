@@ -112,6 +112,7 @@ public static class DeepIdV2BoundedPreKeyPublicationCodec
             exactPublisherXps1.Length != Xps1Length)
             throw new ArgumentException(
                 "The bounded DID2 publication requires exact DCA1 V2 and XPS1 support.");
+        _ = DeepIdV2PreKeyServiceCodec.Decode(exactPublisherXps1);
         var totalLength = checked((uint)exactAggregate.Length);
         var chunkCount = ChunkCount(totalLength);
         var aggregateHash = ApplicationCoreFormat.Sha256Domain(
@@ -211,6 +212,21 @@ public static class DeepIdV2BoundedPreKeyPublicationCodec
                         ApplicationCoreValidationStage.EmbeddedRecord,
                         ApplicationCoreRejection.EmbeddedRecordRejected,
                         "XPP1 V2 fragment embeds an invalid DID2 publisher hint.",
+                        exception);
+                }
+                try
+                {
+                    _ = DeepIdV2PreKeyServiceCodec.Decode(body.Slice(
+                        DeepIdV2Codec.Did2Length +
+                            DeepIdV2ContactAuthorizationCodec.CanonicalLength,
+                        Xps1Length));
+                }
+                catch (FormatException exception)
+                {
+                    throw ApplicationCoreFormat.Error(
+                        ApplicationCoreValidationStage.EmbeddedRecord,
+                        ApplicationCoreRejection.EmbeddedRecordRejected,
+                        "XPP1 V2 fragment embeds an invalid XPS1 V2 descriptor.",
                         exception);
                 }
                 ParsedXpi1V2 manifest;

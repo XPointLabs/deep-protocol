@@ -43,8 +43,123 @@ public sealed class AuthoredDpk2InventoryV2 : IDisposable
     }
 }
 
+/// <summary>
+/// Public DID2 device-signed XPS1 V2 support for one inventory generation.
+/// It contains no pre-key private material or network publication authority.
+/// </summary>
+public sealed class AuthoredDeepIdV2PreKeyService
+{
+    private readonly byte[] exact;
+    private readonly byte[] capability;
+    private readonly byte[] reference;
+
+    internal AuthoredDeepIdV2PreKeyService(byte[] exact,
+        byte[] capability)
+    {
+        this.exact = exact.ToArray();
+        this.capability = capability.ToArray();
+        reference = new byte[38];
+        ProtocolMagicBytes.XPS1.CopyTo(reference);
+        BinaryPrimitives.WriteUInt16BigEndian(reference.AsSpan(4), 2);
+        SHA256.HashData(exact).CopyTo(reference, 6);
+    }
+
+    public ReadOnlyMemory<byte> ExactXps1 => exact.ToArray();
+    public ReadOnlyMemory<byte> ServiceCapability => capability.ToArray();
+    public ReadOnlyMemory<byte> Xps1Reference => reference.ToArray();
+}
+
 public sealed partial class Dpk2AuthoringAuthority
 {
+    /// <summary>
+    /// Authors XPS1 V2 under the same locally protected DPD1 signing seed as
+    /// the DID2 inventory. Initial generation is one; a successor retains the
+    /// capability and names the exact signed predecessor.
+    /// </summary>
+    public AuthoredDeepIdV2PreKeyService AuthorPreKeyServiceV2(
+        Dpk2AuthoringContext context, VerifiedDab2 did2Binding,
+        ushort minimumOneTimeInventory, ushort lastResortReuseLimit,
+        ReadOnlySpan<byte> exactPredecessorXps1 = default)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(did2Binding);
+        if (minimumOneTimeInventory is < 1 or > 4096 ||
+            lastResortReuseLimit is < 1 or > 64 ||
+            context.PrekeyServiceGeneration == 0)
+            throw new ArgumentException(
+                "The DID2 pre-key service policy is outside its closed bound.");
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            var current = _deviceAgreement
+                .RequireActiveDirectoryForProtocolOperation(
+                    context.CurrentDirectory);
+            if (!current.Identity.Account.Certificate.CanonicalBytes.Span
+                    .SequenceEqual(did2Binding.Identity.Account.Certificate
+                        .CanonicalBytes.Span) ||
+                !current.Record.DeepAccountId.Span.SequenceEqual(
+                    did2Binding.Record.DeepAccountId.Span) ||
+                !current.Record.NetworkId.Span.SequenceEqual(
+                    did2Binding.Identity.Account.Certificate.NetworkId.Span))
+                throw new CryptographicException(
+                    "The DID2 pre-key service is outside the active account.");
+            var certificate = current.Identity.ActiveDevices.Single(device =>
+                device.Certificate.DeviceId.Span.SequenceEqual(
+                    _deviceAgreement.DeviceId.Span)).Certificate;
+            byte[] capability;
+            byte[] predecessorHash;
+            if (exactPredecessorXps1.IsEmpty)
+            {
+                if (context.PrekeyServiceGeneration != 1)
+                    throw new CryptographicException(
+                        "An XPS1 V2 successor requires its exact predecessor.");
+                capability = RandomNonzero32();
+                predecessorHash = new byte[32];
+            }
+            else
+            {
+                var predecessor = DeepIdV2PreKeyServiceCodec.Decode(
+                    exactPredecessorXps1);
+                DeepIdV2PreKeyServiceCodec.VerifyDeviceSignature(predecessor,
+                    certificate.DeviceEd25519PublicKey.Span);
+                if (!predecessor.Field(1).Span.SequenceEqual(
+                        current.Record.NetworkId.Span) ||
+                    !predecessor.Field(3).Span.SequenceEqual(
+                        certificate.DeviceId.Span) ||
+                    !predecessor.Field(4).Span.SequenceEqual(
+                        Dpd1Reference(certificate.CanonicalHash.Span)) ||
+                    BinaryPrimitives.ReadUInt64BigEndian(
+                        predecessor.Field(5).Span) + 1 !=
+                        context.PrekeyServiceGeneration)
+                    throw new CryptographicException(
+                        "The XPS1 V2 predecessor is outside this device lineage.");
+                capability = predecessor.Field(2).ToArray();
+                predecessorHash = SHA256.HashData(exactPredecessorXps1);
+            }
+            ReadOnlyMemory<byte>[] fields =
+            [
+                current.Record.NetworkId, capability, certificate.DeviceId,
+                Dpd1Reference(certificate.CanonicalHash.Span),
+                U64(context.PrekeyServiceGeneration), predecessorHash,
+                U16(DeepIdV2Codec.Suite), U16(minimumOneTimeInventory),
+                U16(lastResortReuseLimit), U64(context.IssuedAtUnixSeconds),
+                U64(context.ExpiresAtUnixSeconds)
+            ];
+            var signature = Sign(DeepIdV2PreKeyServiceCodec
+                .CreateSignatureInput(fields));
+            try
+            {
+                var exact = DeepIdV2PreKeyServiceCodec.Encode(fields,
+                    signature);
+                DeepIdV2PreKeyServiceCodec.VerifyDeviceSignature(
+                    DeepIdV2PreKeyServiceCodec.Decode(exact),
+                    certificate.DeviceEd25519PublicKey.Span);
+                return new AuthoredDeepIdV2PreKeyService(exact, capability);
+            }
+            finally { CryptographicOperations.ZeroMemory(signature); }
+        }
+    }
+
     /// <summary>
     /// Authors one complete DID2-only V2 inventory from the exact active DMD1.
     /// No V1 codec, caller-supplied signer, raw private key or network write is
@@ -169,7 +284,8 @@ public sealed partial class Dpk2AuthoringAuthority
         ReadOnlySpan<byte> magic, string parameter)
     {
         if (value.Length != 38 || !value[..4].SequenceEqual(magic) ||
-            BinaryPrimitives.ReadUInt16BigEndian(value[4..6]) != 1 ||
+            BinaryPrimitives.ReadUInt16BigEndian(value[4..6]) !=
+                (magic.SequenceEqual(ProtocolMagicBytes.XPS1) ? 2 : 1) ||
             value[6..].IndexOfAnyExcept((byte)0) < 0)
             throw new ArgumentException("The DID2 inventory reference is invalid.",
                 parameter);

@@ -121,7 +121,8 @@ public static class DeepIdV2PreKeyManifestCodec
         ReadOnlySpan<byte> magic)
     {
         if (!value[..4].SequenceEqual(magic) ||
-            BinaryPrimitives.ReadUInt16BigEndian(value[4..6]) != 1 ||
+            BinaryPrimitives.ReadUInt16BigEndian(value[4..6]) !=
+                (magic.SequenceEqual(ProtocolMagicBytes.XPS1) ? 2 : 1) ||
             ApplicationCoreFormat.IsZero(value[6..]))
             Invalid(ApplicationCoreRejection.InvalidReference,
                 "XPI1 V2 has an unknown or empty artifact reference.");

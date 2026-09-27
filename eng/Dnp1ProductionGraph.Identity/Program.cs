@@ -759,7 +759,10 @@ internal static class GraphPolicy
                 // V2 XPI1 successor check requires the exact, durably accepted
                 // predecessor and unchanged pre-key service identity.
                 "Deep.Protocol|12832|B6A5B402D0A4F7D6F6989EA46BB4A3AEDA946B4EF9BD28E2C6E8043114B85306",
-                "Deep.Protocol|12832|6B681F3D909E0D2132194D230A04843504AC3B1BB6A9CB3E840B251074118E16"
+                "Deep.Protocol|12832|6B681F3D909E0D2132194D230A04843504AC3B1BB6A9CB3E840B251074118E16",
+                // DID2-only XPS1 V2 codec and DPD1-owned author; no runtime publication.
+                "Deep.Protocol|12853|0853A6F8558EBCFDA9353478C5B05A08CB7CB8BE6FFE3D25070131C0DA72F5D9",
+                "Deep.Protocol|12853|76C4035740998BFBA7C36D074158BA09F342EBE8D89E44A9822E16BD923CAB0A"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

@@ -31,6 +31,7 @@ public sealed class MessagingCryptoSurfaceTests
                 nameof(ExactDpe2ReceiveSuccessOutcome),
                 nameof(ExactDpe2SendSuccessCapability),
                 nameof(AuthoredDpk2InventoryV2),
+                nameof(AuthoredDeepIdV2PreKeyService),
                 nameof(AuthoredDpk2Offering),
                 nameof(Dpk2AuthoringAuthority),
                 nameof(Dpk2AuthoringContext),
@@ -91,6 +92,7 @@ public sealed class MessagingCryptoSurfaceTests
         Assert.Empty(typeof(ExactDpe2ReceiveSuccessCapability).GetConstructors());
         Assert.Empty(typeof(AuthoredDpk2Offering).GetConstructors());
         Assert.Empty(typeof(AuthoredDpk2InventoryV2).GetConstructors());
+        Assert.Empty(typeof(AuthoredDeepIdV2PreKeyService).GetConstructors());
         Assert.DoesNotContain(
             typeof(AuthoredDpk2InventoryV2).GetProperties(BindingFlags.Public | BindingFlags.Instance),
             static property => property.PropertyType == typeof(byte[]) ||

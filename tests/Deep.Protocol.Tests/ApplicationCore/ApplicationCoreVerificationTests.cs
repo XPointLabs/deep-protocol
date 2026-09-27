@@ -249,34 +249,22 @@ public sealed class ApplicationCoreVerificationTests
         var adl = DeepIdV2AccountDirectoryLookupCodec.Author(did,
             fixture.Network, 0, ApplicationCoreFixture.Bytes(32, 0x40), 1,
             new byte[38], new byte[32]);
-        static byte[] WriteXps(IReadOnlyList<ReadOnlyMemory<byte>> fields)
-        {
-            var bytes = new byte[352];
-            var writer = new ApplicationRecordWriter(bytes,
-                Encoding.ASCII.GetBytes("XPS1"), 12, 1, 0x0201);
-            for (ushort tag = 1; tag <= 12; tag++)
-                writer.Write(tag, fields[tag - 1].Span);
-            writer.Complete();
-            return bytes;
-        }
         static byte[] SignXps(ReadOnlyMemory<byte>[] fields, KeyPair signer)
         {
-            var unsigned = WriteXps(fields);
-            var projection = unsigned[..280];
-            BinaryPrimitives.WriteUInt16BigEndian(projection.AsSpan(8), 11);
+            var unsigned = fields.Take(11).ToArray();
             fields[11] = PublicKeyAuth.SignDetached(
-                ApplicationCoreFormat.SignatureInput(
-                    "Deep/ContactResolver/V1/prekey-service", projection, 0x0201),
+                DeepIdV2PreKeyServiceCodec.CreateSignatureInput(unsigned),
                 signer.PrivateKey);
-            return WriteXps(fields);
+            return DeepIdV2PreKeyServiceCodec.Encode(unsigned,
+                fields[11].Span);
         }
         var xpsFields = new ReadOnlyMemory<byte>[]
         {
             fixture.Network, ApplicationCoreFixture.Bytes(32, 0x46),
             fixture.DeviceId, ContactRef("DPD1", 1,
                 fixture.Identity.ActiveDevices[0].Certificate.CanonicalHash.Span),
-            Be64(1), ApplicationCoreFixture.Bytes(32, 0x48),
-            Be16(0x0201), Be16(1), Be16(1),
+            Be64(1), new byte[32],
+            Be16(DeepIdV2Codec.Suite), Be16(1), Be16(1),
             Be64(10), Be64(20), ApplicationCoreFixture.Bytes(64, 0x47),
         };
         var xps = SignXps(xpsFields, fixture.DeviceKey);
@@ -341,6 +329,17 @@ public sealed class ApplicationCoreVerificationTests
         AssertVerificationFailure(() =>
             DeepIdV2ContactBundleCodec.VerifyPreKeyServices(
                 SignBundle(staleXpsBundleFields, fixture.DeviceKey),
+                contactVerified, 15));
+        var retiredXpsList = xpsList.ToArray();
+        BinaryPrimitives.WriteUInt16BigEndian(retiredXpsList.AsSpan(5 + 4),
+            1);
+        BinaryPrimitives.WriteUInt16BigEndian(retiredXpsList.AsSpan(5 + 6),
+            0x0201);
+        var retiredXpsBundleFields = bundleFields.ToArray();
+        retiredXpsBundleFields[11] = retiredXpsList;
+        Assert.Throws<ApplicationCoreFormatException>(() =>
+            DeepIdV2ContactBundleCodec.VerifyPreKeyServices(
+                SignBundle(retiredXpsBundleFields, fixture.DeviceKey),
                 contactVerified, 15));
         var oldBundle = bundle.CanonicalBytes.ToArray();
         oldBundle[5] = 1;
@@ -498,7 +497,7 @@ public sealed class ApplicationCoreVerificationTests
             fixture.Network, xpsFields[1], fixture.DeviceId,
             ContactRef("DPD1", 1, fixture.Identity.ActiveDevices[0]
                 .Certificate.CanonicalHash.Span), InventoryU64(1),
-            ContactRef("XPS1", 1, xpsHash), InventoryU64(1), new byte[32],
+            ContactRef("XPS1", 2, xpsHash), InventoryU64(1), new byte[32],
             InventoryU16(32), root ?? ApplicationCoreFixture.Bytes(32, 0x49),
             lastResortHash ?? ApplicationCoreFixture.Bytes(32, 0x4a), dmdHash,
             ContactRef("DRS1", 1,

@@ -123,11 +123,18 @@ public sealed class DeepIdV2BoundedPreKeyPublicationCodecTests
                 Bytes(32, 0x31), Did2(), Dca1(), Xps1())
                 .SelectMany(static fragment => fragment));
 
+        var retiredXps = Xps1();
+        BinaryPrimitives.WriteUInt16BigEndian(retiredXps.AsSpan(4), 1);
+        BinaryPrimitives.WriteUInt16BigEndian(retiredXps.AsSpan(6), 0x0201);
+        Assert.Throws<ApplicationCoreFormatException>(() =>
+            DeepIdV2BoundedPreKeyPublicationCodec.CreateSequence(aggregate,
+                Bytes(32, 0x31), Did2(), Dca1(), retiredXps));
+
         var changedPublicSupport = sequence[0].ToArray();
         changedPublicSupport[FieldOffset(changedPublicSupport, 12) +
             DeepIdV2Codec.Did2Length +
             DeepIdV2ContactAuthorizationCodec.CanonicalLength] ^= 1;
-        Assert.Equal(ApplicationCoreRejection.CrossFieldMismatch,
+        Assert.Equal(ApplicationCoreRejection.EmbeddedRecordRejected,
             Assert.Throws<ApplicationCoreFormatException>(() =>
                 DeepIdV2BoundedPreKeyPublicationCodec.Decode(changedPublicSupport))
                 .Rejection);
@@ -244,7 +251,8 @@ public sealed class DeepIdV2BoundedPreKeyPublicationCodecTests
     {
         var output = new byte[38];
         Encoding.ASCII.GetBytes(magic).CopyTo(output, 0);
-        BinaryPrimitives.WriteUInt16BigEndian(output.AsSpan(4), 1);
+        BinaryPrimitives.WriteUInt16BigEndian(output.AsSpan(4),
+            magic == "XPS1" ? (ushort)2 : (ushort)1);
         hash.CopyTo(output, 6);
         return output;
     }
@@ -270,8 +278,17 @@ public sealed class DeepIdV2BoundedPreKeyPublicationCodecTests
     private static byte[] Dca1() => Bytes(
         DeepIdV2ContactAuthorizationCodec.CanonicalLength, 0xd1);
 
-    private static byte[] Xps1() => Bytes(
-        DeepIdV2BoundedPreKeyPublicationCodec.Xps1Length, 0xe1);
+    private static byte[] Xps1()
+    {
+        ReadOnlyMemory<byte>[] fields =
+        [
+            Bytes(16, 0x11), Bytes(32, 0x35), Bytes(32, 0x21),
+            Reference("DPD1", Bytes(32, 0x25)), Be64(1), new byte[32],
+            Be16(DeepIdV2Codec.Suite), Be16(32), Be16(1), Be64(100),
+            Be64(100_000)
+        ];
+        return DeepIdV2PreKeyServiceCodec.Encode(fields, Bytes(64, 0xe1));
+    }
 
     private static int FieldOffset(ReadOnlySpan<byte> wire, int soughtTag)
     {

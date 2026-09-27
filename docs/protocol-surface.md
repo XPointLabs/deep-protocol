@@ -97,6 +97,11 @@ release API or durability claim.
   production capability producers, asynchronous public API and runtime composition
   are absent/inactive. PMA2/PMT2/PMS2 route-authority activation remains a separate
   producer gate; codec presence cannot substitute for it.
+- DID2 XPS1 is a separate 352-byte version-2/suite-0x0301 descriptor with
+  V2 signature input, generation-1 genesis and version-2 ArtifactRef. The
+  local DPD1 signer can author it; DCB1/XPI1/XPP1 DID2 consumers reject the
+  retired V1 descriptor and signature domain. Local authoring does not persist
+  or publish the descriptor for MAUI yet.
 - The DID2 XPP1 version-2/suite-0x0301 surface now has two mutually rejecting
   closed shapes: the five-tag exact aggregate and a twelve-tag bounded
   manifest/chunk/commit transport carrier. The carrier verifies exact slice

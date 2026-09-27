@@ -139,11 +139,9 @@ public static class DeepIdV2PreKeyInventoryVerifier
             Reject("XPI1 responder has no current XPS1 descriptor.");
         var list = closure.Bundle.FieldSpan(12);
         var xps = list.Slice(1 + index * 356 + 4, 352);
-        Span<ApplicationFieldSlice> fields = stackalloc ApplicationFieldSlice[12];
-        ApplicationCoreFormat.Preflight(xps, ProtocolMagicBytes.XPS1, 12,
-            352, 352, fields, 1, 0x0201);
+        var descriptor = DeepIdV2PreKeyServiceCodec.Decode(xps);
         return BinaryPrimitives.ReadUInt16BigEndian(
-            ApplicationCoreFormat.Field(xps, fields, 9));
+            descriptor.Field(9).Span);
     }
 
     private static void Reject(string message) => throw ApplicationCoreFormat.Error(

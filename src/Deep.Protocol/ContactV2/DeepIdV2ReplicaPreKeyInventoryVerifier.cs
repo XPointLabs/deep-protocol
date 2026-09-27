@@ -34,7 +34,7 @@ public static class DeepIdV2ReplicaPreKeyInventoryVerifier
             Reject("XPP1 publisher hint differs from the current DID2 recipient.");
 
         var manifest = publication.Manifest;
-        var xps = DecodeXps1(exactXps1);
+        var xps = DeepIdV2PreKeyServiceCodec.Decode(exactXps1);
         var directory = authorization.Directory.Record;
         var identity = authorization.Binding.Identity;
         var signer = identity.ActiveDevices.SingleOrDefault(candidate =>
@@ -67,14 +67,9 @@ public static class DeepIdV2ReplicaPreKeyInventoryVerifier
             current.TrustedUpperUnixSeconds >= U64(manifest.FieldSpan(15)))
             Reject("XPP1 XPS1/XPI1 differ from the current DID2 device authority.");
 
-        var unsignedXps = exactXps1[..280].ToArray();
-        BinaryPrimitives.WriteUInt16BigEndian(unsignedXps.AsSpan(8), 11);
-        var xpsSignatureInput = ApplicationCoreFormat.SignatureInput(
-            "Deep/ContactResolver/V1/prekey-service", unsignedXps, 0x0201);
         var signingKey = certificate.DeviceEd25519PublicKey.ToArray();
-        if (!PublicKeyAuth.VerifyDetached(Field(xps, 12).ToArray(),
-                xpsSignatureInput, signingKey) ||
-            !PublicKeyAuth.VerifyDetached(manifest.Field(16).ToArray(),
+        DeepIdV2PreKeyServiceCodec.VerifyDeviceSignature(xps, signingKey);
+        if (!PublicKeyAuth.VerifyDetached(manifest.Field(16).ToArray(),
                 manifest.SignatureInput.ToArray(), signingKey))
             Reject("XPP1 public pre-key service or inventory signature is invalid.");
 
@@ -112,41 +107,16 @@ public static class DeepIdV2ReplicaPreKeyInventoryVerifier
             Reject("XPP1 inventory differs from the complete signed XPI1 root.");
     }
 
-    private static Xps1Fields DecodeXps1(ReadOnlySpan<byte> exact)
-    {
-        Span<ApplicationFieldSlice> slices = stackalloc ApplicationFieldSlice[12];
-        ApplicationCoreFormat.Preflight(exact, ProtocolMagicBytes.XPS1, 12,
-            352, 352, slices, 1, 0x0201);
-        ReadOnlySpan<int> lengths = [16, 32, 32, 38, 8, 32, 2, 2, 2, 8, 8, 64];
-        for (var tag = 1; tag <= lengths.Length; tag++)
-            ApplicationCoreFormat.ExactLength(slices, tag, lengths[tag - 1]);
-        var fields = new byte[12][];
-        for (var tag = 1; tag <= fields.Length; tag++)
-            fields[tag - 1] = ApplicationCoreFormat.Field(exact, slices, tag)
-                .ToArray();
-        if (fields[1].AsSpan().IndexOfAnyExcept((byte)0) < 0 ||
-            fields[2].AsSpan().IndexOfAnyExcept((byte)0) < 0 ||
-            fields[11].AsSpan().IndexOfAnyExcept((byte)0) < 0 ||
-            !fields[3].AsSpan(0, 4).SequenceEqual(ProtocolMagicBytes.DPD1) ||
-            U16(fields[3].AsSpan(4, 2)) != 1 ||
-            U16(fields[6]) != 0x0201 || U16(fields[7]) == 0 ||
-            U16(fields[8]) == 0 ||
-            (fields[5].AsSpan().IndexOfAnyExcept((byte)0) < 0) !=
-                (U64(fields[4]) == 0) ||
-            U64(fields[9]) >= U64(fields[10]))
-            Reject("XPP1 XPS1 descriptor is not canonical.");
-        return new Xps1Fields(fields);
-    }
-
-    private static ReadOnlySpan<byte> Field(Xps1Fields xps, int tag) =>
-        xps.Fields[tag - 1];
+    private static ReadOnlySpan<byte> Field(ParsedXps1V2 xps, int tag) =>
+        xps.Field(tag).Span;
 
     private static byte[] Reference(ReadOnlySpan<byte> magic,
         ReadOnlySpan<byte> hash)
     {
         var bytes = new byte[38];
         magic.CopyTo(bytes);
-        BinaryPrimitives.WriteUInt16BigEndian(bytes.AsSpan(4), 1);
+        BinaryPrimitives.WriteUInt16BigEndian(bytes.AsSpan(4),
+            magic.SequenceEqual(ProtocolMagicBytes.XPS1) ? (ushort)2 : (ushort)1);
         hash.CopyTo(bytes.AsSpan(6));
         return bytes;
     }
@@ -161,5 +131,4 @@ public static class DeepIdV2ReplicaPreKeyInventoryVerifier
         ApplicationCoreValidationStage.CryptographicVerification,
         ApplicationCoreRejection.VerificationFailed, message);
 
-    private sealed record Xps1Fields(byte[][] Fields);
 }

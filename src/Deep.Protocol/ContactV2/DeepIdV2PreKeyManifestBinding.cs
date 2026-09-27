@@ -57,25 +57,23 @@ public static class DeepIdV2PreKeyManifestBinding
         }
         var list = bundle.FieldSpan(12);
         var xps = list.Slice(1 + index * 356 + 4, 352);
-        Span<ApplicationFieldSlice> slices = stackalloc ApplicationFieldSlice[12];
-        ApplicationCoreFormat.Preflight(xps, ProtocolMagicBytes.XPS1, 12,
-            352, 352, slices, 1, 0x0201);
+        var service = DeepIdV2PreKeyServiceCodec.Decode(xps);
         var expectedDpd = Reference(ProtocolMagicBytes.DPD1, 1,
             device.Certificate.CanonicalHash.Span);
-        var expectedXps = Reference(ProtocolMagicBytes.XPS1, 1,
+        var expectedXps = Reference(ProtocolMagicBytes.XPS1, 2,
             SHA256.HashData(xps));
         var expectedDrs = Reference(ProtocolMagicBytes.DRS1, 1,
             identity.Revocations.Snapshot.CanonicalHash.Span);
         if (!manifest.FieldSpan(1).SequenceEqual(bundle.FieldSpan(1)) ||
-            !manifest.FieldSpan(2).SequenceEqual(Get(xps, slices, 2)) ||
+            !manifest.FieldSpan(2).SequenceEqual(service.Field(2).Span) ||
             !manifest.FieldSpan(4).SequenceEqual(expectedDpd) ||
             !manifest.FieldSpan(6).SequenceEqual(expectedXps) ||
-            U64(manifest.FieldSpan(5)) != U64(Get(xps, slices, 5)) ||
-            U16(manifest.FieldSpan(9)) < U16(Get(xps, slices, 8)) ||
+            U64(manifest.FieldSpan(5)) != U64(service.Field(5).Span) ||
+            U16(manifest.FieldSpan(9)) < U16(service.Field(8).Span) ||
             !manifest.FieldSpan(12).SequenceEqual(directory.RecordHash.Span) ||
             !manifest.FieldSpan(13).SequenceEqual(expectedDrs) ||
-            U64(manifest.FieldSpan(14)) < U64(Get(xps, slices, 10)) ||
-            U64(manifest.FieldSpan(15)) > U64(Get(xps, slices, 11)) ||
+            U64(manifest.FieldSpan(14)) < U64(service.Field(10).Span) ||
+            U64(manifest.FieldSpan(15)) > U64(service.Field(11).Span) ||
             U64(manifest.FieldSpan(14)) < U64(bundle.FieldSpan(17)) ||
             U64(manifest.FieldSpan(15)) > U64(bundle.FieldSpan(18)) ||
             lower < U64(manifest.FieldSpan(14)) ||
@@ -86,10 +84,6 @@ public static class DeepIdV2PreKeyManifestBinding
                 device.Certificate.DeviceEd25519PublicKey.ToArray()))
             Reject("XPI1 responder signature is invalid.");
     }
-
-    private static ReadOnlySpan<byte> Get(ReadOnlySpan<byte> canonical,
-        ReadOnlySpan<ApplicationFieldSlice> slices, int tag) =>
-        ApplicationCoreFormat.Field(canonical, slices, tag);
 
     private static ushort U16(ReadOnlySpan<byte> value) =>
         BinaryPrimitives.ReadUInt16BigEndian(value);
