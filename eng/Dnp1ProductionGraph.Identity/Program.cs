@@ -734,7 +734,10 @@ internal static class GraphPolicy
                 "Deep.Protocol|12751|1CF2212C63A313DE11F4284506C9DD64990825E1C7DC92767A14E17AD5129453",
                 // V2 XNA1 threshold signatures verified; freshness and publication remain gated.
                 "Deep.Protocol|12751|279EA2E6335B515E729CB56EF0375E6044EEB5EB751553354AE56C70BEDA5825",
-                "Deep.Protocol|12751|627FBF29C1C4F8ED0366670706F96C654A4AD6306B3E399A4E01CE3886F743B3"
+                "Deep.Protocol|12751|627FBF29C1C4F8ED0366670706F96C654A4AD6306B3E399A4E01CE3886F743B3",
+                // V2 threshold also binds the live DID2 head and trusted time; not publication authority.
+                "Deep.Protocol|12751|D5E191DEE2AFC6EF5658431264CFE76AF5011D3C131CC7CF2C65212307E6F252",
+                "Deep.Protocol|12751|AE84930F20787269261F8BDCAABBD55A4EFDBC8CC8DA78987BED0FE78251F49A"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

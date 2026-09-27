@@ -122,7 +122,8 @@ public sealed class DeepIdV2ContactPublicationCodecTests
 
     internal static (byte[] Xpu, byte[] Xpa, byte[] BodyHash,
         byte[][] Fields, byte[][] XpaFields) Pair(
-        int ciphertextLength, int routeLength, int witnesses)
+        int ciphertextLength, int routeLength, int witnesses,
+        byte[]? directoryHeadHash = null)
     {
         var network = Bytes(16, 0x11);
         var operation = Bytes(32, 0x21);
@@ -146,7 +147,7 @@ public sealed class DeepIdV2ContactPublicationCodecTests
             xpu);
         var bodyHash = DeepIdV2ContactPublicationCodec
             .ComputeAuthorizedBodyHash(skeleton);
-        var head = Bytes(32, 0x61);
+        var head = directoryHeadHash ?? Bytes(32, 0x61);
         var authorizationInput = operation.Concat(bodyHash).Concat(head).ToArray();
         var authorizationId = ApplicationCoreFormat.Sha256Domain(
             "Deep/ContactResolver/V2/publication-authorization-id",

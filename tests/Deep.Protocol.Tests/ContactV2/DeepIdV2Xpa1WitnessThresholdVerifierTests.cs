@@ -72,12 +72,67 @@ public sealed class DeepIdV2Xpa1WitnessThresholdVerifierTests
                 { FailureDomain = Bytes(32, 0x61) }).ToArray(), 2));
     }
 
+    [Fact]
+    public void SignedV2XpaBindsExactCurrentDirectoryHeadAndTrustedInterval()
+    {
+        var signers = Signers();
+        var authority = Authority(signers, 2);
+        var boot = Bytes(16, 0x51);
+        var head = new AccountDirectoryAdh1(
+            authority.NetworkId.Span, 0, new byte[32], 0,
+            AccountDirectoryRfc6962.ComputeEmptyTreeHash(),
+            DeepIdV2DirectorySparseMap.EmptyMapRoot.Span,
+            authority.AuthorityCoreReference.Span,
+            authority.DirectoryWitnessPolicyHash.Span,
+            1, 200, 2,
+            [new AccountDirectoryAdh1WitnessEntry(
+                signers[0].Id, Bytes(64, 0x71))]);
+        var exactHead = AccountDirectoryAdh1Codec.Encode(head);
+        var headHash = AccountDirectoryCrypto.ComputeAdh1CoreHash(head);
+        var request = SignedRequest(signers.Take(2).ToArray(),
+            directoryHeadHash: headHash);
+        var dtt = new AccountDirectoryDtt1(
+            authority.NetworkId.Span, Bytes(32, 0x52), 10, 1,
+            headHash, 0, request.Field(3).Span, 0,
+            authority.AuthorityCoreReference.Span,
+            authority.DirectoryWitnessPolicyHash.Span,
+            10, 11, Bytes(32, 0x53),
+            [new AccountDirectoryDtt1WitnessReceipt(
+                signers[0].Id, Bytes(64, 0x72))]);
+        var freshness = new VerifiedDeepIdV2DirectoryFreshness(
+            exactHead, AccountDirectoryDtt1Codec.Encode(dtt), [],
+            authority.NetworkId.Span, Bytes(32, 0x54),
+            new AccountDirectoryMonotonicRequestWindow(boot, 1, 2, 3),
+            30, 10, 11, AccountDirectoryAdp1ResultKind.NonMembership,
+            null, false, null);
+
+        var verified = DeepIdV2Xpa1CurrentDirectoryWitnessVerifier.Verify(
+            request, authority, freshness, boot, 3);
+
+        Assert.False(DeepIdV2Xpa1CurrentDirectoryWitnessVerifier.RuntimeActivation);
+        Assert.Equal(request.CanonicalBytes.ToArray(), verified.ExactXpu1.ToArray());
+        Assert.Equal(headHash, verified.DirectoryHeadHash.ToArray());
+        Assert.Empty(typeof(VerifiedXpa1V2CurrentDirectoryWitness)
+            .GetConstructors());
+        Assert.Throws<CryptographicException>(() =>
+            DeepIdV2Xpa1CurrentDirectoryWitnessVerifier.Verify(
+                request, authority, freshness, Bytes(16, 0x55), 3));
+        Assert.Throws<CryptographicException>(() =>
+            DeepIdV2Xpa1CurrentDirectoryWitnessVerifier.Verify(
+                request, authority, freshness, boot, 30));
+        Assert.Throws<CryptographicException>(() =>
+            DeepIdV2Xpa1CurrentDirectoryWitnessVerifier.Verify(
+                SignedRequest(signers.Take(2).ToArray()),
+                authority, freshness, boot, 3));
+    }
+
     private static ParsedXpu1V2 SignedRequest(
-        IReadOnlyList<Signer> signers, bool oldDomain = false)
+        IReadOnlyList<Signer> signers, bool oldDomain = false,
+        byte[]? directoryHeadHash = null)
     {
         var pair = DeepIdV2ContactPublicationCodecTests.Pair(
             DeepIdV2ContactPublicationCodec.MinimumCiphertextLength,
-            4_143, signers.Count);
+            4_143, signers.Count, directoryHeadHash);
         var xpa = DeepIdV2ContactPublicationCodec.DecodeXpa1(pair.Xpa);
         Assert.Equal(ApplicationCoreFormat.SignatureInput(
             "Deep/ContactResolver/V2/publication-authorization",
