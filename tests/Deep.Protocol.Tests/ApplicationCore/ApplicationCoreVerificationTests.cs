@@ -583,6 +583,67 @@ public sealed class ApplicationCoreVerificationTests
         Assert.False(DeepIdV2PreKeyInventoryVerifier.RuntimeActivation);
         DeepIdV2PreKeyInventoryVerifier.VerifyComplete(closure, currentContact,
             completeManifest, oneTimeMembers, lastResortMember, bootId, 3);
+        var publication = DeepIdV2PreKeyPublicationCodec.Decode(
+            DeepIdV2PreKeyPublicationCodec.Encode(fixture.Network,
+                ApplicationCoreFixture.Bytes(32, 0xd1),
+                ApplicationCoreFixture.Bytes(32, 0xd2), completeManifest,
+                oneTimeMembers, lastResortMember));
+        Assert.False(DeepIdV2PreKeyPublicationCodec.RuntimeActivation);
+        Assert.Equal(DeepIdV2PreKeyPublicationCodec.MinimumTotalBytes,
+            publication.CanonicalBytes.Length);
+        DeepIdV2PreKeyInventoryVerifier.VerifyComplete(closure, currentContact,
+            publication.Manifest, publication.OneTimeMembers,
+            publication.LastResortMember, bootId, 3);
+        var oldPublicationEnvelope = publication.CanonicalBytes.ToArray();
+        BinaryPrimitives.WriteUInt16BigEndian(oldPublicationEnvelope.AsSpan(4, 2), 1);
+        Assert.Equal(ApplicationCoreRejection.WrongVersion,
+            Assert.Throws<ApplicationCoreFormatException>(() =>
+                DeepIdV2PreKeyPublicationCodec.Decode(oldPublicationEnvelope)).Rejection);
+        var oldMemberEnvelope = publication.CanonicalBytes.ToArray();
+        const int firstMemberStart = 12 + 5 * 8 + 16 + 32 + 32 +
+            DeepIdV2PreKeyManifestCodec.CanonicalLength + 2 + 4;
+        BinaryPrimitives.WriteUInt16BigEndian(
+            oldMemberEnvelope.AsSpan(firstMemberStart + 4, 2), 1);
+        Assert.Equal(ApplicationCoreRejection.EmbeddedRecordRejected,
+            Assert.Throws<ApplicationCoreFormatException>(() =>
+                DeepIdV2PreKeyPublicationCodec.Decode(oldMemberEnvelope)).Rejection);
+        var wrongCount = publication.CanonicalBytes.ToArray();
+        BinaryPrimitives.WriteUInt16BigEndian(
+            wrongCount.AsSpan(firstMemberStart - 6, 2), 31);
+        Assert.Equal(ApplicationCoreRejection.InvalidFieldLength,
+            Assert.Throws<ApplicationCoreFormatException>(() =>
+                DeepIdV2PreKeyPublicationCodec.Decode(wrongCount)).Rejection);
+        ReadOnlyMemory<byte>[] receiptFields =
+        [
+            fixture.Network, publication.PublicationOperationId,
+            publication.Manifest.ExactHash, publication.PlacementHash,
+            ApplicationCoreFixture.Bytes(32, 0xd3), InventoryU64(11)
+        ];
+        var receiptSignature = PublicKeyAuth.SignDetached(
+            DeepIdV2PreKeyCommitReceiptCodec.CreateSignatureInput(receiptFields),
+            fixture.DeviceKey.PrivateKey);
+        var receipt = DeepIdV2PreKeyCommitReceiptCodec.Decode(
+            DeepIdV2PreKeyCommitReceiptCodec.Encode(receiptFields,
+                receiptSignature));
+        Assert.False(DeepIdV2PreKeyCommitReceiptCodec.RuntimeActivation);
+        Assert.Equal(DeepIdV2PreKeyCommitReceiptCodec.CanonicalLength,
+            receipt.CanonicalBytes.Length);
+        Assert.True(PublicKeyAuth.VerifyDetached(receiptSignature,
+            receipt.SignatureInput.ToArray(), fixture.DeviceKey.PublicKey));
+        var substitutedReceiptFields = receiptFields.ToArray();
+        substitutedReceiptFields[2] = ApplicationCoreFixture.Bytes(32, 0xd4);
+        var substitutedReceipt = DeepIdV2PreKeyCommitReceiptCodec.Decode(
+            DeepIdV2PreKeyCommitReceiptCodec.Encode(substitutedReceiptFields,
+                receiptSignature));
+        Assert.False(PublicKeyAuth.VerifyDetached(
+            substitutedReceipt.Field(7).ToArray(),
+            substitutedReceipt.SignatureInput.ToArray(),
+            fixture.DeviceKey.PublicKey));
+        var oldReceiptEnvelope = receipt.CanonicalBytes.ToArray();
+        BinaryPrimitives.WriteUInt16BigEndian(oldReceiptEnvelope.AsSpan(4, 2), 1);
+        Assert.Equal(ApplicationCoreRejection.WrongVersion,
+            Assert.Throws<ApplicationCoreFormatException>(() =>
+                DeepIdV2PreKeyCommitReceiptCodec.Decode(oldReceiptEnvelope)).Rejection);
         AssertVerificationFailure(() => DeepIdV2PreKeyInventoryVerifier.VerifyComplete(
             closure, currentContact, completeManifest,
             oneTimeMembers.Reverse().ToArray(), lastResortMember, bootId, 3));

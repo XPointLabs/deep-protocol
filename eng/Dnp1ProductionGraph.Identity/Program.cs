@@ -702,7 +702,12 @@ internal static class GraphPolicy
                 "Deep.Protocol|12645|987EBEA96095A44137CA7439B2FD6AD963DC50F02792C6997D42919191132667",
                 // DID2 proof-bound DPK2 verification and exact-byte DPH2 transcript.
                 "Deep.Protocol|12651|813467883A8901DD4917EE86010D5F7E6F7D3D0340A369726E4EA31E16575D54",
-                "Deep.Protocol|12651|9BCD15D0AB83B8993B4ECDE7DF8B3F3FA0E819DA90CAB3B313A997F9531ACC31"
+                "Deep.Protocol|12651|9BCD15D0AB83B8993B4ECDE7DF8B3F3FA0E819DA90CAB3B313A997F9531ACC31",
+                // DID2-only bounded XPP1 inventory and XIC1 receipt structural codecs.
+                "Deep.Protocol|12673|DCF29DDE02D23DD2FC9041DA793E5FD7340881C8AD5AC13EE13871F9D418D0E4",
+                "Deep.Protocol|12686|19320DC11F52773A81BAFBEB095247FB56A57AF079758657D665524A932FEF19",
+                // Normalized package-witness build of the same bounded V2 codecs.
+                "Deep.Protocol|12686|BEF3075BDD78803E8895B15968B7810B8EC1AA9C6EB874CF8F42F08AABF54C3D"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [
