@@ -130,6 +130,42 @@ public sealed class ApplicationCoreVerificationTests
             hash.CopyTo(bytes.AsSpan(6));
             return bytes;
         }
+        // Internal fixture isolates the manifest interval binding. Separate
+        // directory-proof tests verify the signed ADH1/DTT1/ADP1 promotion.
+        var checkpointRecord = DeepIdV2AccountDirectoryCodec.Author(
+            fixture.Network,
+            DeepIdV2AccountDirectoryCodec.ComputeDirectoryLeafKey(
+                fixture.Network, did),
+            1, 0, new byte[32],
+            ContactRef("DPA1", 1, dpa.CanonicalHash.Span),
+            ContactRef("DRS1", 1,
+                fixture.Revocations.Snapshot.CanonicalHash.Span),
+            directory.Record.RecordHash.Span, valid.RecordHash.Span,
+            DeepIdV2AccountDirectoryCodec
+                .ComputeRevokedDcaAuthorizationIdsHash([]),
+            11, 2, ApplicationCoreFixture.Bytes(64, 0x78));
+        var checkpoint = new VerifiedAdc1V2(checkpointRecord, verified,
+            directory, []);
+        var authorityReference = ContactRef("XNA1", 1,
+            ApplicationCoreFixture.Bytes(32, 0x79));
+        var exactHead = AccountDirectoryAdh1Codec.Encode(
+            new AccountDirectoryAdh1(fixture.Network, 0, new byte[32], 0,
+                AccountDirectoryRfc6962.ComputeEmptyTreeHash(),
+                DeepIdV2DirectorySparseMap.EmptyMapRoot.Span,
+                authorityReference, ApplicationCoreFixture.Bytes(32, 0x7a),
+                1, 100, 2,
+                [new AccountDirectoryAdh1WitnessEntry(
+                    ApplicationCoreFixture.Bytes(32, 0x7b),
+                    ApplicationCoreFixture.Bytes(64, 0x7c))]));
+        var bootId = ApplicationCoreFixture.Bytes(16, 0x7d);
+        var freshness = new VerifiedDeepIdV2DirectoryFreshness(
+            exactHead, [], [], fixture.Network,
+            checkpoint.Checkpoint.DirectoryLeafKey.Span,
+            new AccountDirectoryMonotonicRequestWindow(bootId, 1, 2, 3),
+            60, 15, 16, AccountDirectoryAdp1ResultKind.CurrentValue,
+            checkpoint, false, null);
+        var currentContact = DeepIdV2CurrentContactAuthorizationVerifier.Verify(
+            freshness, contactVerified, bootId, 3);
         var xirFields = new ReadOnlyMemory<byte>[]
         {
             fixture.Network, ApplicationCoreFixture.Bytes(32, 0x31),
@@ -415,23 +451,42 @@ public sealed class ApplicationCoreVerificationTests
             fixture.DeviceKey);
         Assert.False(DeepIdV2PreKeyManifestBinding.RuntimeActivation);
         DeepIdV2PreKeyManifestBinding.Verify(
-            closure, contactVerified, manifest, 15);
+            closure, currentContact, manifest, bootId, 3);
+        DeepIdV2PreKeyManifestBinding.Verify(
+            closure, currentContact, manifest, bootId, 5);
+        var shortenedManifest = SignInventory(InventoryFields(
+            SHA256.HashData(xps), directory.Record.RecordHash.ToArray(), 19),
+            fixture.DeviceKey);
         AssertVerificationFailure(() => DeepIdV2PreKeyManifestBinding.Verify(
-            closure, contactVerified,
+            closure, currentContact, shortenedManifest, bootId, 6));
+        AssertVerificationFailure(() => DeepIdV2PreKeyManifestBinding.Verify(
+            closure, currentContact,
             SignInventory(InventoryFields(ApplicationCoreFixture.Bytes(32, 0x4b),
-                directory.Record.RecordHash.ToArray()), fixture.DeviceKey), 15));
+                directory.Record.RecordHash.ToArray()), fixture.DeviceKey),
+            bootId, 3));
         AssertVerificationFailure(() => DeepIdV2PreKeyManifestBinding.Verify(
-            closure, contactVerified,
+            closure, currentContact,
             SignInventory(InventoryFields(SHA256.HashData(xps),
-                ApplicationCoreFixture.Bytes(32, 0x4c)), fixture.DeviceKey), 15));
+                ApplicationCoreFixture.Bytes(32, 0x4c)), fixture.DeviceKey),
+            bootId, 3));
         AssertVerificationFailure(() => DeepIdV2PreKeyManifestBinding.Verify(
-            closure, contactVerified,
+            closure, currentContact,
             SignInventory(InventoryFields(SHA256.HashData(xps),
-                directory.Record.RecordHash.ToArray()), fixture.AccountKey), 15));
+                directory.Record.RecordHash.ToArray()), fixture.AccountKey),
+            bootId, 3));
         AssertVerificationFailure(() => DeepIdV2PreKeyManifestBinding.Verify(
-            closure, contactVerified,
+            closure, currentContact,
             SignInventory(InventoryFields(SHA256.HashData(xps),
-                directory.Record.RecordHash.ToArray(), 21), fixture.DeviceKey), 15));
+                directory.Record.RecordHash.ToArray(), 21), fixture.DeviceKey),
+            bootId, 3));
+        Assert.Throws<AccountDirectoryFreshnessVerificationException>(() =>
+            DeepIdV2PreKeyManifestBinding.Verify(
+                closure, currentContact, manifest,
+                ApplicationCoreFixture.Bytes(16, 0x7e), 3));
+        Assert.Equal("AuthorizationNotCurrent",
+            Assert.Throws<AccountDirectoryFreshnessVerificationException>(() =>
+                DeepIdV2PreKeyManifestBinding.Verify(
+                    closure, currentContact, manifest, bootId, 7)).Code);
         var oldClosure = closure.CanonicalBytes.ToArray();
         oldClosure[5] = 1;
         Assert.Throws<ApplicationCoreFormatException>(() =>

@@ -15,14 +15,24 @@ public static class DeepIdV2PreKeyManifestBinding
     public static bool RuntimeActivation => false;
 
     public static void Verify(ParsedDcr1V2 closure,
-        VerifiedDca1V2 authorization, Xpi1Record manifest,
-        ulong trustedUnixSeconds)
+        DeepIdV2CurrentContactAuthorization currentAuthorization,
+        Xpi1Record manifest, ReadOnlySpan<byte> currentBootId,
+        ulong currentMonotonicSample)
     {
         ArgumentNullException.ThrowIfNull(closure);
-        ArgumentNullException.ThrowIfNull(authorization);
+        ArgumentNullException.ThrowIfNull(currentAuthorization);
         ArgumentNullException.ThrowIfNull(manifest);
+        var refreshed = DeepIdV2CurrentContactAuthorizationVerifier.Verify(
+            currentAuthorization.Freshness,
+            currentAuthorization.Authorization, currentBootId,
+            currentMonotonicSample);
+        var lower = refreshed.TrustedLowerUnixSeconds;
+        var upper = refreshed.TrustedUpperUnixSeconds;
+        var authorization = refreshed.Authorization;
         DeepIdV2ResolverClosureCodec.VerifyIdentityAndSupport(
-            closure, authorization, trustedUnixSeconds);
+            closure, authorization, lower);
+        DeepIdV2ResolverClosureCodec.VerifyIdentityAndSupport(
+            closure, authorization, upper);
         var bundle = closure.Bundle;
         var directory = authorization.Directory.Record;
         var identity = authorization.Binding.Identity;
@@ -69,8 +79,8 @@ public static class DeepIdV2PreKeyManifestBinding
             manifest.ExpiresAtUnixSeconds > U64(Get(xps, slices, 11)) ||
             manifest.IssuedAtUnixSeconds < U64(bundle.FieldSpan(17)) ||
             manifest.ExpiresAtUnixSeconds > U64(bundle.FieldSpan(18)) ||
-            trustedUnixSeconds < manifest.IssuedAtUnixSeconds ||
-            trustedUnixSeconds >= manifest.ExpiresAtUnixSeconds)
+            lower < manifest.IssuedAtUnixSeconds ||
+            upper >= manifest.ExpiresAtUnixSeconds)
             Reject("XPI1 does not bind the exact current DID2 recipient XPS1/DMD1/DRS1 closure.");
         if (!PublicKeyAuth.VerifyDetached(manifest.PublisherSignature.ToArray(),
                 manifest.Record.SignatureInput.ToArray(),

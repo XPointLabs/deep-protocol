@@ -682,7 +682,10 @@ internal static class GraphPolicy
                 "Deep.Protocol|12571|FFEB3C54E51BF437DD32F5FC90EF8A2CB5FD02E6B521263708A4E83C7F739864",
                 // Exact-current DID2/DMD1 pre-lease claim binding (Release, Debug).
                 "Deep.Protocol|12571|782B5A1C62D34534080490BE01E3BE185D0CB769FCCD9B1E1FD40A71086FF96B",
-                "Deep.Protocol|12571|8BAA921C477A147153B47A5B16964240E01A392732CC5EE86CCBFAAF0445BCC2"
+                "Deep.Protocol|12571|8BAA921C477A147153B47A5B16964240E01A392732CC5EE86CCBFAAF0445BCC2",
+                // DID2 XPI1 requires a rechecked current DCA1 and the full trusted interval.
+                "Deep.Protocol|12571|BAD1FF4303091E2C24EFD3FBE6BA6A4A40B190E416E9861981B3C63CFAFADF90",
+                "Deep.Protocol|12571|4E804A19598A6315CB2253C328EFF3EA9029ADBACA31821E2BD2ECC0AB270781"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [
