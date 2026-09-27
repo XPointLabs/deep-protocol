@@ -691,7 +691,9 @@ internal static class GraphPolicy
                 "Deep.Protocol|12575|4DDEF82C9BAA2C41EDDD766EF146E50B4B050E69279BFE602F6F20837A73C745",
                 // DID2-only XPI1 V2 parser and current DCR1/XPS1 binding; publication remains gated.
                 "Deep.Protocol|12590|ECFAA9A4B98F81A2711E3C25909160E703704F4D885E14E7FBCFFDE819B428C9",
-                "Deep.Protocol|12590|670701577CA0742E16DAACFC882751010CA726E63DE56B137AE60B6A08B44507"
+                "Deep.Protocol|12590|670701577CA0742E16DAACFC882751010CA726E63DE56B137AE60B6A08B44507",
+                // DID2 DPK2 V2 envelope, current member binding and legacy-wire rejection.
+                "Deep.Protocol|12639|C82C295F539C3889B205DD763F1C936950F8D3D6335D370BC6DFC8EF00B75989"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

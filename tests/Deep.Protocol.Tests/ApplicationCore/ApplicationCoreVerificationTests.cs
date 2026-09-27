@@ -504,6 +504,62 @@ public sealed class ApplicationCoreVerificationTests
             closure, currentContact, manifest, bootId, 3);
         DeepIdV2PreKeyManifestBinding.Verify(
             closure, currentContact, manifest, bootId, 5);
+        Dpk2Record Dpk2Member(byte[] xSignature, byte[] mlKemSignature,
+            byte[] bundleSignature, byte[]? dmdHash = null) => new(
+            fixture.Network, bundle.Field(2).Span, fixture.DeviceId, fixture.Identity
+                .ActiveDevices[0].Certificate.DeviceGeneration,
+            manifest.Field(4).Span, directory.Record.DirectoryGeneration,
+            dmdHash ?? directory.Record.RecordHash.ToArray(), 1, 1,
+            ApplicationCoreFixture.Bytes(32, 0x51), 1, 10, 10, 20,
+            fixture.Identity.ActiveDevices[0].Certificate.DeviceX25519PublicKey.Span,
+            ApplicationCoreFixture.Bytes(32, 0x71),
+            ApplicationCoreFixture.Bytes(32, 0x81), xSignature,
+            ApplicationCoreFixture.Bytes(32, 0x91),
+            ApplicationCoreFixture.Bytes(32, 0xa1),
+            ApplicationCoreFixture.Bytes(32, 0xb1),
+            ApplicationCoreFixture.Bytes(1184, 0xc1),
+            Dpk2PrekeyKind.OneTime, 0, mlKemSignature, bundleSignature);
+        ParsedDpk2V2 SignedMember(bool oldSignatureDomain = false,
+            byte[]? dmdHash = null)
+        {
+            var placeholder = Dpk2Member(new byte[64], new byte[64],
+                new byte[64], dmdHash);
+            var xInput = oldSignatureDomain
+                ? MessagingWireCryptographicInputs
+                    .GetX25519SignedPrekeySignatureInput(placeholder)
+                : DeepIdV2Dpk2Codec
+                    .GetX25519SignedPrekeySignatureInput(placeholder);
+            var mlInput = oldSignatureDomain
+                ? MessagingWireCryptographicInputs
+                    .GetMlKemPrekeySignatureInput(placeholder)
+                : DeepIdV2Dpk2Codec.GetMlKemPrekeySignatureInput(placeholder);
+            var xSignature = PublicKeyAuth.SignDetached(xInput,
+                fixture.DeviceKey.PrivateKey);
+            var mlSignature = PublicKeyAuth.SignDetached(mlInput,
+                fixture.DeviceKey.PrivateKey);
+            var partial = Dpk2Member(xSignature, mlSignature, new byte[64],
+                dmdHash);
+            var bundleInput = oldSignatureDomain
+                ? MessagingWireCryptographicInputs
+                    .GetPrekeyBundleSignatureInput(partial)
+                : DeepIdV2Dpk2Codec.GetPrekeyBundleSignatureInput(partial);
+            var bundleSignature = PublicKeyAuth.SignDetached(bundleInput,
+                fixture.DeviceKey.PrivateKey);
+            return DeepIdV2Dpk2Codec.Decode(DeepIdV2Dpk2Codec.Encode(
+                Dpk2Member(xSignature, mlSignature, bundleSignature,
+                    dmdHash)));
+        }
+        var member = SignedMember();
+        Assert.False(DeepIdV2Dpk2MemberBinding.RuntimeActivation);
+        DeepIdV2Dpk2MemberBinding.Verify(closure, currentContact,
+            manifest, member, bootId, 3);
+        AssertVerificationFailure(() => DeepIdV2Dpk2MemberBinding.Verify(
+            closure, currentContact, manifest, SignedMember(true),
+            bootId, 3));
+        AssertVerificationFailure(() => DeepIdV2Dpk2MemberBinding.Verify(
+            closure, currentContact, manifest,
+            SignedMember(dmdHash: ApplicationCoreFixture.Bytes(32, 0x4c)),
+            bootId, 3));
         var shortenedManifest = SignInventory(InventoryFields(
             SHA256.HashData(xps), directory.Record.RecordHash.ToArray(), 19),
             fixture.DeviceKey);

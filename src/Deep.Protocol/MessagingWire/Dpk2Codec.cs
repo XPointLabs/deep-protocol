@@ -256,13 +256,19 @@ public static class Dpk2Codec
     private static ReadOnlySpan<byte> Magic => ProtocolMagicBytes.DPK2;
     public static ReadOnlySpan<int> AllowedTotalSizes => [LastResortTotalBytes, OneTimeTotalBytes];
 
-    public static byte[] Encode(Dpk2Record record)
+    public static byte[] Encode(Dpk2Record record) =>
+        EncodeForEnvelope(record, MessagingWireFraming.Version,
+            MessagingWireFraming.Suite);
+
+    internal static byte[] EncodeForEnvelope(Dpk2Record record,
+        ushort version, ushort suite)
     {
         ArgumentNullException.ThrowIfNull(record);
         var encoded = new byte[record.MlKemKind == Dpk2PrekeyKind.OneTime
             ? OneTimeTotalBytes
             : LastResortTotalBytes];
-        var writer = new MessagingWireWriter(encoded, Magic, FieldCount);
+        var writer = new MessagingWireWriter(encoded, Magic, FieldCount,
+            version, suite);
         WriteFields1To17(ref writer, record);
         writer.Write(18, record.SignedX25519PrekeySignatureSpan);
         writer.Write(19, record.OneTimeX25519PrekeyIdSpan);
@@ -274,15 +280,22 @@ public static class Dpk2Codec
         return encoded;
     }
 
-    public static Dpk2Record Decode(ReadOnlySpan<byte> encoded)
+    public static Dpk2Record Decode(ReadOnlySpan<byte> encoded) =>
+        DecodeForEnvelope(encoded, MessagingWireFraming.Version,
+            MessagingWireFraming.Suite);
+
+    internal static Dpk2Record DecodeForEnvelope(ReadOnlySpan<byte> encoded,
+        ushort version, ushort suite)
     {
         Span<MessagingWireFieldSlice> fields = stackalloc MessagingWireFieldSlice[FieldCount];
-        MessagingWireFraming.Preflight(encoded, Magic, FieldCount, AllowedTotalSizes, fields);
+        MessagingWireFraming.Preflight(encoded, Magic, FieldCount,
+            AllowedTotalSizes, fields, version, suite);
         ValidateLengths(fields);
         _ = ValidateSemanticFields(encoded, fields);
 
         var owned = encoded.ToArray();
-        MessagingWireFraming.Preflight(owned, Magic, FieldCount, AllowedTotalSizes, fields);
+        MessagingWireFraming.Preflight(owned, Magic, FieldCount,
+            AllowedTotalSizes, fields, version, suite);
         ValidateLengths(fields);
         var semantic = ValidateSemanticFields(owned, fields);
         return new Dpk2Record(
@@ -361,31 +374,48 @@ public static class Dpk2Codec
         return (kind, reuseLimit, notBefore, issuedAt, expiresAt);
     }
 
-    public static byte[] GetX25519SignedPrekeyProjection(Dpk2Record record)
+    public static byte[] GetX25519SignedPrekeyProjection(Dpk2Record record) =>
+        GetX25519SignedPrekeyProjectionForEnvelope(record,
+            MessagingWireFraming.Version, MessagingWireFraming.Suite);
+
+    internal static byte[] GetX25519SignedPrekeyProjectionForEnvelope(
+        Dpk2Record record, ushort version, ushort suite)
     {
         ArgumentNullException.ThrowIfNull(record);
         var encoded = new byte[ProjectionLength(record, 17, false, false)];
-        var writer = new MessagingWireWriter(encoded, Magic, 17);
+        var writer = new MessagingWireWriter(encoded, Magic, 17,
+            version, suite);
         WriteFields1To17(ref writer, record);
         writer.Complete();
         return encoded;
     }
 
-    public static byte[] GetMlKemPrekeyProjection(Dpk2Record record)
+    public static byte[] GetMlKemPrekeyProjection(Dpk2Record record) =>
+        GetMlKemPrekeyProjectionForEnvelope(record,
+            MessagingWireFraming.Version, MessagingWireFraming.Suite);
+
+    internal static byte[] GetMlKemPrekeyProjectionForEnvelope(
+        Dpk2Record record, ushort version, ushort suite)
     {
         ArgumentNullException.ThrowIfNull(record);
         var encoded = new byte[ProjectionLength(record, 21, true, false)];
-        var writer = new MessagingWireWriter(encoded, Magic, 21);
+        var writer = new MessagingWireWriter(encoded, Magic, 21,
+            version, suite);
         WriteFields1To17(ref writer, record);
         WriteFields21To24(ref writer, record);
         writer.Complete();
         return encoded;
     }
 
-    public static byte[] GetUnsignedBundleProjection(Dpk2Record record)
+    public static byte[] GetUnsignedBundleProjection(Dpk2Record record) =>
+        GetUnsignedBundleProjectionForEnvelope(record,
+            MessagingWireFraming.Version, MessagingWireFraming.Suite);
+
+    internal static byte[] GetUnsignedBundleProjectionForEnvelope(
+        Dpk2Record record, ushort version, ushort suite)
     {
         ArgumentNullException.ThrowIfNull(record);
-        var full = Encode(record);
+        var full = EncodeForEnvelope(record, version, suite);
         var output = new byte[full.Length - MessagingWireFraming.FieldHeaderLength - 64];
         full.AsSpan(0, output.Length).CopyTo(output);
         BinaryPrimitives.WriteUInt16BigEndian(output.AsSpan(8, 2), 25);

@@ -261,13 +261,17 @@ public static class MessagingWireCryptographicInputs
     }
 
     internal static byte[] SignatureInput(string label, ReadOnlySpan<byte> record)
+        => SignatureInput(label, record, MessagingWireFraming.Suite);
+
+    internal static byte[] SignatureInput(string label, ReadOnlySpan<byte> record,
+        ushort suite)
     {
         var labelBytes = Ascii(label);
         var output = new byte[labelBytes.Length + 1 + 2 + 4 + record.Length];
         labelBytes.CopyTo(output, 0);
         BinaryPrimitives.WriteUInt16BigEndian(
             output.AsSpan(labelBytes.Length + 1, 2),
-            MessagingWireFraming.Suite);
+            suite);
         BinaryPrimitives.WriteUInt32BigEndian(
             output.AsSpan(labelBytes.Length + 3, 4),
             checked((uint)record.Length));

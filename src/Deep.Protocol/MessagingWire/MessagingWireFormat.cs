@@ -82,7 +82,8 @@ internal static class MessagingWireFraming
         ushort expectedFieldCount,
         ReadOnlySpan<int> allowedTotalSizes,
         Span<MessagingWireFieldSlice> fields,
-        ushort expectedVersion = Version)
+        ushort expectedVersion = Version,
+        ushort expectedSuite = Suite)
     {
         if (!Contains(allowedTotalSizes, encoded.Length))
         {
@@ -111,12 +112,12 @@ internal static class MessagingWireFraming
                 "The record version is not the exact version selected by this codec.");
         }
 
-        if (BinaryPrimitives.ReadUInt16BigEndian(encoded[6..8]) != Suite)
+        if (BinaryPrimitives.ReadUInt16BigEndian(encoded[6..8]) != expectedSuite)
         {
             throw Error(
                 MessagingWirePrevalidationStage.FixedHeader,
                 MessagingWireRejection.WrongSuite,
-                "The record suite is not frozen suite 0x0201.");
+                "The record suite is not the exact suite selected by this codec.");
         }
 
         if (BinaryPrimitives.ReadUInt16BigEndian(encoded[8..10]) != expectedFieldCount)
@@ -288,7 +289,8 @@ internal ref struct MessagingWireWriter
         Span<byte> destination,
         ReadOnlySpan<byte> magic,
         ushort fieldCount,
-        ushort version = MessagingWireFraming.Version)
+        ushort version = MessagingWireFraming.Version,
+        ushort suite = MessagingWireFraming.Suite)
     {
         _destination = destination;
         _fieldCount = fieldCount;
@@ -296,7 +298,7 @@ internal ref struct MessagingWireWriter
         _nextField = 0;
         magic.CopyTo(destination);
         BinaryPrimitives.WriteUInt16BigEndian(destination[4..6], version);
-        BinaryPrimitives.WriteUInt16BigEndian(destination[6..8], MessagingWireFraming.Suite);
+        BinaryPrimitives.WriteUInt16BigEndian(destination[6..8], suite);
         BinaryPrimitives.WriteUInt16BigEndian(destination[8..10], fieldCount);
         BinaryPrimitives.WriteUInt16BigEndian(destination[10..12], 0);
     }
