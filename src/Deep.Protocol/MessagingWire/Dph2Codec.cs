@@ -559,6 +559,21 @@ public static class Dph2Codec
         ArgumentNullException.ThrowIfNull(record);
         ArgumentNullException.ThrowIfNull(exactOffering);
         var expectedHash = MessagingWireCryptographicInputs.ComputeExactDpk2Hash(exactOffering);
+        ValidateSelectionCore(record, exactOffering, expectedHash);
+    }
+
+    public static void ValidateSelection(Dph2Record record,
+        VerifiedDpk2Offering exactOffering)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        ArgumentNullException.ThrowIfNull(exactOffering);
+        ValidateSelectionCore(record, exactOffering.Record,
+            exactOffering.ExactHash.Span);
+    }
+
+    private static void ValidateSelectionCore(Dph2Record record,
+        Dpk2Record exactOffering, ReadOnlySpan<byte> expectedHash)
+    {
         var selected = record.SelectedPrekey;
         var matches = CryptographicOperations.FixedTimeEquals(exactOffering.NetworkIdSpan, record.NetworkIdSpan) &&
                       CryptographicOperations.FixedTimeEquals(expectedHash, record.ExactDpk2HashSpan) &&

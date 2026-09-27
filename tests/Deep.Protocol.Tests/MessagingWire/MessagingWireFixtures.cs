@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using Deep.Protocol.MessagingWire;
+using Deep.Protocol.ContactV2;
 using Sodium;
 
 namespace Deep.Protocol.Tests.MessagingWire;
@@ -17,6 +18,12 @@ internal static class MessagingWireFixtures
     }
 
     internal static Dpk2Record Dpk2(Dpk2PrekeyKind kind)
+        => CreateDpk2(kind, did2: false);
+
+    internal static Dpk2Record Dpk2V2(Dpk2PrekeyKind kind)
+        => CreateDpk2(kind, did2: true);
+
+    private static Dpk2Record CreateDpk2(Dpk2PrekeyKind kind, bool did2)
     {
         var oneTimeId = kind == Dpk2PrekeyKind.OneTime ? Bytes(32, 0xb1) : [];
         var oneTimePublic = kind == Dpk2PrekeyKind.OneTime ? Bytes(32, 0xc1) : [];
@@ -35,14 +42,20 @@ internal static class MessagingWireFixtures
         {
             var placeholder = Build(Bytes(64, 0x91), Bytes(64, 0xf1), Bytes(64, 0xa2));
             var xSignature = PublicKeyAuth.SignDetached(
-                MessagingWireCryptographicInputs.GetX25519SignedPrekeySignatureInput(placeholder),
+                did2
+                    ? DeepIdV2Dpk2Codec.GetX25519SignedPrekeySignatureInput(placeholder)
+                    : MessagingWireCryptographicInputs.GetX25519SignedPrekeySignatureInput(placeholder),
                 keyPair.PrivateKey);
             var mlKemSignature = PublicKeyAuth.SignDetached(
-                MessagingWireCryptographicInputs.GetMlKemPrekeySignatureInput(placeholder),
+                did2
+                    ? DeepIdV2Dpk2Codec.GetMlKemPrekeySignatureInput(placeholder)
+                    : MessagingWireCryptographicInputs.GetMlKemPrekeySignatureInput(placeholder),
                 keyPair.PrivateKey);
             var signedPrekeys = Build(xSignature, mlKemSignature, Bytes(64, 0xa2));
             var bundleSignature = PublicKeyAuth.SignDetached(
-                MessagingWireCryptographicInputs.GetPrekeyBundleSignatureInput(signedPrekeys),
+                did2
+                    ? DeepIdV2Dpk2Codec.GetPrekeyBundleSignatureInput(signedPrekeys)
+                    : MessagingWireCryptographicInputs.GetPrekeyBundleSignatureInput(signedPrekeys),
                 keyPair.PrivateKey);
             return Build(xSignature, mlKemSignature, bundleSignature);
         }
@@ -59,8 +72,13 @@ internal static class MessagingWireFixtures
         finally { CryptographicOperations.ZeroMemory(keyPair.PrivateKey); }
     }
 
-    internal static Dph2Record Dph2(Dpk2Record offering, int ciphertextLength)
+    internal static Dph2Record Dph2(Dpk2Record offering, int ciphertextLength,
+        bool did2Offering = false)
     {
+        var exactHash = did2Offering
+            ? DeepIdV2Dpk2Codec.Decode(DeepIdV2Dpk2Codec.Encode(offering))
+                .ExactHash.ToArray()
+            : MessagingWireCryptographicInputs.ComputeExactDpk2Hash(offering);
         var selected = offering.MlKemKind == Dpk2PrekeyKind.OneTime
             ? Dph2SelectedPrekey.OneTime(
                 offering.SignedX25519PrekeyId.Span,
@@ -81,7 +99,7 @@ internal static class MessagingWireFixtures
             offering.ResponderAccountId.Span,
             offering.ResponderDeviceId.Span,
             offering.ResponderDeviceGeneration,
-            MessagingWireCryptographicInputs.ComputeExactDpk2Hash(offering),
+            exactHash,
             Bytes(32, 0x42),
             Bytes(32, 0x52),
             offering.MlKemKind == Dpk2PrekeyKind.OneTime ? (ushort)0 : (ushort)37,

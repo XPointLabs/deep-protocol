@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using Deep.Protocol.ContactV2;
 using Deep.Protocol.MessagingWire;
 using Sodium;
 
@@ -9,6 +10,42 @@ namespace Deep.Protocol.Tests.MessagingWire;
 
 public sealed class MessagingWireVerificationPlanTests
 {
+    [Theory]
+    [InlineData(Dpk2PrekeyKind.OneTime)]
+    [InlineData(Dpk2PrekeyKind.LastResort)]
+    public void Did2Dpk2ExactBytesSurviveVerificationAndBindDph2Transcript(
+        Dpk2PrekeyKind kind)
+    {
+        var record = MessagingWireFixtures.Dpk2V2(kind);
+        var exact = DeepIdV2Dpk2Codec.Encode(record);
+        var verified = MessagingWireVerification.VerifyDpk2V2(
+            exact, new DpkCallbacks(record));
+        Assert.Equal(exact, verified.ExactBytes.ToArray());
+        Assert.Equal(DeepIdV2Dpk2Codec.Decode(exact).ExactHash.ToArray(),
+            verified.ExactHash.ToArray());
+        Assert.Throws<MessagingWireFormatException>(() =>
+            Dpk2Codec.Decode(exact));
+        Assert.Throws<MessagingWireFormatException>(() =>
+            MessagingWireVerification.VerifyDpk2(
+                Dpk2Codec.Encode(record), new DpkCallbacks(record)));
+
+        var initiation = MessagingWireFixtures.Dph2(record, 4112,
+            did2Offering: true);
+        Dph2Codec.ValidateSelection(initiation, verified);
+        Assert.Throws<MessagingWireFormatException>(() =>
+            Dph2Codec.ValidateSelection(initiation, record));
+        var verifiedInitiation = MessagingWireVerification.VerifyDph2(
+            Dph2Codec.Encode(initiation), verified,
+            new DphCallbacks(initiation));
+        var expected = MessagingWireCryptographicInputs
+            .ComputeDph2TranscriptHash(exact, initiation);
+        Assert.Equal(expected,
+            verifiedInitiation.TranscriptHash.ToArray());
+        Assert.NotEqual(expected,
+            MessagingWireCryptographicInputs.ComputeDph2TranscriptHash(
+                record, initiation));
+    }
+
     [Fact]
     public void PublicFacadeMintsDistinctVerifiedCapabilities()
     {

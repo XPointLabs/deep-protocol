@@ -223,7 +223,7 @@ internal sealed class VerifiedHybridTranscriptCapability
             ? dpk2.OneTimeX25519PrekeyIdSpan.ToArray()
             : null;
         return new VerifiedHybridTranscriptCapability(
-            Dpk2Codec.Encode(dpk2),
+            initiation.Offering.ExactBytes.ToArray(),
             Dph2Codec.GetHandshakeHeader(dph2),
             dph2.ActualMlKem768CiphertextSpan.ToArray(),
             localIsInitiator ? null : initiation.FullReplayHash.ToArray(),

@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using System.Text;
 using Deep.Protocol.ContactV1;
+using Deep.Protocol.ContactV2;
 using Deep.Protocol.MessagingCrypto;
 
 namespace Deep.Protocol.MessagingWire;
@@ -47,9 +48,25 @@ public interface IDpk2VerificationCallbacks
 public sealed class VerifiedDpk2Offering
 {
     internal VerifiedDpk2Offering(Dpk2Record record, byte[] exactHash)
+        : this(record, exactHash, Dpk2Codec.Encode(record))
     {
+    }
+
+    internal VerifiedDpk2Offering(Dpk2Record record, byte[] exactHash,
+        ReadOnlySpan<byte> exactBytes)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        ArgumentNullException.ThrowIfNull(exactHash);
+        if (exactHash.Length != 32 || exactBytes.IsEmpty ||
+            !CryptographicOperations.FixedTimeEquals(exactHash,
+                SHA256.HashData(MessagingWireCryptographicInputs
+                    .DomainHashInput(MessagingWireCryptographicInputs
+                        .ExactDpk2Domain, exactBytes))))
+            throw new CryptographicException(
+                "The verified DPK2 hash does not bind its exact envelope.");
         Record = record;
         _exactHash = exactHash.ToArray();
+        _exactBytes = exactBytes.ToArray();
     }
 
     internal Dpk2Record Record { get; }
@@ -64,8 +81,9 @@ public sealed class VerifiedDpk2Offering
     /// </summary>
     public ReadOnlyMemory<byte> InitiatorAgreementPeerPublicKey =>
         Record.SignedX25519PrekeyPublic;
-    public ReadOnlyMemory<byte> ExactBytes => Dpk2Codec.Encode(Record);
+    public ReadOnlyMemory<byte> ExactBytes => _exactBytes.ToArray();
     private readonly byte[] _exactHash;
+    private readonly byte[] _exactBytes;
 }
 
 internal sealed class Dpk2VerificationPlan
@@ -74,14 +92,25 @@ internal sealed class Dpk2VerificationPlan
     private readonly byte[] _mlKemInput;
     private readonly byte[] _bundleInput;
     private readonly byte[] _exactHash;
+    private readonly byte[] _exactBytes;
 
-    private Dpk2VerificationPlan(Dpk2Record record)
+    private Dpk2VerificationPlan(Dpk2Record record,
+        ReadOnlySpan<byte> exactBytes, bool did2)
     {
         Record = record;
-        _x25519Input = MessagingWireCryptographicInputs.GetX25519SignedPrekeySignatureInput(record);
-        _mlKemInput = MessagingWireCryptographicInputs.GetMlKemPrekeySignatureInput(record);
-        _bundleInput = MessagingWireCryptographicInputs.GetPrekeyBundleSignatureInput(record);
-        _exactHash = MessagingWireCryptographicInputs.ComputeExactDpk2Hash(record);
+        _exactBytes = exactBytes.ToArray();
+        _x25519Input = did2
+            ? DeepIdV2Dpk2Codec.GetX25519SignedPrekeySignatureInput(record)
+            : MessagingWireCryptographicInputs.GetX25519SignedPrekeySignatureInput(record);
+        _mlKemInput = did2
+            ? DeepIdV2Dpk2Codec.GetMlKemPrekeySignatureInput(record)
+            : MessagingWireCryptographicInputs.GetMlKemPrekeySignatureInput(record);
+        _bundleInput = did2
+            ? DeepIdV2Dpk2Codec.GetPrekeyBundleSignatureInput(record)
+            : MessagingWireCryptographicInputs.GetPrekeyBundleSignatureInput(record);
+        _exactHash = SHA256.HashData(MessagingWireCryptographicInputs
+            .DomainHashInput(MessagingWireCryptographicInputs.ExactDpk2Domain,
+                _exactBytes));
     }
 
     internal Dpk2Record Record { get; }
@@ -90,7 +119,16 @@ internal sealed class Dpk2VerificationPlan
     internal static Dpk2VerificationPlan Create(Dpk2Record record)
     {
         ArgumentNullException.ThrowIfNull(record);
-        return new Dpk2VerificationPlan(record);
+        return new Dpk2VerificationPlan(record, Dpk2Codec.Encode(record),
+            did2: false);
+    }
+
+    internal static Dpk2VerificationPlan CreateV2(
+        ReadOnlySpan<byte> exactDpk2)
+    {
+        var parsed = DeepIdV2Dpk2Codec.Decode(exactDpk2);
+        return new Dpk2VerificationPlan(parsed.Record, exactDpk2,
+            did2: true);
     }
 
     internal VerifiedDpk2Offering Verify(IDpk2VerificationCallbacks callbacks)
@@ -107,7 +145,7 @@ internal sealed class Dpk2VerificationPlan
             !callbacks.VerifyEd25519(key, _bundleInput, Record.BundleSignature))
             Reject(MessagingWirePrevalidationStage.CryptographicVerification,
                 "A DPK2 device signature was rejected.");
-        return new VerifiedDpk2Offering(Record, _exactHash.ToArray());
+        return new VerifiedDpk2Offering(Record, _exactHash, _exactBytes);
     }
 
     private static void Reject(MessagingWirePrevalidationStage stage, string message) =>
@@ -211,9 +249,10 @@ internal sealed class Dph2VerificationPlan
     {
         Record = record;
         Offering = offering;
-        Dph2Codec.ValidateSelection(record, offering.Record);
+        Dph2Codec.ValidateSelection(record, offering);
         _senderCommitment = MessagingWireCryptographicInputs.ComputeSenderEphemeralCommitment(record);
-        _transcriptHash = MessagingWireCryptographicInputs.ComputeDph2TranscriptHash(offering.Record, record);
+        _transcriptHash = MessagingWireCryptographicInputs.ComputeDph2TranscriptHash(
+            offering.ExactBytes.Span, record);
         _fullReplayHash = MessagingWireCryptographicInputs.ComputeDph2FullReplayHash(record);
         _claimBinding = MessagingWireCryptographicInputs.ComputeDph2ClaimBinding(record);
     }
@@ -811,6 +850,19 @@ public static class MessagingWireVerification
     {
         ArgumentNullException.ThrowIfNull(callbacks);
         return Dpk2VerificationPlan.Create(Dpk2Codec.Decode(exactDpk2)).Verify(callbacks);
+    }
+
+    /// <summary>
+    /// Verifies the DID2 envelope and device signatures. Caller callbacks
+    /// must resolve the current DID2 recipient; this is not inventory,
+    /// publication or live-claim authority.
+    /// </summary>
+    internal static VerifiedDpk2Offering VerifyDpk2V2(
+        ReadOnlySpan<byte> exactDpk2,
+        IDpk2VerificationCallbacks callbacks)
+    {
+        ArgumentNullException.ThrowIfNull(callbacks);
+        return Dpk2VerificationPlan.CreateV2(exactDpk2).Verify(callbacks);
     }
 
     public static VerifiedDph2Initiation VerifyDph2(

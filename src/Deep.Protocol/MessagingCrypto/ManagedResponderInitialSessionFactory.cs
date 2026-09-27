@@ -552,7 +552,7 @@ public sealed class ManagedResponderInitialSessionFactory : IDisposable
     {
         var dph2 = initiation.Record;
         var dpk2 = initiation.Offering.Record;
-        var exactDpk2Hash = MessagingWireCryptographicInputs.ComputeExactDpk2Hash(dpk2);
+        var exactDpk2Hash = initiation.Offering.ExactHash.ToArray();
         var expectedOneTimeId = claim.Kind == Dpk2PrekeyKind.OneTime
             ? dpk2.OneTimeX25519PrekeyIdSpan
             : ReadOnlySpan<byte>.Empty;

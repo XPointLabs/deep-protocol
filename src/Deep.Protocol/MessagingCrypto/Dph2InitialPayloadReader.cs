@@ -28,7 +28,7 @@ internal static class Dph2InitialPayloadReader
             initialAeadKey.Use(secret => key = secret.ToArray());
             nonce = record.InitialPayloadNonce.ToArray();
             aad = MessagingWireCryptographicInputs.GetDph2InitialAeadAssociatedData(
-                header.Offering.Record, record);
+                header.Offering.ExactBytes.Span, record);
             plaintext = SecretAeadXChaCha20Poly1305.Decrypt(
                 ciphertext, nonce, key!, aad);
             if (plaintext.Length is not (4096 or 16384 or 32768))
@@ -63,7 +63,7 @@ internal static class Dph2InitialPayloadReader
             handshake.UseInitialAeadKey(secret => key = secret.ToArray());
             nonce = record.InitialPayloadNonce.ToArray();
             aad = MessagingWireCryptographicInputs.GetDph2InitialAeadAssociatedData(
-                initiation.Offering.Record, record);
+                initiation.Offering.ExactBytes.Span, record);
             plaintext = SecretAeadXChaCha20Poly1305.Decrypt(ciphertext, nonce, key!, aad);
             return Parse(plaintext, initiation);
         }

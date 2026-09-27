@@ -374,9 +374,7 @@ public sealed class ManagedInitiatorInitialSessionFactory
         Dpk2Record offering,
         InitiatorAgreementFacts local)
     {
-        if (!Fixed(verifiedOffering.ExactHash.Span,
-                MessagingWireCryptographicInputs.ComputeExactDpk2Hash(offering)) ||
-            !Fixed(local.NetworkId, offering.NetworkIdSpan))
+        if (!Fixed(local.NetworkId, offering.NetworkIdSpan))
             throw new CryptographicException("The verified DPK2 and local device lease are from different closures.");
         if (offering.MlKemKind == Dpk2PrekeyKind.OneTime &&
             offering.OneTimeX25519PrekeyPublicSpan.IsEmpty)
@@ -1041,7 +1039,7 @@ public sealed class InitiatorDph2ClaimPreparation : IDisposable
             handshake.UseInitialAeadKey(secret => key = secret.ToArray());
             nonce = header.InitialPayloadNonce.ToArray();
             aad = MessagingWireCryptographicInputs.GetDph2InitialAeadAssociatedData(
-                _offering.Record, header);
+                _offering.ExactBytes.Span, header);
             return SecretAeadXChaCha20Poly1305.Encrypt(plaintext, nonce, key!, aad);
         }
         catch (CryptographicException exception)
@@ -1069,7 +1067,7 @@ public sealed class InitiatorDph2ClaimPreparation : IDisposable
             handshake.UseInitialAeadKey(secret => key = secret.ToArray());
             nonce = record.InitialPayloadNonce.ToArray();
             aad = MessagingWireCryptographicInputs.GetDph2InitialAeadAssociatedData(
-                _offering.Record, record);
+                _offering.ExactBytes.Span, record);
             return SecretAeadXChaCha20Poly1305.Decrypt(ciphertext, nonce, key!, aad);
         }
         finally

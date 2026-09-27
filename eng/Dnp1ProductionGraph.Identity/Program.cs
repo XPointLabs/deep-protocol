@@ -699,7 +699,10 @@ internal static class GraphPolicy
                 "Deep.Protocol|12643|962D61807370221D0BB0168BEF133D47542EF6DA1667D826E2311BACC24C3AFE",
                 // Explicit DID2 one-time/last-resort DPK2 authoring surface.
                 "Deep.Protocol|12645|2EED3CCF1000FF8903BAA89066D54FFCF2F7AA855000ECC4C7451C5957367ABA",
-                "Deep.Protocol|12645|987EBEA96095A44137CA7439B2FD6AD963DC50F02792C6997D42919191132667"
+                "Deep.Protocol|12645|987EBEA96095A44137CA7439B2FD6AD963DC50F02792C6997D42919191132667",
+                // DID2 proof-bound DPK2 verification and exact-byte DPH2 transcript.
+                "Deep.Protocol|12651|813467883A8901DD4917EE86010D5F7E6F7D3D0340A369726E4EA31E16575D54",
+                "Deep.Protocol|12651|9BCD15D0AB83B8993B4ECDE7DF8B3F3FA0E819DA90CAB3B313A997F9531ACC31"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

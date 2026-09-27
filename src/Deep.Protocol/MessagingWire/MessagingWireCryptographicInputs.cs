@@ -135,8 +135,16 @@ public static class MessagingWireCryptographicInputs
     public static byte[] GetDph2TranscriptHashInput(Dpk2Record exactOffering, Dph2Record record)
     {
         ArgumentNullException.ThrowIfNull(exactOffering);
+        return GetDph2TranscriptHashInput(Dpk2Codec.Encode(exactOffering), record);
+    }
+
+    public static byte[] GetDph2TranscriptHashInput(
+        ReadOnlySpan<byte> exactDpk2, Dph2Record record)
+    {
         ArgumentNullException.ThrowIfNull(record);
-        var exactDpk2 = Dpk2Codec.Encode(exactOffering);
+        if (exactDpk2.IsEmpty)
+            throw new ArgumentException("The exact DPK2 envelope is required.",
+                nameof(exactDpk2));
         var header = Dph2Codec.GetHandshakeHeader(record);
         var value = Concat(LengthPrefix32(exactDpk2), LengthPrefix32(header));
         return DomainHashInput(HandshakeTranscriptDomain, value);
@@ -144,6 +152,10 @@ public static class MessagingWireCryptographicInputs
 
     public static byte[] ComputeDph2TranscriptHash(Dpk2Record exactOffering, Dph2Record record) =>
         SHA512.HashData(GetDph2TranscriptHashInput(exactOffering, record));
+
+    public static byte[] ComputeDph2TranscriptHash(
+        ReadOnlySpan<byte> exactDpk2, Dph2Record record) =>
+        SHA512.HashData(GetDph2TranscriptHashInput(exactDpk2, record));
 
     public static byte[] ComputeDph2HeaderHash(Dph2Record record)
         => SHA256.HashData(GetDph2HeaderHashInput(record));
@@ -159,9 +171,17 @@ public static class MessagingWireCryptographicInputs
         Dph2Record record)
     {
         ArgumentNullException.ThrowIfNull(exactOffering);
+        return GetDph2InitialAeadAssociatedData(
+            Dpk2Codec.Encode(exactOffering), record);
+    }
+
+    public static byte[] GetDph2InitialAeadAssociatedData(
+        ReadOnlySpan<byte> exactDpk2,
+        Dph2Record record)
+    {
         ArgumentNullException.ThrowIfNull(record);
         var header = Dph2Codec.GetHandshakeHeader(record);
-        var transcriptHash = ComputeDph2TranscriptHash(exactOffering, record);
+        var transcriptHash = ComputeDph2TranscriptHash(exactDpk2, record);
         return Context(Dph2InitialAadDomain, header, transcriptHash);
     }
 
