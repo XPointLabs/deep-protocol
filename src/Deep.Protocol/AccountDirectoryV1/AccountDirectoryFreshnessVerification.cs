@@ -14,6 +14,27 @@ public sealed class AccountDirectoryFreshnessVerificationException : Cryptograph
 }
 
 /// <summary>
+/// Identity-neutral, verifier-minted ADH1/DTT1 time evidence consumed by the
+/// XPoint network closure. It exposes no account, contact or message authority.
+/// </summary>
+internal interface IVerifiedDirectoryNetworkTime
+{
+    ReadOnlyMemory<byte> NetworkId { get; }
+    ReadOnlyMemory<byte> ExactAdh1CoreReference { get; }
+    ReadOnlyMemory<byte> ExactDtt1 { get; }
+    ReadOnlyMemory<byte> ExactDtt1CoreHash { get; }
+    ReadOnlyMemory<byte> BootId { get; }
+    ulong ValidFromUnixSeconds { get; }
+    ulong ExpiresAtUnixSeconds { get; }
+    ulong TrustedLowerUnixSeconds { get; }
+    ulong TrustedUpperUnixSeconds { get; }
+    ulong MonotonicSample { get; }
+    ulong FreshnessDeadlineMonotonicSeconds { get; }
+    bool IsCurrentAtMonotonic(ReadOnlySpan<byte> currentBootId,
+        ulong currentSample);
+}
+
+/// <summary>
 /// Caller-measured monotonic timestamps for one nonce-bound DTT1 request.
 /// Values are elapsed seconds from one boot-specific monotonic clock.
 /// </summary>
@@ -75,7 +96,7 @@ public sealed class AccountDirectoryProtectedLkg
 /// Non-forgeable result of the production ADH1/DTT1/ADP1 verifier. It proves
 /// that one exact lookup result is current at a nonce-bound monotonic sample.
 /// </summary>
-public sealed class VerifiedAccountDirectoryFreshness
+public sealed class VerifiedAccountDirectoryFreshness : IVerifiedDirectoryNetworkTime
 {
     private readonly byte[] networkId;
     private readonly byte[] exactAdh1;

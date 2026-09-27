@@ -211,7 +211,7 @@ internal static class XPointOnionCapabilityProducer
 
     internal static async ValueTask<VerifiedOnionNetworkContext> VerifyAsync(
         VerifiedXPointNetworkAuthority authority,
-        VerifiedAccountDirectoryFreshness freshness,
+        IVerifiedDirectoryNetworkTime freshness,
         IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedXvp1Chain,
         IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedXnv1Chain,
         IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedXnh1Chain,
@@ -423,7 +423,7 @@ internal static class XPointOnionCapabilityProducer
 
     private static void VerifyCommonBindings(
         VerifiedXPointNetworkAuthority authority,
-        VerifiedAccountDirectoryFreshness freshness,
+        IVerifiedDirectoryNetworkTime freshness,
         AccountDirectoryDtt1 dtt,
         Xvp1Record xvp,
         Xnv1Record xnv,
@@ -460,7 +460,7 @@ internal static class XPointOnionCapabilityProducer
 
     private static void VerifyDtt(
         VerifiedXPointNetworkAuthority authority,
-        VerifiedAccountDirectoryFreshness freshness,
+        IVerifiedDirectoryNetworkTime freshness,
         AccountDirectoryDtt1 dtt,
         Xnv1Record view)
     {
@@ -476,7 +476,7 @@ internal static class XPointOnionCapabilityProducer
 
     private static VerifiedNetworkNode[] VerifyNodes(
         VerifiedXPointNetworkAuthority authority,
-        VerifiedAccountDirectoryFreshness freshness,
+        IVerifiedDirectoryNetworkTime freshness,
         Xvp1Record policy,
         Xnv1Record view,
         ContactRecord pmt,
@@ -558,7 +558,7 @@ internal static class XPointOnionCapabilityProducer
     }
 
     private static void VerifyCurrentPmt(
-        VerifiedAccountDirectoryFreshness freshness,
+        IVerifiedDirectoryNetworkTime freshness,
         ContactRecord pmt,
         IReadOnlyList<Xnd1Record> nodes)
     {

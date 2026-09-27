@@ -188,7 +188,7 @@ public sealed class VerifiedXPointNetworkForwardCheckpoint
 
     internal void EnsureUsable(
         VerifiedXPointNetworkAuthority authority,
-        VerifiedAccountDirectoryFreshness freshness)
+        IVerifiedDirectoryNetworkTime freshness)
     {
         TrustedTime.EnsureLive();
         if (!CryptographicOperations.FixedTimeEquals(NextProtectedLkg.NetworkId.Span, authority.NetworkId.Span) ||

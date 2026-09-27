@@ -124,6 +124,28 @@ public sealed class XPointOnionCapabilityProducerTests
     }
 
     [Fact]
+    public async Task Did2DirectoryTime_VerifiesAndRehydratesNetworkWithoutV1AccountProof()
+    {
+        var fixture = Fixture.Create();
+        var context = await fixture.VerifyDid2Async();
+        context.EnsureCurrent();
+        Assert.NotNull(context.ProtectedLkg);
+
+        var rehydrated = await fixture.RehydrateDid2Async(context.ProtectedLkg!);
+        Assert.Equal(context.ProtectedLkg!.HeadCoreReference.ToArray(),
+            rehydrated.ProtectedLkg!.HeadCoreReference.ToArray());
+
+        var foreign = Fixture.Create(networkMarker: 0x21).Did2TimeEvidence();
+        await Assert.ThrowsAsync<OnionBoundaryException>(async () =>
+            await fixture.VerifyDid2Async(foreign));
+
+        var stale = fixture.WithClockSample(fixture.FreshnessDeadline);
+        var staleError = await Assert.ThrowsAsync<OnionBoundaryException>(async () =>
+            await stale.VerifyDid2Async());
+        Assert.Equal("trusted-time-invalid", staleError.Code);
+    }
+
+    [Fact]
     public async Task ExactClosure_RejectsBadThresholdForkAndStaleMonotonicTime()
     {
         var fixture = Fixture.Create();
@@ -256,7 +278,8 @@ public sealed class XPointOnionCapabilityProducerTests
 
         var verifyMethods = typeof(OnionNetworkContextVerifier).GetMethods(
             BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
-        Assert.Equal(["VerifyAsync", "VerifyFromForwardCheckpointAsync", "VerifyRehydratedCurrentAsync"],
+        Assert.Equal(["VerifyAsync", "VerifyAsync", "VerifyFromForwardCheckpointAsync",
+                "VerifyRehydratedCurrentAsync", "VerifyRehydratedCurrentAsync"],
             verifyMethods.Select(static method => method.Name).Order(StringComparer.Ordinal).ToArray());
         Assert.All(verifyMethods, verify => Assert.DoesNotContain(verify.GetParameters(), parameter =>
             typeof(Delegate).IsAssignableFrom(parameter.ParameterType) ||
@@ -549,6 +572,32 @@ public sealed class XPointOnionCapabilityProducerTests
                 new ReadOnlyMemory<byte>[] { _xnv }, new ReadOnlyMemory<byte>[] { _xnh },
                 _nodes.Select(static value => (ReadOnlyMemory<byte>)value).ToArray(),
                 new ReadOnlyMemory<byte>[] { _pmt }, previous,
+                new OnionTrustedTimeAuthority(new FixedClock(Bytes(16, 0xc1), _clockSample)), default);
+
+        internal VerifiedDeepIdV2DirectoryFreshness Did2TimeEvidence() =>
+            new(_freshness.ExactAdh1.Span, _freshness.ExactDtt1.Span, [],
+                _authority.NetworkId.Span, Bytes(32, 0x75),
+                new AccountDirectoryMonotonicRequestWindow(Bytes(16, 0xc1), 990, 995, 1_000),
+                _freshness.FreshnessDeadlineMonotonicSeconds,
+                _freshness.TrustedLowerUnixSeconds, _freshness.TrustedUpperUnixSeconds,
+                AccountDirectoryAdp1ResultKind.NonMembership, null, false, null);
+
+        internal ValueTask<VerifiedOnionNetworkContext> VerifyDid2Async(
+            VerifiedDeepIdV2DirectoryFreshness? evidence = null) =>
+            OnionNetworkContextVerifier.VerifyAsync(
+                _authority, evidence ?? Did2TimeEvidence(), new ReadOnlyMemory<byte>[] { _xvp },
+                new ReadOnlyMemory<byte>[] { _xnv }, new ReadOnlyMemory<byte>[] { _xnh },
+                _nodes.Select(static value => (ReadOnlyMemory<byte>)value).ToArray(),
+                new ReadOnlyMemory<byte>[] { _pmt }, null,
+                new OnionTrustedTimeAuthority(new FixedClock(Bytes(16, 0xc1), _clockSample)), default);
+
+        internal ValueTask<VerifiedOnionNetworkContext> RehydrateDid2Async(
+            XPointNetworkProtectedLkg protectedCurrent) =>
+            OnionNetworkContextVerifier.VerifyRehydratedCurrentAsync(
+                _authority, Did2TimeEvidence(), new ReadOnlyMemory<byte>[] { _xvp },
+                new ReadOnlyMemory<byte>[] { _xnv }, new ReadOnlyMemory<byte>[] { _xnh },
+                _nodes.Select(static value => (ReadOnlyMemory<byte>)value).ToArray(),
+                new ReadOnlyMemory<byte>[] { _pmt }, protectedCurrent,
                 new OnionTrustedTimeAuthority(new FixedClock(Bytes(16, 0xc1), _clockSample)), default);
 
         internal ValueTask<VerifiedOnionNetworkContext> VerifyWithPmtDirectoryAnchorAsync(byte marker)

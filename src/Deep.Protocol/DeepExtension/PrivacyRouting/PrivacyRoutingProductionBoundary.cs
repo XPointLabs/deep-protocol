@@ -284,7 +284,7 @@ public sealed class OnionTrustedTimeAuthority
     }
 
     internal async ValueTask<OnionTrustedTimeLease> MintAsync(
-        VerifiedAccountDirectoryFreshness freshness,
+        IVerifiedDirectoryNetworkTime freshness,
         ulong hardUpperUnixSeconds,
         CancellationToken cancellationToken)
     {
@@ -530,6 +530,26 @@ internal sealed record VerifiedNetworkNode(
 
 public static class OnionNetworkContextVerifier
 {
+    /// <summary>
+    /// Verifies the identity-neutral network closure with DID2 directory
+    /// freshness. This does not authorize V1 contact or message operations.
+    /// </summary>
+    public static ValueTask<VerifiedOnionNetworkContext> VerifyAsync(
+        VerifiedXPointNetworkAuthority authority,
+        VerifiedDeepIdV2DirectoryFreshness trustedFreshness,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedXvp1Chain,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedXnv1Chain,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedXnh1Chain,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactActiveXnd1,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedPmt2Chain,
+        VerifiedOnionNetworkContext? protectedPrevious,
+        OnionTrustedTimeAuthority trustedTimeAuthority,
+        CancellationToken cancellationToken)
+        => XPointOnionCapabilityProducer.VerifyAsync(
+            authority, trustedFreshness, exactOrderedXvp1Chain, exactOrderedXnv1Chain,
+            exactOrderedXnh1Chain, exactActiveXnd1, exactOrderedPmt2Chain,
+            protectedPrevious, trustedTimeAuthority, cancellationToken);
+
     public static ValueTask<VerifiedOnionNetworkContext> VerifyAsync(
         VerifiedXPointNetworkAuthority authority,
         VerifiedAccountDirectoryFreshness trustedFreshness,
@@ -557,6 +577,38 @@ public static class OnionNetworkContextVerifier
     public static async ValueTask<VerifiedOnionNetworkContext> VerifyRehydratedCurrentAsync(
         VerifiedXPointNetworkAuthority authority,
         VerifiedAccountDirectoryFreshness trustedFreshness,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedXvp1Chain,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedXnv1Chain,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedXnh1Chain,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactActiveXnd1,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedPmt2Chain,
+        XPointNetworkProtectedLkg protectedCurrent,
+        OnionTrustedTimeAuthority trustedTimeAuthority,
+        CancellationToken cancellationToken)
+        => await VerifyRehydratedCoreAsync(authority, trustedFreshness,
+            exactOrderedXvp1Chain, exactOrderedXnv1Chain, exactOrderedXnh1Chain,
+            exactActiveXnd1, exactOrderedPmt2Chain, protectedCurrent,
+            trustedTimeAuthority, cancellationToken).ConfigureAwait(false);
+
+    public static ValueTask<VerifiedOnionNetworkContext> VerifyRehydratedCurrentAsync(
+        VerifiedXPointNetworkAuthority authority,
+        VerifiedDeepIdV2DirectoryFreshness trustedFreshness,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedXvp1Chain,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedXnv1Chain,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedXnh1Chain,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactActiveXnd1,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedPmt2Chain,
+        XPointNetworkProtectedLkg protectedCurrent,
+        OnionTrustedTimeAuthority trustedTimeAuthority,
+        CancellationToken cancellationToken)
+        => VerifyRehydratedCoreAsync(authority, trustedFreshness,
+            exactOrderedXvp1Chain, exactOrderedXnv1Chain, exactOrderedXnh1Chain,
+            exactActiveXnd1, exactOrderedPmt2Chain, protectedCurrent,
+            trustedTimeAuthority, cancellationToken);
+
+    private static async ValueTask<VerifiedOnionNetworkContext> VerifyRehydratedCoreAsync(
+        VerifiedXPointNetworkAuthority authority,
+        IVerifiedDirectoryNetworkTime trustedFreshness,
         IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedXvp1Chain,
         IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedXnv1Chain,
         IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedXnh1Chain,

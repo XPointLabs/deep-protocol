@@ -69,7 +69,8 @@ public sealed class VerifiedDeepIdV2DirectoryQuery
 /// Direct signed successors and root-authorized forward checkpoint chains are
 /// accepted only with the protected-floor and append consistency proofs.
 /// </summary>
-public sealed class VerifiedDeepIdV2DirectoryFreshness
+public sealed class VerifiedDeepIdV2DirectoryFreshness :
+    IVerifiedDirectoryNetworkTime
 {
     private readonly byte[] exactAdh1;
     private readonly byte[] exactDtt1;
@@ -121,6 +122,18 @@ public sealed class VerifiedDeepIdV2DirectoryFreshness
     public bool HasRootAuthorizedForwardLineage { get; }
     public ReadOnlyMemory<byte> VerifiedProtectedLkgExactAdh1 =>
         verifiedProtectedLkgExactAdh1.ToArray();
+    ReadOnlyMemory<byte> IVerifiedDirectoryNetworkTime.ExactAdh1CoreReference =>
+        AccountDirectoryCrypto.CreateReference(ProtocolMagicBytes.ADH1, 1,
+            NextProtectedLkg.CoreHash.Span);
+    ReadOnlyMemory<byte> IVerifiedDirectoryNetworkTime.ExactDtt1CoreHash =>
+        AccountDirectoryCrypto.ComputeDtt1CoreHash(
+            AccountDirectoryDtt1Codec.Decode(exactDtt1));
+    ReadOnlyMemory<byte> IVerifiedDirectoryNetworkTime.BootId =>
+        bootId.ToArray();
+    ulong IVerifiedDirectoryNetworkTime.ValidFromUnixSeconds =>
+        NextProtectedLkg.Head.ValidFrom;
+    ulong IVerifiedDirectoryNetworkTime.ExpiresAtUnixSeconds =>
+        NextProtectedLkg.Head.ValidUntil;
     public ulong MonotonicSample { get; }
     public ulong FreshnessDeadlineMonotonicSeconds { get; }
     public ulong TrustedLowerUnixSeconds { get; }
