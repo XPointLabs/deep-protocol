@@ -18,7 +18,8 @@ public sealed class DeepIdV2PreKeyClaimResultCodecTests
             Dpk2PrekeyKind.LastResort);
         var payload = SuccessPayload(fixture);
         var wire = DeepIdV2PreKeyClaimResultCodec.Encode(fixture.Request,
-            status, Xpc1V2MutationOutcome.DurablyCommitted, 123, 0, payload);
+            status, Xpc1V2MutationOutcome.DurablyCommitted,
+            1_700_000_123, 0, payload);
         var result = DeepIdV2PreKeyClaimResultCodec.Decode(wire,
             fixture.Request);
 
@@ -61,6 +62,15 @@ public sealed class DeepIdV2PreKeyClaimResultCodecTests
         wrongRequest[FieldOffset(wrongRequest, 22)] ^= 1;
         Assert.Throws<ApplicationCoreFormatException>(() =>
             DeepIdV2PreKeyClaimResultCodec.Decode(wire, wrongRequest));
+
+        foreach (var outside in new[] { 1_700_000_099UL, 1_700_100_000UL })
+        {
+            Assert.Equal(ApplicationCoreRejection.InvalidTimeRange,
+                Assert.Throws<ApplicationCoreFormatException>(() =>
+                    DeepIdV2PreKeyClaimResultCodec.Encode(fixture.Request,
+                        status, Xpc1V2MutationOutcome.DurablyCommitted,
+                        outside, 0, payload)).Rejection);
+        }
     }
 
     [Fact]
@@ -112,7 +122,7 @@ public sealed class DeepIdV2PreKeyClaimResultCodecTests
 
         var wire = DeepIdV2PreKeyClaimResultCodec.Encode(fixture.Request,
             Xpc1V2Status.Claimed, Xpc1V2MutationOutcome.DurablyCommitted,
-            123, 0, payload);
+            1_700_000_123, 0, payload);
         Assert.Equal(4096, wire.Length);
         Assert.Equal(Xpc1V2Status.Claimed,
             DeepIdV2PreKeyClaimResultCodec.Decode(wire, fixture.Request).Status);

@@ -201,8 +201,9 @@ public static class DeepIdV2PreKeyClaimResultCodec
         var status = (Xpc1V2Status)BinaryPrimitives.ReadUInt16BigEndian(Field(4));
         var outcome = (Xpc1V2MutationOutcome)Field(5)[0];
         var retry = BinaryPrimitives.ReadUInt32BigEndian(Field(7));
+        var serverTime = BinaryPrimitives.ReadUInt64BigEndian(Field(6));
         if (!Enum.IsDefined(status) || !Enum.IsDefined(outcome) ||
-            BinaryPrimitives.ReadUInt64BigEndian(Field(6)) == 0)
+            serverTime == 0)
             Fail(ApplicationCoreValidationStage.SemanticFields,
                 ApplicationCoreRejection.InvalidEnum,
                 "XPC1 V2 status, mutation outcome or server time is invalid.");
@@ -214,7 +215,8 @@ public static class DeepIdV2PreKeyClaimResultCodec
                     outcome != Xpc1V2MutationOutcome.DurablyCommitted ||
                     retry != 0)
                     InvalidMatrix();
-                VerifyClaimed(ownedWire, offsets, lengths, request);
+                VerifyClaimed(ownedWire, offsets, lengths, request,
+                    serverTime);
                 break;
             case Xpc1V2Status.StaleBundle:
                 if (count != 11 || outcome != Xpc1V2MutationOutcome.None ||
@@ -262,7 +264,7 @@ public static class DeepIdV2PreKeyClaimResultCodec
 
     private static void VerifyClaimed(byte[] wire,
         int[] offsets, int[] lengths,
-        ParsedXpk1V2 request)
+        ParsedXpk1V2 request, ulong serverTime)
     {
         ReadOnlySpan<byte> Field(int tag) =>
             wire.AsSpan(offsets[tag], lengths[tag]);
@@ -299,6 +301,23 @@ public static class DeepIdV2PreKeyClaimResultCodec
                 "XPC1 V2 contains an invalid exact DID2 offering or manifest.");
             throw;
         }
+
+        // Server time is not a trusted clock source. Even as an unsigned
+        // projection, a successful claim must not contradict the exact
+        // request, inventory, or selected offering validity windows.
+        if (serverTime < BinaryPrimitives.ReadUInt64BigEndian(
+                request.Field(5).Span) ||
+            serverTime >= BinaryPrimitives.ReadUInt64BigEndian(
+                request.Field(6).Span) ||
+            serverTime < BinaryPrimitives.ReadUInt64BigEndian(
+                manifest.FieldSpan(14)) ||
+            serverTime >= BinaryPrimitives.ReadUInt64BigEndian(
+                manifest.FieldSpan(15)) ||
+            serverTime < offering.Record.NotBefore ||
+            serverTime >= offering.ExpiresAt)
+            Fail(ApplicationCoreValidationStage.SemanticFields,
+                ApplicationCoreRejection.InvalidTimeRange,
+                "XPC1 V2 server time is outside the exact claim and inventory validity windows.");
 
         var counter = BinaryPrimitives.ReadUInt16BigEndian(Field(23));
         var generation = BinaryPrimitives.ReadUInt64BigEndian(Field(24));

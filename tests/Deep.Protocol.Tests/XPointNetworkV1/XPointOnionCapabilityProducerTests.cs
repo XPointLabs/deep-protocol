@@ -105,7 +105,8 @@ public sealed class XPointOnionCapabilityProducerTests
         ParsedXpc1V2 Result() => DeepIdV2PreKeyClaimResultCodec.Decode(
             DeepIdV2PreKeyClaimResultCodec.Encode(requestBytes,
                 Xpc1V2Status.Claimed,
-                Xpc1V2MutationOutcome.DurablyCommitted, 123, 0, payload),
+                Xpc1V2MutationOutcome.DurablyCommitted,
+                1_700_000_123, 0, payload),
             requestBytes);
         var result = Result();
         var verified = DeepIdV2PreKeyClaimReplicaSignatureVerifier.Verify(
