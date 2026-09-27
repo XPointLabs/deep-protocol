@@ -2,6 +2,7 @@ using System.Net;
 using System.Security.Cryptography;
 using Deep.Protocol.AccountDirectoryV1;
 using Deep.Protocol.ContactV1;
+using Deep.Protocol.DeepExtension.PrivacyRouting;
 using Sodium;
 
 namespace Deep.Protocol.XPointNetworkV1;
@@ -112,6 +113,105 @@ public sealed class XPointNetworkOperationalGenesisAuthorTests
             bootstrap.Authority, authored.ExactPma2.Span, 1_095, 1_105);
         Assert.True(mailboxAuthority.BindsProjection(authored.ExactPmt2.Span));
         authored.VerifiedNetwork.EnsureCurrent();
+
+        var priorHead = XPointNetworkCodec.Parse<Xnh1Record>(authored.ExactXnh1.Span);
+        var priorPmt = ContactCodec.Decode("PMT2", authored.ExactPmt2.Span);
+        var adh = AccountDirectoryAdh1Codec.Decode(authored.ExactAdh1.Span);
+        var firstRollovers = Rollovers(nodes, 0x30, 0x80);
+        var successorRequest = new XPointNetworkOperationalSuccessorRequest(
+            Hash("successor-ceremony"), bootstrap, [root], witnesses,
+            firstRollovers,
+            authored.ExactXvp1, authored.ExactXnd1, [authored.ExactXnv1],
+            authored.ExactXnh1, authored.ExactPma2, authored.ExactPmt2,
+            priorHead.CoreHash.Span, priorPmt.ArtifactHash.Span,
+            XPointNetworkCodec.EncodeCoreReference("ADH1", AccountDirectoryCrypto.ComputeAdh1CoreHash(adh)),
+            1_200, 1_210, 1_400);
+        var successor = await XPointNetworkOperationalSuccessorAuthor.AuthorAsync(successorRequest);
+        Assert.Equal(1UL, XPointNetworkCodec.Parse<Xvp1Record>(successor.ExactXvp1.Span).Generation);
+        Assert.Equal(1UL, XPointNetworkCodec.Parse<Xnv1Record>(successor.ExactXnv1.Span).ViewGeneration);
+        Assert.Equal(2UL, XPointNetworkCodec.Parse<Xnh1Record>(successor.ExactXnh1.Span).TreeSize);
+        Assert.Equal(3, successor.ExactXnd1.Count);
+        Assert.All(successor.ExactXnd1, bytes =>
+            Assert.Equal(1UL, XPointNetworkCodec.Parse<Xnd1Record>(bytes.Span).Generation));
+        Assert.Equal(1UL, System.Buffers.Binary.BinaryPrimitives.ReadUInt64BigEndian(
+            ContactCodec.Decode("PMT2", successor.ExactPmt2.Span).FieldSpan(2)));
+        Assert.True(priorPmt.FieldSpan(6).SequenceEqual(
+            ContactCodec.Decode("PMT2", successor.ExactPmt2.Span).FieldSpan(6)));
+
+        var reusedTrafficKeys = nodes.Select(static node => new XPointNetworkOperationalNodeRollover(
+            node.IdentitySigner, node.CurrentOriginSpkiSha256.Span, node.NextOriginSpkiSha256.Span,
+            node.CurrentOnionX25519PublicKey.Span, node.NextOnionX25519PublicKey.Span)).ToArray();
+        var reusedKeyRequest = new XPointNetworkOperationalSuccessorRequest(
+            Hash("reused-traffic-key-ceremony"), bootstrap, [root], witnesses,
+            reusedTrafficKeys, authored.ExactXvp1, authored.ExactXnd1,
+            [authored.ExactXnv1], authored.ExactXnh1, authored.ExactPma2, authored.ExactPmt2,
+            priorHead.CoreHash.Span, priorPmt.ArtifactHash.Span,
+            XPointNetworkCodec.EncodeCoreReference("ADH1", AccountDirectoryCrypto.ComputeAdh1CoreHash(adh)),
+            1_200, 1_210, 1_400);
+        await Assert.ThrowsAsync<CryptographicException>(() =>
+            XPointNetworkOperationalSuccessorAuthor.AuthorAsync(reusedKeyRequest).AsTask());
+
+        var currentNonce = Bytes(32, 0xf5);
+        var currentBoot = Bytes(16, 0xf6);
+        var protectedDirectoryHead = AccountDirectoryProtectedLkgFactory.Restore(
+            bootstrap.Authority, authored.ExactAdh1,
+            AccountDirectoryCrypto.ComputeAdh1CoreHash(adh));
+        var proofMaterial = AccountDirectoryAdp1ProofMaterial.NonMembership(
+            Bytes(32, 0xf1), callerProtectedLkg: null, consistencyProofNodes: [],
+            exactAfp1: ReadOnlyMemory<byte>.Empty, sparseMapBitmap: new byte[32], sparseMapSiblings: []);
+        var proofRequest = new AccountDirectoryProofAuthoringRequest(
+            network, currentNonce, currentBoot, 200,
+            authored.ExactAdh1.Span, successor.ExactXnv1.Span,
+            1_300, 5, 1_295,
+            checked(1_305UL + AccountDirectoryCurrentProofVerifier.MaximumNonceRoundTripSeconds),
+            AccountDirectoryDtt1IssuanceEpoch.Derive(bootstrap.Authority, 1_300, 5), 1);
+        var currentProof = await AccountDirectoryProofAuthor.IssueAsync(
+            bootstrap.Authority, protectedDirectoryHead, proofRequest, proofMaterial,
+            witnesses.Cast<IAccountDirectoryDtt1WitnessSigner>().ToArray());
+        var freshness = AccountDirectoryCurrentProofVerifier.Verify(
+            bootstrap.Authority, authored.ExactAdh1,
+            currentProof.ExactDtt1, currentProof.ExactAdp1,
+            currentNonce, Bytes(32, 0xf1),
+            new AccountDirectoryMonotonicRequestWindow(currentBoot, 200, 201, 202),
+            protectedLkg: null, currentCheckpoint: null, supportedReader: 1);
+        var verifiedSuccessor = await OnionNetworkContextVerifier.VerifyAsync(
+            bootstrap.Authority, freshness,
+            [successor.ExactXvp1], [successor.ExactXnv1], [successor.ExactXnh1],
+            successor.ExactXnd1, [successor.ExactPmt2],
+            protectedPrevious: authored.VerifiedNetwork,
+            new OnionTrustedTimeAuthority(new FixedClock(currentBoot, 202)),
+            CancellationToken.None);
+        verifiedSuccessor.EnsureCurrent();
+
+        var secondHead = XPointNetworkCodec.Parse<Xnh1Record>(successor.ExactXnh1.Span);
+        var secondPmt = ContactCodec.Decode("PMT2", successor.ExactPmt2.Span);
+        var secondRollovers = Rollovers(nodes, 0x60, 0xa0);
+        var secondRequest = new XPointNetworkOperationalSuccessorRequest(
+            Hash("second-successor-ceremony"), bootstrap, [root], witnesses,
+            secondRollovers,
+            successor.ExactXvp1, successor.ExactXnd1,
+            [authored.ExactXnv1, successor.ExactXnv1],
+            successor.ExactXnh1, successor.ExactPma2, successor.ExactPmt2,
+            secondHead.CoreHash.Span, secondPmt.ArtifactHash.Span,
+            XPointNetworkCodec.EncodeCoreReference("ADH1", AccountDirectoryCrypto.ComputeAdh1CoreHash(adh)),
+            1_330, 1_340, 1_480);
+        var second = await XPointNetworkOperationalSuccessorAuthor.AuthorAsync(secondRequest);
+        Assert.Equal(2UL, XPointNetworkCodec.Parse<Xnv1Record>(second.ExactXnv1.Span).ViewGeneration);
+        Assert.Equal(3UL, XPointNetworkCodec.Parse<Xnh1Record>(second.ExactXnh1.Span).TreeSize);
+        Assert.True(priorPmt.FieldSpan(6).SequenceEqual(
+            ContactCodec.Decode("PMT2", second.ExactPmt2.Span).FieldSpan(6)));
+
+        var wrongHeadPin = new XPointNetworkOperationalSuccessorRequest(
+            Hash("wrong-head-pin-ceremony"), bootstrap, [root], witnesses,
+            secondRollovers,
+            successor.ExactXvp1, successor.ExactXnd1,
+            [authored.ExactXnv1, successor.ExactXnv1],
+            successor.ExactXnh1, successor.ExactPma2, successor.ExactPmt2,
+            Bytes(32, 0x7a), secondPmt.ArtifactHash.Span,
+            XPointNetworkCodec.EncodeCoreReference("ADH1", AccountDirectoryCrypto.ComputeAdh1CoreHash(adh)),
+            1_330, 1_340, 1_480);
+        await Assert.ThrowsAsync<CryptographicException>(() =>
+            XPointNetworkOperationalSuccessorAuthor.AuthorAsync(wrongHeadPin).AsTask());
     }
 
     private static string ContactMagic(ReadOnlySpan<byte> bytes) =>
@@ -119,6 +219,24 @@ public sealed class XPointNetworkOperationalGenesisAuthorTests
 
     private static byte[] Hash(string value) => SHA256.HashData(System.Text.Encoding.ASCII.GetBytes(value));
     private static byte[] Bytes(int length, byte value) => Enumerable.Repeat(value, length).ToArray();
+
+    private static XPointNetworkOperationalNodeRollover[] Rollovers(
+        IReadOnlyList<XPointNetworkOperationalNode> nodes, byte spkiMarker, byte onionMarker) =>
+        nodes.Select((node, index) => new XPointNetworkOperationalNodeRollover(
+            node.IdentitySigner,
+            Bytes(32, checked((byte)(spkiMarker + index * 2))),
+            Bytes(32, checked((byte)(spkiMarker + index * 2 + 1))),
+            ScalarMult.Base(Bytes(32, checked((byte)(onionMarker + index * 2)))),
+            ScalarMult.Base(Bytes(32, checked((byte)(onionMarker + index * 2 + 1)))))).ToArray();
+
+    private sealed class FixedClock(byte[] boot, ulong sample) : IOnionMonotonicClock
+    {
+        public ValueTask<OnionMonotonicReading> ReadAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.FromResult(new OnionMonotonicReading(boot, sample));
+        }
+    }
 
     private class OperationalSigner : IXPointNetworkOperationalSigner
     {

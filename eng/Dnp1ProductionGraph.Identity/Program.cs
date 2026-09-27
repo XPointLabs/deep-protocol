@@ -767,7 +767,10 @@ internal static class GraphPolicy
                 // raw capability/reference pairs are no longer public inputs
                 // (Release, Debug normalized assembly snapshots).
                 "Deep.Protocol|12853|38631B201C2F0DEE5C47C9BE6B5CE5072D8A7D7A83F25A5C5C3CFF3CCC8B2DF6",
-                "Deep.Protocol|12853|48E195270592F7F2B097D8F76648CF989D8D6EC741051AE1F27B1F728ADB220E"
+                "Deep.Protocol|12853|48E195270592F7F2B097D8F76648CF989D8D6EC741051AE1F27B1F728ADB220E",
+                // Reviewed public operational-successor author/request/rollover API;
+                // immutable identity, fresh traffic keys and protected head pins.
+                "Deep.Protocol|12916|73DCC6B6387E7B464614BFDB96B615264BDBB45A521327E01861842686F3451C"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [
