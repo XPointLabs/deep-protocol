@@ -750,7 +750,12 @@ internal static class GraphPolicy
                 // Exact DID2 publisher hint and complete current inventory gate;
                 // placement, durable commit and claim remain independently gated.
                 "Deep.Protocol|12818|F4D155E607F3C85C25D770772BC57CE43DF350B132059C46058D32E9261C5B78",
-                "Deep.Protocol|12818|E6201B62A79BDC4B6E488552DEB0FCA9329E22813E315EACE35B4DF04DDBD0D0"
+                "Deep.Protocol|12818|E6201B62A79BDC4B6E488552DEB0FCA9329E22813E315EACE35B4DF04DDBD0D0",
+                // DCR-free DID2 replica pre-key support: exact public DCA1/XPS1
+                // in bounded XPP1 and a current-proof inventory verifier.
+                // Final two-replica commit and claim remain disabled.
+                "Deep.Protocol|12828|D6CB1C329EAC9DD8F6823AC1C415ABF37A2A297F023959D330A8AF6CFDEB7B50",
+                "Deep.Protocol|12828|98397D663957DDABB876C1625302856178DD43DEC1F6F2B3D0E97709640AF76E"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

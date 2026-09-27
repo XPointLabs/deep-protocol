@@ -642,6 +642,26 @@ public sealed class ApplicationCoreVerificationTests
         DeepIdV2PreKeyInventoryVerifier.VerifyComplete(closure, currentContact,
             publication.Manifest, publication.OneTimeMembers,
             publication.LastResortMember, bootId, 3);
+        Assert.False(DeepIdV2ReplicaPreKeyInventoryVerifier.RuntimeActivation);
+        DeepIdV2ReplicaPreKeyInventoryVerifier.VerifyComplete(did, xps,
+            currentContact, publication, bootId, 3);
+        var boundedPublication = DeepIdV2BoundedPreKeyPublicationCodec
+            .CreateSequence(publication.CanonicalBytes.Span,
+                ApplicationCoreFixture.Bytes(32, 0xd5), did.CanonicalBytes.Span,
+                contact.CanonicalBytes.Span, xps);
+        var boundedManifest = DeepIdV2BoundedPreKeyPublicationCodec.Decode(
+            boundedPublication[0]);
+        Assert.Equal(contact.CanonicalBytes.ToArray(),
+            boundedManifest.PublisherDca1.ToArray());
+        Assert.Equal(xps, boundedManifest.PublisherXps1.ToArray());
+        AssertVerificationFailure(() =>
+            DeepIdV2ReplicaPreKeyInventoryVerifier.VerifyComplete(unrelatedDid,
+                xps, currentContact, publication, bootId, 3));
+        var damagedPublicXps = xps.ToArray();
+        damagedPublicXps[^1] ^= 1;
+        AssertVerificationFailure(() =>
+            DeepIdV2ReplicaPreKeyInventoryVerifier.VerifyComplete(did,
+                damagedPublicXps, currentContact, publication, bootId, 3));
         Assert.False(DeepIdV2PreKeyPublicationAuthorizationVerifier.RuntimeActivation);
         DeepIdV2PreKeyPublicationAuthorizationVerifier.Verify(did, closure,
             currentContact, publication, bootId, 3);
@@ -719,6 +739,9 @@ public sealed class ApplicationCoreVerificationTests
                 oneTimeMembers, lastResortMember));
         AssertVerificationFailure(() =>
             DeepIdV2PreKeyPublicationAuthorizationVerifier.Verify(did, closure,
+                currentContact, wrongRootPublication, bootId, 3));
+        AssertVerificationFailure(() =>
+            DeepIdV2ReplicaPreKeyInventoryVerifier.VerifyComplete(did, xps,
                 currentContact, wrongRootPublication, bootId, 3));
         var wrongLastResortManifest = SignInventory(InventoryFields(
             SHA256.HashData(xps), directory.Record.RecordHash.ToArray(),

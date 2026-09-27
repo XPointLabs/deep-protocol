@@ -27,6 +27,21 @@ public static class DeepIdV2Dpk2MemberBinding
         DeepIdV2CurrentContactAuthorization currentAuthorization,
         ParsedXpi1V2 manifest, ParsedDpk2V2 offering)
     {
+        ArgumentNullException.ThrowIfNull(closure);
+        VerifyAfterManifest(closure.Bundle.FieldSpan(2), currentAuthorization,
+            manifest, offering);
+    }
+
+    internal static void VerifyAfterManifest(ReadOnlySpan<byte> expectedAccountId,
+        DeepIdV2CurrentContactAuthorization currentAuthorization,
+        ParsedXpi1V2 manifest, ParsedDpk2V2 offering)
+    {
+        ArgumentNullException.ThrowIfNull(currentAuthorization);
+        ArgumentNullException.ThrowIfNull(manifest);
+        ArgumentNullException.ThrowIfNull(offering);
+        if (expectedAccountId.Length != 32)
+            throw new ArgumentException("The exact account ID is required.",
+                nameof(expectedAccountId));
         var record = offering.Record;
         var directory = currentAuthorization.Authorization.Directory.Record;
         var signer = currentAuthorization.Authorization.Binding.Identity
@@ -41,7 +56,7 @@ public static class DeepIdV2Dpk2MemberBinding
         var certificate = signer.Certificate;
         if (!record.NetworkId.Span.SequenceEqual(manifest.FieldSpan(1)) ||
             !record.ResponderAccountId.Span.SequenceEqual(
-                closure.Bundle.FieldSpan(2)) ||
+                expectedAccountId) ||
             !record.ResponderDeviceId.Span.SequenceEqual(manifest.FieldSpan(3)) ||
             record.ResponderDeviceGeneration != certificate.DeviceGeneration ||
             !record.ResponderDpd1Ref.Span.SequenceEqual(manifest.FieldSpan(4)) ||

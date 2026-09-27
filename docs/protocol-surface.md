@@ -100,12 +100,15 @@ release API or durability claim.
 - The DID2 XPP1 version-2/suite-0x0301 surface now has two mutually rejecting
   closed shapes: the five-tag exact aggregate and a twelve-tag bounded
   manifest/chunk/commit transport carrier. The carrier verifies exact slice
-  lengths, V2 domain-separated hashes, descriptor commitments and the
-  65,861-byte request ceiling. The separate XIC1 pair verifier checks both
+  lengths, V2 domain-separated hashes, DID2/DCA1/XPS1 public-support
+  commitments and the 65,861-byte request ceiling. A separate verifier checks
+  complete XPI1/DPK2 against nonce-fresh current DID2 and signed XPS1 without
+  requiring plaintext DCR1 at the selected replica. The XIC1 pair verifier checks both
   selected NETCODEC node signatures, exact XPP1/placement binding and receipt
   times. Neither surface reconstructs durable XNode state, verifies the
-  inventory's current DID2 authority, or authorizes a pre-key claim; those
-  consumers must use this package at its exact commit before activation.
+  inventory's current DID2 authority at a final runtime commit, or authorizes
+  a pre-key claim; those consumers must use the verifiers at exact commit
+  before activation.
 - `Dpk2AuthoringAuthority.AuthorInventoryV2` locally authors a complete
   ordered V2 DPK2 inventory, device-signed XPI1 and exact aggregate XPP1 only
   when a verified DID2 DAB2 belongs to the active DMD1 account. It retains
