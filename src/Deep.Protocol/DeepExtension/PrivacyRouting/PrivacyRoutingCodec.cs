@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using Deep.Protocol.ContactV1;
+using Deep.Protocol.ContactV2;
 using Deep.Protocol.DeepExtension.MailboxCapabilities;
 using Deep.Protocol.GroupV1;
 using Sodium;
@@ -450,12 +451,12 @@ internal static class PrivacyRoutingPayloadVerifier
 
             if (ReadMagic(request) == ProtocolMagic.XPP1)
             {
-                var publication = Xpp1BoundedCodec.Decode(request);
-                if (!CryptographicOperations.FixedTimeEquals(publication.NetworkId.Span, networkId) ||
-                    !publication.CanonicalBytes.Span.SequenceEqual(request))
+                var fragment = DeepIdV2BoundedPreKeyPublicationCodec.Decode(request);
+                if (!CryptographicOperations.FixedTimeEquals(fragment.NetworkId.Span, networkId) ||
+                    !fragment.CanonicalBytes.Span.SequenceEqual(request))
                     throw PrivacyRoutingWire.Error(
                         PrivacyRoutingProtocolError.InvalidKeyBinding,
-                        "Bounded XPP1 is not bound to the ONION-01 network or exact canonical bytes.");
+                        "DID2 XPP1 fragment is not bound to the ONION-01 network or exact canonical bytes.");
                 return;
             }
 
@@ -587,17 +588,31 @@ internal static class PrivacyRoutingPayloadVerifier
 
             if (ReadMagic(exactRequest) == ProtocolMagic.XPP1)
             {
-                var request = Xpp1BoundedCodec.Decode(exactRequest);
-                var receipt = Xic1BoundedCodec.Decode(body);
-                Xic1BoundedCodec.ValidateFields(
-                    Enumerable.Range(1, 14)
-                        .Select(tag => receipt.FieldSpan(tag).ToArray())
-                        .ToArray(),
-                    request);
-                if (!receipt.CanonicalBytes.Span.SequenceEqual(body))
+                var fragment = DeepIdV2BoundedPreKeyPublicationCodec.Decode(
+                    exactRequest);
+                if (fragment.Phase != Xpp1V2FragmentPhase.Commit)
+                {
+                    // A staging acknowledgement is transport progress only.
+                    // It is never a replica receipt or claim authority.
+                    if (body.Length != 1 || body[0] is not (1 or 3))
+                        throw PrivacyRoutingWire.Error(
+                            PrivacyRoutingProtocolError.InvalidOperation,
+                            "DID2 XPP1 staging response is not an exact acknowledgement.");
+                    return;
+                }
+                var receipt = DeepIdV2PreKeyCommitReceiptCodec.Decode(body);
+                if (!CryptographicOperations.FixedTimeEquals(
+                        receipt.Field(1).Span, fragment.NetworkId.Span) ||
+                    !CryptographicOperations.FixedTimeEquals(
+                        receipt.Field(2).Span,
+                        fragment.PublicationOperationId.Span) ||
+                    !CryptographicOperations.FixedTimeEquals(
+                        receipt.Field(4).Span,
+                        fragment.PlacementHash.Span) ||
+                    !receipt.CanonicalBytes.Span.SequenceEqual(body))
                     throw PrivacyRoutingWire.Error(
-                        PrivacyRoutingProtocolError.InvalidOperation,
-                        "Bounded XIC1 response has non-canonical trailing bytes.");
+                        PrivacyRoutingProtocolError.ReplyContextMismatch,
+                        "DID2 XIC1 response differs from the exact commit fragment.");
                 return;
             }
 

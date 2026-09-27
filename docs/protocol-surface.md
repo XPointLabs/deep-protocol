@@ -108,7 +108,12 @@ release API or durability claim.
   epoch and rejects a changed service identity; it does not own that durable
   predecessor or activate the service. The XIC1 pair verifier checks both
   selected NETCODEC node signatures, exact XPP1/placement binding and receipt
-  times. Neither surface reconstructs durable XNode state, verifies the
+  times. The ONION ContactResolve terminal now admits only the bounded V2
+  fragment, binds staging acknowledgements to non-Commit phases and a V2 XIC1
+  to the exact Commit network/operation/placement; it rejects the retired V1
+  bounded XPP1 wire. This terminal check is structural, not a replica-signature
+  or two-replica authority check. The Protocol surface does not reconstruct
+  durable XNode state, verify the
   inventory's current DID2 authority at a final runtime commit, or authorizes
   a pre-key claim; those consumers must use the verifiers at exact commit
   before activation.

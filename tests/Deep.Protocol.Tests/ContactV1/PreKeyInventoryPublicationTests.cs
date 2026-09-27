@@ -184,92 +184,20 @@ public sealed class PreKeyInventoryPublicationTests
     }
 
     [Fact]
-    public async Task BoundedPublication_OnionBoundaryAcceptsOnlyCanonicalPhaseMatchedXpp1AndXic1()
+    public async Task BoundedPublication_OnionBoundaryRejectsRetiredV1Xpp1()
     {
         var fixture = await Fixture.CreateAsync();
         var bounded = BoundedPreKeyInventoryPublication.Create(
             fixture.Publication, fixture.Placement.ViewHash.Span, 20, 70);
-        var requests = new Xpp1BoundedRequest[]
+        foreach (var request in new Xpp1BoundedRequest[]
+                 { bounded.ManifestRequest, bounded.ChunkRequests[0],
+                   bounded.CommitRequest })
         {
-            bounded.ManifestRequest,
-            bounded.ChunkRequests[0],
-            bounded.CommitRequest,
-        };
-
-        Xic1BoundedReceipt Receipt(Xpp1BoundedRequest request)
-        {
-            var status = request.Phase switch
-            {
-                Xpp1BoundedPhase.Manifest => Xic1BoundedStatus.ManifestStaged,
-                Xpp1BoundedPhase.Chunk => Xic1BoundedStatus.ChunkStaged,
-                Xpp1BoundedPhase.Commit => Xic1BoundedStatus.Committed,
-                _ => throw new InvalidOperationException(),
-            };
-            var outcome = request.Phase == Xpp1BoundedPhase.Commit
-                ? Xic1BoundedMutationOutcome.DurablyActivated
-                : Xic1BoundedMutationOutcome.DurablyStaged;
-            var acceptedCount = request.Phase switch
-            {
-                Xpp1BoundedPhase.Manifest => (ushort)0,
-                Xpp1BoundedPhase.Chunk => checked((ushort)(request.ChunkIndex + 1)),
-                Xpp1BoundedPhase.Commit => request.ChunkCount,
-                _ => throw new InvalidOperationException(),
-            };
-            var acceptedLength = request.Phase switch
-            {
-                Xpp1BoundedPhase.Manifest => 0UL,
-                Xpp1BoundedPhase.Chunk => Math.Min(
-                    request.InventoryTotalLength,
-                    checked((ulong)acceptedCount * Xpp1BoundedCodec.MaximumChunkPayloadBytes)),
-                Xpp1BoundedPhase.Commit => request.InventoryTotalLength,
-                _ => throw new InvalidOperationException(),
-            };
-            var stateHash = request is Xpp1CommitRequest commit
-                ? Xic1BoundedCodec.ComputeActivatedStateHash(commit)
-                : Bytes(32, 0xc1);
-            var fields = new Xic1BoundedUnsignedFields(
-                request, status, outcome, acceptedCount, acceptedLength,
-                Bytes(32, 0xb1), 30, stateHash);
-            return Xic1BoundedCodec.Decode(Xic1BoundedCodec.Encode(fields, Bytes(64, 0xd1)));
+            Assert.Throws<PrivacyRoutingProtocolException>(() =>
+                OnionTerminalPayloadVerifierV1.VerifyRequest(
+                    fixture.Placement.Network, OnionOperation.ContactResolve,
+                    request.CanonicalBytes));
         }
-
-        foreach (var request in requests)
-        {
-            var verifiedRequest = OnionTerminalPayloadVerifierV1.VerifyRequest(
-                fixture.Placement.Network, OnionOperation.ContactResolve, request.CanonicalBytes);
-            var receipt = Receipt(request);
-            var verifiedResult = OnionTerminalPayloadVerifierV1.VerifySuccess(
-                verifiedRequest, receipt.CanonicalBytes);
-
-            Assert.Equal(request.CanonicalBytes.ToArray(), verifiedRequest.CanonicalBytes.ToArray());
-            Assert.Equal(receipt.CanonicalBytes.ToArray(), verifiedResult.Body.ToArray());
-        }
-
-        Assert.Throws<PrivacyRoutingProtocolException>(() => OnionTerminalPayloadVerifierV1.VerifyRequest(
-            fixture.Placement.Network, OnionOperation.GroupControl,
-            bounded.ManifestRequest.CanonicalBytes));
-        Assert.Throws<PrivacyRoutingProtocolException>(() => OnionTerminalPayloadVerifierV1.VerifyRequest(
-            fixture.Placement.Network, OnionOperation.ContactResolve,
-            fixture.Publication.CanonicalBytes));
-
-        var oversized = bounded.ChunkRequests[0].CanonicalBytes.ToArray();
-        Array.Resize(ref oversized, Xpp1BoundedCodec.MaximumCanonicalRequestBytes + 1);
-        Assert.Throws<PrivacyRoutingProtocolException>(() => OnionTerminalPayloadVerifierV1.VerifyRequest(
-            fixture.Placement.Network, OnionOperation.ContactResolve, oversized));
-
-        var manifestRequest = OnionTerminalPayloadVerifierV1.VerifyRequest(
-            fixture.Placement.Network, OnionOperation.ContactResolve,
-            bounded.ManifestRequest.CanonicalBytes);
-        Assert.Throws<PrivacyRoutingProtocolException>(() => OnionTerminalPayloadVerifierV1.VerifySuccess(
-            manifestRequest, Receipt(bounded.ChunkRequests[0]).CanonicalBytes));
-        Assert.Throws<PrivacyRoutingProtocolException>(() => OnionTerminalPayloadVerifierV1.VerifySuccess(
-            manifestRequest, fixture.Receipts[0].CanonicalBytes));
-
-        var phaseStatusMismatch = Receipt(bounded.ManifestRequest).CanonicalBytes.ToArray();
-        phaseStatusMismatch[FieldHeaderOffset(phaseStatusMismatch, 8) + 9] =
-            (byte)Xic1BoundedStatus.ChunkStaged;
-        Assert.Throws<PrivacyRoutingProtocolException>(() => OnionTerminalPayloadVerifierV1.VerifySuccess(
-            manifestRequest, phaseStatusMismatch));
     }
 
     [Fact]
