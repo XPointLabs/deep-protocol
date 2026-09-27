@@ -725,7 +725,10 @@ internal static class GraphPolicy
                 "Deep.Protocol|12751|F5FEFFE75DF957901D3EA90CF280FB44BB9F0836FDD9F24EDE220A0DD3208963",
                 // Internal DID2 locator/read-key candidate; no release runtime activation.
                 "Deep.Protocol|12751|00ABCFEB5A3136C97C38FBA67B24C213D0026DB9E53C971E1867F0DCDC2F87A1",
-                "Deep.Protocol|12751|684FE4870F2CAA971C8D4AB7C5DD17714EB0A797D260A35A9FAC49CE26664026"
+                "Deep.Protocol|12751|684FE4870F2CAA971C8D4AB7C5DD17714EB0A797D260A35A9FAC49CE26664026",
+                // Internal DID2-only DCR1 V2 AEAD candidate; publication remains disabled.
+                "Deep.Protocol|12751|55DD4A24B5DC1BA6CCA6A82B9180D2213CB3F4B274C8447B1DB0EC7FAE8DF7F1",
+                "Deep.Protocol|12751|A8CECB7AE3183EBEDD8F14B7B1F2C583AB99994D15A9883BA3B710777AC0AAB7"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

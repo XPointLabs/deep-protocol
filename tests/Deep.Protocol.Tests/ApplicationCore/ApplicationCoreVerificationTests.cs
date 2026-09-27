@@ -431,6 +431,54 @@ public sealed class ApplicationCoreVerificationTests
         Assert.False(DeepIdV2ResolverClosureCodec.RuntimeActivation);
         DeepIdV2ResolverClosureCodec.VerifyIdentityAndSupport(
             closure, contactVerified, 15);
+        using (var resolver = DeepIdV2PermanentContactResolutionDerivation.Derive(
+            fixture.Network, did, ApplicationCoreFixture.Bytes(16, 0x73)))
+        {
+            Assert.False(DeepIdV2ResolverObjectProtection.RuntimeActivation);
+            var nonce = ApplicationCoreFixture.Bytes(24, 0x4d);
+            var protectedDcr = DeepIdV2ResolverObjectProtection.SealCore(
+                closure, fixture.Network, did, resolver,
+                destination => nonce.CopyTo(destination));
+            Assert.Equal(nonce, protectedDcr[..24]);
+            Assert.Equal(closure.CanonicalBytes.ToArray(),
+                DeepIdV2ResolverObjectProtection.Open(protectedDcr,
+                    fixture.Network, did, resolver).CanonicalBytes.ToArray());
+            var randomA = DeepIdV2ResolverObjectProtection.Seal(
+                closure, fixture.Network, did, resolver);
+            var randomB = DeepIdV2ResolverObjectProtection.Seal(
+                closure, fixture.Network, did, resolver);
+            Assert.False(randomA.AsSpan(0, 24).SequenceEqual(randomB.AsSpan(0, 24)));
+            using (var otherResolver = DeepIdV2PermanentContactResolutionDerivation.Derive(
+                ApplicationCoreFixture.Bytes(16, 0x4e), did,
+                ApplicationCoreFixture.Bytes(16, 0x73)))
+                Assert.Throws<CryptographicException>(() =>
+                    DeepIdV2ResolverObjectProtection.Seal(
+                        closure, fixture.Network, did, otherResolver));
+            var tampered = protectedDcr.ToArray();
+            tampered[^1] ^= 1;
+            Assert.Throws<CryptographicException>(() =>
+                DeepIdV2ResolverObjectProtection.Open(tampered,
+                    fixture.Network, did, resolver));
+            Assert.Throws<CryptographicException>(() =>
+                DeepIdV2ResolverObjectProtection.Open(protectedDcr,
+                    ApplicationCoreFixture.Bytes(16, 0x4e), did, resolver));
+            var wrongDid = DeepIdV2Codec.AuthorDid2(
+                ApplicationCoreFixture.Bytes(32, 0x4f), pqPublicKey,
+                ApplicationCoreFixture.Bytes(16, 0x73));
+            Assert.Throws<CryptographicException>(() =>
+                DeepIdV2ResolverObjectProtection.Open(protectedDcr,
+                    fixture.Network, wrongDid, resolver));
+            Assert.Throws<CryptographicException>(() =>
+                DeepIdV2ResolverObjectProtection.SealCore(closure,
+                    fixture.Network, wrongDid, resolver,
+                    destination => nonce.CopyTo(destination)));
+            Assert.Throws<CryptographicException>(() =>
+                DeepIdV2ResolverObjectProtection.Open(protectedDcr[..^1],
+                    fixture.Network, did, resolver));
+            Assert.Throws<CryptographicException>(() =>
+                DeepIdV2ResolverObjectProtection.Open(new byte[39],
+                    fixture.Network, did, resolver));
+        }
         static byte[] InventoryU64(ulong value)
         {
             var bytes = new byte[8];
