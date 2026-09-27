@@ -37,8 +37,15 @@ public sealed class ParsedXpp1V2Fragment
     public ushort ChunkCount => BinaryPrimitives.ReadUInt16BigEndian(fields[7]);
     public ushort ChunkIndex => BinaryPrimitives.ReadUInt16BigEndian(fields[8]);
     public ReadOnlyMemory<byte> ChunkHash => Field(10);
-    public ReadOnlyMemory<byte> DescriptorListHash => Field(11);
+    public ReadOnlyMemory<byte> PublisherDescriptorCommitment => Field(11);
     public ReadOnlyMemory<byte> Body => Field(12);
+    /// <summary>
+    /// Public DID2 credential carried only by a manifest. It is an untrusted
+    /// directory lookup input, not publisher or inventory authority.
+    /// </summary>
+    public ReadOnlyMemory<byte> PublisherDid2 => Phase == Xpp1V2FragmentPhase.Manifest
+        ? fields[11].AsMemory(0, DeepIdV2Codec.Did2Length).ToArray()
+        : ReadOnlyMemory<byte>.Empty;
     public ReadOnlyMemory<byte> RequestHash => ApplicationCoreFormat.Sha256Domain(
         DeepIdV2BoundedPreKeyPublicationCodec.RequestHashDomain, canonical);
 
@@ -77,13 +84,15 @@ public static class DeepIdV2BoundedPreKeyPublicationCodec
     /// verify two final XIC1 receipts independently.
     /// </summary>
     public static IReadOnlyList<byte[]> CreateSequence(
-        ReadOnlySpan<byte> exactAggregate, ReadOnlySpan<byte> currentViewHash32)
+        ReadOnlySpan<byte> exactAggregate, ReadOnlySpan<byte> currentViewHash32,
+        ReadOnlySpan<byte> exactPublisherDid2)
     {
         if (currentViewHash32.Length != 32 ||
             ApplicationCoreFormat.IsZero(currentViewHash32))
             throw new ArgumentException("The current XNV view hash is required.",
                 nameof(currentViewHash32));
         var aggregate = DeepIdV2PreKeyPublicationCodec.Decode(exactAggregate);
+        var publisher = DeepIdV2Codec.DecodeDid2(exactPublisherDid2);
         var totalLength = checked((uint)exactAggregate.Length);
         var chunkCount = ChunkCount(totalLength);
         var aggregateHash = ApplicationCoreFormat.Sha256Domain(
@@ -97,12 +106,15 @@ public static class DeepIdV2BoundedPreKeyPublicationCodec
             ComputeChunkHash(checked((ushort)index), slice)
                 .CopyTo(descriptors, index * 36 + 4);
         }
-        var descriptorHash = ApplicationCoreFormat.Sha256Domain(
-            DescriptorHashDomain, descriptors);
         var manifestBytes = aggregate.Manifest.CanonicalBytes;
-        var manifestBody = new byte[manifestBytes.Length + descriptors.Length];
-        manifestBytes.Span.CopyTo(manifestBody);
-        descriptors.CopyTo(manifestBody, manifestBytes.Length);
+        var manifestBody = new byte[DeepIdV2Codec.Did2Length +
+            manifestBytes.Length + descriptors.Length];
+        publisher.CanonicalBytes.Span.CopyTo(manifestBody);
+        manifestBytes.Span.CopyTo(manifestBody.AsSpan(DeepIdV2Codec.Did2Length));
+        descriptors.CopyTo(manifestBody,
+            DeepIdV2Codec.Did2Length + manifestBytes.Length);
+        var descriptorHash = ComputeManifestDescriptorHash(
+            publisher.CanonicalBytes.Span, descriptors);
         var common = new FragmentHeader(aggregate.NetworkId.ToArray(),
             aggregate.PublicationOperationId.ToArray(),
             currentViewHash32.ToArray(), aggregate.PlacementHash.ToArray(),
@@ -139,7 +151,7 @@ public static class DeepIdV2BoundedPreKeyPublicationCodec
         for (var tag = 2; tag <= 6; tag++)
             ApplicationCoreFormat.NonZero(Field(tag), "XPP1 V2 fragment header");
         ApplicationCoreFormat.NonZero(Field(11),
-            "XPP1 V2 descriptor-list commitment");
+            "XPP1 V2 publisher/descriptor commitment");
         var phase = (Xpp1V2FragmentPhase)Field(1)[0];
         if (!Enum.IsDefined(phase))
             Reject(ApplicationCoreRejection.InvalidEnum,
@@ -160,15 +172,30 @@ public static class DeepIdV2BoundedPreKeyPublicationCodec
             case Xpp1V2FragmentPhase.Manifest:
                 if (index != NonChunkIndex ||
                     !ApplicationCoreFormat.IsZero(Field(10)) ||
-                    body.Length != DeepIdV2PreKeyManifestCodec.CanonicalLength +
+                    body.Length != DeepIdV2Codec.Did2Length +
+                        DeepIdV2PreKeyManifestCodec.CanonicalLength +
                         count * 36)
                     Reject(ApplicationCoreRejection.InvalidFieldLength,
                         "XPP1 V2 manifest fragment shape is invalid.");
+                try
+                {
+                    _ = DeepIdV2Codec.DecodeDid2(
+                        body[..DeepIdV2Codec.Did2Length]);
+                }
+                catch (FormatException exception)
+                {
+                    throw ApplicationCoreFormat.Error(
+                        ApplicationCoreValidationStage.EmbeddedRecord,
+                        ApplicationCoreRejection.EmbeddedRecordRejected,
+                        "XPP1 V2 fragment embeds an invalid DID2 publisher hint.",
+                        exception);
+                }
                 ParsedXpi1V2 manifest;
                 try
                 {
                     manifest = DeepIdV2PreKeyManifestCodec.Decode(
-                        body[..DeepIdV2PreKeyManifestCodec.CanonicalLength]);
+                        body.Slice(DeepIdV2Codec.Did2Length,
+                            DeepIdV2PreKeyManifestCodec.CanonicalLength));
                 }
                 catch (FormatException exception)
                 {
@@ -179,13 +206,15 @@ public static class DeepIdV2BoundedPreKeyPublicationCodec
                         exception);
                 }
                 if (!Fixed(Field(2), manifest.Field(1).Span) ||
-                    !Fixed(ApplicationCoreFormat.Sha256Domain(
-                            DescriptorHashDomain,
-                            body[DeepIdV2PreKeyManifestCodec.CanonicalLength..]),
+                    !Fixed(ComputeManifestDescriptorHash(
+                            body[..DeepIdV2Codec.Did2Length],
+                            body[(DeepIdV2Codec.Did2Length +
+                                DeepIdV2PreKeyManifestCodec.CanonicalLength)..]),
                         Field(11)))
                     Reject(ApplicationCoreRejection.CrossFieldMismatch,
-                        "XPP1 V2 manifest network or descriptor hash differs.");
-                var descriptors = body[DeepIdV2PreKeyManifestCodec.CanonicalLength..];
+                        "XPP1 V2 manifest network or publisher/descriptor commitment differs.");
+                var descriptors = body[(DeepIdV2Codec.Did2Length +
+                    DeepIdV2PreKeyManifestCodec.CanonicalLength)..];
                 for (var current = 0; current < count; current++)
                 {
                     var row = descriptors.Slice(current * 36, 36);
@@ -280,6 +309,15 @@ public static class DeepIdV2BoundedPreKeyPublicationCodec
         BinaryPrimitives.WriteUInt16BigEndian(input, index);
         body.CopyTo(input.AsSpan(2));
         return ApplicationCoreFormat.Sha256Domain(ChunkHashDomain, input);
+    }
+
+    private static byte[] ComputeManifestDescriptorHash(
+        ReadOnlySpan<byte> exactDid2, ReadOnlySpan<byte> descriptors)
+    {
+        var input = new byte[checked(exactDid2.Length + descriptors.Length)];
+        exactDid2.CopyTo(input);
+        descriptors.CopyTo(input.AsSpan(exactDid2.Length));
+        return ApplicationCoreFormat.Sha256Domain(DescriptorHashDomain, input);
     }
 
     private static bool Fixed(ReadOnlySpan<byte> left,

@@ -740,7 +740,10 @@ internal static class GraphPolicy
                 "Deep.Protocol|12751|AE84930F20787269261F8BDCAABBD55A4EFDBC8CC8DA78987BED0FE78251F49A",
                 // DID2-only XPC1 authoring and selected-replica signature evidence; not durable claim authority.
                 "Deep.Protocol|12799|6121D294CCB876300B07B5B9DEDC5F1BB1B40707539921F363806E181198109C",
-                "Deep.Protocol|12799|DFA9F24A22B338FFB9FA9CCF316B7A1FA0499FD0F9C2533FC4052EBC67E6DBA1"
+                "Deep.Protocol|12799|DFA9F24A22B338FFB9FA9CCF316B7A1FA0499FD0F9C2533FC4052EBC67E6DBA1",
+                // Bounded DID2 publication manifest carries a committed public publisher hint.
+                "Deep.Protocol|12801|6E79CCA1DDEB0F67815566C5DCD249FB6FDE8B1129A583763BABACADC03AE4B8",
+                "Deep.Protocol|12801|9AED126AF3A3F0146A32CE14D161A02267BDD8F0EA683D41482A9B9111FB55D6"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

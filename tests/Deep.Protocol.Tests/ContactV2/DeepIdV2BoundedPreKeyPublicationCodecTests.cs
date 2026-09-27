@@ -12,7 +12,7 @@ public sealed class DeepIdV2BoundedPreKeyPublicationCodecTests
     {
         var aggregate = Aggregate();
         var sequence = DeepIdV2BoundedPreKeyPublicationCodec.CreateSequence(
-            aggregate, Bytes(32, 0x31));
+            aggregate, Bytes(32, 0x31), Did2());
         Assert.False(DeepIdV2BoundedPreKeyPublicationCodec.RuntimeActivation);
         Assert.Equal(4, sequence.Count);
         var manifest = DeepIdV2BoundedPreKeyPublicationCodec.Decode(sequence[0]);
@@ -20,6 +20,8 @@ public sealed class DeepIdV2BoundedPreKeyPublicationCodecTests
         var second = DeepIdV2BoundedPreKeyPublicationCodec.Decode(sequence[2]);
         var commit = DeepIdV2BoundedPreKeyPublicationCodec.Decode(sequence[3]);
         Assert.Equal(Xpp1V2FragmentPhase.Manifest, manifest.Phase);
+        Assert.Equal(Did2(), manifest.PublisherDid2.ToArray());
+        Assert.Empty(first.PublisherDid2.ToArray());
         Assert.Equal(Xpp1V2FragmentPhase.Chunk, first.Phase);
         Assert.Equal(Xpp1V2FragmentPhase.Commit, commit.Phase);
         Assert.Equal((ushort)2, manifest.ChunkCount);
@@ -32,11 +34,27 @@ public sealed class DeepIdV2BoundedPreKeyPublicationCodecTests
         Assert.Equal(ApplicationCoreFormat.Sha256Domain(
                 DeepIdV2BoundedPreKeyPublicationCodec.RequestHashDomain,
                 sequence[0]), manifest.RequestHash.ToArray());
-        Assert.Equal(manifest.DescriptorListHash.ToArray(),
-            commit.DescriptorListHash.ToArray());
+        Assert.Equal(manifest.PublisherDescriptorCommitment.ToArray(),
+            commit.PublisherDescriptorCommitment.ToArray());
         Assert.Equal(sequence.SelectMany(static fragment => fragment),
             DeepIdV2BoundedPreKeyPublicationCodec.CreateSequence(aggregate,
-                Bytes(32, 0x31)).SelectMany(static fragment => fragment));
+                Bytes(32, 0x31), Did2()).SelectMany(static fragment => fragment));
+
+        var retiredPublisher = sequence[0].ToArray();
+        BinaryPrimitives.WriteUInt16BigEndian(
+            retiredPublisher.AsSpan(FieldOffset(retiredPublisher, 12) + 4), 1);
+        Assert.Equal(ApplicationCoreRejection.EmbeddedRecordRejected,
+            Assert.Throws<ApplicationCoreFormatException>(() =>
+                DeepIdV2BoundedPreKeyPublicationCodec.Decode(retiredPublisher))
+                .Rejection);
+
+        var changedPublisher = sequence[0].ToArray();
+        changedPublisher[FieldOffset(changedPublisher, 12) +
+            FieldOffset(Did2(), 1)] ^= 1;
+        Assert.Equal(ApplicationCoreRejection.CrossFieldMismatch,
+            Assert.Throws<ApplicationCoreFormatException>(() =>
+                DeepIdV2BoundedPreKeyPublicationCodec.Decode(changedPublisher))
+                .Rejection);
 
         var changedChunk = sequence[1].ToArray();
         changedChunk[^1] ^= 1;
@@ -94,6 +112,10 @@ public sealed class DeepIdV2BoundedPreKeyPublicationCodecTests
             Bytes(32, 0x41), Bytes(32, 0x51), manifest,
             Enumerable.Repeat(member, 32).ToArray(), last);
     }
+
+    private static byte[] Did2() => DeepIdV2Codec.AuthorDid2(
+        Bytes(32, 0xa1), Bytes(1952, 0xa2), Bytes(16, 0xa3))
+        .CanonicalBytes.ToArray();
 
     private static int FieldOffset(ReadOnlySpan<byte> wire, int soughtTag)
     {
