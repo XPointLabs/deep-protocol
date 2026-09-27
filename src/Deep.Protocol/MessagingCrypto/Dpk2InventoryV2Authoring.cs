@@ -161,16 +161,16 @@ public sealed partial class Dpk2AuthoringAuthority
     }
 
     /// <summary>
-    /// Authors one complete DID2-only V2 inventory from the exact active DMD1.
-    /// No V1 codec, caller-supplied signer, raw private key or network write is
-    /// involved. The returned publication is not safe to dispatch before all
+    /// Authors one complete DID2-only V2 inventory from the exact active DMD1
+    /// and one signed XPS1 V2 service object. Separate raw capability and
+    /// reference inputs are not accepted. No V1 codec, caller-supplied signer,
+    /// raw private key or network write is involved. The result is not safe to dispatch before all
     /// private capabilities are durably committed by the account owner.
     /// </summary>
     public AuthoredDpk2InventoryV2 AuthorInventoryV2(
         Dpk2AuthoringContext context,
         VerifiedDab2 did2Binding,
-        ReadOnlySpan<byte> serviceCapability32,
-        ReadOnlySpan<byte> xps1Reference38,
+        AuthoredDeepIdV2PreKeyService service,
         ReadOnlySpan<byte> currentDrs1Reference38,
         ReadOnlySpan<byte> predecessorXpi1Hash32,
         ReadOnlySpan<byte> publicationOperationId32,
@@ -180,14 +180,12 @@ public sealed partial class Dpk2AuthoringAuthority
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(did2Binding);
+        ArgumentNullException.ThrowIfNull(service);
         if (oneTimePreKeyCount is < 32 or > 4096 ||
             lastResortReuseLimit is < 1 or > 64 ||
             context.PrekeyServiceGeneration == 0 ||
             context.InventoryEpoch is < 1 or > 14)
             throw new ArgumentException("The DID2 inventory policy is outside its closed bound.");
-        Nonzero(serviceCapability32, 32, nameof(serviceCapability32));
-        Reference(xps1Reference38, ProtocolMagicBytes.XPS1,
-            nameof(xps1Reference38));
         Reference(currentDrs1Reference38, ProtocolMagicBytes.DRS1,
             nameof(currentDrs1Reference38));
         Nonzero(publicationOperationId32, 32,
@@ -213,6 +211,30 @@ public sealed partial class Dpk2AuthoringAuthority
                     did2Binding.Identity.Account.Certificate.NetworkId.Span))
                 throw new CryptographicException(
                     "The DID2 binding is outside the active inventory account.");
+            var certificate = current.Identity.ActiveDevices.Single(device =>
+                device.Certificate.DeviceId.Span.SequenceEqual(DeviceId.Span))
+                .Certificate;
+            var descriptor = DeepIdV2PreKeyServiceCodec.Decode(
+                service.ExactXps1.Span);
+            DeepIdV2PreKeyServiceCodec.VerifyDeviceSignature(descriptor,
+                certificate.DeviceEd25519PublicKey.Span);
+            if (!descriptor.Field(1).Span.SequenceEqual(current.Record.NetworkId.Span) ||
+                !descriptor.Field(2).Span.SequenceEqual(service.ServiceCapability.Span) ||
+                !descriptor.Field(3).Span.SequenceEqual(DeviceId.Span) ||
+                !descriptor.Field(4).Span.SequenceEqual(
+                    Dpd1Reference(certificate.CanonicalHash.Span)) ||
+                BinaryPrimitives.ReadUInt64BigEndian(descriptor.Field(5).Span) !=
+                    context.PrekeyServiceGeneration ||
+                BinaryPrimitives.ReadUInt16BigEndian(descriptor.Field(8).Span) >
+                    oneTimePreKeyCount ||
+                BinaryPrimitives.ReadUInt16BigEndian(descriptor.Field(9).Span) <
+                    lastResortReuseLimit ||
+                BinaryPrimitives.ReadUInt64BigEndian(descriptor.Field(10).Span) >
+                    context.NotBeforeUnixSeconds ||
+                BinaryPrimitives.ReadUInt64BigEndian(descriptor.Field(11).Span) <
+                    context.ExpiresAtUnixSeconds)
+                throw new CryptographicException(
+                    "The DID2 inventory is outside its exact signed XPS1 V2 service.");
             var offerings = new List<AuthoredDpk2Offering>(oneTimePreKeyCount);
             AuthoredDpk2Offering? last = null;
             try
@@ -234,11 +256,11 @@ public sealed partial class Dpk2AuthoringAuthority
                 var fields = new ReadOnlyMemory<byte>[]
                 {
                     current.Record.NetworkId,
-                    serviceCapability32.ToArray(),
+                    service.ServiceCapability,
                     DeviceId,
                     offerings[0].Record.ResponderDpd1Ref,
                     U64(context.PrekeyServiceGeneration),
-                    xps1Reference38.ToArray(),
+                    service.Xps1Reference,
                     U64(context.InventoryEpoch),
                     predecessorXpi1Hash32.ToArray(),
                     U16(oneTimePreKeyCount),

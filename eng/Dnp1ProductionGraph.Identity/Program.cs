@@ -762,7 +762,12 @@ internal static class GraphPolicy
                 "Deep.Protocol|12832|6B681F3D909E0D2132194D230A04843504AC3B1BB6A9CB3E840B251074118E16",
                 // DID2-only XPS1 V2 codec and DPD1-owned author; no runtime publication.
                 "Deep.Protocol|12853|0853A6F8558EBCFDA9353478C5B05A08CB7CB8BE6FFE3D25070131C0DA72F5D9",
-                "Deep.Protocol|12853|76C4035740998BFBA7C36D074158BA09F342EBE8D89E44A9822E16BD923CAB0A"
+                "Deep.Protocol|12853|76C4035740998BFBA7C36D074158BA09F342EBE8D89E44A9822E16BD923CAB0A",
+                // V2 inventory author consumes the exact signed XPS1 object;
+                // raw capability/reference pairs are no longer public inputs
+                // (Release, Debug normalized assembly snapshots).
+                "Deep.Protocol|12853|38631B201C2F0DEE5C47C9BE6B5CE5072D8A7D7A83F25A5C5C3CFF3CCC8B2DF6",
+                "Deep.Protocol|12853|48E195270592F7F2B097D8F76648CF989D8D6EC741051AE1F27B1F728ADB220E"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [
