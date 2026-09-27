@@ -431,24 +431,74 @@ public sealed class ApplicationCoreVerificationTests
         Assert.False(DeepIdV2ResolverClosureCodec.RuntimeActivation);
         DeepIdV2ResolverClosureCodec.VerifyIdentityAndSupport(
             closure, contactVerified, 15);
-        Xpi1UnsignedFields InventoryFields(byte[] xpsHash, byte[] dmdHash,
-            ulong expiresAt = 20) => new(fixture.Network,
-            xpsFields[1].Span, fixture.DeviceId,
+        static byte[] InventoryU64(ulong value)
+        {
+            var bytes = new byte[8];
+            BinaryPrimitives.WriteUInt64BigEndian(bytes, value);
+            return bytes;
+        }
+        static byte[] InventoryU16(ushort value)
+        {
+            var bytes = new byte[2];
+            BinaryPrimitives.WriteUInt16BigEndian(bytes, value);
+            return bytes;
+        }
+        ReadOnlyMemory<byte>[] InventoryFields(byte[] xpsHash, byte[] dmdHash,
+            ulong expiresAt = 20) =>
+        [
+            fixture.Network, xpsFields[1], fixture.DeviceId,
             ContactRef("DPD1", 1, fixture.Identity.ActiveDevices[0]
-                .Certificate.CanonicalHash.Span), 1,
-            ContactRef("XPS1", 1, xpsHash), 1, new byte[32], 32,
-            ApplicationCoreFixture.Bytes(32, 0x49),
+                .Certificate.CanonicalHash.Span), InventoryU64(1),
+            ContactRef("XPS1", 1, xpsHash), InventoryU64(1), new byte[32],
+            InventoryU16(32), ApplicationCoreFixture.Bytes(32, 0x49),
             ApplicationCoreFixture.Bytes(32, 0x4a), dmdHash,
             ContactRef("DRS1", 1,
                 fixture.Revocations.Snapshot.CanonicalHash.Span),
-            10, expiresAt);
-        Xpi1Record SignInventory(Xpi1UnsignedFields fields, KeyPair signer) =>
-            Xpi1Codec.Decode(Xpi1Codec.Encode(fields,
-                PublicKeyAuth.SignDetached(
-                    Xpi1Codec.CreateSignatureInput(fields), signer.PrivateKey)));
+            InventoryU64(10), InventoryU64(expiresAt)
+        ];
+        ParsedXpi1V2 SignInventory(ReadOnlyMemory<byte>[] fields, KeyPair signer)
+        {
+            var signature = PublicKeyAuth.SignDetached(
+                DeepIdV2PreKeyManifestCodec.CreateSignatureInput(fields),
+                signer.PrivateKey);
+            return DeepIdV2PreKeyManifestCodec.Decode(
+                DeepIdV2PreKeyManifestCodec.Encode(fields, signature));
+        }
         var manifest = SignInventory(InventoryFields(
             SHA256.HashData(xps), directory.Record.RecordHash.ToArray()),
             fixture.DeviceKey);
+        Assert.False(DeepIdV2PreKeyManifestCodec.RuntimeActivation);
+        var legacyFields = new Xpi1UnsignedFields(fixture.Network,
+            xpsFields[1].Span, fixture.DeviceId,
+            ContactRef("DPD1", 1, fixture.Identity.ActiveDevices[0]
+                .Certificate.CanonicalHash.Span), 1,
+            ContactRef("XPS1", 1, SHA256.HashData(xps)), 1,
+            new byte[32], 32, ApplicationCoreFixture.Bytes(32, 0x49),
+            ApplicationCoreFixture.Bytes(32, 0x4a),
+            directory.Record.RecordHash.Span,
+            ContactRef("DRS1", 1,
+                fixture.Revocations.Snapshot.CanonicalHash.Span), 10, 20);
+        var oldManifest = Xpi1Codec.Encode(legacyFields,
+            PublicKeyAuth.SignDetached(Xpi1Codec.CreateSignatureInput(
+                legacyFields), fixture.DeviceKey.PrivateKey));
+        Assert.Equal(ApplicationCoreRejection.WrongVersion,
+            Assert.Throws<ApplicationCoreFormatException>(() =>
+                DeepIdV2PreKeyManifestCodec.Decode(oldManifest)).Rejection);
+        var wrongSuite = manifest.CanonicalBytes.ToArray();
+        BinaryPrimitives.WriteUInt16BigEndian(wrongSuite.AsSpan(6), 0x0201);
+        Assert.Equal(ApplicationCoreRejection.WrongSuite,
+            Assert.Throws<ApplicationCoreFormatException>(() =>
+                DeepIdV2PreKeyManifestCodec.Decode(wrongSuite)).Rejection);
+        var oldDomainFields = InventoryFields(SHA256.HashData(xps),
+            directory.Record.RecordHash.ToArray());
+        var oldDomainSignature = PublicKeyAuth.SignDetached(
+            Xpi1Codec.CreateSignatureInput(legacyFields),
+            fixture.DeviceKey.PrivateKey);
+        var oldDomainManifest = DeepIdV2PreKeyManifestCodec.Decode(
+            DeepIdV2PreKeyManifestCodec.Encode(oldDomainFields,
+                oldDomainSignature));
+        AssertVerificationFailure(() => DeepIdV2PreKeyManifestBinding.Verify(
+            closure, currentContact, oldDomainManifest, bootId, 3));
         Assert.False(DeepIdV2PreKeyManifestBinding.RuntimeActivation);
         DeepIdV2PreKeyManifestBinding.Verify(
             closure, currentContact, manifest, bootId, 3);

@@ -1,7 +1,6 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using Deep.Protocol.ApplicationCore;
-using Deep.Protocol.ContactV1;
 using Sodium;
 
 namespace Deep.Protocol.ContactV2;
@@ -16,7 +15,7 @@ public static class DeepIdV2PreKeyManifestBinding
 
     public static void Verify(ParsedDcr1V2 closure,
         DeepIdV2CurrentContactAuthorization currentAuthorization,
-        Xpi1Record manifest, ReadOnlySpan<byte> currentBootId,
+        ParsedXpi1V2 manifest, ReadOnlySpan<byte> currentBootId,
         ulong currentMonotonicSample)
     {
         ArgumentNullException.ThrowIfNull(closure);
@@ -36,7 +35,7 @@ public static class DeepIdV2PreKeyManifestBinding
         var bundle = closure.Bundle;
         var directory = authorization.Directory.Record;
         var identity = authorization.Binding.Identity;
-        var recipientId = manifest.ResponderDeviceId.ToArray();
+        var recipientId = manifest.Field(3).ToArray();
         var index = -1;
         for (var current = 0; current < directory.ActiveDevices.Count; current++)
             if (directory.ActiveDevices[current].DeviceId.Span.SequenceEqual(recipientId))
@@ -67,23 +66,23 @@ public static class DeepIdV2PreKeyManifestBinding
             SHA256.HashData(xps));
         var expectedDrs = Reference(ProtocolMagicBytes.DRS1, 1,
             identity.Revocations.Snapshot.CanonicalHash.Span);
-        if (!manifest.NetworkId.Span.SequenceEqual(bundle.FieldSpan(1)) ||
-            !manifest.ServiceCapability.Span.SequenceEqual(Get(xps, slices, 2)) ||
-            !manifest.ResponderDpd1Reference.Span.SequenceEqual(expectedDpd) ||
-            !manifest.Xps1Reference.Span.SequenceEqual(expectedXps) ||
-            manifest.ServiceGeneration != U64(Get(xps, slices, 5)) ||
-            manifest.OneTimeDpk2Count < U16(Get(xps, slices, 8)) ||
-            !manifest.CurrentDmd1Hash.Span.SequenceEqual(directory.RecordHash.Span) ||
-            !manifest.CurrentDrs1Reference.Span.SequenceEqual(expectedDrs) ||
-            manifest.IssuedAtUnixSeconds < U64(Get(xps, slices, 10)) ||
-            manifest.ExpiresAtUnixSeconds > U64(Get(xps, slices, 11)) ||
-            manifest.IssuedAtUnixSeconds < U64(bundle.FieldSpan(17)) ||
-            manifest.ExpiresAtUnixSeconds > U64(bundle.FieldSpan(18)) ||
-            lower < manifest.IssuedAtUnixSeconds ||
-            upper >= manifest.ExpiresAtUnixSeconds)
+        if (!manifest.FieldSpan(1).SequenceEqual(bundle.FieldSpan(1)) ||
+            !manifest.FieldSpan(2).SequenceEqual(Get(xps, slices, 2)) ||
+            !manifest.FieldSpan(4).SequenceEqual(expectedDpd) ||
+            !manifest.FieldSpan(6).SequenceEqual(expectedXps) ||
+            U64(manifest.FieldSpan(5)) != U64(Get(xps, slices, 5)) ||
+            U16(manifest.FieldSpan(9)) < U16(Get(xps, slices, 8)) ||
+            !manifest.FieldSpan(12).SequenceEqual(directory.RecordHash.Span) ||
+            !manifest.FieldSpan(13).SequenceEqual(expectedDrs) ||
+            U64(manifest.FieldSpan(14)) < U64(Get(xps, slices, 10)) ||
+            U64(manifest.FieldSpan(15)) > U64(Get(xps, slices, 11)) ||
+            U64(manifest.FieldSpan(14)) < U64(bundle.FieldSpan(17)) ||
+            U64(manifest.FieldSpan(15)) > U64(bundle.FieldSpan(18)) ||
+            lower < U64(manifest.FieldSpan(14)) ||
+            upper >= U64(manifest.FieldSpan(15)))
             Reject("XPI1 does not bind the exact current DID2 recipient XPS1/DMD1/DRS1 closure.");
-        if (!PublicKeyAuth.VerifyDetached(manifest.PublisherSignature.ToArray(),
-                manifest.Record.SignatureInput.ToArray(),
+        if (!PublicKeyAuth.VerifyDetached(manifest.Field(16).ToArray(),
+                manifest.SignatureInput.ToArray(),
                 device.Certificate.DeviceEd25519PublicKey.ToArray()))
             Reject("XPI1 responder signature is invalid.");
     }

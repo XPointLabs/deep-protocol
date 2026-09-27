@@ -688,7 +688,10 @@ internal static class GraphPolicy
                 "Deep.Protocol|12571|4E804A19598A6315CB2253C328EFF3EA9029ADBACA31821E2BD2ECC0AB270781",
                 // DID2 directory freshness may mint the identity-neutral XPoint context.
                 "Deep.Protocol|12575|F4401972A25AE07559C76C52C79F141943C45374E4773CF3219F03A3AD8F5299",
-                "Deep.Protocol|12575|4DDEF82C9BAA2C41EDDD766EF146E50B4B050E69279BFE602F6F20837A73C745"
+                "Deep.Protocol|12575|4DDEF82C9BAA2C41EDDD766EF146E50B4B050E69279BFE602F6F20837A73C745",
+                // DID2-only XPI1 V2 parser and current DCR1/XPS1 binding; publication remains gated.
+                "Deep.Protocol|12590|ECFAA9A4B98F81A2711E3C25909160E703704F4D885E14E7FBCFFDE819B428C9",
+                "Deep.Protocol|12590|670701577CA0742E16DAACFC882751010CA726E63DE56B137AE60B6A08B44507"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [
