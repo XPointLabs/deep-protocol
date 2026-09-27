@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using Deep.Protocol.ApplicationCore;
+using Deep.Protocol.ContactV2;
 using Deep.Protocol.Identity;
 using Deep.Protocol.MessagingWire;
 
@@ -55,9 +56,9 @@ public sealed class Dpk2AuthoringContext
 }
 
 /// <summary>
-/// Device-owned production author for frozen suite 0x0201 DPK2 offerings.
-/// It has no public constructor and accepts neither private keys nor a crypto
-/// provider from its caller.
+/// Device-owned author for explicit version-1 and DID2 version-2 DPK2
+/// offerings. The call selects a closed envelope and signature suite; callers
+/// cannot supply private keys, an arbitrary suite or a crypto provider.
 /// </summary>
 public sealed class Dpk2AuthoringAuthority : IDisposable
 {
@@ -89,7 +90,11 @@ public sealed class Dpk2AuthoringAuthority : IDisposable
     public ulong DeviceGeneration => _deviceAgreement.DeviceGeneration;
 
     public AuthoredDpk2Offering AuthorOneTime(Dpk2AuthoringContext context) =>
-        Author(context, Dpk2PrekeyKind.OneTime, reuseLimit: 0);
+        Author(context, Dpk2PrekeyKind.OneTime, reuseLimit: 0, did2: false);
+
+    /// <summary>Authors an exact DID2-generation offering with V2 signatures.</summary>
+    public AuthoredDpk2Offering AuthorOneTimeV2(Dpk2AuthoringContext context) =>
+        Author(context, Dpk2PrekeyKind.OneTime, reuseLimit: 0, did2: true);
 
     public AuthoredDpk2Offering AuthorLastResort(
         Dpk2AuthoringContext context,
@@ -97,7 +102,19 @@ public sealed class Dpk2AuthoringAuthority : IDisposable
     {
         if (reuseLimit is < 1 or > 64)
             throw new ArgumentOutOfRangeException(nameof(reuseLimit), "A last-resort reuse limit must be 1..64.");
-        return Author(context, Dpk2PrekeyKind.LastResort, reuseLimit);
+        return Author(context, Dpk2PrekeyKind.LastResort, reuseLimit,
+            did2: false);
+    }
+
+    /// <summary>Authors a bounded DID2 last-resort offering.</summary>
+    public AuthoredDpk2Offering AuthorLastResortV2(
+        Dpk2AuthoringContext context, ushort reuseLimit)
+    {
+        if (reuseLimit is < 1 or > 64)
+            throw new ArgumentOutOfRangeException(nameof(reuseLimit),
+                "A last-resort reuse limit must be 1..64.");
+        return Author(context, Dpk2PrekeyKind.LastResort, reuseLimit,
+            did2: true);
     }
 
     public void Dispose()
@@ -109,7 +126,8 @@ public sealed class Dpk2AuthoringAuthority : IDisposable
     private AuthoredDpk2Offering Author(
         Dpk2AuthoringContext context,
         Dpk2PrekeyKind kind,
-        ushort reuseLimit)
+        ushort reuseLimit,
+        bool did2)
     {
         ArgumentNullException.ThrowIfNull(context);
         lock (_gate)
@@ -170,21 +188,32 @@ public sealed class Dpk2AuthoringAuthority : IDisposable
                     bundleId, signedId, signedPublic,
                     oneTimeId, oneTimePublic, mlKemId, mlKemPublic,
                     new byte[64], new byte[64], new byte[64], dpd1Reference);
-                xSignature = Sign(MessagingWireCryptographicInputs.GetX25519SignedPrekeySignatureInput(unsigned));
-                mlKemSignature = Sign(MessagingWireCryptographicInputs.GetMlKemPrekeySignatureInput(unsigned));
+                xSignature = Sign(did2
+                    ? DeepIdV2Dpk2Codec.GetX25519SignedPrekeySignatureInput(unsigned)
+                    : MessagingWireCryptographicInputs.GetX25519SignedPrekeySignatureInput(unsigned));
+                mlKemSignature = Sign(did2
+                    ? DeepIdV2Dpk2Codec.GetMlKemPrekeySignatureInput(unsigned)
+                    : MessagingWireCryptographicInputs.GetMlKemPrekeySignatureInput(unsigned));
                 var partiallySigned = CreateRecord(
                     directory, certificate, context, kind, reuseLimit,
                     bundleId, signedId, signedPublic,
                     oneTimeId, oneTimePublic, mlKemId, mlKemPublic,
                     xSignature, mlKemSignature, new byte[64], dpd1Reference);
-                bundleSignature = Sign(MessagingWireCryptographicInputs.GetPrekeyBundleSignatureInput(partiallySigned));
+                bundleSignature = Sign(did2
+                    ? DeepIdV2Dpk2Codec.GetPrekeyBundleSignatureInput(partiallySigned)
+                    : MessagingWireCryptographicInputs.GetPrekeyBundleSignatureInput(partiallySigned));
                 var record = CreateRecord(
                     directory, certificate, context, kind, reuseLimit,
                     bundleId, signedId, signedPublic,
                     oneTimeId, oneTimePublic, mlKemId, mlKemPublic,
                     xSignature, mlKemSignature, bundleSignature, dpd1Reference);
-                exact = Dpk2Codec.Encode(record);
-                exactHash = MessagingWireCryptographicInputs.ComputeExactDpk2Hash(record);
+                exact = did2 ? DeepIdV2Dpk2Codec.Encode(record) :
+                    Dpk2Codec.Encode(record);
+                exactHash = did2
+                    ? SHA256.HashData(MessagingWireCryptographicInputs
+                        .DomainHashInput(MessagingWireCryptographicInputs
+                            .ExactDpk2Domain, exact))
+                    : MessagingWireCryptographicInputs.ComputeExactDpk2Hash(record);
 
                 capability = new Dpk2PreKeySecretCapability(
                     record,

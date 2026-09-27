@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using Deep.Protocol.ContactV1;
+using Deep.Protocol.ContactV2;
 using Deep.Protocol.MessagingWire;
 using Sodium;
 
@@ -603,6 +604,15 @@ internal static class Dpk2PreKeyPersistenceCodec
 
     private static (Dpk2Record Record, byte[] ExactHash) DecodeExactDpk2(ReadOnlySpan<byte> exactDpk2)
     {
+        if (exactDpk2.Length >= 8 &&
+            BinaryPrimitives.ReadUInt16BigEndian(exactDpk2.Slice(4, 2)) ==
+                DeepIdV2Dpk2Codec.Version)
+        {
+            // The V2 envelope and its exact-byte hash must never be
+            // reconstructed through the version-1 DPK2 codec.
+            var parsed = DeepIdV2Dpk2Codec.Decode(exactDpk2);
+            return (parsed.Record, parsed.ExactHash.ToArray());
+        }
         var record = Dpk2Codec.Decode(exactDpk2);
         var canonical = Dpk2Codec.Encode(record);
         try
