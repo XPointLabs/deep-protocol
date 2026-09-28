@@ -770,7 +770,11 @@ internal static class GraphPolicy
                 "Deep.Protocol|12853|48E195270592F7F2B097D8F76648CF989D8D6EC741051AE1F27B1F728ADB220E",
                 // Reviewed public operational-successor author/request/rollover API;
                 // immutable identity, fresh traffic keys and protected head pins.
-                "Deep.Protocol|12916|73DCC6B6387E7B464614BFDB96B615264BDBB45A521327E01861842686F3451C"
+                "Deep.Protocol|12916|73DCC6B6387E7B464614BFDB96B615264BDBB45A521327E01861842686F3451C",
+                // Exact ADH1/XNH1 core-hash inspection for the offline,
+                // separately pinned successor ceremony (no signer access).
+                "Deep.Protocol|12918|1116917E0A7467F34414A72047D80FAB49E7A3F372F10CE95E4F3F52BD97C085",
+                "Deep.Protocol|12918|B75F576D3329F57C0A67A0AC1FB0DDB9D702B7E0C323CA303FBF71FBA6C84E00"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

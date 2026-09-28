@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
+using Deep.Protocol.AccountDirectoryV1;
 using Deep.Protocol.ContactV1;
 using Sodium;
 
@@ -182,6 +183,12 @@ public sealed class AuthoredXPointNetworkOperationalSuccessor
 /// </summary>
 public static class XPointNetworkOperationalSuccessorAuthor
 {
+    public static byte[] ComputeAdh1CoreHash(ReadOnlySpan<byte> exactAdh1) =>
+        AccountDirectoryCrypto.ComputeAdh1CoreHash(AccountDirectoryAdh1Codec.Decode(exactAdh1));
+
+    public static byte[] ComputeXnh1CoreHash(ReadOnlySpan<byte> exactXnh1) =>
+        XPointNetworkCodec.Parse<Xnh1Record>(exactXnh1).CoreHash.ToArray();
+
     public static async ValueTask<AuthoredXPointNetworkOperationalSuccessor> AuthorAsync(
         XPointNetworkOperationalSuccessorRequest request,
         CancellationToken cancellationToken = default)
