@@ -1244,6 +1244,16 @@ public sealed class VerifiedOnionReceiveContext
     internal OnionTrustedTimeLease TrustedTime { get; }
     internal PrivacyRoutingHop LocalHop => _localHop;
 
+    internal VerifiedOnionReceiveContext RebindAuthenticatedRelayPosition(OnionReceivePosition position)
+    {
+        if (Position == OnionReceivePosition.Exit ||
+            position is not (OnionReceivePosition.Ingress or OnionReceivePosition.Core))
+            throw new OnionBoundaryException("invalid-receive-position",
+                "Only an authenticated relay layer can disambiguate signed relay positions.");
+        return new VerifiedOnionReceiveContext(new VerifiedOnionLocalNodeKey(
+            Network, position, _localNode, KeyHandle));
+    }
+
     internal PrivacyRoutingHop ResolveNextHop(ReadOnlySpan<byte> nextNodeId)
     {
         if (Position == OnionReceivePosition.Exit)
@@ -1393,13 +1403,19 @@ public sealed class OnionReplayOpenLease : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         var transaction = Interlocked.Exchange(ref _transaction, null);
-        if (transaction is not null) await transaction.DisposeAsync().ConfigureAwait(false);
-        CryptographicOperations.ZeroMemory(_frameHash);
-        CryptographicOperations.ZeroMemory(_networkId);
-        CryptographicOperations.ZeroMemory(_ownerId);
-        CryptographicOperations.ZeroMemory(_keyId);
-        CryptographicOperations.ZeroMemory(_keyHandleId);
-        CryptographicOperations.ZeroMemory(_bootId);
+        try
+        {
+            if (transaction is not null) await transaction.DisposeAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(_frameHash);
+            CryptographicOperations.ZeroMemory(_networkId);
+            CryptographicOperations.ZeroMemory(_ownerId);
+            CryptographicOperations.ZeroMemory(_keyId);
+            CryptographicOperations.ZeroMemory(_keyHandleId);
+            CryptographicOperations.ZeroMemory(_bootId);
+        }
     }
 }
 

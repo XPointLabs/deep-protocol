@@ -183,9 +183,24 @@ internal static class PrivacyRoutingValidationBuilder
         var next = plain.Slice(40, 32);
         PrivacyRoutingWire.ValidateId(replay, PrivacyRoutingProtocolError.InvalidIdentifier, "replay id");
         PrivacyRoutingWire.ValidateId(next, PrivacyRoutingProtocolError.InvalidIdentifier, "next router id");
-        var expectedNext = receive.ResolveNextHop(next);
         var inner = PrivacyRoutingWire.ValidatePayloadAndPadding(plain, 80, 72, 76);
-        PrivacyRoutingWire.ValidateInnerFrame(inner, expectedNext, receive.Network.NetworkIdSpan);
+        // The outer Relay header cannot distinguish Ingress from Core. Only an
+        // authenticated, canonical inner header may resolve that ambiguity.
+        var position = PrivacyRoutingWire.ReadAuthenticatedRelayPosition(inner);
+        var selected = receive.Position == position
+            ? receive
+            : receive.RebindAuthenticatedRelayPosition(position);
+        var expectedNext = selected.ResolveNextHop(next);
+        PrivacyRoutingWire.ValidateInnerFrame(inner, expectedNext, selected.Network.NetworkIdSpan);
+        if (!ReferenceEquals(selected, receive))
+        {
+            // Validate all forward facts before emitting the sole retryable
+            // pre-commit position error. No capability or plaintext is released.
+            _ = selected.ResolveNextHopTransport(next);
+            selected.Network.EnsureCurrent();
+            throw new OnionBoundaryException("receive-position-mismatch",
+                "The authenticated relay layer requires another signed local receive position.");
+        }
         return new PrivacyRoutingRelayLayer(replay, next, inner);
     }
 
@@ -983,6 +998,14 @@ internal static class PrivacyRoutingWire
     { ValidatePublicKey(peerPublic);byte[] shared;var privateCopy=localPrivate.ToArray();var publicCopy=peerPublic.ToArray();try{try{shared=ScalarMult.Mult(privateCopy,publicCopy);}catch(Exception exception){throw Error(PrivacyRoutingProtocolError.AuthenticationFailed,"X25519 scalar multiplication failed.",exception);}}finally{CryptographicOperations.ZeroMemory(privateCopy);CryptographicOperations.ZeroMemory(publicCopy);}try{if(IsZero(shared))throw Error(PrivacyRoutingProtocolError.AuthenticationFailed,"X25519 shared secret is all zero.");var epochBytes=U64(epoch);var salt=Sha512Domain("Deep/XPoint/V1/frame-salt",network.ToArray(),owner.ToArray(),epochBytes,keyId.ToArray(),ephemeral.ToArray());try{var prk=HMACSHA512.HashData(salt,shared);try{var info=System.Text.Encoding.ASCII.GetBytes("Deep/XPoint/V1/frame-key\0").Concat(new[]{purpose,layer,(byte)1}).ToArray();try{var t=HMACSHA512.HashData(prk,info);try{return t[..32];}finally{CryptographicOperations.ZeroMemory(t);}}finally{CryptographicOperations.ZeroMemory(info);}}finally{CryptographicOperations.ZeroMemory(prk);}}finally{CryptographicOperations.ZeroMemory(salt);CryptographicOperations.ZeroMemory(epochBytes);}}finally{CryptographicOperations.ZeroMemory(shared);} }
     private static Header ValidateHeader(ReadOnlySpan<byte> frame,byte purpose) { if(frame.Length is <176 or >1572864)throw Error(PrivacyRoutingProtocolError.FrameLengthOutOfRange,"XRF1 length is outside bounds.");if(!frame[..4].SequenceEqual(Magic))throw Error(PrivacyRoutingProtocolError.UnsupportedVersion,"XRF1 magic is required.");if(frame[4]!=1||frame[5]!=1||frame[6]!=1||!IsZero(frame.Slice(9,3)))throw Error(PrivacyRoutingProtocolError.UnsupportedVersion,"XRF1 header is invalid.");if(frame[7]!=purpose||(purpose==1&&frame[8]is not(1 or 2))||(purpose==2&&frame[8]!=3))throw Error(PrivacyRoutingProtocolError.WrongFramePurpose,"XRF1 purpose/layer is invalid.");if(BinaryPrimitives.ReadUInt32BigEndian(frame.Slice(156,4))!=frame.Length-160)throw Error(PrivacyRoutingProtocolError.InvalidLength,"XRF1 ciphertext length is invalid.");var header=new Header(frame);ValidateNetwork(header.Network);ValidateId(header.Owner,PrivacyRoutingProtocolError.InvalidIdentifier,"header owner id");ValidateId(header.KeyId,PrivacyRoutingProtocolError.InvalidIdentifier,"header key id");ValidateEpoch(header.Epoch,purpose==2);ValidatePublicKey(header.Ephemeral);ValidateNonce(header.Nonce);return header; }
     internal static ReadOnlySpan<byte> ValidatePayloadAndPadding(ReadOnlySpan<byte> plain,int prefix,int lengthOffset,int exponentOffset) { var payload=BinaryPrimitives.ReadUInt32BigEndian(plain.Slice(lengthOffset,4));var exponent=plain[exponentOffset];if(exponent is <8 or >16)throw Error(PrivacyRoutingProtocolError.InvalidPadding,"Padding exponent is invalid.");var z=ReadU24(plain.Slice(exponentOffset+1,3));var block=1<<exponent;if(payload>int.MaxValue||z>=block||z!=Padding(prefix,(int)payload,block)||(ulong)prefix+payload+(uint)z!=(ulong)plain.Length||!IsZero(plain.Slice(prefix+(int)payload,z)))throw Error(PrivacyRoutingProtocolError.InvalidPadding,"Padding is non-canonical.");return plain.Slice(prefix,(int)payload); }
+    internal static OnionReceivePosition ReadAuthenticatedRelayPosition(ReadOnlySpan<byte> innerFrame)
+    {
+        // Caller must already have authenticated the enclosing XRL1. This is
+        // internal: callers cannot turn an unauthenticated header into authority.
+        var header = ValidateHeader(innerFrame, 1);
+        return header.Layer == 1 ? OnionReceivePosition.Ingress : OnionReceivePosition.Core;
+    }
+
     internal static void ValidateInnerFrame(ReadOnlySpan<byte> frame,PrivacyRoutingHop nextHop,ReadOnlySpan<byte> outerNetwork) { ValidateNetwork(outerNetwork);ArgumentNullException.ThrowIfNull(nextHop);var header=ValidateHeader(frame,1);if(!CryptographicOperations.FixedTimeEquals(header.Network,outerNetwork)||!CryptographicOperations.FixedTimeEquals(header.Owner,nextHop.RouterOwnerIdSpan)||!CryptographicOperations.FixedTimeEquals(header.KeyId,nextHop.KeyIdSpan)||header.Epoch!=nextHop.Epoch||header.Layer!=(byte)nextHop.Role)throw Error(PrivacyRoutingProtocolError.InvalidKeyBinding,"XRL1 inner network/owner/key/epoch/role binding is invalid."); }
     private readonly ref struct Header { private readonly ReadOnlySpan<byte> _frame;internal Header(ReadOnlySpan<byte> frame)=>_frame=frame;internal byte Purpose=>_frame[7];internal byte Layer=>_frame[8];internal ReadOnlySpan<byte> Network=>_frame.Slice(12,16);internal ReadOnlySpan<byte> Owner=>_frame.Slice(28,32);internal ulong Epoch=>BinaryPrimitives.ReadUInt64BigEndian(_frame.Slice(60,8));internal ReadOnlySpan<byte> KeyId=>_frame.Slice(68,32);internal ReadOnlySpan<byte> Ephemeral=>_frame.Slice(100,32);internal ReadOnlySpan<byte> Nonce=>_frame.Slice(132,24); }
 }

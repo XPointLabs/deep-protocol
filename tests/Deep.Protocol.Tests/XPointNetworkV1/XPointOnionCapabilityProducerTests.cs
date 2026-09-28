@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using Deep.Protocol.AccountDirectoryV1;
+using Deep.Protocol.ApplicationCore;
 using Deep.Protocol.ContactV1;
 using Deep.Protocol.ContactV2;
 using Deep.Protocol.DeepExtension.PrivacyRouting;
@@ -16,6 +17,155 @@ namespace Deep.Protocol.Tests.XPointNetworkV1;
 
 public sealed class XPointOnionCapabilityProducerTests
 {
+    [Theory]
+    [InlineData(0, 1, 2)]
+    [InlineData(0, 2, 1)]
+    [InlineData(1, 0, 2)]
+    [InlineData(1, 2, 0)]
+    [InlineData(2, 0, 1)]
+    [InlineData(2, 1, 0)]
+    public async Task SignedMultiRoleReceive_AllSixPermutationsDisambiguateOnlyAfterAuthentication(
+        int ingressIndex, int coreIndex, int exitIndex)
+    {
+        var network = await Fixture.Create().VerifyDid2Async();
+        var (path, request) = MultiRoleRequest(network, ingressIndex, coreIndex, exitIndex);
+        var codec = new PrivacyRoutingCodec(new OnionEntropyAuthority(new ReceiveEntropyLedger()),
+            new OnionKeyAgreementAuthority(new ReceiveVault()));
+        using var built = await codec.BuildAsync(path, request, default);
+        var store = new ReceiveReplayStore();
+        using var ingress = Assert.IsType<OpenedOnionRelay>(await OpenSignedRelay(
+            network, codec, store, built.Frame, ingressIndex, OnionReceivePosition.Ingress));
+        using var core = Assert.IsType<OpenedOnionRelay>(await OpenSignedRelay(
+            network, codec, store, ingress.InnerFrame, coreIndex, OnionReceivePosition.Core));
+        var exitReceive = SignedReceive(network, core.InnerFrame, exitIndex, OnionReceivePosition.Exit);
+        await using var exitLease = await new OnionReplayAuthority(store)
+            .BeginOpenAsync(exitReceive, core.InnerFrame, default);
+        using var exit = Assert.IsType<OpenedOnionExit>(
+            await codec.OpenAsync(core.InnerFrame, exitReceive, exitLease, default));
+        Assert.Equal(request.CanonicalBytes.ToArray(), exit.Request.CanonicalBytes.ToArray());
+        Assert.Equal(3, store.CommitCount);
+        Assert.Equal(5, store.DisposalCount);
+        Assert.Equal(new[] { OnionReceivePosition.Core, OnionReceivePosition.Ingress,
+            OnionReceivePosition.Ingress, OnionReceivePosition.Core, OnionReceivePosition.Exit },
+            store.Positions);
+        var failure = OnionTerminalPayloadVerifierV1.VerifyFailure(exit.Request, OnionFailureCode.Unavailable);
+        var response = await codec.SealAsync(exit.ReplyContext, failure, default);
+        var openedResponse = await codec.OpenResponseAsync(response, built.ReplyContext, default);
+        Assert.Equal(OnionFailureCode.Unavailable, openedResponse.Result.FailureCode);
+    }
+
+    [Theory]
+    [InlineData("authentication")]
+    [InlineData("padding")]
+    [InlineData("inner-key")]
+    [InlineData("inner-network")]
+    [InlineData("inner-version")]
+    [InlineData("unknown-next")]
+    public async Task SignedMultiRoleReceive_InvalidFrameNeverEmitsPositionRetry(string fault)
+    {
+        var network = await Fixture.Create().VerifyDid2Async();
+        var (path, request) = MultiRoleRequest(network, 0, 1, 2);
+        var codec = new PrivacyRoutingCodec(new OnionEntropyAuthority(new ReceiveEntropyLedger()),
+            new OnionKeyAgreementAuthority(new ReceiveVault()));
+        using var built = await codec.BuildAsync(path, request, default);
+        var frame = MutateSignedRelay(network, built.Frame, fault);
+        var wrongReceive = SignedReceive(network, frame, 0, OnionReceivePosition.Core);
+        var store = new ReceiveReplayStore();
+        await using var lease = await new OnionReplayAuthority(store).BeginOpenAsync(wrongReceive, frame, default);
+        var error = await Assert.ThrowsAnyAsync<Exception>(async () =>
+            await codec.OpenAsync(frame, wrongReceive, lease, default));
+        Assert.False(error is OnionBoundaryException { Code: "receive-position-mismatch" });
+        if (fault == "unknown-next")
+            Assert.Equal("node-not-in-view", Assert.IsType<OnionBoundaryException>(error).Code);
+        else
+            Assert.Equal(fault switch
+            {
+                "authentication" => PrivacyRoutingProtocolError.AuthenticationFailed,
+                "padding" => PrivacyRoutingProtocolError.InvalidPadding,
+                "inner-version" => PrivacyRoutingProtocolError.UnsupportedVersion,
+                _ => PrivacyRoutingProtocolError.InvalidKeyBinding
+            }, Assert.IsType<PrivacyRoutingProtocolException>(error).Error);
+        Assert.Equal(0, store.CommitCount);
+        Assert.Equal(1, store.DisposalCount);
+        Assert.Single(store.Positions);
+    }
+
+    [Fact]
+    public async Task SignedMultiRoleReceive_DisallowedLocalRoleDoesNotAuthorizePositionRetry()
+    {
+        var fixture = Fixture.Create();
+        var network = await fixture.VerifyDid2Async();
+        var (path, request) = MultiRoleRequest(network, 0, 1, 2);
+        var codec = new PrivacyRoutingCodec(new OnionEntropyAuthority(new ReceiveEntropyLedger()),
+            new OnionKeyAgreementAuthority(new ReceiveVault()));
+        using var built = await codec.BuildAsync(path, request, default);
+        var removed = await fixture.WithNodeRole(0, 0x001e).VerifyDid2Async();
+        var receive = SignedReceive(removed, built.Frame, 0, OnionReceivePosition.Core);
+        var store = new ReceiveReplayStore();
+        await using var lease = await new OnionReplayAuthority(store).BeginOpenAsync(receive, built.Frame, default);
+        var error = await Assert.ThrowsAsync<OnionBoundaryException>(async () =>
+            await codec.OpenAsync(built.Frame, receive, lease, default));
+        Assert.Equal("path-role-invalid", error.Code);
+        Assert.Equal(0, store.CommitCount);
+    }
+
+    [Fact]
+    public async Task SignedMultiRoleReceive_FailedDisposalReplacesRetryError()
+    {
+        var network = await Fixture.Create().VerifyDid2Async();
+        var (path, request) = MultiRoleRequest(network, 0, 1, 2);
+        var codec = new PrivacyRoutingCodec(new OnionEntropyAuthority(new ReceiveEntropyLedger()),
+            new OnionKeyAgreementAuthority(new ReceiveVault()));
+        using var built = await codec.BuildAsync(path, request, default);
+        var receive = SignedReceive(network, built.Frame, 0, OnionReceivePosition.Core);
+        var store = new ReceiveReplayStore { FailDispose = true };
+        await using var lease = await new OnionReplayAuthority(store).BeginOpenAsync(receive, built.Frame, default);
+        await Assert.ThrowsAsync<IOException>(async () =>
+            await codec.OpenAsync(built.Frame, receive, lease, default));
+        Assert.Equal(0, store.CommitCount);
+        Assert.Equal(1, store.DisposalCount);
+    }
+
+    [Fact]
+    public async Task SignedMultiRoleReceive_VaultFailureNeverEmitsPositionRetry()
+    {
+        var network = await Fixture.Create().VerifyDid2Async();
+        var (path, request) = MultiRoleRequest(network, 0, 1, 2);
+        var entropy = new OnionEntropyAuthority(new ReceiveEntropyLedger());
+        var builder = new PrivacyRoutingCodec(entropy, new OnionKeyAgreementAuthority(new ReceiveVault()));
+        using var built = await builder.BuildAsync(path, request, default);
+        var codec = new PrivacyRoutingCodec(entropy, new OnionKeyAgreementAuthority(new RejectingVault()));
+        var receive = SignedReceive(network, built.Frame, 0, OnionReceivePosition.Core);
+        var store = new ReceiveReplayStore();
+        await using var lease = await new OnionReplayAuthority(store).BeginOpenAsync(receive, built.Frame, default);
+        await Assert.ThrowsAsync<NotSupportedException>(async () =>
+            await codec.OpenAsync(built.Frame, receive, lease, default));
+        Assert.Equal(0, store.CommitCount);
+        Assert.Single(store.Positions);
+    }
+
+    [Theory]
+    [InlineData(OnionReplayCommitOutcome.Replayed, "replay-rejected")]
+    [InlineData(OnionReplayCommitOutcome.Saturated, "replay-rejected")]
+    [InlineData(OnionReplayCommitOutcome.Ambiguous, "replay-commit-ambiguous")]
+    public async Task SignedMultiRoleReceive_CommitFailureNeverEmitsPositionRetry(
+        OnionReplayCommitOutcome outcome, string code)
+    {
+        var network = await Fixture.Create().VerifyDid2Async();
+        var (path, request) = MultiRoleRequest(network, 0, 1, 2);
+        var codec = new PrivacyRoutingCodec(new OnionEntropyAuthority(new ReceiveEntropyLedger()),
+            new OnionKeyAgreementAuthority(new ReceiveVault()));
+        using var built = await codec.BuildAsync(path, request, default);
+        var receive = SignedReceive(network, built.Frame, 0, OnionReceivePosition.Ingress);
+        var store = new ReceiveReplayStore { Outcome = outcome };
+        await using var lease = await new OnionReplayAuthority(store).BeginOpenAsync(receive, built.Frame, default);
+        var error = await Assert.ThrowsAsync<OnionBoundaryException>(async () =>
+            await codec.OpenAsync(built.Frame, receive, lease, default));
+        Assert.Equal(code, error.Code);
+        Assert.Equal(1, store.CommitCount);
+        Assert.Single(store.Positions);
+    }
+
     [Fact]
     public async Task SelectedEntryTransport_BindsBothExitPermutationsWithoutCallerOrigin()
     {
@@ -408,11 +558,9 @@ public sealed class XPointOnionCapabilityProducerTests
 
         var keys = new OnionKeyAgreementAuthority(new RejectingVault());
         var handle = keys.BindKeyHandle(Bytes(32, 0xd1));
-        var receive = OnionReceiveContextFactory.Create(
-            context, OnionOperation.ContactResolve, OnionReceivePosition.Ingress,
-            others[0], handle, others[1]);
-        Assert.Equal(OnionReceivePosition.Ingress, receive.Position);
-        Assert.Equal(handle.Id.ToArray(), receive.KeyHandle.Id.ToArray());
+        var local = OnionLocalNodeKeyFactory.Bind(
+            context, OnionReceivePosition.Ingress, others[0], handle);
+        Assert.Equal(OnionReceivePosition.Ingress, local.Position);
     }
 
     [Fact]
@@ -757,6 +905,155 @@ public sealed class XPointOnionCapabilityProducerTests
                 tooMany, package.Nfp, package.TargetView, package.TargetHead,
                 new OnionTrustedTimeAuthority(new FixedClock(Bytes(16, 0xc1), package.ClockSample)), default));
         Assert.Contains("1..64", error.Message, StringComparison.Ordinal);
+    }
+
+    private static (VerifiedOnionPathContext Path, VerifiedCanonicalOnionRequest Request) MultiRoleRequest(
+        VerifiedOnionNetworkContext network, int ingress, int core, int exit)
+    {
+        var nodes = OnionPathCandidateSnapshotFactory.Create(network).Candidates;
+        for (byte marker = 1; marker < 65; marker++)
+        {
+            var capability = Bytes(32, marker);
+            var placement = ContactServicePlacementFactory.Create(network,
+                ContactServiceRequestKind.PublishPreKeyInventory, capability);
+            if (!placement.RankedReplicaNodeIds.Any(id => id.Span.SequenceEqual(nodes[exit].NodeId.Span))) continue;
+            var path = OnionPathContextFactory.CreateContactResolver(network, placement,
+                nodes[ingress].NodeId, nodes[core].NodeId, nodes[exit].NodeId);
+            // Canonical V2 commit carriage only: this does not claim the staged
+            // aggregate, publisher proof or final XIC1 publication exists.
+            var exact = new byte[325];
+            var writer = new ApplicationRecordWriter(exact, "XPP1"u8, 12, 2, DeepIdV2Codec.Suite);
+            writer.Write(1, [(byte)Xpp1V2FragmentPhase.Commit]);
+            writer.Write(2, network.NetworkId.Span);
+            writer.Write(3, Bytes(32, 0x11));
+            writer.Write(4, placement.ViewHash.Span);
+            writer.Write(5, placement.PlacementHash.Span);
+            writer.Write(6, Bytes(32, 0x12));
+            writer.Write(7, U32(DeepIdV2PreKeyPublicationCodec.MinimumTotalBytes));
+            writer.Write(8, U16(2));
+            writer.Write(9, U16(DeepIdV2BoundedPreKeyPublicationCodec.NonChunkIndex));
+            writer.Write(10, new byte[32]);
+            writer.Write(11, Bytes(32, 0x13));
+            writer.Write(12, []);
+            writer.Complete();
+            _ = DeepIdV2BoundedPreKeyPublicationCodec.Decode(exact);
+            return (path, OnionTerminalPayloadVerifierV1.VerifyRequest(network, OnionOperation.ContactResolve, exact));
+        }
+        throw new InvalidOperationException("The bounded test capability search found no selected exit.");
+    }
+
+    private static VerifiedOnionReceiveContext SignedReceive(VerifiedOnionNetworkContext network,
+        ReadOnlyMemory<byte> frame, int index, OnionReceivePosition position) =>
+        OnionReceiveContextSelector.Select(frame, OnionLocalNodeKeyFactory.Bind(network, position,
+            OnionPathCandidateSnapshotFactory.Create(network).Candidates[index].NodeId,
+            new OnionKeyHandle(Bytes(32, checked((byte)(0xd0 + index))))));
+
+    private static async ValueTask<OpenedOnionLayer> OpenSignedRelay(VerifiedOnionNetworkContext network,
+        PrivacyRoutingCodec codec, ReceiveReplayStore store, ReadOnlyMemory<byte> frame,
+        int index, OnionReceivePosition position)
+    {
+        var opposite = position == OnionReceivePosition.Ingress ? OnionReceivePosition.Core : OnionReceivePosition.Ingress;
+        var wrong = SignedReceive(network, frame, index, opposite);
+        var previousCommits = store.CommitCount;
+        await using var wrongLease = await new OnionReplayAuthority(store).BeginOpenAsync(wrong, frame, default);
+        var mismatch = await Assert.ThrowsAsync<OnionBoundaryException>(async () =>
+            await codec.OpenAsync(frame, wrong, wrongLease, default));
+        Assert.Equal("receive-position-mismatch", mismatch.Code);
+        Assert.Equal(previousCommits, store.CommitCount);
+        var right = SignedReceive(network, frame, index, position);
+        await using var rightLease = await new OnionReplayAuthority(store).BeginOpenAsync(right, frame, default);
+        return await codec.OpenAsync(frame, right, rightLease, default);
+    }
+
+    private static byte[] MutateSignedRelay(VerifiedOnionNetworkContext network,
+        ReadOnlyMemory<byte> original, string fault)
+    {
+        if (fault == "authentication")
+        {
+            var corrupt = original.ToArray(); corrupt[^1] ^= 1; return corrupt;
+        }
+        var receive = SignedReceive(network, original, 0, OnionReceivePosition.Ingress);
+        var scalar = Bytes(32, 0xa0);
+        var shared = ScalarMult.Mult(scalar, original.Span.Slice(100, 32).ToArray());
+        var plain = PrivacyRoutingWire.OpenRequestEnvelopeWithSharedSecret(original.Span, receive, shared);
+        try
+        {
+            switch (fault)
+            {
+                case "padding": plain[^1] = 1; break;
+                case "inner-key": plain[80 + 68] ^= 1; break;
+                case "inner-network": plain[80 + 12] ^= 1; break;
+                case "inner-version": plain[80 + 4] = 2; break;
+                case "unknown-next": plain.AsSpan(40, 32).Fill(0xf8); break;
+                default: throw new ArgumentOutOfRangeException(nameof(fault));
+            }
+            var local = receive.LocalHop;
+            return PrivacyRoutingWire.SealEnvelope(plain, network.NetworkId.Span,
+                local.RouterOwnerId.Span, local.Epoch, local.KeyId.Span, 1, 1,
+                local.X25519PublicKey.Span, Bytes(32, 0xe5), Bytes(24, 0xe6));
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(scalar);
+            CryptographicOperations.ZeroMemory(shared);
+            CryptographicOperations.ZeroMemory(plain);
+        }
+    }
+
+    private sealed class ReceiveVault : IOnionKeyAgreementVault
+    {
+        public ValueTask<byte[]> DeriveX25519SharedSecretAsync(OnionKeyHandle handle,
+            ReadOnlyMemory<byte> peer, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var index = handle.Id.Span[0] - 0xd0;
+            Assert.InRange(index, 0, 2);
+            var scalar = Bytes(32, checked((byte)(0xa0 + index)));
+            try { return ValueTask.FromResult(ScalarMult.Mult(scalar, peer.ToArray())); }
+            finally { CryptographicOperations.ZeroMemory(scalar); }
+        }
+    }
+
+    private sealed class ReceiveEntropyLedger : IOnionEntropyUniquenessLedger
+    {
+        public ValueTask<OnionEntropyCommitOutcome> CommitAsync(OnionEntropyCommitmentBatch batch,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.FromResult(OnionEntropyCommitOutcome.Committed);
+        }
+    }
+
+    private sealed class ReceiveReplayStore : IOnionDurableReplayStore
+    {
+        internal List<OnionReceivePosition> Positions { get; } = [];
+        internal int CommitCount { get; private set; }
+        internal int DisposalCount { get; private set; }
+        internal bool FailDispose { get; init; }
+        internal OnionReplayCommitOutcome Outcome { get; init; } = OnionReplayCommitOutcome.Committed;
+        public ValueTask<IOnionDurableReplayTransaction> BeginAsync(OnionReplayScope scope,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Positions.Add(scope.Position);
+            return ValueTask.FromResult<IOnionDurableReplayTransaction>(new Transaction(this));
+        }
+        private sealed class Transaction(ReceiveReplayStore store) : IOnionDurableReplayTransaction
+        {
+            public ValueTask<OnionReplayCommitOutcome> CommitAsync(ReadOnlyMemory<byte> replayId,
+                CancellationToken cancellationToken)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                store.CommitCount++;
+                return ValueTask.FromResult(store.Outcome);
+            }
+            public ValueTask DisposeAsync()
+            {
+                store.DisposalCount++;
+                if (store.FailDispose) throw new IOException("Injected replay disposal failure.");
+                return ValueTask.CompletedTask;
+            }
+        }
     }
 
     private sealed class RejectingVault : IOnionKeyAgreementVault

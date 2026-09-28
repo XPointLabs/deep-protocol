@@ -369,6 +369,15 @@ from a request enum or carrier metadata; the codec remains independent of HTTP,
 QUIC, Reality, XHTTP and peer-forwarding transports.
 
 The separately frozen
+[`DR-0011`](../../docs/survival-program/decisions/DR-0011-authenticated-relay-position.md)
+defines signed multi-role disambiguation without changing this wire/API. The
+header selector does not distinguish Ingress from Core. Only complete
+authenticated XRL1/inner-header/next-hop validation may produce the closed
+`receive-position-mismatch` pre-commit error. A host may then try the other
+already-signed relay position once with a new position-bound lease. No other
+failure, failed disposal or uncertain replay outcome authorizes that retry.
+
+The separately frozen
 [`DR-0009`](../../docs/survival-program/decisions/DR-0009-did2-selected-entry-transport.md)
 adds `OnionEntryTransportFactory.Create(VerifiedOnionPathContext)` returning a
 sealed `VerifiedOnionEntryTransport` with no public constructor, a read-only
