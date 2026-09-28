@@ -774,7 +774,12 @@ internal static class GraphPolicy
                 // Exact ADH1/XNH1 core-hash inspection for the offline,
                 // separately pinned successor ceremony (no signer access).
                 "Deep.Protocol|12918|1116917E0A7467F34414A72047D80FAB49E7A3F372F10CE95E4F3F52BD97C085",
-                "Deep.Protocol|12918|B75F576D3329F57C0A67A0AC1FB0DDB9D702B7E0C323CA303FBF71FBA6C84E00"
+                "Deep.Protocol|12918|B75F576D3329F57C0A67A0AC1FB0DDB9D702B7E0C323CA303FBF71FBA6C84E00",
+                // Reviewed identity-neutral NCQ2/NCP2 raw distribution codec,
+                // owned untrusted records and generated lifecycle constants.
+                // No account/time/placement/route capability constructors.
+                "Deep.Protocol|12954|9FD65A4FEB6A5B7137F32CD3B53DF2F2C4C614F8A834C5E392AF1A338365C023",
+                "Deep.Protocol|12954|B8383F4DD816F915362AB3DE335C2C636EA97CAF5E08BA247493F89BDC4D942B"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

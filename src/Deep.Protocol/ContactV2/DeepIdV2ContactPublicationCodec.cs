@@ -63,8 +63,8 @@ internal static class DeepIdV2ContactPublicationCodec
         [1, 2, 3, 4, 5, 6, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27];
     internal static ReadOnlySpan<ushort> XpaTags =>
         [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
-    private static ReadOnlySpan<byte> XpuMagic => "XPU1"u8;
-    private static ReadOnlySpan<byte> XpaMagic => "XPA1"u8;
+    private static ReadOnlySpan<byte> XpuMagic => ProtocolMagicBytes.XPU1;
+    private static ReadOnlySpan<byte> XpaMagic => ProtocolMagicBytes.XPA1;
 
     public static ParsedXpu1V2 DecodeXpu1(ReadOnlySpan<byte> canonical)
     {

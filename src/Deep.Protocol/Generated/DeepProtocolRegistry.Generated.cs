@@ -165,6 +165,8 @@ public static class DeepProtocolIdentifiers
         public const string MSM1 = "MSM1";
         public const string MSR1 = "MSR1";
         public const string MST1 = "MST1";
+        public const string NCP2 = "NCP2";
+        public const string NCQ2 = "NCQ2";
         public const string NFP1 = "NFP1";
         public const string OCR1 = "OCR1";
         public const string PHP1 = "PHP1";
@@ -392,6 +394,8 @@ public static class DeepProtocolIdentifiers
         public static System.ReadOnlySpan<byte> MSM1 => "MSM1"u8;
         public static System.ReadOnlySpan<byte> MSR1 => "MSR1"u8;
         public static System.ReadOnlySpan<byte> MST1 => "MST1"u8;
+        public static System.ReadOnlySpan<byte> NCP2 => "NCP2"u8;
+        public static System.ReadOnlySpan<byte> NCQ2 => "NCQ2"u8;
         public static System.ReadOnlySpan<byte> NFP1 => "NFP1"u8;
         public static System.ReadOnlySpan<byte> OCR1 => "OCR1"u8;
         public static System.ReadOnlySpan<byte> PHP1 => "PHP1"u8;
@@ -538,7 +542,7 @@ internal readonly record struct GeneratedRegistryIdentifier(
 
 internal static class DeepProtocolRegistryGenerated
 {
-    internal const string RegistrySha256 = "9a100432b71529b1db7c98e482a910fb67a037001fbb0b1c8edc2dc50a337193";
+    internal const string RegistrySha256 = "d3aed6c1a06b5f76b04640f4f7658902b4cbd160ddf57a7ced3e2df828ca9b63";
     internal const string Dnp1RegistrySha256 = "e036a0b6acb260e05e18ac536a723b0b8561d2ba1d813429304505b0e7a7da7b";
     internal const string Dnp1ApprovedCommit = "a8456987efe031388ca2eb9006886fb78f31e06c";
 
@@ -685,6 +689,8 @@ internal static class DeepProtocolRegistryGenerated
         new("magic", "MSM1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "MSR1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "MST1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
+        new("magic", "NCP2", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
+        new("magic", "NCQ2", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "NFP1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "OCR1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "PHP1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),

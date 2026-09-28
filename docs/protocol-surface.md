@@ -47,6 +47,20 @@ verifiers, and a protected CSPRNG uniqueness
 authority. Internal vector helpers and process-local replay memory are not a
 release API or durability claim.
 
+## Identity-neutral network distribution candidate
+
+`XPointNetworkClosureWireCodec` provides only bounded raw public distribution
+framing and an owned untrusted artifact container. It exports no verified
+network/time/account/placement/route capability. Exact envelope semantics are
+owned by [`XPOINT-NETWORK-V1 section 8.1`](../../docs/architecture/XPOINT-NETWORK-V1.md#81-identity-neutral-network-closure-distribution-ncq2ncp2).
+Registry and Shared must rebuild against the exact same Protocol checkpoint;
+older distribution frames and account-proof packages are not fallback inputs.
+There is no account/database reset or repin caused by this envelope: existing
+pinned authority and protected floors remain mandatory. Public API/assembly
+snapshots and global generated magic allocations are updated for this candidate;
+signed NETCODEC and reviewed D--G bytes are unchanged. HTTP distribution does
+not activate message delivery, masked acquisition or a release claim.
+
 ## Explicit exclusions
 
 - `Deep.Protocol.Native*` and its dark solution no longer exist. Production and

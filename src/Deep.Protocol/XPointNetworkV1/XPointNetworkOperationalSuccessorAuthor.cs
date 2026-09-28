@@ -88,7 +88,7 @@ public sealed class XPointNetworkOperationalSuccessorRequest
         this.protectedHeadCoreHash = Required(protectedHeadCoreHash, 32, nameof(protectedHeadCoreHash));
         this.protectedPmtArtifactHash = Required(protectedPmtArtifactHash, 32, nameof(protectedPmtArtifactHash));
         this.currentAdh1CoreReference = Required(currentAdh1CoreReference, 38, nameof(currentAdh1CoreReference));
-        if (!this.currentAdh1CoreReference.AsSpan(0, 4).SequenceEqual("ADH1"u8) ||
+        if (!this.currentAdh1CoreReference.AsSpan(0, 4).SequenceEqual(ProtocolMagicBytes.ADH1) ||
             !this.currentAdh1CoreReference.AsSpan(4, 2).SequenceEqual(new byte[] { 0, 1 }))
             throw new ArgumentException("The current directory anchor must be an ADH1 core reference.", nameof(currentAdh1CoreReference));
         if (RootSigners.Count == 0 || WitnessSigners.Count is < 2 or > 32 ||
