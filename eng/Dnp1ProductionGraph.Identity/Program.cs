@@ -556,10 +556,10 @@ internal static class GraphPolicy
         {
             ["Deep.Protocol"] =
             [
-                // Current DR-0012 protected-history/key-preflight API only (Debug, normalized Release).
+                // Current DR-0012 API plus pinned periodic ADF1 offline author (Debug, normalized Release).
                 // Pre-cutover/public-API predecessor snapshots are not accepted.
-                "Deep.Protocol|12965|192A9AC7016619941DA69AB6EA1365F5012F1C40E7EEEE55065714A3128D86A7",
-                "Deep.Protocol|12965|AF928317F565BFEA12C9E637D7BCAD386DFCFE90E14A87967E371B92A23B137D"
+                "Deep.Protocol|12966|05E342EE0F4DE3243FE832920F036470C5BF812146EB20854820A8C733B49C25",
+                "Deep.Protocol|12966|2311FDFDE6CA298851A7879D2613E086D0339A7D9A3B2751B7B4A1487808E67F"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

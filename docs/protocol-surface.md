@@ -145,6 +145,17 @@ not activate message delivery, masked acquisition or a release claim.
 
 ## DNP1 classical Wave 1
 
+The DID2 offline `AccountDirectoryAdf1OfflineAuthor.AuthorSuccessorAsync`
+extends an independently pinned, root-authenticated ADF1 instead of replacing
+generation zero. It requires the complete threshold-signed head export from
+genesis to the new target, checks the predecessor's original coverage and
+target, and covers every newly intervening head before calling root custody.
+The method currently supports an unchanged XNA root authority. ADF1/AFP1 wire,
+signature domains and the full DID2 forward-tail reader are unchanged; existing
+client/node floors are not reset. DevOps owns the offline ceremony and retains
+both exact checkpoint files. This authoring API is not online root custody,
+publication evidence or permission to bypass the reader's complete chain.
+
 The DNP1 classical identity/reset/MRL2 design is frozen in docs repository
 commit `2651599913bf92c021d36b6a53395499b6a091fb` (36 records,
 158 domains and 314 executable vector IDs). `Deep.Protocol` implements the

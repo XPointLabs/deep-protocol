@@ -20,7 +20,8 @@ public interface IAccountDirectoryAdf1RootSigner
 /// signed-head lineage from genesis through the target's predecessor. Exact
 /// heads are re-authenticated against the verified network authority; the
 /// caller cannot supply a raw hash, leaf, authority reference or receipt.
-/// Later periodic checkpoints require a separate authoring path.
+/// Periodic checkpoints retain the independently pinned, authenticated previous
+/// root checkpoint and cover every newly intervening signed head.
 /// </summary>
 public static class AccountDirectoryAdf1OfflineAuthor
 {
@@ -35,13 +36,71 @@ public static class AccountDirectoryAdf1OfflineAuthor
             issuedAtUnixSeconds, minimumReader, rootSigners,
             cancellationToken);
 
-    public static async ValueTask<byte[]> AuthorInitialAsync(
+    public static ValueTask<byte[]> AuthorInitialAsync(
         VerifiedXPointNetworkAuthority authority,
         IReadOnlyList<AccountDirectoryProtectedLkg> coveredHeads,
         AccountDirectoryProtectedLkg target,
         ulong issuedAtUnixSeconds, ushort minimumReader,
         IReadOnlyList<IAccountDirectoryAdf1RootSigner> rootSigners,
+        CancellationToken cancellationToken = default) =>
+        AuthorCoreAsync(authority, coveredHeads, target, issuedAtUnixSeconds,
+            minimumReader, rootSigners, null, cancellationToken);
+
+    /// <summary>Extends, never replaces, an independently pinned root checkpoint.
+    /// The complete genesis-to-target head export remains mandatory. This path
+    /// supports one unchanged XNA root authority, not authority rotation.</summary>
+    public static ValueTask<byte[]> AuthorSuccessorAsync(
+        VerifiedXPointNetworkAuthority authority,
+        IReadOnlyList<AccountDirectoryProtectedLkg> coveredHeads,
+        AccountDirectoryProtectedLkg target,
+        ReadOnlyMemory<byte> exactPreviousAdf1,
+        ReadOnlyMemory<byte> expectedPreviousCoreHash,
+        ulong issuedAtUnixSeconds, ushort minimumReader,
+        IReadOnlyList<IAccountDirectoryAdf1RootSigner> rootSigners,
         CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(authority);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (exactPreviousAdf1.Length is < 1 or > 16_384 ||
+            expectedPreviousCoreHash.Length != 32 ||
+            expectedPreviousCoreHash.Span.IndexOfAnyExcept((byte)0) < 0)
+            throw new CryptographicException("The periodic ADF1 predecessor input is invalid.");
+        var previous = AccountDirectoryAdf1Codec.Decode(exactPreviousAdf1.Span);
+        if (previous.CheckpointGeneration == ulong.MaxValue ||
+            !Fixed(AccountDirectoryCrypto.ComputeAdf1CoreHash(previous), expectedPreviousCoreHash.Span) ||
+            !Fixed(previous.NetworkId.Span, authority.NetworkId.Span) ||
+            !Fixed(previous.AuthorityXnaCoreReference.Span, authority.AuthorityCoreReference.Span) ||
+            previous.MinimumReader < 2 || minimumReader < previous.MinimumReader ||
+            previous.IssuedAt < authority.NotBefore || previous.IssuedAt > authority.ExpiresAt ||
+            issuedAtUnixSeconds < previous.IssuedAt ||
+            previous.Receipts.Count < authority.RootThreshold ||
+            previous.Receipts.Count > authority.RootKeys.Count)
+            throw new CryptographicException("The periodic ADF1 predecessor is unpinned or outside its authority.");
+        var input = AccountDirectoryCrypto.ComputeAdf1SigningInput(previous);
+        try
+        {
+            foreach (var receipt in previous.Receipts)
+            {
+                var key = authority.RootKeys.SingleOrDefault(key =>
+                    Fixed(key.Id.Span, receipt.RootKeyId.Span));
+                if (key is null || !PublicKeyAuth.VerifyDetached(receipt.Signature.ToArray(),
+                    input, key.Ed25519PublicKey.ToArray()))
+                    throw new CryptographicException("The periodic ADF1 predecessor root signature is invalid.");
+            }
+        }
+        finally { CryptographicOperations.ZeroMemory(input); }
+        return AuthorCoreAsync(authority, coveredHeads, target, issuedAtUnixSeconds,
+            minimumReader, rootSigners, previous, cancellationToken);
+    }
+
+    private static async ValueTask<byte[]> AuthorCoreAsync(
+        VerifiedXPointNetworkAuthority authority,
+        IReadOnlyList<AccountDirectoryProtectedLkg> coveredHeads,
+        AccountDirectoryProtectedLkg target,
+        ulong issuedAtUnixSeconds, ushort minimumReader,
+        IReadOnlyList<IAccountDirectoryAdf1RootSigner> rootSigners,
+        AccountDirectoryAdf1? previousCheckpoint,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(authority);
         ArgumentNullException.ThrowIfNull(coveredHeads);
@@ -93,6 +152,38 @@ public static class AccountDirectoryAdf1OfflineAuthor
         AccountDirectoryCurrentProofVerifier.VerifyAdhAuthorityAndWitnessClosure(
             authority, target.Head, requireCurrentAuthority: true);
 
+        IReadOnlyList<AccountDirectoryProtectedLkg> newlyCovered = coveredHeads;
+        if (previousCheckpoint is not null)
+        {
+            var priorTarget = coveredHeads.SingleOrDefault(head =>
+                Fixed(head.CoreHash.Span, previousCheckpoint.TargetAdh1CoreReference.Span[6..]));
+            if (priorTarget is null ||
+                priorTarget.TreeSize != previousCheckpoint.TargetTreeSize ||
+                !Fixed(priorTarget.AppendLogMerkleRoot.Span, previousCheckpoint.TargetAppendLogRoot.Span) ||
+                !Fixed(priorTarget.CurrentValueMapRoot.Span, previousCheckpoint.TargetCurrentValueMapRoot.Span) ||
+                !Fixed(priorTarget.Head.ExactXnaAuthorityCoreReference.Span, previousCheckpoint.AuthorityXnaCoreReference.Span) ||
+                previousCheckpoint.CoveredLastAdhGeneration >= priorTarget.LogGeneration ||
+                previousCheckpoint.IssuedAt < priorTarget.Head.ValidFrom ||
+                previousCheckpoint.IssuedAt >= priorTarget.Head.ValidUntil)
+                throw new CryptographicException("The periodic ADF1 previous target is outside the authenticated head history.");
+            var priorCovered = coveredHeads.Where(head =>
+                head.LogGeneration >= previousCheckpoint.CoveredFirstAdhGeneration &&
+                head.LogGeneration <= previousCheckpoint.CoveredLastAdhGeneration).ToArray();
+            if ((ulong)priorCovered.Length != previousCheckpoint.CoveredHeadCount ||
+                priorCovered.Length == 0 ||
+                !Fixed(CoveredRoot(priorCovered), previousCheckpoint.CoveredHeadMerkleRoot.Span))
+                throw new CryptographicException("The periodic ADF1 previous coverage differs from authenticated head history.");
+            newlyCovered = coveredHeads.Where(head =>
+                head.LogGeneration > previousCheckpoint.CoveredLastAdhGeneration).ToArray();
+            if (newlyCovered.Count == 0 ||
+                newlyCovered[0].LogGeneration != previousCheckpoint.CoveredLastAdhGeneration + 1)
+                throw new CryptographicException("The periodic ADF1 would omit intervening protected heads.");
+        }
+        var checkpointGeneration = previousCheckpoint is null ? 0UL :
+            checked(previousCheckpoint.CheckpointGeneration + 1);
+        var predecessorHash = previousCheckpoint is null ? new byte[32] :
+            AccountDirectoryCrypto.ComputeAdf1CoreHash(previousCheckpoint);
+
         var roots = authority.RootKeys.ToDictionary(
             static key => Convert.ToHexString(key.Id.Span),
             StringComparer.Ordinal);
@@ -113,19 +204,15 @@ public static class AccountDirectoryAdf1OfflineAuthor
         selected.Sort(static (left, right) =>
             left.Id.AsSpan().SequenceCompareTo(right.Id));
 
-        var coveredLeaves = coveredHeads.Select(static head =>
-            AccountDirectoryCurrentProofVerifier.ComputeCoveredHeadLeaf(
-                head.LogGeneration, head.TreeSize, head.CoreHash.Span)).ToArray();
-        var coveredRoot = AccountDirectoryProofMaterialAuthor.TreeHash(
-            coveredLeaves, 0, coveredLeaves.Length);
+        var coveredRoot = CoveredRoot(newlyCovered);
         var targetReference = AccountDirectoryCrypto.CreateReference(
             ProtocolMagicBytes.ADH1, 1, target.CoreHash.Span);
         var placeholders = selected.Select(static item =>
             new AccountDirectoryAdf1RootReceipt(item.Id,
                 Enumerable.Repeat((byte)1, 64).ToArray())).ToArray();
         var unsigned = new AccountDirectoryAdf1(authority.NetworkId.Span,
-            0, new byte[32], 0,
-            lastCovered.LogGeneration, (ulong)coveredHeads.Count,
+            checkpointGeneration, predecessorHash, newlyCovered[0].LogGeneration,
+            lastCovered.LogGeneration, (ulong)newlyCovered.Count,
             coveredRoot, targetReference,
             target.TreeSize, target.AppendLogMerkleRoot.Span,
             target.CurrentValueMapRoot.Span,
@@ -155,8 +242,8 @@ public static class AccountDirectoryAdf1OfflineAuthor
                 finally { CryptographicOperations.ZeroMemory(signature); }
             }
             var signed = new AccountDirectoryAdf1(authority.NetworkId.Span,
-                0, new byte[32], 0,
-                lastCovered.LogGeneration, (ulong)coveredHeads.Count,
+                checkpointGeneration, predecessorHash, newlyCovered[0].LogGeneration,
+                lastCovered.LogGeneration, (ulong)newlyCovered.Count,
                 coveredRoot, targetReference,
                 target.TreeSize, target.AppendLogMerkleRoot.Span,
                 target.CurrentValueMapRoot.Span,
@@ -166,4 +253,14 @@ public static class AccountDirectoryAdf1OfflineAuthor
         }
         finally { CryptographicOperations.ZeroMemory(signingInput); }
     }
+
+    private static byte[] CoveredRoot(IReadOnlyList<AccountDirectoryProtectedLkg> heads)
+    {
+        var leaves = heads.Select(static head => AccountDirectoryCurrentProofVerifier
+            .ComputeCoveredHeadLeaf(head.LogGeneration, head.TreeSize, head.CoreHash.Span)).ToArray();
+        return AccountDirectoryProofMaterialAuthor.TreeHash(leaves, 0, leaves.Length);
+    }
+
+    private static bool Fixed(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right) =>
+        left.Length == right.Length && CryptographicOperations.FixedTimeEquals(left, right);
 }
