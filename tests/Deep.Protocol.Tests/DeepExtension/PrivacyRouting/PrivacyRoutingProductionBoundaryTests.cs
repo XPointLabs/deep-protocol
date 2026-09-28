@@ -11,6 +11,15 @@ namespace Deep.Protocol.Tests.DeepExtension.PrivacyRouting;
 public sealed class PrivacyRoutingProductionBoundaryTests
 {
     [Fact]
+    public void SelectedEntryTransport_RejectsIncompleteNetworkContext()
+    {
+        using var fixture = new ProductionFixture();
+        var error = Assert.Throws<OnionBoundaryException>(() =>
+            OnionEntryTransportFactory.Create(fixture.Path(OnionOperation.ContactResolve)));
+        Assert.Equal("network-context-incomplete", error.Code);
+    }
+
+    [Fact]
     public async Task ProductionBoundary_RoundTripsContactResolve_WithDurableCommitBeforeRelease()
     {
         using var fixture = new ProductionFixture();
@@ -111,6 +120,7 @@ public sealed class PrivacyRoutingProductionBoundaryTests
                      typeof(VerifiedOnionNetworkContext), typeof(OnionTrustedTimeLease),
                      typeof(VerifiedOnionPathContext), typeof(VerifiedOnionLocalNodeKey),
                      typeof(VerifiedOnionReceiveContext), typeof(VerifiedOnionNextHopTransport),
+                     typeof(VerifiedOnionEntryTransport),
                      typeof(VerifiedGroupControlPlacement),
                      typeof(VerifiedCanonicalOnionRequest), typeof(VerifiedOnionTerminalResult),
                      typeof(OnionReplayOpenLease), typeof(OnionReplyContext), typeof(OnionExitReplyContext)
@@ -165,6 +175,12 @@ public sealed class PrivacyRoutingProductionBoundaryTests
         Assert.Null(typeof(OpenedOnionRelay).GetProperty("NextRouterId"));
         Assert.Equal(typeof(VerifiedOnionNextHopTransport),
             typeof(OpenedOnionRelay).GetProperty("NextHop")?.PropertyType);
+        var entry = Assert.Single(typeof(OnionEntryTransportFactory).GetMethods(
+            BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly));
+        Assert.Equal("Create", entry.Name);
+        Assert.Equal([typeof(VerifiedOnionPathContext)],
+            entry.GetParameters().Select(static parameter => parameter.ParameterType));
+        Assert.Equal(typeof(VerifiedOnionEntryTransport), entry.ReturnType);
         Assert.Equal(typeof(ReadOnlyMemory<byte>),
             typeof(OnionReplayScope).GetProperty("BootId")?.PropertyType);
     }

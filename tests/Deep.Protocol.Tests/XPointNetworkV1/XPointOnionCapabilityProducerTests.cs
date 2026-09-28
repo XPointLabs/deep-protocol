@@ -17,6 +17,67 @@ namespace Deep.Protocol.Tests.XPointNetworkV1;
 public sealed class XPointOnionCapabilityProducerTests
 {
     [Fact]
+    public async Task SelectedEntryTransport_BindsBothExitPermutationsWithoutCallerOrigin()
+    {
+        var fixture = Fixture.Create();
+        var network = await fixture.VerifyDid2Async();
+        var placement = ContactServicePlacementFactory.Create(network,
+            ContactServiceRequestKind.PublishPreKeyInventory, Bytes(32, 0x91));
+        foreach (var exit in placement.RankedReplicaNodeIds)
+        {
+            var others = fixture.NodeIds.Where(id => !id.AsSpan().SequenceEqual(exit.Span)).ToArray();
+            var path = OnionPathContextFactory.CreateContactResolver(network, placement,
+                others[0], others[1], exit);
+            var transport = OnionEntryTransportFactory.Create(path);
+            transport.EnsureCurrent();
+            Assert.Equal(path.EntryRouterId.ToArray(),
+                network.ResolveNode(transport.Peer.NodeId.Span).RouterOwnerId);
+            var expected = network.ResolveNode(others[0]);
+            Assert.Equal(expected.OriginAddress, transport.Peer.Address.ToArray());
+            Assert.Equal(expected.OriginSpki, transport.Peer.SpkiSha256.ToArray());
+            Assert.Equal(expected.OriginPort, transport.Peer.Port);
+            MemoryMarshal.AsMemory(transport.Peer.Address).Span.Fill(0);
+            Assert.Equal(expected.OriginAddress, transport.Peer.Address.ToArray());
+        }
+        Assert.Throws<ArgumentNullException>(() => OnionEntryTransportFactory.Create(null!));
+    }
+
+    [Fact]
+    public async Task SelectedEntryTransport_RejectsExpiredLeaseAndChangedTrafficKey()
+    {
+        var fixture = Fixture.Create();
+        var network = await fixture.VerifyDid2Async();
+        var placement = ContactServicePlacementFactory.Create(network,
+            ContactServiceRequestKind.PublishPreKeyInventory, Bytes(32, 0x91));
+        var exit = placement.RankedReplicaNodeIds[0];
+        var others = fixture.NodeIds.Where(id => !id.AsSpan().SequenceEqual(exit.Span)).ToArray();
+        var path = OnionPathContextFactory.CreateContactResolver(network, placement, others[0], others[1], exit);
+        var clock = new AdvancingTimestampProvider();
+        var lease = new OnionTrustedTimeLease(clock, TimeSpan.FromSeconds(1), Bytes(32, 0x92));
+        var expiring = new VerifiedOnionPathContext(network, lease, OnionOperation.ContactResolve, path.Route);
+        var transport = OnionEntryTransportFactory.Create(expiring);
+        clock.Timestamp = 1;
+        Assert.Equal("trusted-time-expired", Assert.Throws<OnionBoundaryException>(transport.EnsureCurrent).Code);
+        Assert.Equal("trusted-time-expired",
+            Assert.Throws<OnionBoundaryException>(() => OnionEntryTransportFactory.Create(expiring)).Code);
+        var changed = path.Route.ToArray();
+        var first = changed[0];
+        changed[0] = new PrivacyRoutingHop(first.RouterOwnerId.Span, first.KeyId.Span, first.Epoch,
+            first.Role, ScalarMult.Base(Bytes(32, 0x93)));
+        var mismatched = new VerifiedOnionPathContext(network, path.TrustedTime,
+            OnionOperation.ContactResolve, changed);
+        Assert.Equal("entry-path-mismatch",
+            Assert.Throws<OnionBoundaryException>(() => OnionEntryTransportFactory.Create(mismatched)).Code);
+    }
+
+    private sealed class AdvancingTimestampProvider : TimeProvider
+    {
+        internal long Timestamp { get; set; }
+        public override long TimestampFrequency => 1;
+        public override long GetTimestamp() => Timestamp;
+    }
+
+    [Fact]
     public async Task Did2Xpc1Claim_RequiresBothCurrentSelectedReplicaSignatures()
     {
         var context = await Fixture.Create(networkMarker: 0x01).VerifyAsync();

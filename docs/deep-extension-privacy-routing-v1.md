@@ -368,6 +368,16 @@ position is minted from the verified local XNode role/listener composition, neve
 from a request enum or carrier metadata; the codec remains independent of HTTP,
 QUIC, Reality, XHTTP and peer-forwarding transports.
 
+The separately frozen
+[`DR-0009`](../../docs/survival-program/decisions/DR-0009-did2-selected-entry-transport.md)
+adds `OnionEntryTransportFactory.Create(VerifiedOnionPathContext)` returning a
+sealed `VerifiedOnionEntryTransport` with no public constructor, a read-only
+`Peer: VerifiedOnionNextHopTransport` and `EnsureCurrent(): void`. It derives the
+selected entry's signed transport facts from the same live path/closure, never
+from a caller origin or routing hint. The transport rechecks that capability
+before TLS/dispatch and cannot forward to a different entry. This is separate
+from the transport-neutral path/codec; frozen wire bytes and domains do not change.
+
 ### 7.3 Mandatory durable replay transaction and key lease
 
 Production opening is asynchronous and has no replay-optional overload. Before
