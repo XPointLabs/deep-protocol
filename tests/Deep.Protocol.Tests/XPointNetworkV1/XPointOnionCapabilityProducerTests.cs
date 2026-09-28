@@ -17,6 +17,102 @@ namespace Deep.Protocol.Tests.XPointNetworkV1;
 
 public sealed class XPointOnionCapabilityProducerTests
 {
+    [Fact]
+    public async Task ProtectedHistory_EqualTipRetainsActualPredecessor()
+    {
+        var fixture = Fixture.Create();
+        var previous = await fixture.VerifyDid2Async();
+        var history = OnionNetworkProtectedHistoryCodec.Encode(previous);
+        var current = await fixture.VerifyHistoryAsync(history);
+        Assert.Equal(history, OnionNetworkProtectedHistoryCodec.Encode(current));
+        Assert.True(OnionNetworkProtectedHistoryCodec.BindsPredecessor(current, history));
+        Assert.False(OnionNetworkProtectedHistoryCodec.BindsPredecessor(previous, history));
+        var fork = await Fixture.Create(selectionEpoch: 8).VerifyDid2Async();
+        Assert.Equal(previous.ProtectedLkg!.ViewCoreReference.ToArray(), fork.ProtectedLkg!.ViewCoreReference.ToArray());
+        Assert.False(OnionNetworkProtectedHistoryCodec.BindsPredecessor(current, OnionNetworkProtectedHistoryCodec.Encode(fork)));
+        Assert.Equal(previous.ProtectedLkg!.HeadCoreReference.ToArray(), current.PriorProtectedLkg!.HeadCoreReference.ToArray());
+        var copy = OnionNetworkProtectedHistoryCodec.Encode(current); copy.AsSpan().Fill(0);
+        Assert.Equal(history, OnionNetworkProtectedHistoryCodec.Encode(current));
+    }
+
+    [Fact]
+    public async Task ProtectedHistory_FullSuccessorDoesNotReviveExpiredPriorLease()
+    {
+        var fixture = Fixture.Create();
+        var previous = await fixture.WithClockSample(fixture.FreshnessDeadline - 1).VerifyDid2Async();
+        var history = OnionNetworkProtectedHistoryCodec.Encode(previous);
+        await Task.Delay(TimeSpan.FromMilliseconds(1_100));
+        Assert.Equal("trusted-time-expired", Assert.Throws<OnionBoundaryException>(previous.EnsureCurrent).Code);
+        var current = await fixture.VerifyHistoryAsync(history, fixture.BuildSuccessorChain());
+        current.EnsureCurrent();
+        Assert.Equal(2UL, current.ProtectedLkg!.ViewGeneration);
+        Assert.Equal(0UL, current.PriorProtectedLkg!.ViewGeneration);
+        Assert.Equal(previous.ProtectedLkg!.HeadRoot.ToArray(), current.PriorProtectedLkg.HeadRoot.ToArray());
+        Assert.Equal("trusted-time-expired", Assert.Throws<OnionBoundaryException>(previous.EnsureCurrent).Code);
+    }
+
+    [Theory]
+    [InlineData("magic")]
+    [InlineData("version")]
+    [InlineData("reserved")]
+    [InlineData("length")]
+    [InlineData("checkpoint")]
+    [InlineData("trailing")]
+    [InlineData("max+1")]
+    [InlineData("root")]
+    [InlineData("policy-signature")]
+    [InlineData("pmt-signature")]
+    public async Task ProtectedHistory_RejectsMalformedOrForgedCapsule(string fault)
+    {
+        var fixture = Fixture.Create();
+        var history = OnionNetworkProtectedHistoryCodec.Encode(await fixture.VerifyDid2Async());
+        switch (fault)
+        {
+            case "magic": history[0] ^= 1; break;
+            case "version": history[5] = 1; break;
+            case "reserved": history[7] = 1; break;
+            case "length": history[11] ^= 1; break;
+            case "checkpoint": history[16 + 178] = 2; break;
+            case "root": history[16 + 62] ^= 1; break;
+            case "trailing": history = [.. history, 0]; break;
+            case "max+1": history = new byte[16 + 225 + 2 * 65_535 + 1]; break;
+            case "policy-signature":
+                var length = BinaryPrimitives.ReadUInt32BigEndian(history.AsSpan(8));
+                history[16 + 225 + (int)length - 1] ^= 1; break;
+            default: history[^1] ^= 1; break;
+        }
+        var failure = await Assert.ThrowsAsync<OnionBoundaryException>(async () => await fixture.VerifyHistoryAsync(history));
+        Assert.Contains(failure.Code, new[] { "network-history-invalid", "network-history-mismatch" });
+    }
+
+    [Fact]
+    public async Task ProtectedHistory_RejectsCrossNetworkForkOmissionAndRollback()
+    {
+        var fixture = Fixture.Create();
+        var history = OnionNetworkProtectedHistoryCodec.Encode(await fixture.VerifyDid2Async());
+        await Assert.ThrowsAsync<OnionBoundaryException>(async () => await Fixture.Create(0x12).VerifyHistoryAsync(history));
+        await Assert.ThrowsAsync<OnionBoundaryException>(async () => await fixture.WithArtifacts(0x71).VerifyHistoryAsync(history));
+        await Assert.ThrowsAsync<OnionBoundaryException>(async () =>
+            await fixture.VerifyHistoryAsync(history, fixture.BuildSuccessorChain().WithoutFirstIntermediate()));
+        var latest = await fixture.VerifyHistoryAsync(history, fixture.BuildSuccessorChain());
+        await Assert.ThrowsAsync<OnionBoundaryException>(async () =>
+            await fixture.VerifyHistoryAsync(OnionNetworkProtectedHistoryCodec.Encode(latest)));
+    }
+
+    [Fact]
+    public async Task InstalledPublicKey_UsesOnlyVerifiedActiveDescriptor()
+    {
+        var fixture = Fixture.Create();
+        var network = await fixture.VerifyDid2Async();
+        OnionLocalNodeKeyFactory.EnsureInstalledPublicKey(network, fixture.NodeIds[0], ScalarMult.Base(Bytes(32, 0xa0)));
+        Assert.Equal("local-node-key-mismatch", Assert.Throws<OnionBoundaryException>(() =>
+            OnionLocalNodeKeyFactory.EnsureInstalledPublicKey(network, fixture.NodeIds[0], ScalarMult.Base(Bytes(32, 0xb0)))).Code);
+        Assert.Equal("local-node-key-mismatch", Assert.Throws<OnionBoundaryException>(() =>
+            OnionLocalNodeKeyFactory.EnsureInstalledPublicKey(network, fixture.NodeIds[0], new byte[31])).Code);
+        Assert.Equal("node-not-in-view", Assert.Throws<OnionBoundaryException>(() =>
+            OnionLocalNodeKeyFactory.EnsureInstalledPublicKey(network, Bytes(32, 0xdf), ScalarMult.Base(Bytes(32, 0xa0)))).Code);
+    }
+
     [Theory]
     [InlineData(0, 1, 2)]
     [InlineData(0, 2, 1)]
@@ -84,7 +180,8 @@ public sealed class XPointOnionCapabilityProducerTests
                 "padding" => PrivacyRoutingProtocolError.InvalidPadding,
                 "inner-version" => PrivacyRoutingProtocolError.UnsupportedVersion,
                 _ => PrivacyRoutingProtocolError.InvalidKeyBinding
-            }, Assert.IsType<PrivacyRoutingProtocolException>(error).Error);
+            }, Assert.IsType<PrivacyRoutingProtocolException>(
+                Assert.IsType<OnionBoundaryException>(error).InnerException).Error);
         Assert.Equal(0, store.CommitCount);
         Assert.Equal(1, store.DisposalCount);
         Assert.Single(store.Positions);
@@ -735,6 +832,14 @@ public sealed class XPointOnionCapabilityProducerTests
         Assert.Empty(typeof(VerifiedOnionPathCandidate).GetConstructors());
         Assert.Empty(typeof(VerifiedGroupControlPlacement).GetConstructors());
 
+        var historyMethods = typeof(OnionNetworkProtectedHistoryCodec).GetMethods(
+            BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
+        Assert.Equal(["BindsPredecessor", "Encode"], historyMethods.Select(method => method.Name).Order().ToArray());
+        var historyBinding = Assert.Single(historyMethods, method => method.Name == "BindsPredecessor");
+        Assert.Equal(typeof(bool), historyBinding.ReturnType);
+        Assert.Equal([typeof(VerifiedOnionNetworkContext), typeof(ReadOnlyMemory<byte>)],
+            historyBinding.GetParameters().Select(parameter => parameter.ParameterType).ToArray());
+
         var candidateCreate = Assert.Single(typeof(OnionPathCandidateSnapshotFactory).GetMethods(
             BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly));
         Assert.Equal("Create", candidateCreate.Name);
@@ -748,6 +853,7 @@ public sealed class XPointOnionCapabilityProducerTests
         var verifyMethods = typeof(OnionNetworkContextVerifier).GetMethods(
             BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
         Assert.Equal(["VerifyAsync", "VerifyAsync", "VerifyFromForwardCheckpointAsync",
+                "VerifyFromProtectedHistoryAsync",
                 "VerifyRehydratedCurrentAsync", "VerifyRehydratedCurrentAsync"],
             verifyMethods.Select(static method => method.Name).Order(StringComparer.Ordinal).ToArray());
         Assert.All(verifyMethods, verify => Assert.DoesNotContain(verify.GetParameters(), parameter =>
@@ -1208,6 +1314,23 @@ public sealed class XPointOnionCapabilityProducerTests
                 _nodes.Select(static value => (ReadOnlyMemory<byte>)value).ToArray(),
                 new ReadOnlyMemory<byte>[] { _pmt }, null,
                 new OnionTrustedTimeAuthority(new FixedClock(Bytes(16, 0xc1), _clockSample)), default);
+
+        internal ValueTask<VerifiedOnionNetworkContext> VerifyHistoryAsync(byte[] history, SuccessorFixture? successors = null)
+        {
+            var freshness = successors?.Freshness ?? _freshness;
+            var evidence = new VerifiedDeepIdV2DirectoryFreshness(freshness.ExactAdh1.Span, freshness.ExactDtt1.Span, [],
+                _authority.NetworkId.Span, Bytes(32, 0x75),
+                new AccountDirectoryMonotonicRequestWindow(Bytes(16, 0xc1), 990, 995, 1_000),
+                freshness.FreshnessDeadlineMonotonicSeconds, freshness.TrustedLowerUnixSeconds, freshness.TrustedUpperUnixSeconds,
+                AccountDirectoryAdp1ResultKind.NonMembership, null, false, null);
+            return OnionNetworkContextVerifier.VerifyFromProtectedHistoryAsync(_authority, evidence,
+                new ReadOnlyMemory<byte>[] { _xvp }.Concat((successors?.Policies ?? []).Select(bytes => (ReadOnlyMemory<byte>)bytes)).ToArray(),
+                new ReadOnlyMemory<byte>[] { _xnv }.Concat((successors?.Views ?? []).Select(bytes => (ReadOnlyMemory<byte>)bytes)).ToArray(),
+                new ReadOnlyMemory<byte>[] { _xnh }.Concat((successors?.Heads ?? []).Select(bytes => (ReadOnlyMemory<byte>)bytes)).ToArray(),
+                (successors?.Nodes ?? _nodes).Select(bytes => (ReadOnlyMemory<byte>)bytes).ToArray(),
+                new ReadOnlyMemory<byte>[] { _pmt }.Concat((successors?.Pmts ?? []).Select(bytes => (ReadOnlyMemory<byte>)bytes)).ToArray(),
+                history, new(new FixedClock(Bytes(16, 0xc1), _clockSample)), default);
+        }
 
         internal ValueTask<VerifiedOnionNetworkContext> RehydrateDid2Async(
             XPointNetworkProtectedLkg protectedCurrent) =>

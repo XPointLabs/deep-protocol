@@ -556,10 +556,10 @@ internal static class GraphPolicy
         {
             ["Deep.Protocol"] =
             [
-                // Current DR-0009 selected-entry API only (Debug, normalized Release).
+                // Current DR-0012 protected-history/key-preflight API only (Debug, normalized Release).
                 // Pre-cutover/public-API predecessor snapshots are not accepted.
-                "Deep.Protocol|12960|71546049C24F8DC1CF04145EE683BA251EFAA63C856C0927DBCAF2D25573509D",
-                "Deep.Protocol|12960|9F2EF389482B3E16A168FF8763E8A6A577889F727A2293195369C40196F3BDBA"
+                "Deep.Protocol|12965|192A9AC7016619941DA69AB6EA1365F5012F1C40E7EEEE55065714A3128D86A7",
+                "Deep.Protocol|12965|AF928317F565BFEA12C9E637D7BCAD386DFCFE90E14A87967E371B92A23B137D"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

@@ -330,13 +330,15 @@ public sealed class VerifiedOnionNetworkContext
         IEnumerable<VerifiedNetworkNode> nodes,
         VerifiedOnionNetworkClosure closure,
         XPointNetworkProtectedLkg protectedLkg,
-        XPointNetworkProtectedLkg? priorProtectedLkg) : this(networkId)
+        XPointNetworkProtectedLkg? priorProtectedLkg,
+        ReadOnlyMemory<byte> protectedPriorHistoryHash = default) : this(networkId)
     {
         TrustedTime = trustedTime;
         _nodes = nodes.ToDictionary(static node => Convert.ToHexString(node.NodeId), StringComparer.Ordinal);
         Closure = closure;
         ProtectedLkg = CopyLkg(protectedLkg);
         PriorProtectedLkg = priorProtectedLkg is null ? null : CopyLkg(priorProtectedLkg);
+        _protectedPriorHistoryHash = protectedPriorHistoryHash.ToArray();
     }
     public ReadOnlyMemory<byte> NetworkId => _networkId.ToArray();
     public XPointNetworkProtectedLkg? ProtectedLkg { get; }
@@ -354,6 +356,10 @@ public sealed class VerifiedOnionNetworkContext
     internal ReadOnlySpan<byte> NetworkIdSpan => _networkId;
     internal OnionTrustedTimeLease? TrustedTime { get; }
     internal VerifiedOnionNetworkClosure? Closure { get; }
+    private readonly byte[] _protectedPriorHistoryHash = [];
+    internal bool BindsProtectedPredecessor(ReadOnlySpan<byte> hash) =>
+        hash.Length == 32 && _protectedPriorHistoryHash.Length == 32 &&
+        CryptographicOperations.FixedTimeEquals(hash, _protectedPriorHistoryHash);
 
     /// <summary>
     /// Proves that an exact PMT2 artifact reference belongs to this verified
@@ -530,6 +536,37 @@ internal sealed record VerifiedNetworkNode(
 
 public static class OnionNetworkContextVerifier
 {
+    /// <summary>
+    /// Verifies complete signed history against a caller-authenticated durable
+    /// predecessor without reviving its expired time or traffic-key capability.
+    /// </summary>
+    public static async ValueTask<VerifiedOnionNetworkContext> VerifyFromProtectedHistoryAsync(
+        VerifiedXPointNetworkAuthority authority,
+        VerifiedDeepIdV2DirectoryFreshness trustedFreshness,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedXvp1Chain,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedXnv1Chain,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedXnh1Chain,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactActiveXnd1,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedPmt2Chain,
+        ReadOnlyMemory<byte> exactProtectedHistory,
+        OnionTrustedTimeAuthority trustedTimeAuthority,
+        CancellationToken cancellationToken)
+    {
+        // Reject hostile custody bytes before crypto/clock callbacks. The host
+        // authenticates their storage; signed-chain inclusion authenticates all
+        // restored lineage facts before any current capability can escape.
+        _ = OnionNetworkProtectedHistoryCodec.Decode(exactProtectedHistory.Span);
+        var history = exactProtectedHistory.ToArray();
+        var chains = OnionNetworkProtectedHistoryCodec.OwnChains(exactOrderedXvp1Chain,
+            exactOrderedXnv1Chain, exactOrderedXnh1Chain, exactActiveXnd1, exactOrderedPmt2Chain);
+        var candidate = await XPointOnionCapabilityProducer.VerifyAsync(authority, trustedFreshness,
+            chains[0], chains[1], chains[2], chains[3], chains[4], null, trustedTimeAuthority, cancellationToken)
+            .ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        return OnionNetworkProtectedHistoryCodec.BindVerifiedHistory(candidate, history,
+            chains[0], chains[1], chains[2], chains[4]);
+    }
+
     /// <summary>
     /// Verifies the identity-neutral network closure with DID2 directory
     /// freshness. This does not authorize V1 contact or message operations.
@@ -1047,6 +1084,25 @@ public sealed class VerifiedOnionLocalNodeKey
 
 public static class OnionLocalNodeKeyFactory
 {
+    /// <summary>
+    /// Checks an operator-installed public key against the active traffic key
+    /// selected by the complete current network verifier. Exports no key and
+    /// grants no receive capability.
+    /// </summary>
+    public static void EnsureInstalledPublicKey(
+        VerifiedOnionNetworkContext network,
+        ReadOnlyMemory<byte> localNodeId,
+        ReadOnlyMemory<byte> installedOnionPublicKey)
+    {
+        ArgumentNullException.ThrowIfNull(network);
+        network.EnsureCurrent();
+        var local = network.ResolveNode(localNodeId.Span);
+        if (installedOnionPublicKey.Length != 32 ||
+            !CryptographicOperations.FixedTimeEquals(local.OnionPublicKey, installedOnionPublicKey.Span))
+            throw new OnionBoundaryException("local-node-key-mismatch",
+                "The installed onion public key does not match the signed active descriptor.");
+    }
+
     public static VerifiedOnionLocalNodeKey Bind(
         VerifiedOnionNetworkContext network,
         OnionReceivePosition position,
@@ -1728,10 +1784,13 @@ public sealed partial class PrivacyRoutingCodec
             opened = null;
             return new OpenedOnionExit(exit, request, reply);
         }
-        catch
+        catch (Exception exception)
         {
             opened?.Dispose();
             await replayLease.DisposeAsync().ConfigureAwait(false);
+            if (exception is PrivacyRoutingProtocolException)
+                throw new OnionBoundaryException("receive-frame-invalid",
+                    "The ONION frame failed authenticated canonical validation.", exception);
             throw;
         }
         finally

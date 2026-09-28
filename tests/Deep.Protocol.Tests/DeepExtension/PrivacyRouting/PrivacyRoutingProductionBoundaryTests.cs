@@ -151,6 +151,7 @@ public sealed class PrivacyRoutingProductionBoundaryTests
             BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)).Name);
         Assert.Equal(
             ["VerifyAsync", "VerifyAsync", "VerifyFromForwardCheckpointAsync",
+                "VerifyFromProtectedHistoryAsync",
                 "VerifyRehydratedCurrentAsync", "VerifyRehydratedCurrentAsync"],
             typeof(OnionNetworkContextVerifier).GetMethods(
                     BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly)
@@ -159,13 +160,19 @@ public sealed class PrivacyRoutingProductionBoundaryTests
             typeof(OnionPathContextFactory).GetMethods(
                     BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly)
                 .Select(static method => method.Name).Order(StringComparer.Ordinal).ToArray());
-        var bind = Assert.Single(typeof(OnionLocalNodeKeyFactory).GetMethods(
-            BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly));
+        var keyMethods = typeof(OnionLocalNodeKeyFactory).GetMethods(
+            BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
+        Assert.Equal(["Bind", "EnsureInstalledPublicKey"], keyMethods.Select(method => method.Name).Order().ToArray());
+        var bind = Assert.Single(keyMethods, method => method.Name == "Bind");
         Assert.Equal("Bind", bind.Name);
         Assert.Equal(
             [typeof(VerifiedOnionNetworkContext), typeof(OnionReceivePosition),
              typeof(ReadOnlyMemory<byte>), typeof(OnionKeyHandle)],
             bind.GetParameters().Select(static parameter => parameter.ParameterType).ToArray());
+        var preflight = Assert.Single(keyMethods, method => method.Name == "EnsureInstalledPublicKey");
+        Assert.Equal(typeof(void), preflight.ReturnType);
+        Assert.Equal([typeof(VerifiedOnionNetworkContext), typeof(ReadOnlyMemory<byte>), typeof(ReadOnlyMemory<byte>)],
+            preflight.GetParameters().Select(parameter => parameter.ParameterType).ToArray());
         var select = Assert.Single(typeof(OnionReceiveContextSelector).GetMethods(
             BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly));
         Assert.Equal("Select", select.Name);

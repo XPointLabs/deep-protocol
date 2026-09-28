@@ -338,6 +338,20 @@ restart/replay cleanup only and never extends admissibility. A receive key is ex
 to the codec only as an opaque, lease-bound key-vault handle; raw private bytes are
 not a public API value.
 
+The separately frozen
+[`DR-0012`](../../docs/survival-program/decisions/DR-0012-protected-network-history.md)
+adds `OnionNetworkProtectedHistoryCodec.Encode(VerifiedOnionNetworkContext)` and
+the DID2-only `OnionNetworkContextVerifier.VerifyFromProtectedHistoryAsync`.
+`BindsPredecessor(network, exactProtectedHistory)` checks the entire verified
+predecessor for the host's floor CAS, not just its view/head tuple.
+The exported local capsule is non-secret history, not freshness authority; the
+caller authenticates its custody. Complete signed current history must include
+the protected prior records before a current capability is released. Old time
+and traffic-key capabilities are never revived. The same decision adds
+`OnionLocalNodeKeyFactory.EnsureInstalledPublicKey(network, localNodeId,
+installedOnionPublicKey)`: it checks the verifier-selected active key without
+exporting a key or granting receive authority. Wire bytes and domains are unchanged.
+
 ### 7.2 Exact-three path and receive-position proof
 
 `OnionPathContextFactory.CreateContactResolver(...)` and
