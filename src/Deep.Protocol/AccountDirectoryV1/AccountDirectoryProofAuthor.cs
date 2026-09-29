@@ -362,11 +362,46 @@ public static class AccountDirectoryProofAuthor
         }
     }
 
+    /// <summary>
+    /// Read-only issuance-context check for readiness. Performs the same head,
+    /// time, authority and signed-view checks as proof authoring, but does not
+    /// sign, consume a nonce, create a proof or mint a mutation capability.
+    /// </summary>
+    public static void RequireIssuanceReady(
+        VerifiedXPointNetworkAuthority authority,
+        AccountDirectoryProtectedLkg currentHead,
+        AccountDirectoryProofAuthoringRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(authority);
+        ArgumentNullException.ThrowIfNull(currentHead);
+        ArgumentNullException.ThrowIfNull(request);
+        _ = ValidateIssuanceContext(authority, currentHead, request);
+    }
+
     private static Xnv1Record ValidateRequest(
         VerifiedXPointNetworkAuthority authority,
         AccountDirectoryProtectedLkg currentHead,
         AccountDirectoryProofAuthoringRequest request,
         AccountDirectoryAdp1ProofMaterial proof)
+    {
+        var currentView = ValidateIssuanceContext(authority, currentHead, request);
+        var lkg = proof.CallerProtectedLkg;
+        if (lkg is null)
+        {
+            if (proof.ConsistencyProofNodes.Count != 0 || !proof.ExactAfp1.IsEmpty)
+                Fail("InvalidHistoryProof", "A caller history proof requires an exact protected LKG.");
+        }
+        else if (!Fixed(lkg.Head.NetworkId.Span, request.NetworkId.Span))
+        {
+            Fail("NetworkMismatch", "The protected directory LKG belongs to another network.");
+        }
+        return currentView;
+    }
+
+    private static Xnv1Record ValidateIssuanceContext(
+        VerifiedXPointNetworkAuthority authority,
+        AccountDirectoryProtectedLkg currentHead,
+        AccountDirectoryProofAuthoringRequest request)
     {
         if (!Fixed(authority.NetworkId.Span, request.NetworkId.Span) ||
             !Fixed(authority.NetworkId.Span, currentHead.Head.NetworkId.Span))
@@ -394,19 +429,7 @@ public static class AccountDirectoryProofAuthor
         if (currentHead.Head.MinimumReader > request.SupportedReader)
             Fail("UnsupportedReader", "The current ADH1 requires a newer reader.");
 
-        var currentView = ValidateCurrentView(authority, request, lower, upper);
-
-        var lkg = proof.CallerProtectedLkg;
-        if (lkg is null)
-        {
-            if (proof.ConsistencyProofNodes.Count != 0 || !proof.ExactAfp1.IsEmpty)
-                Fail("InvalidHistoryProof", "A caller history proof requires an exact protected LKG.");
-        }
-        else if (!Fixed(lkg.Head.NetworkId.Span, request.NetworkId.Span))
-        {
-            Fail("NetworkMismatch", "The protected directory LKG belongs to another network.");
-        }
-        return currentView;
+        return ValidateCurrentView(authority, request, lower, upper);
     }
 
     internal static Xnv1Record ValidateCurrentView(

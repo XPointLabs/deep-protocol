@@ -12,6 +12,35 @@ namespace Deep.Protocol.Tests.AccountDirectoryV1;
 public sealed partial class AccountDirectoryFreshnessVerificationTests
 {
     [Fact]
+    public void ReadOnlyIssuanceReadinessUsesTheAuthoringBoundaryAndRejectsForgedViews()
+    {
+        var authority = AuthorityFixture.Create();
+        var fixture = authority.CurrentValue();
+        var request = AuthoringRequest(fixture);
+        var head = new AccountDirectoryProtectedLkg(fixture.HeadBytes);
+        var before = head.ExactAdh1.ToArray();
+        for (var index = 0; index < 20; index++)
+            AccountDirectoryProofAuthor.RequireIssuanceReady(authority.Verified, head, request);
+        Assert.Equal(before, head.ExactAdh1.ToArray());
+        var view = request.ExactCurrentXnv1.ToArray();
+        view[^1] ^= 1;
+        var forged = new AccountDirectoryProofAuthoringRequest(request.NetworkId.Span,
+            request.Nonce.Span, request.BootId.Span, request.ClientMonotonicSendSample,
+            request.ExactCurrentAdh1.Span, view, request.ObservedUnixTime,
+            request.UncertaintySeconds, request.IssuedAtUnixTime,
+            request.ExpiresAtUnixTime, request.IssuanceEpoch, request.SupportedReader);
+        Assert.Equal("CurrentViewWitnessInvalid", Assert.Throws<AccountDirectoryProofAuthoringException>(() =>
+            AccountDirectoryProofAuthor.RequireIssuanceReady(authority.Verified, head, forged)).Code);
+        var changedHead = fixture.HeadBytes.ToArray();
+        changedHead[^1] ^= 1;
+        Assert.Equal("ExactAdhMismatch", Assert.Throws<AccountDirectoryProofAuthoringException>(() =>
+            AccountDirectoryProofAuthor.RequireIssuanceReady(authority.Verified, head,
+                AuthoringRequest(fixture, exactAdh1: changedHead))).Code);
+        Assert.Throws<ArgumentNullException>(() =>
+            AccountDirectoryProofAuthor.RequireIssuanceReady(null!, head, request));
+    }
+
+    [Fact]
     public async Task Author_CurrentValueProducesCanonicalNonceBoundPackageWithDeterministicSigners()
     {
         var authority = AuthorityFixture.Create();

@@ -192,6 +192,14 @@ genesis remains pinned by each consumer's immutable deployment source.
 Protocol never claims persistence, durability, publication, activation or a
 successful consumer CAS.
 
+DR-0013 freezes the additive read-only
+`AccountDirectoryProofAuthor.RequireIssuanceReady` issuance-context verifier.
+It returns no capability, signs nothing and performs no nonce/state mutation.
+Its normative semantics and downstream repin/no-reset impact are in
+[the decision](../../docs/survival-program/decisions/DR-0013-readonly-directory-issuance-readiness.md).
+The positive actual public-API snapshots include this method; predecessor
+snapshots are replaced, not accepted as an alternate production surface.
+
 The package candidate is not a clean-break production activation until the
 reviewed exact-three closure is atomically repinned by each authorized
 consumer and its protected state is reset under the separate cutover plan.
