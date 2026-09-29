@@ -1,7 +1,5 @@
 using System.Security.Cryptography;
-using System.Runtime.CompilerServices;
 using Deep.Protocol.ContactV1;
-using Deep.Protocol.DeepExtension.PrivacyRouting;
 
 namespace Deep.Protocol.Tests.ContactV1;
 
@@ -123,22 +121,6 @@ public sealed class Xpk1ClaimJournalTests
                 method.GetParameters().Any(parameter => parameter.ParameterType == typeof(Xpc1Result)));
     }
 
-    [Fact]
-    public void ExactXpk1IsAcceptedByTheProductionContactResolveWireBoundary()
-    {
-        var exact = Request(0x31, 0x51);
-        var decoded = Xpk1Codec.Decode(exact);
-        var network = CreateNetwork(decoded.NetworkId.Span);
-
-        var verified = OnionTerminalPayloadVerifierV1.VerifyRequest(
-            network,
-            OnionOperation.ContactResolve,
-            exact);
-
-        Assert.Equal(OnionOperation.ContactResolve, verified.Operation);
-        Assert.Equal(exact, verified.CanonicalBytes.ToArray());
-    }
-
     private static byte[] Request(byte operationMarker, byte viewMarker)
     {
         var operationId = Bytes(32, operationMarker);
@@ -159,6 +141,4 @@ public sealed class Xpk1ClaimJournalTests
     private static byte[] Bytes(int length, byte seed) =>
         Enumerable.Range(0, length).Select(index => unchecked((byte)(seed + index))).ToArray();
 
-    [UnsafeAccessor(UnsafeAccessorKind.Constructor)]
-    private static extern VerifiedOnionNetworkContext CreateNetwork(ReadOnlySpan<byte> networkId);
 }

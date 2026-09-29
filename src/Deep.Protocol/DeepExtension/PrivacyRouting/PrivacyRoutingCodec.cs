@@ -475,11 +475,21 @@ internal static class PrivacyRoutingPayloadVerifier
                 return;
             }
 
+            if (ReadMagic(request) == ProtocolMagic.XPK1)
+            {
+                var claim = DeepIdV2PreKeyClaimRequestCodec.Decode(request);
+                if (!CryptographicOperations.FixedTimeEquals(claim.Field(1).Span, networkId) ||
+                    !claim.CanonicalBytes.Span.SequenceEqual(request))
+                    throw PrivacyRoutingWire.Error(
+                        PrivacyRoutingProtocolError.InvalidKeyBinding,
+                        "DID2 XPK1 request is not bound to the ONION-01 network or exact canonical bytes.");
+                return;
+            }
+
             ContactServiceRequestRecord decoded = ReadMagic(request) switch
             {
                 ProtocolMagic.XPU1 => Xpu1Codec.Decode(request),
                 ProtocolMagic.XIQ1 => Xiq1Codec.Decode(request),
-                ProtocolMagic.XPK1 => Xpk1Codec.Decode(request),
                 ProtocolMagic.XUW1 => Xuw1Codec.Decode(request),
                 ProtocolMagic.XUQ1 => Xuq1Codec.Decode(request),
                 _ => throw PrivacyRoutingWire.Error(PrivacyRoutingProtocolError.InvalidOperation, "ContactResolve accepts only current ContactV1 request records.")
@@ -631,11 +641,22 @@ internal static class PrivacyRoutingPayloadVerifier
                 return;
             }
 
+            if (ReadMagic(exactRequest) == ProtocolMagic.XPK1)
+            {
+                // Structural/exact-request closure only. Replica signatures,
+                // publication and fresh recipient authority remain independent.
+                var claim = DeepIdV2PreKeyClaimResultCodec.Decode(body, exactRequest);
+                if (!claim.WireBytes.Span.SequenceEqual(body))
+                    throw PrivacyRoutingWire.Error(
+                        PrivacyRoutingProtocolError.InvalidOperation,
+                        "DID2 XPC1 response has non-canonical trailing bytes.");
+                return;
+            }
+
             ContactServiceResultRecord decoded = ReadMagic(exactRequest) switch
             {
                 ProtocolMagic.XPU1 => Xpo1Codec.Decode(body, exactRequest),
                 ProtocolMagic.XIQ1 => Xis1Codec.Decode(body, exactRequest),
-                ProtocolMagic.XPK1 => Xpc1Codec.Decode(body, exactRequest),
                 ProtocolMagic.XUW1 or ProtocolMagic.XUQ1 => Xus1Codec.Decode(body, exactRequest),
                 _ => throw PrivacyRoutingWire.Error(PrivacyRoutingProtocolError.InvalidOperation, "ContactResolve request/result pairing is invalid.")
             };
