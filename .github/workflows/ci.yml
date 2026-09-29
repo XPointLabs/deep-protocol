@@ -30,7 +30,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/deep-platform
-          ref: 127a804f2b3eeae4e99f7ee845da01e7f3642d3f
+          ref: 33dfc00e2268ec17c4a2326ad83a1abbc8d7f7a1
           path: integration-source
           persist-credentials: false
 
