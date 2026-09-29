@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "status": "TARGET_UNFROZEN_CANDIDATE",
+  "decision": "DR-0014",
+  "byteOrder": "big-endian",
+  "request": {
+    "magic": "DHQ2", "version": 2, "reserved": 0, "length": 68,
+    "fields": [
+      {"offset": 0, "bytes": 4, "kind": "magic"},
+      {"offset": 4, "bytes": 2, "kind": "version"},
+      {"offset": 6, "bytes": 2, "kind": "zero-reserved"},
+      {"offset": 8, "bytes": 4, "kind": "exact-total-length"},
+      {"offset": 12, "bytes": 16, "kind": "nonzero-network-id"},
+      {"offset": 28, "bytes": 8, "kind": "protected-source-generation"},
+      {"offset": 36, "bytes": 32, "kind": "nonzero-protected-source-core-hash"}
+    ]
+  },
+  "response": {
+    "magic": "DHR2", "version": 2, "reserved": 0,
+    "minimumBytes": 71, "maximumBytes": 264519,
+    "sourceEcho": {"offset": 12, "bytes": 56, "mustEqualRequest": true},
+    "headCount": {"offset": 68, "bytes": 2, "maximum": 64},
+    "heads": {"lengthPrefixBytes": 4, "minimumBytes": 1, "maximumBytes": 4096, "codec": "ADH1-reader-exactly-2"},
+    "consistencyNodeCount": {"bytes": 1, "maximum": 64},
+    "consistencyNodeBytes": 32,
+    "emptyPageRequiresZeroConsistencyNodes": true,
+    "trailingBytes": "reject"
+  },
+  "verification": {
+    "authenticateSourceAndEveryHead": true,
+    "exactSequentialGenerationAndPreviousCoreHash": true,
+    "sameTreeSizeRequiresUnchangedLogAndMapRoots": true,
+    "finalRfc6962ConsistencyFromSourceRequired": true,
+    "expiredHistoricalHeadIsNotFreshnessAuthority": true,
+    "durableCompareExchangeBeforeNextPage": true,
+    "freshNonceCurrentProofAfterCatchupRequired": true,
+    "unknownSource": "HTTP-409-not-genesis-reset"
+  }
+}

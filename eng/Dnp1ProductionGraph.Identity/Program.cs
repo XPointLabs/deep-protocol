@@ -556,10 +556,12 @@ internal static class GraphPolicy
         {
             ["Deep.Protocol"] =
             [
-                // Current DR-0013 read-only readiness API (Debug, normalized Release).
+                // Reviewed DR-0014 historical catch-up and DR-0015 delegated
+                // renewal API (Debug, normalized Release). Shape-only history
+                // bytes do not mint freshness; protected commits require seals.
                 // Pre-cutover/public-API predecessor snapshots are not accepted.
-                "Deep.Protocol|12967|7FB8FABD3003A687F4820F6958106448F83DC55DC8D87D5926AEA2DC0355699E",
-                "Deep.Protocol|12967|50B9A787BCE7EA76C90E5C505411ACE185ECE2117199505653618EBF57F54615"
+                "Deep.Protocol|12998|ACB26ADD1C1F1FF8F0749C1473E50A7540F7EA705910B801454503A5998CE2E9",
+                "Deep.Protocol|12998|1FA9F694BE197A086FDD399EFA0555464A6C4DE361ABE3D1CD69E7DE13CA0EE4"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

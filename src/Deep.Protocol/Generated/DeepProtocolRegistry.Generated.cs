@@ -68,6 +68,8 @@ public static class DeepProtocolIdentifiers
         public const string DGR1 = "DGR1";
         public const string DGT1 = "DGT1";
         public const string DHL1 = "DHL1";
+        public const string DHQ2 = "DHQ2";
+        public const string DHR2 = "DHR2";
         public const string DIA1 = "DIA1";
         public const string DID1 = "DID1";
         public const string DID2 = "DID2";
@@ -297,6 +299,8 @@ public static class DeepProtocolIdentifiers
         public static System.ReadOnlySpan<byte> DGR1 => "DGR1"u8;
         public static System.ReadOnlySpan<byte> DGT1 => "DGT1"u8;
         public static System.ReadOnlySpan<byte> DHL1 => "DHL1"u8;
+        public static System.ReadOnlySpan<byte> DHQ2 => "DHQ2"u8;
+        public static System.ReadOnlySpan<byte> DHR2 => "DHR2"u8;
         public static System.ReadOnlySpan<byte> DIA1 => "DIA1"u8;
         public static System.ReadOnlySpan<byte> DID1 => "DID1"u8;
         public static System.ReadOnlySpan<byte> DID2 => "DID2"u8;
@@ -542,7 +546,7 @@ internal readonly record struct GeneratedRegistryIdentifier(
 
 internal static class DeepProtocolRegistryGenerated
 {
-    internal const string RegistrySha256 = "d3aed6c1a06b5f76b04640f4f7658902b4cbd160ddf57a7ced3e2df828ca9b63";
+    internal const string RegistrySha256 = "b3e344bcbadc6d01f874d71bead767b75c1e66dba64402d8625ebcb83d523901";
     internal const string Dnp1RegistrySha256 = "e036a0b6acb260e05e18ac536a723b0b8561d2ba1d813429304505b0e7a7da7b";
     internal const string Dnp1ApprovedCommit = "a8456987efe031388ca2eb9006886fb78f31e06c";
 
@@ -592,6 +596,8 @@ internal static class DeepProtocolRegistryGenerated
         new("magic", "DGR1", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "DGT1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "DHL1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
+        new("magic", "DHQ2", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
+        new("magic", "DHR2", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "DIA1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "DID1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "DID2", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),

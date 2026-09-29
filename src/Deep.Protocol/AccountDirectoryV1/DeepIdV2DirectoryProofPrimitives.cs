@@ -115,6 +115,40 @@ public static class DeepIdV2DirectorySparseMap
 
     public static ReadOnlyMemory<byte> EmptyMapRoot => Empty[256].ToArray();
 
+    // Same canonical sparse-map hashes as BuildLevels, updated along one
+    // 256-bit path. Journal replay must not rebuild every prior leaf twice
+    // for every transition and again for every historical head.
+    internal sealed class Accumulator
+    {
+        private readonly Dictionary<string,byte[]>[] levels = Enumerable.Range(0,257)
+            .Select(_ => new Dictionary<string,byte[]>(StringComparer.Ordinal)).ToArray();
+        private byte[] root = Empty[256];
+        internal ReadOnlySpan<byte> Root => root;
+        internal void Update(ReadOnlySpan<byte> leaf, ReadOnlySpan<byte> reference)
+        {
+            Require(leaf,32,nameof(leaf)); ValidateReference(reference.ToArray());
+            var position = leaf.ToArray();
+            Span<byte> payload = stackalloc byte[70];
+            leaf.CopyTo(payload); reference.CopyTo(payload[32..]);
+            var current = AccountDirectoryCrypto.Sha256Domain(PresentDomain,payload);
+            levels[0][Convert.ToHexString(position)] = current;
+            Span<byte> pair = stackalloc byte[64];
+            for (var level=0; level<256; level++) {
+                var bit = 255-level;
+                var right = (position[bit/8] & (0x80 >> (bit%8))) != 0;
+                ToggleBit(position,bit);
+                var sibling = levels[level].GetValueOrDefault(Convert.ToHexString(position),Empty[level]);
+                ToggleBit(position,bit);
+                if (right) { sibling.CopyTo(pair); current.CopyTo(pair[32..]); }
+                else { current.CopyTo(pair); sibling.CopyTo(pair[32..]); }
+                current = AccountDirectoryCrypto.Sha256Domain(NodeDomain,pair);
+                ClearBit(position,bit);
+                levels[level+1][Convert.ToHexString(position)] = current;
+            }
+            root = current;
+        }
+    }
+
     internal static byte[] ComputeFullMapRoot(
         IReadOnlyDictionary<string, byte[]> currentReferencesByHexLeaf)
     {

@@ -67,7 +67,7 @@ public static class OnionNetworkProtectedHistoryCodec
             var pmt = ContactCodec.Decode(ProtocolMagic.PMT2, capsule[(HeaderBytes + LkgBytes + (int)policyLength)..]);
             if (!Fixed(policy.NetworkId.Span, lkg.NetworkId.Span) || !Fixed(pmt.Field(1).Span, lkg.NetworkId.Span) ||
                 !Fixed(pmt.Field(5).Span, lkg.ViewCoreReference.Span) ||
-                BinaryPrimitives.ReadUInt64BigEndian(pmt.Field(2).Span) != policy.UInt64(12))
+                BinaryPrimitives.ReadUInt64BigEndian(pmt.Field(2).Span) < policy.UInt64(12))
                 throw Invalid();
             return (lkg, policy, pmt);
         }

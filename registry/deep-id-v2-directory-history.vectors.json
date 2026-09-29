@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "status": "SHAPE_VECTORS_NOT_AUTHENTICATED_HISTORY",
+  "fixture": {"networkIdHex": "000102030405060708090a0b0c0d0e0f", "sourceGeneration": 0, "sourceCoreHashHex": "0101010101010101010101010101010101010101010101010101010101010101"},
+  "requestHex": "444851320002000000000044000102030405060708090a0b0c0d0e0f00000000000000000101010101010101010101010101010101010101010101010101010101010101",
+  "emptyResponseHex": "444852320002000000000047000102030405060708090a0b0c0d0e0f00000000000000000101010101010101010101010101010101010101010101010101010101010101000000",
+  "negativeCases": ["wrong magic", "unknown version", "nonzero reserved", "mismatched total", "mismatched network", "mismatched source generation", "mismatched source hash", "65 heads", "truncated prefix/head/proof", "65 proof nodes", "empty page with proof", "trailing bytes"],
+  "authenticatedTests": "tests/Deep.Protocol.Tests/AccountDirectoryV1/DeepIdV2DirectoryCatchupVerifierTests.cs"
+}

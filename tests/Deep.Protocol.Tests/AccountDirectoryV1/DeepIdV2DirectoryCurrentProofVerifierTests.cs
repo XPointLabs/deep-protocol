@@ -91,7 +91,7 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
         if (!((OperatingSystem.IsWindows() &&
                 RuntimeInformation.ProcessArchitecture is (Architecture.X64 or Architecture.Arm64)) ||
               (OperatingSystem.IsLinux() &&
-                RuntimeInformation.ProcessArchitecture == Architecture.X64)))
+                RuntimeInformation.ProcessArchitecture is (Architecture.X64 or Architecture.Arm64))))
             return;
 
         var (admission, checkpoint, binding, authorization) = await

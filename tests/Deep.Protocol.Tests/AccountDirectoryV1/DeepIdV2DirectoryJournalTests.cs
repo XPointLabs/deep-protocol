@@ -77,6 +77,16 @@ public sealed class DeepIdV2DirectoryJournalTests
         var head = Head(2, DeepIdV2DirectoryJournal.ComputeAppendRoot(journal),
             finalRoot, minimumReader: 2);
 
+        var firstHead = Head(1,firstTransition.AppendLogLeafHash.Span,firstRoot,minimumReader:2);
+        DeepIdV2DirectoryProofMaterialAuthor.ValidateCompleteJournalHistory([firstHead,head],journal,[first,second]);
+        Assert.Throws<CryptographicException>(() => DeepIdV2DirectoryProofMaterialAuthor.ValidateCompleteJournalHistory(
+            [firstHead,head],journal,[second,first]));
+        var changedPrefix = Head(1,firstTransition.AppendLogLeafHash.Span,Bytes(32,0x77),minimumReader:2);
+        Assert.Throws<CryptographicException>(() => DeepIdV2DirectoryProofMaterialAuthor.ValidateCompleteJournalHistory(
+            [changedPrefix,head],journal,[first,second]));
+        // Inside one admitted batch, original checkpoint set semantics stay unordered.
+        DeepIdV2DirectoryProofMaterialAuthor.ValidateCompleteJournalHistory([head],journal,[second,first]);
+
         var proof = DeepIdV2DirectoryProofMaterialAuthor.Create(head,
             journal, [first, second], first.Checkpoint.DirectoryLeafKey.Span);
         Assert.Equal(AccountDirectoryAdp1ResultKind.CurrentValue,

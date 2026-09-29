@@ -78,6 +78,26 @@ public sealed class DeepIdV2DirectoryProofMaterial
 /// </summary>
 public static class DeepIdV2DirectoryProofMaterialAuthor
 {
+    /// <summary>Validates every historical prefix in one complete replay. This
+    /// does not authenticate raw heads, create a proof, or grant freshness.</summary>
+    public static void ValidateCompleteJournalHistory(
+        IReadOnlyList<AccountDirectoryProtectedLkg> authenticatedHeads,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactTransitions,
+        IReadOnlyList<VerifiedAdc1V2> currentCheckpoints)
+    {
+        ArgumentNullException.ThrowIfNull(currentCheckpoints);
+        var map = DeepIdV2DirectoryJournal.ReplayHistoryAndVerify(authenticatedHeads,exactTransitions,currentCheckpoints);
+        if (currentCheckpoints.Count!=map.Count) throw new CryptographicException("Current V2 capability set is incomplete.");
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var capability in currentCheckpoints) {
+            if (capability is null || !Fixed(capability.Checkpoint.NetworkId.Span,authenticatedHeads[^1].Head.NetworkId.Span))
+                throw new CryptographicException("Current V2 capability is absent or cross-network.");
+            var key = Convert.ToHexString(capability.Checkpoint.DirectoryLeafKey.Span);
+            if (!seen.Add(key) || !map.TryGetValue(key,out var reference) || !Fixed(reference,capability.Checkpoint.ArtifactReference.Span))
+                throw new CryptographicException("Current V2 capability differs from the verified journal.");
+        }
+    }
+
     public static DeepIdV2DirectoryProofMaterial Create(
         AccountDirectoryProtectedLkg currentHead,
         IReadOnlyList<ReadOnlyMemory<byte>> exactTransitions,

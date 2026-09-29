@@ -315,7 +315,7 @@ internal static class XPointOnionCapabilityProducer
             VerifyCommonBindings(authority, freshness, dtt, xvp, xnv, xnh);
             VerifyDtt(authority, freshness, dtt, xnv);
             if (!pmt.FieldSpan(5).SequenceEqual(XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XNV1, xnv.CoreHash.Span)) ||
-                BinaryPrimitives.ReadUInt64BigEndian(pmt.FieldSpan(2)) != xvp.UInt64(12))
+                BinaryPrimitives.ReadUInt64BigEndian(pmt.FieldSpan(2)) < xvp.UInt64(12))
                 Fail("pmt-binding-invalid", "The terminal PMT2 does not bind the DTT1-authenticated terminal view and policy.");
 
             var verifiedNodes = VerifyNodes(authority, freshness, xvp, xnv, pmt, nodes, out var hardUpper);
@@ -451,7 +451,7 @@ internal static class XPointOnionCapabilityProducer
             Fail("network-time-invalid", "The complete trusted interval is outside an exact network artifact interval.");
     }
 
-    private static void VerifyPolicy(VerifiedXPointNetworkAuthority authority, Xvp1Record policy)
+    internal static void VerifyPolicy(VerifiedXPointNetworkAuthority authority, Xvp1Record policy)
     {
         VerifyRootThreshold(policy.Signatures, authority, XPointNetworkCrypto.ComputeSigningInput(policy));
         if (policy.UInt8(5) != OnionLimits.RouteHopCount || (policy.UInt16(7) & 0x000f) != 0x000f)
@@ -550,7 +550,7 @@ internal static class XPointOnionCapabilityProducer
     {
         if (!pmt.FieldSpan(1).SequenceEqual(authority.NetworkId.Span) ||
             !pmt.FieldSpan(5).SequenceEqual(XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XNV1, view.CoreHash.Span)) ||
-            BinaryPrimitives.ReadUInt64BigEndian(pmt.FieldSpan(2)) != policy.UInt64(12) ||
+            BinaryPrimitives.ReadUInt64BigEndian(pmt.FieldSpan(2)) < policy.UInt64(12) ||
             pmt.FieldSpan(7)[0] != policy.MailboxReplicaCount)
             Fail("pmt-binding-invalid", "A PMT2 successor is not the exact projection required by its verified XVP1/XNV1 pair.");
         VerifyContactThreshold(pmt, authority);
@@ -686,7 +686,7 @@ internal static class XPointOnionCapabilityProducer
         if (valid < authority.RootThreshold) Fail("policy-threshold-invalid", "XVP1 does not meet the exact root threshold.");
     }
 
-    private static void VerifyThreshold(
+    internal static void VerifyThreshold(
         IReadOnlyList<XPointSignatureEntry> signatures,
         VerifiedXPointNetworkAuthority authority,
         ReadOnlySpan<byte> message,
@@ -703,7 +703,7 @@ internal static class XPointOnionCapabilityProducer
         VerifyWitnessRows(signatures.Select(static value => (value.WitnessId.ToArray(), value.Signature.ToArray())), authority, message, "dtt-threshold-invalid");
     }
 
-    private static void VerifyContactThreshold(ContactRecord record, VerifiedXPointNetworkAuthority authority)
+    internal static void VerifyContactThreshold(ContactRecord record, VerifiedXPointNetworkAuthority authority)
     {
         var rows = Rows(record.FieldSpan(16), 96).Select(static row => (row[..32].ToArray(), row[32..].ToArray()));
         VerifyWitnessRows(rows, authority, record.SignatureInput.Span, "pmt-threshold-invalid");

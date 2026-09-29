@@ -91,7 +91,7 @@ public sealed class XPointNetworkOperationalSuccessorRequest
         if (!this.currentAdh1CoreReference.AsSpan(0, 4).SequenceEqual(ProtocolMagicBytes.ADH1) ||
             !this.currentAdh1CoreReference.AsSpan(4, 2).SequenceEqual(new byte[] { 0, 1 }))
             throw new ArgumentException("The current directory anchor must be an ADH1 core reference.", nameof(currentAdh1CoreReference));
-        if (RootSigners.Count == 0 || WitnessSigners.Count is < 2 or > 32 ||
+        if (WitnessSigners.Count is < 2 or > 32 ||
             NodeRollovers.Count is < 3 or > 512 ||
             ExactPreviousXnd1.Count != NodeRollovers.Count ||
             ExactOrderedXnv1History.Count is < 1 or > 4_096)
@@ -189,14 +189,24 @@ public static class XPointNetworkOperationalSuccessorAuthor
     public static byte[] ComputeXnh1CoreHash(ReadOnlySpan<byte> exactXnh1) =>
         XPointNetworkCodec.Parse<Xnh1Record>(exactXnh1).CoreHash.ToArray();
 
-    public static async ValueTask<AuthoredXPointNetworkOperationalSuccessor> AuthorAsync(
+    public static ValueTask<AuthoredXPointNetworkOperationalSuccessor> AuthorAsync(
         XPointNetworkOperationalSuccessorRequest request,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) => AuthorCoreAsync(request, false, cancellationToken);
+
+    public static ValueTask<AuthoredXPointNetworkOperationalSuccessor> AuthorDelegatedAsync(
+        XPointNetworkOperationalSuccessorRequest request,
+        CancellationToken cancellationToken = default) => AuthorCoreAsync(request, true, cancellationToken);
+
+    private static async ValueTask<AuthoredXPointNetworkOperationalSuccessor> AuthorCoreAsync(
+        XPointNetworkOperationalSuccessorRequest request, bool delegated,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
         var authority = request.Bootstrap.Authority;
-        var roots = ValidateRoots(authority, request.RootSigners);
+        if (delegated && request.RootSigners.Count != 0)
+            throw new ArgumentException("Delegated renewal must not load offline root custody.");
+        var roots = delegated ? [] : ValidateRoots(authority, request.RootSigners);
         var witnesses = ValidateWitnesses(authority, request.WitnessSigners);
         var priorPolicy = XPointNetworkCodec.Parse<Xvp1Record>(request.ExactPreviousXvp1.Span);
         var priorNodes = request.ExactPreviousXnd1
@@ -207,11 +217,32 @@ public static class XPointNetworkOperationalSuccessorAuthor
         var priorPma = ContactCodec.Decode(ProtocolMagic.PMA2, request.ExactPreviousPma2.Span);
         var priorPmt = ContactCodec.Decode(ProtocolMagic.PMT2, request.ExactProtectedPmt2.Span);
         ValidateProtectedPredecessor(request, authority, priorPolicy, priorNodes, priorView, priorHead, priorPma, priorPmt);
-        var nodeRollovers = ValidateNodeRollovers(priorNodes, request.NodeRollovers);
+        XPointNetworkViewLogAuthor.RequireProtectedPrefix(request.ExactOrderedXnv1History, request.ExactProtectedXnh1.Span);
+        var nodeRollovers = ValidateNodeRollovers(priorNodes, request.NodeRollovers, delegated);
 
         var nextPmtGeneration = checked(BinaryPrimitives.ReadUInt64BigEndian(priorPmt.FieldSpan(2)) + 1);
-        var policy = await AuthorPolicyAsync(request, priorPolicy, nextPmtGeneration, roots, cancellationToken)
-            .ConfigureAwait(false);
+        if (delegated)
+        {
+            if (priorPolicy.NotBefore > request.IssuedAtUnixSeconds ||
+                priorPolicy.ExpiresAt < request.ExpiresAtUnixSeconds ||
+                nextPmtGeneration < priorPolicy.UInt64(12))
+                throw new CryptographicException("Operational renewal is outside its live root policy delegation.");
+            _ = MailboxAuthorityV2Verifier.Verify(authority, request.ExactPreviousPma2.Span,
+                request.IssuedAtUnixSeconds, request.ExpiresAtUnixSeconds - 1);
+            for (var index = 0; index < priorNodes.Length; index++)
+            {
+                var previous = priorNodes[index];
+                var next = nodeRollovers[index];
+                if (!Fixed(next.CurrentOnionX25519PublicKey.Span, previous.FieldSpan(22)) &&
+                    !Fixed(next.CurrentOnionX25519PublicKey.Span, previous.FieldSpan(26)) ||
+                    previous.Origins.Any(origin =>
+                        !Fixed(next.CurrentOriginSpkiSha256.Span, origin.CurrentSpki.Span) &&
+                        !Fixed(next.CurrentOriginSpkiSha256.Span, origin.NextSpki.Span)))
+                    throw new CryptographicException("Delegated key activation was not pre-announced by the node identity.");
+            }
+        }
+        var policy = delegated ? request.ExactPreviousXvp1.ToArray() :
+            await AuthorPolicyAsync(request, priorPolicy, nextPmtGeneration, roots, cancellationToken).ConfigureAwait(false);
         var nodeBytes = new byte[priorNodes.Length][];
         for (var index = 0; index < priorNodes.Length; index++)
             nodeBytes[index] = await AuthorNodeAsync(
@@ -223,12 +254,13 @@ public static class XPointNetworkOperationalSuccessorAuthor
             request.ExactOrderedXnv1History, request.ExactProtectedXnh1.Span, view);
         var head = await AuthorHeadAsync(request, priorHead, view, proof, witnesses, cancellationToken)
             .ConfigureAwait(false);
-        var pma = await AuthorPmaAsync(request, priorPma, roots, cancellationToken)
-            .ConfigureAwait(false);
+        var pma = delegated ? request.ExactPreviousPma2.ToArray() :
+            await AuthorPmaAsync(request, priorPma, roots, cancellationToken).ConfigureAwait(false);
         var pmt = await AuthorPmtAsync(request, priorPmt, pma, view, nodes, witnesses, cancellationToken)
             .ConfigureAwait(false);
 
-        XPointNetworkVerifier.RequireSuccessor(priorPolicy, XPointNetworkCodec.Parse<Xvp1Record>(policy));
+        if (!delegated)
+            XPointNetworkVerifier.RequireSuccessor(priorPolicy, XPointNetworkCodec.Parse<Xvp1Record>(policy));
         XPointNetworkVerifier.RequireSuccessor(priorView, XPointNetworkCodec.Parse<Xnv1Record>(view));
         XPointNetworkVerifier.RequireSuccessor(priorHead, XPointNetworkCodec.Parse<Xnh1Record>(head));
         for (var index = 0; index < priorNodes.Length; index++)
@@ -266,7 +298,7 @@ public static class XPointNetworkOperationalSuccessorAuthor
             !Fixed(pmt.FieldSpan(1), authority.NetworkId.Span) ||
             !Fixed(pmt.FieldSpan(4), XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.PMA2, pma.CoreHash.Span)) ||
             !Fixed(pmt.FieldSpan(5), XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XNV1, view.CoreHash.Span)) ||
-            BinaryPrimitives.ReadUInt64BigEndian(pmt.FieldSpan(2)) != policy.UInt64(12) ||
+            BinaryPrimitives.ReadUInt64BigEndian(pmt.FieldSpan(2)) < policy.UInt64(12) ||
             nodes.Count != view.UInt16(11) ||
             nodes.Select(static node => Convert.ToHexString(node.NodeId.Span)).Distinct(StringComparer.Ordinal).Count() != nodes.Count)
             throw new CryptographicException("The exact protected operational predecessor is incomplete or cross-bound.");
@@ -277,6 +309,23 @@ public static class XPointNetworkOperationalSuccessorAuthor
         var validHistoricalTime = BinaryPrimitives.ReadUInt64BigEndian(pma.FieldSpan(11));
         _ = MailboxAuthorityV2Verifier.Verify(authority, pma.CanonicalBytes.Span,
             validHistoricalTime, validHistoricalTime);
+        XPointOnionCapabilityProducer.VerifyPolicy(authority, policy);
+        foreach (var exact in request.ExactOrderedXnv1History)
+        {
+            var historical = XPointNetworkCodec.Parse<Xnv1Record>(exact.Span);
+            if (!Fixed(historical.FieldSpan(7), authority.AuthorityCoreReference.Span) ||
+                !Fixed(historical.FieldSpan(8), authority.DirectoryWitnessPolicyHash.Span))
+                throw new CryptographicException("Protected view history changed authority.");
+            XPointOnionCapabilityProducer.VerifyThreshold(historical.WitnessSignatures, authority,
+                XPointNetworkCrypto.ComputeSigningInput(historical), "view-threshold-invalid");
+        }
+        XPointOnionCapabilityProducer.VerifyThreshold(head.WitnessSignatures, authority,
+            XPointNetworkCrypto.ComputeSigningInput(head), "head-threshold-invalid");
+        XPointOnionCapabilityProducer.VerifyContactThreshold(pmt, authority);
+        foreach (var node in nodes)
+            if (!PublicKeyAuth.VerifyDetached(node.Signature.Span.ToArray(),
+                    XPointNetworkCrypto.ComputeSigningInput(node), node.IdentityPublicKey.Span.ToArray()))
+                throw new CryptographicException("Protected node descriptor signature is invalid.");
     }
 
     private static async ValueTask<byte[]> AuthorPolicyAsync(
@@ -326,7 +375,10 @@ public static class XPointNetworkOperationalSuccessorAuthor
             U64(request.ExpiresAtUnixSeconds).CopyTo(origins, offset + 140);
         }
         fields[19] = origins;
-        var currentEpoch = checked(previous.UInt64(25) + 1);
+        var currentEpoch = Fixed(rollover.CurrentOnionX25519PublicKey.Span, previous.FieldSpan(22))
+            ? previous.UInt64(21)
+            : Fixed(rollover.CurrentOnionX25519PublicKey.Span, previous.FieldSpan(26))
+                ? previous.UInt64(25) : checked(previous.UInt64(25) + 1);
         fields[20] = U64(currentEpoch);
         fields[21] = rollover.CurrentOnionX25519PublicKey;
         fields[22] = U64(request.NotBeforeUnixSeconds);
@@ -602,7 +654,8 @@ public static class XPointNetworkOperationalSuccessorAuthor
 
     private static XPointNetworkOperationalNodeRollover[] ValidateNodeRollovers(
         IReadOnlyList<Xnd1Record> nodes,
-        IReadOnlyList<XPointNetworkOperationalNodeRollover> rollovers)
+        IReadOnlyList<XPointNetworkOperationalNodeRollover> rollovers,
+        bool delegated)
     {
         var byId = new Dictionary<string, XPointNetworkOperationalNodeRollover>(StringComparer.Ordinal);
         foreach (var rollover in rollovers)
@@ -612,6 +665,12 @@ public static class XPointNetworkOperationalSuccessorAuthor
             throw new CryptographicException("The renewal node identity signer set is incomplete.");
         var trafficKeys = new HashSet<string>(StringComparer.Ordinal);
         var originPins = new HashSet<string>(StringComparer.Ordinal);
+        var previousKeys = nodes.SelectMany(node => new[]
+            { Convert.ToHexString(node.FieldSpan(22)), Convert.ToHexString(node.FieldSpan(26)) })
+            .ToHashSet(StringComparer.Ordinal);
+        var previousPins = nodes.SelectMany(node => node.Origins.SelectMany(origin => new[]
+            { Convert.ToHexString(origin.CurrentSpki.Span), Convert.ToHexString(origin.NextSpki.Span) }))
+            .ToHashSet(StringComparer.Ordinal);
         return nodes.Select(node =>
         {
             if (!byId.TryGetValue(Convert.ToHexString(node.NodeId.Span), out var rollover) ||
@@ -619,16 +678,17 @@ public static class XPointNetworkOperationalSuccessorAuthor
                 throw new CryptographicException("A renewal node signer changes a registered node identity.");
             var currentOnion = rollover.CurrentOnionX25519PublicKey.Span;
             var nextOnion = rollover.NextOnionX25519PublicKey.Span;
-            if (Fixed(currentOnion, node.FieldSpan(22)) || Fixed(currentOnion, node.FieldSpan(26)) ||
-                Fixed(nextOnion, node.FieldSpan(22)) || Fixed(nextOnion, node.FieldSpan(26)) ||
+            if ((!delegated && previousKeys.Contains(Convert.ToHexString(currentOnion))) ||
+                (previousKeys.Contains(Convert.ToHexString(nextOnion)) &&
+                 (!delegated || !Fixed(nextOnion, node.FieldSpan(26)))) ||
                 !trafficKeys.Add(Convert.ToHexString(currentOnion)) ||
                 !trafficKeys.Add(Convert.ToHexString(nextOnion)))
                 throw new CryptographicException("Renewal onion traffic keys must be fresh and unique across nodes.");
             var currentSpki = rollover.CurrentOriginSpkiSha256.ToArray();
             var nextSpki = rollover.NextOriginSpkiSha256.ToArray();
-            if (node.Origins.Any(origin =>
-                    Fixed(currentSpki, origin.CurrentSpki.Span) || Fixed(currentSpki, origin.NextSpki.Span) ||
-                    Fixed(nextSpki, origin.CurrentSpki.Span) || Fixed(nextSpki, origin.NextSpki.Span)) ||
+            if ((!delegated && previousPins.Contains(Convert.ToHexString(currentSpki))) ||
+                (previousPins.Contains(Convert.ToHexString(nextSpki)) &&
+                 (!delegated || node.Origins.Any(origin => !Fixed(nextSpki, origin.NextSpki.Span)))) ||
                 !originPins.Add(Convert.ToHexString(currentSpki)) ||
                 !originPins.Add(Convert.ToHexString(nextSpki)))
                 throw new CryptographicException("Renewal origin SPKI pins must be fresh and unique across nodes.");

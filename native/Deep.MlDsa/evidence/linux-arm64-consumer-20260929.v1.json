@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "status": "candidate-functional-evidence-not-release-approval",
+  "repository": "XPointLabs/deep-protocol",
+  "workflowRun": 35858379369,
+  "buildCommit": "9364d113d8c017c04918b46a2b4d9a01d50b4879",
+  "artifactId": 10748341412,
+  "archiveSha256": "4313285d22d72e406c713c289878d0e0b0d7e2a928584a103b39c4f12e563a70",
+  "rid": "linux-arm64",
+  "bytes": 73544,
+  "sha256": "3997e5c296373bfd6bda1fe45bb5763b1e3bf7158395c213591eef7db2235dfd",
+  "sourceSnapshotIdenticalToCurrentNativeImplementation": true,
+  "ciChecks": ["pinned vendor snapshot", "native ABI", "independent DID2/DAB2 transcript", "NIST ACVP", "ASan", "UBSan"],
+  "consumerChecks": {"nativeLinuxArm64ManagedChecks": 7, "passed": 7, "skipped": 0, "localNativeSourceBuild": false},
+  "productionEligible": false,
+  "releaseProvenanceAndSideChannelApproval": false
+}

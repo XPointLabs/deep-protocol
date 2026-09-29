@@ -35,6 +35,34 @@ internal static class XPointNetworkViewLogAuthor
 
         var head = XPointNetworkCodec.Parse<Xnh1Record>(exactProtectedHead);
         var successor = XPointNetworkCodec.Parse<Xnv1Record>(exactSuccessorView);
+        var (previous, leaves) = RestoreProtectedPrefix(exactAcceptedViews, head);
+        XPointNetworkVerifier.RequireSuccessor(previous, successor);
+        if (!successor.NetworkId.Equals(head.NetworkId) ||
+            !successor.AuthorizingXna.Equals(head.AuthorizingXna) ||
+            !successor.DirectoryWitnessPolicyHash.Equals(head.DirectoryWitnessPolicyHash))
+            throw new CryptographicException("The successor view changes the protected network authority.");
+        var appendedLeaf = ViewLeaf(successor);
+        leaves.Add(appendedLeaf);
+        var root = TreeHash(leaves, 0, leaves.Count);
+        var nodes = new List<byte[]>();
+        AppendConsistencySubproof(leaves, exactAcceptedViews.Count, 0, leaves.Count, true, nodes);
+        var flattened = nodes.SelectMany(static value => value).ToArray();
+        if (nodes.Count > 64 || !nodes.Any(value => value.AsSpan().SequenceEqual(appendedLeaf)))
+            throw new CryptographicException("The XNH1 append proof is too long or omits the new leaf.");
+        XPointMerkleProofs.VerifyConsistency(
+            head.TreeSize, checked(head.TreeSize + 1), head.Root.Span, root, flattened, nodes.Count);
+        return new XPointNetworkViewAppendProof(root, nodes);
+    }
+
+    internal static void RequireProtectedPrefix(IReadOnlyList<ReadOnlyMemory<byte>> exactAcceptedViews,
+        ReadOnlySpan<byte> exactProtectedHead) =>
+        _ = RestoreProtectedPrefix(exactAcceptedViews, XPointNetworkCodec.Parse<Xnh1Record>(exactProtectedHead));
+
+    private static (Xnv1Record Previous, List<byte[]> Leaves) RestoreProtectedPrefix(
+        IReadOnlyList<ReadOnlyMemory<byte>> exactAcceptedViews, Xnh1Record head)
+    {
+        if (exactAcceptedViews.Count is < 1 or > MaximumHistoryViews)
+            throw new ArgumentException("The bounded accepted view history is empty or too long.");
         if (head.TreeSize != checked((ulong)exactAcceptedViews.Count))
             throw new CryptographicException("The protected head does not cover the exact accepted view history.");
 
@@ -62,24 +90,7 @@ internal static class XPointNetworkViewLogAuthor
             !CryptographicOperations.FixedTimeEquals(
                 TreeHash(leaves, 0, leaves.Count), head.Root.Span))
             throw new CryptographicException("The accepted views do not reconstruct the protected XNH1 root.");
-        XPointNetworkVerifier.RequireSuccessor(previous, successor);
-        if (!successor.NetworkId.Equals(head.NetworkId) ||
-            !successor.AuthorizingXna.Equals(head.AuthorizingXna) ||
-            !successor.DirectoryWitnessPolicyHash.Equals(head.DirectoryWitnessPolicyHash))
-            throw new CryptographicException("The successor view changes the protected network authority.");
-
-        var appendedLeaf = ViewLeaf(successor);
-        leaves.Add(appendedLeaf);
-        var root = TreeHash(leaves, 0, leaves.Count);
-        var nodes = new List<byte[]>();
-        AppendConsistencySubproof(leaves, exactAcceptedViews.Count, 0, leaves.Count, true, nodes);
-        var flattened = nodes.SelectMany(static value => value).ToArray();
-        if (nodes.Count > 64 || !nodes.Any(value => value.AsSpan().SequenceEqual(appendedLeaf)))
-            throw new CryptographicException("The XNH1 append proof is too long or omits the new leaf.");
-        XPointMerkleProofs.VerifyConsistency(
-            head.TreeSize, checked(head.TreeSize + 1), head.Root.Span, root,
-            flattened, nodes.Count);
-        return new XPointNetworkViewAppendProof(root, nodes);
+        return (previous, leaves);
     }
 
     private static byte[] ViewLeaf(Xnv1Record view)

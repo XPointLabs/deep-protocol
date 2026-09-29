@@ -640,7 +640,7 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
         if (!((OperatingSystem.IsWindows() &&
                 RuntimeInformation.ProcessArchitecture is (Architecture.X64 or Architecture.Arm64)) ||
               (OperatingSystem.IsLinux() &&
-                RuntimeInformation.ProcessArchitecture == Architecture.X64)))
+                RuntimeInformation.ProcessArchitecture is (Architecture.X64 or Architecture.Arm64))))
             return;
 
         using var phrase = DeepRecoveryV1.VerifyCanonicalUtf8(Encoding.ASCII.GetBytes(Mnemonic));
@@ -956,7 +956,7 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
         if (!((OperatingSystem.IsWindows() &&
                 RuntimeInformation.ProcessArchitecture is (Architecture.X64 or Architecture.Arm64)) ||
               (OperatingSystem.IsLinux() &&
-                RuntimeInformation.ProcessArchitecture == Architecture.X64)))
+                RuntimeInformation.ProcessArchitecture is (Architecture.X64 or Architecture.Arm64))))
             return;
         using var recovery = Recovery(Network);
         var account = Dnp1IdentityAuthoringV1.AuthorGenesisAccount(

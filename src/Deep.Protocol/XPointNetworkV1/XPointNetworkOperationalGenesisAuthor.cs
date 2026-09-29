@@ -221,7 +221,8 @@ public sealed class XPointNetworkOperationalGenesisRequest
         ulong snapshotCurrentMonotonicSeconds,
         ulong observedUnixTime,
         uint uncertaintySeconds,
-        ushort minimumReader = 1)
+        ushort minimumReader = 1,
+        ulong rootPolicyExpiresAtUnixSeconds = 0)
     {
         this.ceremonyId = Required(ceremonyId, 32, nameof(ceremonyId));
         Bootstrap = bootstrap ?? throw new ArgumentNullException(nameof(bootstrap));
@@ -245,6 +246,11 @@ public sealed class XPointNetworkOperationalGenesisRequest
         IssuedAtUnixSeconds = issuedAtUnixSeconds;
         NotBeforeUnixSeconds = notBeforeUnixSeconds;
         ExpiresAtUnixSeconds = expiresAtUnixSeconds;
+        RootPolicyExpiresAtUnixSeconds = rootPolicyExpiresAtUnixSeconds == 0
+            ? expiresAtUnixSeconds : rootPolicyExpiresAtUnixSeconds;
+        if (RootPolicyExpiresAtUnixSeconds < expiresAtUnixSeconds ||
+            RootPolicyExpiresAtUnixSeconds > Bootstrap.Authority.ExpiresAt)
+            throw new ArgumentException("Root policy delegation must cover operations inside the verified authority interval.");
         SnapshotNonce = Required(snapshotNonce, 32, nameof(snapshotNonce));
         SnapshotBootId = Required(snapshotBootId, 16, nameof(snapshotBootId));
         SnapshotNonceCreatedAtMonotonicSeconds = snapshotNonceCreatedAtMonotonicSeconds;
@@ -285,6 +291,7 @@ public sealed class XPointNetworkOperationalGenesisRequest
     public ulong IssuedAtUnixSeconds { get; }
     public ulong NotBeforeUnixSeconds { get; }
     public ulong ExpiresAtUnixSeconds { get; }
+    public ulong RootPolicyExpiresAtUnixSeconds { get; }
     public ReadOnlyMemory<byte> SnapshotNonce { get; }
     public ReadOnlyMemory<byte> SnapshotBootId { get; }
     public ulong SnapshotNonceCreatedAtMonotonicSeconds { get; }
@@ -478,7 +485,7 @@ public static class XPointNetworkOperationalGenesisAuthor
             request.MailboxRetrieveIssuerPublicKey,
             U64(1), U32(3_600), U16(1),
             U64(request.IssuedAtUnixSeconds), U64(request.NotBeforeUnixSeconds),
-            U64(request.ExpiresAtUnixSeconds), authority.AuthorityCoreReference,
+            U64(request.RootPolicyExpiresAtUnixSeconds), authority.AuthorityCoreReference,
             authority.DirectoryWitnessPolicyHash,
             new byte[] { checked((byte)request.RootSigners.Count) },
             SignatureRows(request.RootSigners.Select(static signer =>
@@ -539,7 +546,7 @@ public static class XPointNetworkOperationalGenesisAuthor
             U32(2_592_000), U16(600), U16(1), U64(0),
             XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XCC1, request.Xcc1CoreCommitment.Span),
             U16(1), U64(request.IssuedAtUnixSeconds), U64(request.NotBeforeUnixSeconds),
-            U64(request.ExpiresAtUnixSeconds), authority.AuthorityCoreReference,
+            U64(request.RootPolicyExpiresAtUnixSeconds), authority.AuthorityCoreReference,
             new byte[] { checked((byte)request.RootSigners.Count) },
             SignatureRows(request.RootSigners.Select(static signer =>
                 (signer.RootKeyId.ToArray(), Placeholder64())).ToArray()),

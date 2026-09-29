@@ -17,7 +17,7 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
     [Fact]
     public async Task Did2Admission_AdvancesThresholdHeadAndRejectsChangedPrivateJournal()
     {
-        if (!OperatingSystem.IsWindows() ||
+        if (!(OperatingSystem.IsWindows() || OperatingSystem.IsLinux()) ||
             RuntimeInformation.ProcessArchitecture is not (Architecture.X64 or Architecture.Arm64))
             return;
         var network = ContactNetworkAuthorityVerifierTests.Fixture.Create();
@@ -156,7 +156,7 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
     [Fact]
     public async Task Did2Proof_EarlierLeafInSameBatchUsesFinalMapWithoutRewritingTransition()
     {
-        if (!OperatingSystem.IsWindows() ||
+        if (!(OperatingSystem.IsWindows() || OperatingSystem.IsLinux()) ||
             RuntimeInformation.ProcessArchitecture is not (Architecture.X64 or Architecture.Arm64))
             return;
         var network = ContactNetworkAuthorityVerifierTests.Fixture.Create();

@@ -8,6 +8,26 @@ namespace Deep.Protocol.Tests.AccountDirectoryV1;
 public sealed class DeepIdV2DirectoryProofPrimitivesTests
 {
     [Fact]
+    public void IncrementalSparseMapMatchesIndependentFullRebuildAfterEveryInsertionAndReplacement()
+    {
+        var accumulator = new DeepIdV2DirectorySparseMap.Accumulator();
+        var map = new Dictionary<string,byte[]>(StringComparer.Ordinal);
+        Assert.Equal(DeepIdV2DirectorySparseMap.EmptyMapRoot.ToArray(),accumulator.Root.ToArray());
+        for (var index=0; index<128; index++) {
+            var key = index<64 ? SHA256.HashData(BitConverter.GetBytes(index)) : new byte[32];
+            if (index>=64) key[31]=checked((byte)(index-63)); // Long shared prefixes.
+            var reference = AdcReference(2,SHA256.HashData(BitConverter.GetBytes(index+1000)));
+            map[Convert.ToHexString(key)] = reference; accumulator.Update(key,reference);
+            Assert.Equal(DeepIdV2DirectorySparseMap.ComputeFullMapRoot(map),accumulator.Root.ToArray());
+            if (index%8==0) {
+                reference = AdcReference(2,SHA256.HashData(BitConverter.GetBytes(index+2000)));
+                map[Convert.ToHexString(key)] = reference; accumulator.Update(key,reference);
+                Assert.Equal(DeepIdV2DirectorySparseMap.ComputeFullMapRoot(map),accumulator.Root.ToArray());
+            }
+        }
+    }
+
+    [Fact]
     public void TransitionV2_RoundTripsAndCommitsExactV2Bytes()
     {
         var leaf = Bytes(32, 0x10);

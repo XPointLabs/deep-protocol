@@ -30,6 +30,10 @@ internal static class DeepMlDsa65CandidateAssets
             RuntimeInformation.ProcessArchitecture == Architecture.Arm64)
             return new("runtimes/android-arm64/native/libdeep_mldsa.so", 79112,
                 "6e46e4df970f5376416af3c50fb39e580487a616d2541aa26d1d90eddf918cc9");
+        if (OperatingSystem.IsLinux() &&
+            RuntimeInformation.ProcessArchitecture == Architecture.Arm64)
+            return new("runtimes/linux-arm64/native/libdeep_mldsa.so", 73544,
+                "3997e5c296373bfd6bda1fe45bb5763b1e3bf7158395c213591eef7db2235dfd");
         throw new PlatformNotSupportedException(
             "No checked Deep ML-DSA candidate asset exists for this process RID.");
     }

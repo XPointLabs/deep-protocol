@@ -97,7 +97,7 @@ public sealed class DeepPqRootRecoveryV2Tests
         if (!((OperatingSystem.IsWindows() &&
                 RuntimeInformation.ProcessArchitecture is (Architecture.X64 or Architecture.Arm64)) ||
               (OperatingSystem.IsLinux() &&
-                RuntimeInformation.ProcessArchitecture == Architecture.X64)))
+                RuntimeInformation.ProcessArchitecture is (Architecture.X64 or Architecture.Arm64))))
             return;
         using var original = DeepRecoveryV1.VerifyCanonicalUtf8(
             Encoding.ASCII.GetBytes(ZeroEntropyPhrase));
