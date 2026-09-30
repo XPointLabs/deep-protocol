@@ -46,22 +46,61 @@ public sealed class Dph2InitialClaimPreview
         ArgumentNullException.ThrowIfNull(trustedTimeAuthority);
         var reading = await trustedTimeAuthority.ReadCurrentAsync(cancellationToken)
             .ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        return RequireCurrentInitiator(_header.Record, _header.InitiatorDirectoryHeadHash,
+            initiatorFreshness, reading.BootId.Span, reading.SampleSeconds);
+    }
+
+    // This DID2-only check can be shared with the V2 promotion cutover. It
+    // grants no session and takes no V1 recipient/request/result or callback.
+    internal static VerifiedAdc1V2 RequireCurrentInitiator(Dph2Record record,
+        ReadOnlySpan<byte> initiatorDirectoryHeadHash,
+        VerifiedDeepIdV2DirectoryFreshness initiatorFreshness,
+        ReadOnlySpan<byte> currentBootId, ulong currentMonotonicSample)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        ArgumentNullException.ThrowIfNull(initiatorFreshness);
         var current = initiatorFreshness.CurrentCheckpoint;
         if (initiatorFreshness.ResultKind !=
                 AccountDirectoryAdp1ResultKind.CurrentValue ||
             current is null ||
             !initiatorFreshness.IsCurrentAtMonotonic(
-                reading.BootId.Span, reading.SampleSeconds) ||
+                currentBootId, currentMonotonicSample) ||
             !Fixed(initiatorFreshness.NetworkId.Span,
-                _header.Record.NetworkId.Span) ||
+                record.NetworkId.Span) ||
             !Fixed(current.Directory.Record.DeepAccountId.Span,
-                _header.Record.InitiatorAccountId.Span) ||
+                record.InitiatorAccountId.Span) ||
             !Fixed(current.Directory.Record.RecordHash.Span,
-                _header.InitiatorDirectoryHeadHash) ||
+                initiatorDirectoryHeadHash) ||
             !Fixed(current.Binding.DeepId.CanonicalBytes.Span,
-                _header.Record.InitiatorDid2.Span))
+                record.InitiatorDid2.Span))
             throw new CryptographicException(
                 "The DPH2 initiator directory is not the current verified account-directory value.");
+        ulong lower, upper;
+        try
+        {
+            var elapsed = checked(currentMonotonicSample - initiatorFreshness.MonotonicSample);
+            lower = checked(initiatorFreshness.TrustedLowerUnixSeconds + elapsed);
+            upper = checked(initiatorFreshness.TrustedUpperUnixSeconds + elapsed);
+        }
+        catch (OverflowException exception)
+        {
+            throw new CryptographicException("The DPH2 initiator time interval overflowed.", exception);
+        }
+        var entry = current.Directory.Record.ActiveDevices.SingleOrDefault(device =>
+            Fixed(device.DeviceId.Span, record.InitiatorDeviceId.Span));
+        var device = current.Binding.Identity.ActiveDevices.SingleOrDefault(candidate =>
+            Fixed(candidate.Certificate.DeviceId.Span, record.InitiatorDeviceId.Span));
+        if (entry is null || device is null || lower > upper ||
+            device.Certificate.DeviceGeneration != record.InitiatorDeviceGeneration ||
+            device.Certificate.IssuedAtUnixSeconds > lower ||
+            device.Certificate.ExpiresAtUnixSeconds <= upper ||
+            !Fixed(entry.Dpd1Reference.CanonicalBytes.Span, record.InitiatorDpd1Ref.Span) ||
+            !Fixed(entry.Dpd1Reference.CanonicalHash.Span, device.Certificate.CanonicalHash.Span) ||
+            !Fixed(device.Certificate.DeviceX25519PublicKey.Span,
+                record.InitiatorDeviceAgreementPublicKey.Span))
+            throw new CryptographicException(
+                "The DPH2 initiator is not the exact current DID2 device for the complete time interval.");
         return current;
     }
 

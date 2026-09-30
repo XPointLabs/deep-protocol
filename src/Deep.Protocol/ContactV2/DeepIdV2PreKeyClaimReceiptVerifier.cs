@@ -51,8 +51,39 @@ public sealed class VerifiedXpc1V2PreKeyClaimReceipt
     public IReadOnlyList<ReadOnlyMemory<byte>> ReplicaNodeIds =>
         Array.AsReadOnly(replicas.Select(id => (ReadOnlyMemory<byte>)id.ToArray()).ToArray());
 
-    internal (byte[] Xpk1, byte[] Xpc1Wire) CopyEncryptedInitialClaimTranscript() =>
-        (request.CanonicalBytes.ToArray(), result.WireBytes.ToArray());
+    // The exact transcript may enter a DPH2 payload only after its public
+    // claim closure matches. This is a read-only correlation check, not
+    // promotion of an initiator proof, handshake or durable session.
+    internal (byte[] Xpk1, byte[] Xpc1Wire) CopyEncryptedInitialClaimTranscript(
+        Dph2Record dph2)
+    {
+        RequireMatchesDph2Header(dph2);
+        return (request.CanonicalBytes.ToArray(), result.WireBytes.ToArray());
+    }
+
+    internal void RequireMatchesDph2Header(Dph2Record dph2)
+    {
+        ArgumentNullException.ThrowIfNull(dph2);
+        // Validate against the retained exact V2 offering, never a V1
+        // re-encoding of its projected Dpk2Record.
+        Dph2Codec.ValidateSelection(dph2, Offering);
+        var commitment = MessagingWireCryptographicInputs.ComputeSenderEphemeralCommitment(dph2);
+        try
+        {
+            if (!Fixed(request.Field(1).Span, dph2.NetworkId.Span) ||
+                !Fixed(request.Field(2).Span, dph2.ClaimOperationId.Span) ||
+                !Fixed(request.Field(22).Span, dph2.ClaimOperationId.Span) ||
+                !Fixed(request.Field(19).Span, dph2.ResponderDeviceId.Span) ||
+                !Fixed(request.Field(21).Span, commitment) ||
+                !Fixed(result.Field(18).Span, dph2.ClaimReceiptHash.Span) ||
+                !Fixed(result.Field(17).Span,
+                    dph2.SelectedPrekey.OneTimeX25519PrekeyIdOrZero.Span) ||
+                LastResortUseCounter != dph2.LastResortUseCounter)
+                throw new CryptographicException(
+                    "The DPH2 header differs from the exact verified DID2 claim.");
+        }
+        finally { CryptographicOperations.ZeroMemory(commitment); }
+    }
 
     internal static void RequireExactReplay(VerifiedXpc1V2PreKeyClaimReceipt retained,
         VerifiedXpc1V2PreKeyClaimReceipt candidate)
@@ -68,6 +99,8 @@ public sealed class VerifiedXpc1V2PreKeyClaimReceipt
         BinaryPrimitives.ReadUInt16BigEndian(value);
     private static ulong U64(ReadOnlySpan<byte> value) =>
         BinaryPrimitives.ReadUInt64BigEndian(value);
+    private static bool Fixed(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right) =>
+        left.Length == right.Length && CryptographicOperations.FixedTimeEquals(left, right);
 }
 
 /// <summary>Closed current-recipient XPC1 V2 verification. No V1 closure,

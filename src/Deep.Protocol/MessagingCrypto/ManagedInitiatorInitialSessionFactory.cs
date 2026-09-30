@@ -404,11 +404,10 @@ public sealed class ManagedInitiatorInitialSessionFactory
     private static byte[] Dpd1Reference(ReadOnlySpan<byte> hash)
     {
         MessagingCryptoValidation.NonZeroExact(hash, 32, nameof(hash));
-        var reference = new byte[38];
-        ProtocolMagicBytes.DPD1.CopyTo(reference);
-        BinaryPrimitives.WriteUInt16BigEndian(reference.AsSpan(4), 1);
-        hash.CopyTo(reference.AsSpan(6));
-        return reference;
+        return ApplicationCoreCodec.CreateArtifactReference(
+            (ushort)Deep.Protocol.DeepNative.ArtifactType.Dpd1,
+            checked((uint)Deep.Protocol.DeepNative.RecordDefinitions.Dpd1.MinimumLength),
+            hash).CanonicalBytes.ToArray();
     }
 
     private static void FillProductionEntropy(Span<byte> destination) =>
@@ -1242,11 +1241,10 @@ public sealed class InitiatorDph2ClaimPreparation : IDisposable
 
     private static byte[] Dpd1Reference(ReadOnlySpan<byte> hash)
     {
-        var reference = new byte[38];
-        ProtocolMagicBytes.DPD1.CopyTo(reference);
-        BinaryPrimitives.WriteUInt16BigEndian(reference.AsSpan(4), 1);
-        hash.CopyTo(reference.AsSpan(6));
-        return reference;
+        return ApplicationCoreCodec.CreateArtifactReference(
+            (ushort)Deep.Protocol.DeepNative.ArtifactType.Dpd1,
+            checked((uint)Deep.Protocol.DeepNative.RecordDefinitions.Dpd1.MinimumLength),
+            hash).CanonicalBytes.ToArray();
     }
 
     private static void Zero(byte[]? value)

@@ -131,6 +131,8 @@ public sealed class ManagedInitiatorInitialSessionFactoryTests
             Assert.Equal(4112, dph2.InitialCiphertext.Length);
             Assert.Equal(kind, dph2.SelectedPrekey.Kind);
             Assert.Equal(counter, dph2.LastResortUseCounter);
+            Assert.Equal(fixture.Directory.ActiveDevices[0].Dpd1Reference.CanonicalBytes.ToArray(),
+                dph2.InitiatorDpd1Ref.ToArray());
             Assert.Equal(fixture.OperationId, dph2.ClaimOperationId.ToArray());
             Assert.Equal(preparation.SenderEphemeralCommitment.ToArray(),
                 MessagingWireCryptographicInputs.ComputeSenderEphemeralCommitment(dph2));

@@ -1,10 +1,12 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
+using Deep.Protocol.AccountDirectoryV1;
 using Deep.Protocol.ApplicationCore;
 using Deep.Protocol.ContactV1;
 using Deep.Protocol.ContactV2;
 using Deep.Protocol.DeepExtension.PrivacyRouting;
 using Deep.Protocol.MessagingWire;
+using Deep.Protocol.MessagingCrypto;
 using Deep.Protocol.Tests.XPointNetworkV1;
 using Deep.Protocol.XPointNetworkV1;
 using Sodium;
@@ -41,12 +43,44 @@ public sealed class DeepIdV2PreKeyClaimReceiptVerifierTests
         var keyByNode = Enumerable.Range(0, 2).ToDictionary(
             index => Convert.ToHexString(Bytes(32, checked((byte)(0x31 + index)))),
             index => keys[index]);
+        Dph2Record Header(ParsedDpk2V2 selected, byte[] receiptHash,
+            int ciphertextLength = 4112, HeaderChanges? changes = null)
+        {
+            var checkpoint = contact.Freshness.CurrentCheckpoint!;
+            var directory = checkpoint.Directory.Record;
+            var device = checkpoint.Binding.Identity.ActiveDevices.Single().Certificate;
+            var member = selected.Record;
+            return new Dph2Record(
+                changes?.Network ?? contact.Freshness.NetworkId.ToArray(),
+                changes?.InitiatorAccount ?? directory.DeepAccountId.ToArray(),
+                changes?.InitiatorDevice ?? device.DeviceId.ToArray(),
+                changes?.InitiatorGeneration ?? device.DeviceGeneration,
+                changes?.DpdRef ?? directory.ActiveDevices[0].Dpd1Reference.CanonicalBytes.ToArray(),
+                changes?.Did ?? checkpoint.Binding.DeepId.CanonicalBytes.ToArray(),
+                changes?.RecipientAccount ?? member.ResponderAccountId.ToArray(),
+                changes?.RecipientDevice ?? member.ResponderDeviceId.ToArray(),
+                changes?.RecipientGeneration ?? member.ResponderDeviceGeneration,
+                changes?.DpkHash ?? selected.ExactHash.ToArray(),
+                changes?.Operation ?? Bytes(32, 0x61), receiptHash,
+                changes?.Counter ?? (selected.Kind == Dpk2PrekeyKind.OneTime ? (ushort)0 : (ushort)1),
+                changes?.Agreement ?? device.DeviceX25519PublicKey.ToArray(),
+                changes?.Ephemeral ?? Bytes(32, 0x65),
+                changes?.Selection ?? (selected.Kind == Dpk2PrekeyKind.OneTime
+                    ? Dph2SelectedPrekey.OneTime(member.SignedX25519PrekeyId.Span,
+                        member.OneTimeX25519PrekeyId.Span, member.MlKemPrekeyId.Span)
+                    : Dph2SelectedPrekey.LastResort(member.SignedX25519PrekeyId.Span,
+                        member.MlKemPrekeyId.Span)),
+                Bytes(1088, 0x66), changes?.Ratchet ?? Bytes(32, 0x67), Bytes(24, 0x68),
+                Dph2InitialCiphertext.Import(Bytes(ciphertextLength, 0x69)));
+        }
+        var senderCommitment = MessagingWireCryptographicInputs.ComputeSenderEphemeralCommitment(
+            Header(oneTime[0], Bytes(32, 0x64)));
         ParsedXpk1V2 Request(byte[]? bundleHash = null, ulong expiry = 20) =>
             DeepIdV2PreKeyClaimRequestCodec.Decode(DeepIdV2PreKeyClaimRequestCodec.Encode(
                 contact.Freshness.NetworkId.Span, Bytes(32, 0x61), placement.ViewHash.Span,
                 placement.PlacementHash.Span, 10, expiry, manifest.Field(2).Span,
                 bundleHash ?? closure.Bundle.ObjectHash.ToArray(), manifest.Field(6).Span[6..],
-                manifest.Field(3).Span, Bytes(32, 0x62)));
+                manifest.Field(3).Span, senderCommitment));
         ParsedXpc1V2 Result(ParsedXpk1V2 request, ParsedDpk2V2 selected,
             ParsedXpi1V2 inventory, ushort counter = 0,
             Xpc1V2Status status = Xpc1V2Status.Claimed, ulong serverTime = 15,
@@ -109,11 +143,119 @@ public sealed class DeepIdV2PreKeyClaimReceiptVerifierTests
         Assert.Equal(2, receipt.ReplicaNodeIds.Count);
         var exact = await Verify(request, oneTimeResult);
         VerifiedXpc1V2PreKeyClaimReceipt.RequireExactReplay(receipt, exact);
-        var transcript = receipt.CopyEncryptedInitialClaimTranscript();
+        var header = Header(oneTime[0], receipt.ClaimReceiptHash.ToArray());
+        var transcript = receipt.CopyEncryptedInitialClaimTranscript(header);
         Assert.Equal(request.CanonicalBytes.ToArray(), transcript.Xpk1);
         Assert.Equal(oneTimeResult.WireBytes.ToArray(), transcript.Xpc1Wire);
         transcript.Xpk1[0] ^= 1; transcript.Xpc1Wire[0] ^= 1;
-        Assert.Equal(request.CanonicalBytes.ToArray(), receipt.CopyEncryptedInitialClaimTranscript().Xpk1);
+        Assert.Equal(request.CanonicalBytes.ToArray(), receipt.CopyEncryptedInitialClaimTranscript(header).Xpk1);
+        // Correlation alone grants no initiator proof, AEAD, handshake or ACK.
+        // The selected offering must retain its exact V2 hash, not a V1
+        // re-encoding of the identity-neutral projected record.
+        foreach (var selected in new[] { oneTime[0], lastResort })
+        {
+            var candidate = await Verify(request, Result(request, selected, manifest,
+                selected.Kind == Dpk2PrekeyKind.OneTime ? (ushort)0 : (ushort)1));
+            foreach (var bucket in new[] { 4112, 16400, 32784 })
+            {
+                var bound = Header(selected, candidate.ClaimReceiptHash.ToArray(), bucket);
+                candidate.RequireMatchesDph2Header(Dph2Codec.Decode(Dph2Codec.Encode(bound)));
+                var pair = candidate.CopyEncryptedInitialClaimTranscript(bound);
+                Assert.Equal(request.CanonicalBytes.ToArray(), pair.Xpk1);
+                Assert.Equal(candidate.ClaimReceiptHash.ToArray(), bound.ClaimReceiptHash.ToArray());
+                Assert.Equal(selected.ExactHash.ToArray(), bound.ExactDpk2Hash.ToArray());
+            }
+        }
+        foreach (var change in new[]
+        {
+            new HeaderChanges(Operation: Bytes(32, 0x70)),
+            new HeaderChanges(InitiatorAccount: Bytes(32, 0x70)),
+            new HeaderChanges(InitiatorDevice: Bytes(32, 0x70)),
+            new HeaderChanges(DpdRef: Ref("DPD1", Bytes(32, 0x70))),
+            new HeaderChanges(Did: DeepIdV2Codec.AuthorDid2(Bytes(32, 0x70),
+                Bytes(1952, 0x71), Bytes(16, 0x72)).CanonicalBytes.ToArray()),
+            new HeaderChanges(Agreement: Bytes(32, 0x70)),
+            new HeaderChanges(Ephemeral: Bytes(32, 0x70)),
+            new HeaderChanges(Ratchet: Bytes(32, 0x70))
+        })
+            Assert.Throws<CryptographicException>(() => receipt.CopyEncryptedInitialClaimTranscript(
+                Header(oneTime[0], receipt.ClaimReceiptHash.ToArray(), changes: change)));
+        Assert.Throws<CryptographicException>(() => receipt.RequireMatchesDph2Header(
+            Header(oneTime[0], Bytes(32, 0x70))));
+        foreach (var change in new[]
+        {
+            new HeaderChanges(Network: Bytes(16, 0x70)),
+            new HeaderChanges(RecipientAccount: Bytes(32, 0x70)),
+            new HeaderChanges(RecipientDevice: Bytes(32, 0x70)),
+            new HeaderChanges(RecipientGeneration: header.ResponderDeviceGeneration + 1),
+            new HeaderChanges(DpkHash: Bytes(32, 0x70)),
+            new HeaderChanges(DpkHash: MessagingWireCryptographicInputs.ComputeExactDpk2Hash(oneTime[0].Record)),
+            new HeaderChanges(Selection: Dph2SelectedPrekey.OneTime(Bytes(32, 0x70),
+                header.SelectedPrekey.OneTimeX25519PrekeyIdOrZero.Span,
+                header.SelectedPrekey.MlKemPrekeyId.Span)),
+            new HeaderChanges(Selection: Dph2SelectedPrekey.OneTime(
+                header.SelectedPrekey.SignedX25519PrekeyId.Span, Bytes(32, 0x70),
+                header.SelectedPrekey.MlKemPrekeyId.Span)),
+            new HeaderChanges(Selection: Dph2SelectedPrekey.OneTime(
+                header.SelectedPrekey.SignedX25519PrekeyId.Span,
+                header.SelectedPrekey.OneTimeX25519PrekeyIdOrZero.Span, Bytes(32, 0x70)))
+        })
+            Assert.Throws<MessagingWireFormatException>(() => receipt.CopyEncryptedInitialClaimTranscript(
+                Header(oneTime[0], receipt.ClaimReceiptHash.ToArray(), changes: change)));
+        var lastResortReceipt = await Verify(request, Result(request, lastResort, manifest, 1));
+        // Counter 2 is structurally valid, but cannot replace the signed claim's counter 1.
+        // The fixture's signed last-resort reuse limit is 1, so selection also rejects it.
+        Assert.Throws<MessagingWireFormatException>(() => lastResortReceipt.RequireMatchesDph2Header(
+            Header(lastResort, lastResortReceipt.ClaimReceiptHash.ToArray(), changes: new(Counter: 2))));
+        Assert.Throws<ArgumentNullException>(() => receipt.CopyEncryptedInitialClaimTranscript(null!));
+        var currentCheckpoint = contact.Freshness.CurrentCheckpoint!;
+        var currentHead = currentCheckpoint.Directory.Record.RecordHash.ToArray();
+        VerifiedAdc1V2 Initiator(Dph2Record candidate,
+            VerifiedDeepIdV2DirectoryFreshness? freshness = null, ulong sample = 3,
+            byte[]? operationBoot = null, byte[]? head = null) =>
+            Dph2InitialClaimPreview.RequireCurrentInitiator(candidate, head ?? currentHead,
+                freshness ?? contact.Freshness, operationBoot ?? boot, sample);
+        Assert.Same(currentCheckpoint, Initiator(header));
+        var changedGeneration = Header(oneTime[0], receipt.ClaimReceiptHash.ToArray(),
+            changes: new(InitiatorGeneration: header.InitiatorDeviceGeneration + 1));
+        // Sender commitment intentionally excludes device generation. The
+        // independent current-device check must reject this otherwise matching claim.
+        receipt.RequireMatchesDph2Header(changedGeneration);
+        Assert.Throws<CryptographicException>(() => Initiator(changedGeneration));
+        foreach (var change in new[]
+        {
+            new HeaderChanges(InitiatorDevice: Bytes(32, 0x70)),
+            new HeaderChanges(InitiatorGeneration: header.InitiatorDeviceGeneration + 1),
+            new HeaderChanges(DpdRef: Ref("DPD1", Bytes(32, 0x70))),
+            new HeaderChanges(Agreement: Bytes(32, 0x70))
+        })
+            Assert.Throws<CryptographicException>(() => Initiator(Header(oneTime[0],
+                receipt.ClaimReceiptHash.ToArray(), changes: change)));
+        Assert.Throws<CryptographicException>(() => Initiator(header, head: Bytes(32, 0x70)));
+        Assert.Throws<CryptographicException>(() => Initiator(header, operationBoot: Bytes(16, 0x70)));
+        Assert.Throws<CryptographicException>(() => Initiator(header, sample: 2));
+        Assert.Throws<CryptographicException>(() => Initiator(header,
+            sample: contact.Freshness.FreshnessDeadlineMonotonicSeconds));
+        // Narrow time-bound output seam, retaining the actual V2 checkpoint.
+        // These checks do not claim that a native/physical directory issued
+        // the altered interval; the public proof verifier has separate gates.
+        VerifiedDeepIdV2DirectoryFreshness TimeBounds(ulong lower, ulong upper) => new(
+            contact.Freshness.ExactAdh1.Span, contact.Freshness.ExactDtt1.Span,
+            contact.Freshness.ExactAdp1V2.Span, contact.Freshness.NetworkId.Span,
+            contact.Freshness.QueriedDirectoryLeafKey.Span,
+            new AccountDirectoryMonotonicRequestWindow(boot, 3, 3, 3),
+            contact.Freshness.FreshnessDeadlineMonotonicSeconds, lower, upper,
+            AccountDirectoryAdp1ResultKind.CurrentValue, currentCheckpoint,
+            contact.Freshness.HasRootAuthorizedForwardLineage, null);
+        var certificate = currentCheckpoint.Binding.Identity.ActiveDevices.Single().Certificate;
+        Assert.Throws<CryptographicException>(() => Initiator(header,
+            TimeBounds(certificate.IssuedAtUnixSeconds - 1, contact.TrustedUpperUnixSeconds)));
+        Assert.Throws<CryptographicException>(() => Initiator(header,
+            TimeBounds(contact.TrustedLowerUnixSeconds, certificate.ExpiresAtUnixSeconds)));
+        Assert.Throws<CryptographicException>(() => Initiator(header,
+            TimeBounds(contact.TrustedLowerUnixSeconds, certificate.ExpiresAtUnixSeconds - 1), sample: 4));
+        Assert.Throws<CryptographicException>(() => Initiator(header,
+            TimeBounds(contact.TrustedLowerUnixSeconds, ulong.MaxValue), sample: 4));
         var replayHash = receipt.ExactReplayHash.ToArray(); replayHash[0] ^= 1;
         Assert.NotEqual(replayHash, receipt.ExactReplayHash.ToArray());
         Assert.Equal((ushort)1, (await Verify(request, Result(request, lastResort, manifest, 1)))
@@ -250,6 +392,14 @@ public sealed class DeepIdV2PreKeyClaimReceiptVerifierTests
                 samples?[Math.Min(index, samples.Length - 1)] ?? 3));
         }
     }
+    private sealed record HeaderChanges(byte[]? Network = null,
+        byte[]? InitiatorAccount = null, byte[]? InitiatorDevice = null,
+        ulong? InitiatorGeneration = null,
+        byte[]? DpdRef = null, byte[]? Did = null, byte[]? RecipientAccount = null,
+        byte[]? RecipientDevice = null, ulong? RecipientGeneration = null,
+        byte[]? DpkHash = null, byte[]? Operation = null, ushort? Counter = null,
+        byte[]? Agreement = null, byte[]? Ephemeral = null, byte[]? Ratchet = null,
+        Dph2SelectedPrekey? Selection = null);
     private static byte[] Bytes(int length, byte value) { var bytes = new byte[length]; bytes.AsSpan().Fill(value); return bytes; }
     private static byte[] U16(ushort value) { var bytes = new byte[2]; BinaryPrimitives.WriteUInt16BigEndian(bytes, value); return bytes; }
     private static byte[] U32(uint value) { var bytes = new byte[4]; BinaryPrimitives.WriteUInt32BigEndian(bytes, value); return bytes; }

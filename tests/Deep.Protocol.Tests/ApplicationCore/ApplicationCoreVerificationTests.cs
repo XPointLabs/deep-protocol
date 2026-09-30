@@ -53,7 +53,7 @@ public sealed class ApplicationCoreVerificationTests
     [Fact]
     public async Task Dab2_RequiresExactAccountClosureAndBothRootSignatures()
     {
-        var fixture = VerifiedFixture.Create();
+        var fixture = VerifiedFixture.Create(deviceIssuedAt: 10);
         var pqPublicKey = ApplicationCoreFixture.Bytes(1952, 0x71);
         var pqSignature = ApplicationCoreFixture.Bytes(3309, 0x72);
         var did = DeepIdV2Codec.AuthorDid2(
@@ -1404,7 +1404,8 @@ public sealed class ApplicationCoreVerificationTests
         internal static VerifiedFixture Create(
             KeyPair? existingAddressKey = null,
             byte accountValue = 0x22,
-            byte deviceValue = 0x33)
+            byte deviceValue = 0x33,
+            ulong deviceIssuedAt = 100)
         {
             var network = ApplicationCoreFixture.Bytes(16, 0x11);
             var accountId = ApplicationCoreFixture.Bytes(32, accountValue);
@@ -1448,7 +1449,7 @@ public sealed class ApplicationCoreVerificationTests
             dpdFields[11] = U64(1);
             dpdFields[13] = U64(0);
             dpdFields[14] = ApplicationCoreFixture.Bytes(32, 0x54);
-            dpdFields[15] = U64(100);
+            dpdFields[15] = U64(deviceIssuedAt);
             dpdFields[16] = U64(1_000);
             dpdFields[17] = U64((ulong)DeviceCapabilities.MailboxRoleIssuer);
             dpdFields[18] = U16(ArtifactRegistry.IdentityAuthV1Ed25519);
