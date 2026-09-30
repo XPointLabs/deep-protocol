@@ -75,12 +75,13 @@ public sealed partial class DeepIdV2PreKeyClaimReceiptVerifierTests
         }
         var senderCommitment = MessagingWireCryptographicInputs.ComputeSenderEphemeralCommitment(
             Header(oneTime[0], Bytes(32, 0x64)));
-        ParsedXpk1V2 Request(byte[]? bundleHash = null, ulong expiry = 20) =>
+        ParsedXpk1V2 Request(byte[]? bundleHash = null, ulong expiry = 20,
+            byte[]? operation = null, byte[]? commitment = null) =>
             DeepIdV2PreKeyClaimRequestCodec.Decode(DeepIdV2PreKeyClaimRequestCodec.Encode(
-                contact.Freshness.NetworkId.Span, Bytes(32, 0x61), placement.ViewHash.Span,
+                contact.Freshness.NetworkId.Span, operation ?? Bytes(32, 0x61), placement.ViewHash.Span,
                 placement.PlacementHash.Span, 10, expiry, manifest.Field(2).Span,
                 bundleHash ?? closure.Bundle.ObjectHash.ToArray(), manifest.Field(6).Span[6..],
-                manifest.Field(3).Span, senderCommitment));
+                manifest.Field(3).Span, commitment ?? senderCommitment));
         ParsedXpc1V2 Result(ParsedXpk1V2 request, ParsedDpk2V2 selected,
             ParsedXpi1V2 inventory, ushort counter = 0,
             Xpc1V2Status status = Xpc1V2Status.Claimed, ulong serverTime = 15,
@@ -120,6 +121,16 @@ public sealed partial class DeepIdV2PreKeyClaimReceiptVerifierTests
             DeepIdV2PreKeyClaimReceiptVerifier.VerifyAsync(request, result, operationPlacement ?? placement,
                 contact, closure, new OnionTrustedTimeAuthority(clock ?? new Clock(boot)), cancellation);
         var request = Request();
+        await MessagingCrypto.ManagedInitiatorInitialSessionFactoryTests.AssertV2RecoveryAsync(
+            contact, closure, placement, oneTime[0], lastResort, boot,
+            async (offering, operation, commitment) =>
+            {
+                var selected = offering.Record.MlKemKind == Dpk2PrekeyKind.OneTime
+                    ? oneTime[0] : lastResort;
+                var currentRequest = Request(operation: operation, commitment: commitment);
+                return await Verify(currentRequest, Result(currentRequest, selected, manifest,
+                    selected.Kind == Dpk2PrekeyKind.OneTime ? (ushort)0 : (ushort)1));
+            });
         var oneTimeResult = Result(request, oneTime[0], manifest);
         var receipt = await Verify(request, oneTimeResult);
         // Independent domain/length framing oracle; do not derive this expected

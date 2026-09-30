@@ -560,8 +560,8 @@ internal static class GraphPolicy
                 // handoff (Debug, normalized Release). The receipt alone has no
                 // session binding; current proof/promotion still grants no ACK.
                 // Pre-cutover/public-API predecessor snapshots are not accepted.
-                "Deep.Protocol|13035|5A3DDB708C2041833E1CB9DEC7506349387D40D3DE83C3F1C735056B20D2C77D",
-                "Deep.Protocol|13035|D919C1E97B2E1B3C9F3FC7CF52979861C5B7BD6DAFD949848CFB8750721AF01C"
+                "Deep.Protocol|13035|675400692E2D4158318B7F1147F25AB225B69EC930B818E8B827E9F8A10663E1",
+                "Deep.Protocol|13035|7983DB58DB07A81C55620B49C2F6FE835620483FE4E2AAF641059284D825D38C"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

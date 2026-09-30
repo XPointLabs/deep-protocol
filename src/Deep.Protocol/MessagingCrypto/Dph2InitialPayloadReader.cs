@@ -83,15 +83,7 @@ internal static class Dph2InitialPayloadReader
         if (length is < 1 or > 32764 || length > padded.Length - 4)
             throw new CryptographicException("The authenticated DPH2 payload length is invalid.");
         var body = padded[..length];
-#if DEEP_PROTOCOL_RECOVERY_TEST_SEAM
-        // Pre-cutover recovery fixtures use synthetic claims without an exact
-        // signed XPC1 result. Only the test assembly recognizes that body.
-        var offset = body[0] is 1 or 2
-            ? 0
-            : Dph2InitialClaimTranscriptCodec.DecodePrefix(body, initiation.Record).Consumed;
-#else
         var offset = Dph2InitialClaimTranscriptCodec.DecodePrefix(body, initiation.Record).Consumed;
-#endif
         var count = body[offset];
         if (count is not (1 or 2))
             throw new CryptographicException("The authenticated DPH2 event count is invalid.");

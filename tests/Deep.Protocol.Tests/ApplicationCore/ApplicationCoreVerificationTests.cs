@@ -53,7 +53,8 @@ public sealed class ApplicationCoreVerificationTests
     [Fact]
     public async Task Dab2_RequiresExactAccountClosureAndBothRootSignatures()
     {
-        var fixture = VerifiedFixture.Create(deviceIssuedAt: 10);
+        var fixture = VerifiedFixture.Create(deviceIssuedAt: 10,
+            deviceAgreementPublic: ScalarMult.Base(ApplicationCoreFixture.Bytes(32, 0x51)));
         var pqPublicKey = ApplicationCoreFixture.Bytes(1952, 0x71);
         var pqSignature = ApplicationCoreFixture.Bytes(3309, 0x72);
         var did = DeepIdV2Codec.AuthorDid2(
@@ -564,11 +565,11 @@ public sealed class ApplicationCoreVerificationTests
             ApplicationCoreFixture.Bytes(32, 0x51), 1, 10, 10, 20,
             fixture.Identity.ActiveDevices[0].Certificate.DeviceX25519PublicKey.Span,
             ApplicationCoreFixture.Bytes(32, 0x71),
-            ApplicationCoreFixture.Bytes(32, 0x81), xSignature,
+            ScalarMult.Base(ApplicationCoreFixture.Bytes(32, 0x81)), xSignature,
             kind == Dpk2PrekeyKind.OneTime
                 ? ApplicationCoreFixture.Bytes(32, prekeySeed) : [],
             kind == Dpk2PrekeyKind.OneTime
-                ? ApplicationCoreFixture.Bytes(32, 0xa1) : [],
+                ? ScalarMult.Base(ApplicationCoreFixture.Bytes(32, prekeySeed)) : [],
             ApplicationCoreFixture.Bytes(32, 0xb1),
             ApplicationCoreFixture.Bytes(1184, 0xc1),
             kind, kind == Dpk2PrekeyKind.OneTime ? (ushort)0 : reuseLimit,
@@ -1405,7 +1406,8 @@ public sealed class ApplicationCoreVerificationTests
             KeyPair? existingAddressKey = null,
             byte accountValue = 0x22,
             byte deviceValue = 0x33,
-            ulong deviceIssuedAt = 100)
+            ulong deviceIssuedAt = 100,
+            byte[]? deviceAgreementPublic = null)
         {
             var network = ApplicationCoreFixture.Bytes(16, 0x11);
             var accountId = ApplicationCoreFixture.Bytes(32, accountValue);
@@ -1442,7 +1444,7 @@ public sealed class ApplicationCoreVerificationTests
             dpdFields[3] = deviceId;
             dpdFields[4] = U64(1);
             dpdFields[5] = deviceEd.PublicKey;
-            dpdFields[6] = ApplicationCoreFixture.Bytes(32, 0x51);
+            dpdFields[6] = deviceAgreementPublic ?? ApplicationCoreFixture.Bytes(32, 0x51);
             dpdFields[7] = ApplicationCoreFixture.Bytes(32, 0x52);
             dpdFields[8] = U64(1);
             dpdFields[10] = ApplicationCoreFixture.Bytes(32, 0x53);

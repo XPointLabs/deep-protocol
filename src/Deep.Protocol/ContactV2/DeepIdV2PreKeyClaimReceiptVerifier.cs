@@ -18,6 +18,7 @@ public sealed class VerifiedXpc1V2PreKeyClaimReceipt
     private readonly byte[] exactReplayHash;
     private readonly byte[][] replicas;
     private readonly VerifiedContactServicePlacement placement;
+    private int initiatorConsumed;
 
     internal VerifiedXpc1V2PreKeyClaimReceipt(ParsedXpk1V2 request,
         ParsedXpc1V2 result, VerifiedDpk2Offering offering,
@@ -85,6 +86,15 @@ public sealed class VerifiedXpc1V2PreKeyClaimReceipt
                     "The DPH2 header differs from the exact verified DID2 claim.");
         }
         finally { CryptographicOperations.ZeroMemory(commitment); }
+    }
+
+    // A sender preparation may complete once with this exact receipt. This
+    // internal transfer is not a public session/ACK capability.
+    internal void ConsumeForInitiator(Dph2Record dph2)
+    {
+        RequireMatchesDph2Header(dph2);
+        if (Interlocked.CompareExchange(ref initiatorConsumed, 1, 0) != 0)
+            throw new InvalidOperationException("The DID2 initiator receipt is single-use.");
     }
 
     // Final operation-time recheck after the other endpoint's proof work.

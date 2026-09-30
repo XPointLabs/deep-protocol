@@ -83,71 +83,6 @@ public sealed class VerifiedXpc1PreKeyClaimReceipt
             .ToArray();
     }
 
-#if DEEP_PROTOCOL_RECOVERY_TEST_SEAM
-    internal static VerifiedXpc1PreKeyClaimReceipt CreateInitiatorRecoveryTestReceipt(
-        Dpk2Record dpk2,
-        ReadOnlySpan<byte> operationId,
-        ReadOnlySpan<byte> claimReceiptHash,
-        ReadOnlySpan<byte> senderEphemeralCommitment,
-        ushort lastResortUseCounter)
-    {
-        ArgumentNullException.ThrowIfNull(dpk2);
-        return new VerifiedXpc1PreKeyClaimReceipt(
-            dpk2,
-            operationId,
-            claimReceiptHash,
-            senderEphemeralCommitment,
-            lastResortUseCounter);
-    }
-
-    private VerifiedXpc1PreKeyClaimReceipt(
-        Dpk2Record dpk2,
-        ReadOnlySpan<byte> operationId,
-        ReadOnlySpan<byte> claimReceiptHash,
-        ReadOnlySpan<byte> senderEphemeralCommitment,
-        ushort lastResortUseCounter)
-    {
-        if (operationId.Length != 32 || operationId.IndexOfAnyExcept((byte)0) < 0 ||
-            claimReceiptHash.Length != 32 || claimReceiptHash.IndexOfAnyExcept((byte)0) < 0 ||
-            senderEphemeralCommitment.Length != 32 || senderEphemeralCommitment.IndexOfAnyExcept((byte)0) < 0)
-            throw new ArgumentException("Recovery-test receipt values must be exact nonzero 32-byte values.");
-        if ((dpk2.MlKemKind == Dpk2PrekeyKind.OneTime && lastResortUseCounter != 0) ||
-            (dpk2.MlKemKind == Dpk2PrekeyKind.LastResort &&
-             (lastResortUseCounter is < 1 or > 64 || lastResortUseCounter > dpk2.ReuseLimit)))
-            throw new ArgumentOutOfRangeException(nameof(lastResortUseCounter));
-
-        var exactDpk2Hash = MessagingWireCryptographicInputs.ComputeExactDpk2Hash(dpk2);
-        _offering = new VerifiedDpk2Offering(dpk2, exactDpk2Hash);
-        _networkId = dpk2.NetworkId.ToArray();
-        _operationId = operationId.ToArray();
-        _requestHash = SHA256.HashData(operationId);
-        _claimReceiptHash = claimReceiptHash.ToArray();
-        _exactDpk2Hash = exactDpk2Hash;
-        _xpi1Hash = SHA256.HashData(dpk2.BundleId.Span);
-        _responderAccountId = dpk2.ResponderAccountId.ToArray();
-        _responderDeviceId = dpk2.ResponderDeviceId.ToArray();
-        ResponderDeviceGeneration = dpk2.ResponderDeviceGeneration;
-        _signedX25519PrekeyId = dpk2.SignedX25519PrekeyId.ToArray();
-        _selectedOneTimePrekeyId = dpk2.MlKemKind == Dpk2PrekeyKind.OneTime
-            ? dpk2.OneTimeX25519PrekeyId.ToArray()
-            : new byte[32];
-        _mlKemPrekeyId = dpk2.MlKemPrekeyId.ToArray();
-        _senderEphemeralCommitment = senderEphemeralCommitment.ToArray();
-        _fullExactReplayHash = SHA256.HashData(claimReceiptHash);
-        _exactXpk1 = [];
-        _exactXpc1Wire = [];
-        PrekeyKind = dpk2.MlKemKind;
-        ServiceGeneration = dpk2.PrekeyServiceGeneration;
-        PrekeyExpiresAtUnixSeconds = dpk2.ExpiresAt;
-        LastResortUseCounter = lastResortUseCounter;
-        ClaimCommitGeneration = 1;
-        InventoryEpoch = dpk2.InventoryEpoch;
-        InventoryIndex = 0;
-        ServerTimeUnixSeconds = dpk2.NotBefore;
-        Status = Xpc1Status.Claimed;
-        _replicaNodeIds = [];
-    }
-#endif
 
     public ReadOnlyMemory<byte> NetworkId => _networkId.ToArray();
     /// <summary>
@@ -191,9 +126,6 @@ public sealed class VerifiedXpc1PreKeyClaimReceipt
         return (_exactXpk1.ToArray(), _exactXpc1Wire.ToArray());
     }
 
-#if DEEP_PROTOCOL_RECOVERY_TEST_SEAM
-    internal bool HasExactClaimTranscriptForTests => _exactXpk1.Length != 0 && _exactXpc1Wire.Length != 0;
-#endif
 
     /// <summary>
     /// Binds this witnessed claim to the exact verified responder-side DPH2 and

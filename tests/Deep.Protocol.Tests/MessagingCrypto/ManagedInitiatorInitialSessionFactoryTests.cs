@@ -3,7 +3,9 @@ using System.Reflection;
 using System.Security.Cryptography;
 using Deep.Protocol.AccountDirectoryV1;
 using Deep.Protocol.ApplicationCore;
-using Deep.Protocol.ContactV1;
+using Deep.Protocol.ContactV2;
+using Deep.Protocol.DeepExtension.PrivacyRouting;
+using Deep.Protocol.XPointNetworkV1;
 using Deep.Protocol.Identity;
 using Deep.Protocol.MessagingCrypto;
 using Deep.Protocol.MessagingWire;
@@ -14,23 +16,58 @@ namespace Deep.Protocol.Tests.MessagingCrypto;
 
 public sealed class ManagedInitiatorInitialSessionFactoryTests
 {
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void ResponderRecoversExactAuthenticatedInitialEvents(bool includeFirstApplication)
+    private Func<Dpk2PrekeyKind, Fixture>? createFixture;
+
+    // Called by the signed current V2 identity/claim fixture. Synthetic KEM
+    // and ratchet providers below test mechanisms only, never physical/PQ gates.
+    internal static async Task AssertV2RecoveryAsync(
+        DeepIdV2CurrentContactAuthorization contact, ParsedDcr1V2 closure,
+        VerifiedContactServicePlacement placement, ParsedDpk2V2 oneTime,
+        ParsedDpk2V2 lastResort, byte[] boot,
+        Func<VerifiedDpk2Offering, byte[], byte[], ValueTask<VerifiedXpc1V2PreKeyClaimReceipt>> claim)
     {
-        using var fixture = new Fixture();
+        var tests = new ManagedInitiatorInitialSessionFactoryTests
+        {
+            createFixture = kind => new Fixture(contact, closure, placement,
+                kind == Dpk2PrekeyKind.OneTime ? oneTime : lastResort, boot, claim)
+        };
+        foreach (var kind in new[] { Dpk2PrekeyKind.OneTime, Dpk2PrekeyKind.LastResort })
+        {
+            await tests.PreClaimPreviewDerivesOnlyTheMatchingInitialAeadKey(kind);
+            await tests.ExactDph2AndInitialTrs1AreProducedAsOneSingleUseCommit(kind,
+                kind == Dpk2PrekeyKind.OneTime ? (ushort)0 : (ushort)1);
+        }
+        await tests.ResponderRecoversExactAuthenticatedInitialEvents(false);
+        await tests.ResponderRecoversExactAuthenticatedInitialEvents(true);
+        await tests.ResponderRejectsTamperedInitialCiphertextBeforeTrs1Escapes();
+        await tests.ExactInitialPayloadSelectsTheCanonicalPaddingBucket(5_000, 16_400, Dph2Codec.MediumTotalBytes);
+        await tests.ExactInitialPayloadSelectsTheCanonicalPaddingBucket(16_000, 32_784, Dph2Codec.LargeTotalBytes);
+        await tests.ChangedXpc1SenderCommitmentRejectsAndConsumesPreparation();
+        await tests.ClaimForAnotherVerifiedDpk2RejectsBeforeDph2Escapes();
+        await tests.SessionInitFromAnotherLocalDirectoryRejectsAndConsumesPreparation();
+        await tests.CrossConversationFirstEventRejects();
+        tests.FreshPreparationsNeverReuseTheSenderCommitment();
+        await tests.OwnedRatchetSecretAndAtomicPayloadAreUnavailableAfterDispose();
+        await tests.CurrentCompletionRejectsExpiryCancellationAndConcurrentDispose();
+    }
+
+    private Fixture CreateFixture(Dpk2PrekeyKind kind = Dpk2PrekeyKind.OneTime) =>
+        createFixture!(kind);
+
+    private async Task ResponderRecoversExactAuthenticatedInitialEvents(bool includeFirstApplication)
+    {
+        using var fixture = CreateFixture();
         using var preparation = fixture.Prepare();
-        using var commit = preparation.Complete(
-            fixture.Claim(preparation),
-            fixture.SessionInit.CanonicalBytes.Span,
-            includeFirstApplication ? fixture.FirstMessage.CanonicalBytes.Span : ReadOnlySpan<byte>.Empty);
+        using var commit = await fixture.CompleteAsync(preparation,
+            await fixture.Claim(preparation),
+            fixture.SessionInit.CanonicalBytes,
+            includeFirstApplication ? fixture.FirstMessage.CanonicalBytes : ReadOnlyMemory<byte>.Empty);
         using var outbound = commit.ConsumeForAtomicStore();
         var exactDph2 = outbound.ExactDph2.ToArray();
         try
         {
             var dph2 = Dph2Codec.Decode(exactDph2);
-            using var claim = fixture.ResponderClaim(dph2);
+            using var claim = await fixture.ResponderClaim(dph2);
             using var responder = fixture.ResponderFactory();
             using var material = fixture.RecoverInitial(responder, claim);
             Assert.Equal(fixture.SessionInit.CanonicalBytes.ToArray(), material.SessionInitDmc2.ToArray());
@@ -49,36 +86,35 @@ public sealed class ManagedInitiatorInitialSessionFactoryTests
         finally { CryptographicOperations.ZeroMemory(exactDph2); }
     }
 
-    [Fact]
-    public void ResponderRejectsTamperedInitialCiphertextBeforeTrs1Escapes()
+    private async Task ResponderRejectsTamperedInitialCiphertextBeforeTrs1Escapes()
     {
-        using var fixture = new Fixture();
+        using var fixture = CreateFixture();
         using var preparation = fixture.Prepare();
-        using var commit = preparation.Complete(
-            fixture.Claim(preparation), fixture.SessionInit.CanonicalBytes.Span);
+        using var commit = await fixture.CompleteAsync(preparation,
+            await fixture.Claim(preparation), fixture.SessionInit.CanonicalBytes);
         using var outbound = commit.ConsumeForAtomicStore();
         var exactDph2 = outbound.ExactDph2.ToArray();
         try
         {
             exactDph2[^1] ^= 0x01;
             var dph2 = Dph2Codec.Decode(exactDph2);
-            using var claim = fixture.ResponderClaim(dph2);
-            using var responder = fixture.ResponderFactory();
-            Assert.ThrowsAny<CryptographicException>(() => fixture.RecoverInitial(responder, claim));
+            await Assert.ThrowsAnyAsync<CryptographicException>(async () =>
+            {
+                using var claim = await fixture.ResponderClaim(dph2);
+                using var responder = fixture.ResponderFactory();
+                using var material = fixture.RecoverInitial(responder, claim);
+            });
         }
         finally { CryptographicOperations.ZeroMemory(exactDph2); }
     }
 
-    [Theory]
-    [InlineData(Dpk2PrekeyKind.OneTime)]
-    [InlineData(Dpk2PrekeyKind.LastResort)]
-    public void PreClaimPreviewDerivesOnlyTheMatchingInitialAeadKey(
+    private async Task PreClaimPreviewDerivesOnlyTheMatchingInitialAeadKey(
         Dpk2PrekeyKind kind)
     {
-        using var fixture = new Fixture(kind);
+        using var fixture = CreateFixture(kind);
         using var preparation = fixture.Prepare();
-        using var commit = preparation.Complete(
-            fixture.Claim(preparation), fixture.SessionInit.CanonicalBytes.Span);
+        using var commit = await fixture.CompleteAsync(preparation,
+            await fixture.Claim(preparation), fixture.SessionInit.CanonicalBytes);
         using var outbound = commit.ConsumeForAtomicStore();
         var exactDph2 = outbound.ExactDph2.ToArray();
         byte[]? padded = null;
@@ -86,10 +122,11 @@ public sealed class ManagedInitiatorInitialSessionFactoryTests
         {
             var dph2 = Dph2Codec.Decode(exactDph2);
             padded = fixture.PreviewPaddedInitialPayload(dph2);
-            Assert.Equal(4096, padded.Length);
-            // This synthetic recovery fixture has an event-only body only in
-            // the test-seam assembly; production authors a claim prefix.
-            Assert.Equal((byte)1, padded[0]);
+            Assert.Equal(16384, padded.Length);
+            var bodyLength = checked((int)BinaryPrimitives.ReadUInt32BigEndian(padded.AsSpan()[^4..]));
+            var prefix = Dph2InitialClaimTranscriptCodec.DecodePrefix(padded.AsSpan(0, bodyLength), dph2);
+            Assert.Equal((byte)1, padded[prefix.Consumed]);
+            Assert.Equal(commit.ClaimOperationId.ToArray(), prefix.Request.Field(2).ToArray());
             exactDph2[^1] ^= 1;
             Assert.ThrowsAny<CryptographicException>(() =>
                 fixture.PreviewPaddedInitialPayload(Dph2Codec.Decode(exactDph2)));
@@ -101,20 +138,17 @@ public sealed class ManagedInitiatorInitialSessionFactoryTests
         }
     }
 
-    [Theory]
-    [InlineData(Dpk2PrekeyKind.OneTime, 0)]
-    [InlineData(Dpk2PrekeyKind.LastResort, 7)]
-    public void ExactDph2AndInitialTrs1AreProducedAsOneSingleUseCommit(
+    private async Task ExactDph2AndInitialTrs1AreProducedAsOneSingleUseCommit(
         Dpk2PrekeyKind kind,
         ushort counter)
     {
-        using var fixture = new Fixture(kind, counter);
+        using var fixture = CreateFixture(kind);
         using var preparation = fixture.Prepare();
-        var claim = fixture.Claim(preparation);
-        using var commit = preparation.Complete(
+        var claim = await fixture.Claim(preparation);
+        using var commit = await fixture.CompleteAsync(preparation,
             claim,
-            fixture.SessionInit.CanonicalBytes.Span,
-            fixture.FirstMessage.CanonicalBytes.Span);
+            fixture.SessionInit.CanonicalBytes,
+            fixture.FirstMessage.CanonicalBytes);
 
         Assert.Equal(fixture.OperationId, commit.ClaimOperationId.ToArray());
         Assert.Equal(32, commit.SessionId.Length);
@@ -127,8 +161,8 @@ public sealed class ManagedInitiatorInitialSessionFactoryTests
         try
         {
             var dph2 = Dph2Codec.Decode(exactDph2);
-            Assert.Equal(Dph2Codec.SmallTotalBytes, exactDph2.Length);
-            Assert.Equal(4112, dph2.InitialCiphertext.Length);
+            Assert.Equal(Dph2Codec.MediumTotalBytes, exactDph2.Length);
+            Assert.Equal(16400, dph2.InitialCiphertext.Length);
             Assert.Equal(kind, dph2.SelectedPrekey.Kind);
             Assert.Equal(counter, dph2.LastResortUseCounter);
             Assert.Equal(fixture.Directory.ActiveDevices[0].Dpd1Reference.CanonicalBytes.ToArray(),
@@ -150,6 +184,7 @@ public sealed class ManagedInitiatorInitialSessionFactoryTests
             Assert.Equal(1UL, state.StorageGeneration);
 
             Assert.Throws<InvalidOperationException>(() => commit.ConsumeForAtomicStore());
+            Assert.Throws<InvalidOperationException>(() => claim.ConsumeForInitiator(dph2));
         }
         finally
         {
@@ -158,22 +193,19 @@ public sealed class ManagedInitiatorInitialSessionFactoryTests
         }
     }
 
-    [Theory]
-    [InlineData(5_000, 16_400, Dph2Codec.MediumTotalBytes)]
-    [InlineData(16_000, 32_784, Dph2Codec.LargeTotalBytes)]
-    public void ExactInitialPayloadSelectsTheCanonicalPaddingBucket(
+    private async Task ExactInitialPayloadSelectsTheCanonicalPaddingBucket(
         int textLength,
         int expectedCiphertextLength,
         int expectedDph2Length)
     {
-        using var fixture = new Fixture();
+        using var fixture = CreateFixture();
         using var preparation = fixture.Prepare();
-        var claim = fixture.Claim(preparation);
+        var claim = await fixture.Claim(preparation);
         var firstMessage = fixture.AuthorFirstMessage(new string('x', textLength));
-        using var commit = preparation.Complete(
+        using var commit = await fixture.CompleteAsync(preparation,
             claim,
-            fixture.SessionInit.CanonicalBytes.Span,
-            firstMessage.CanonicalBytes.Span);
+            fixture.SessionInit.CanonicalBytes,
+            firstMessage.CanonicalBytes);
         using var payload = commit.ConsumeForAtomicStore();
 
         var exactDph2 = payload.ExactDph2.ToArray();
@@ -189,42 +221,39 @@ public sealed class ManagedInitiatorInitialSessionFactoryTests
         }
     }
 
-    [Fact]
-    public void ChangedXpc1SenderCommitmentRejectsAndConsumesPreparation()
+    private async Task ChangedXpc1SenderCommitmentRejectsAndConsumesPreparation()
     {
-        using var fixture = new Fixture();
+        using var fixture = CreateFixture();
         using var preparation = fixture.Prepare();
         var wrong = preparation.SenderEphemeralCommitment.ToArray();
         wrong[0] ^= 0x80;
-        var claim = fixture.Claim(preparation, senderCommitment: wrong);
+        var claim = await fixture.Claim(preparation, senderCommitment: wrong);
 
-        Assert.ThrowsAny<CryptographicException>(() => preparation.Complete(
-            claim, fixture.SessionInit.CanonicalBytes.Span));
-        Assert.Throws<InvalidOperationException>(() => preparation.Complete(
-            claim, fixture.SessionInit.CanonicalBytes.Span));
+        await Assert.ThrowsAnyAsync<CryptographicException>(async () => await fixture.CompleteAsync(preparation,
+            claim, fixture.SessionInit.CanonicalBytes));
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.CompleteAsync(preparation,
+            claim, fixture.SessionInit.CanonicalBytes));
     }
 
-    [Fact]
-    public void ClaimForAnotherVerifiedDpk2RejectsBeforeDph2Escapes()
+    private async Task ClaimForAnotherVerifiedDpk2RejectsBeforeDph2Escapes()
     {
-        using var fixture = new Fixture();
-        using var other = new Fixture(responderDeviceFill: 0x6a);
+        using var fixture = CreateFixture();
+        using var other = CreateFixture(Dpk2PrekeyKind.LastResort);
         using var preparation = fixture.Prepare();
-        var claim = other.ClaimFor(
+        var claim = await other.ClaimFor(
             other.Offering,
             fixture.OperationId,
-            preparation.SenderEphemeralCommitment.Span);
+            preparation.SenderEphemeralCommitment);
 
-        Assert.Throws<CryptographicException>(() => preparation.Complete(
-            claim, fixture.SessionInit.CanonicalBytes.Span));
+        await Assert.ThrowsAsync<CryptographicException>(async () => await fixture.CompleteAsync(preparation,
+            claim, fixture.SessionInit.CanonicalBytes));
     }
 
-    [Fact]
-    public void SessionInitFromAnotherLocalDirectoryRejectsAndConsumesPreparation()
+    private async Task SessionInitFromAnotherLocalDirectoryRejectsAndConsumesPreparation()
     {
-        using var fixture = new Fixture();
+        using var fixture = CreateFixture();
         using var preparation = fixture.Prepare();
-        var claim = fixture.Claim(preparation);
+        var claim = await fixture.Claim(preparation);
         var foreignAccount = Bytes(32, 0xe4);
         var foreignDirectory = ApplicationCoreFixture.Directory(
             fixture.NetworkId, foreignAccount, fixture.DeviceId);
@@ -234,18 +263,17 @@ public sealed class ManagedInitiatorInitialSessionFactoryTests
         var foreign = ApplicationCoreFixture.Message(
             foreignPayload, fixture.NetworkId, foreignAccount, fixture.DeviceId);
 
-        Assert.Throws<CryptographicException>(() => preparation.Complete(
-            claim, foreign.CanonicalBytes.Span));
-        Assert.Throws<InvalidOperationException>(() => preparation.Complete(
-            claim, fixture.SessionInit.CanonicalBytes.Span));
+        await Assert.ThrowsAsync<CryptographicException>(async () => await fixture.CompleteAsync(preparation,
+            claim, foreign.CanonicalBytes));
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await fixture.CompleteAsync(preparation,
+            claim, fixture.SessionInit.CanonicalBytes));
     }
 
-    [Fact]
-    public void CrossConversationFirstEventRejects()
+    private async Task CrossConversationFirstEventRejects()
     {
-        using var fixture = new Fixture();
+        using var fixture = CreateFixture();
         using var preparation = fixture.Prepare();
-        var claim = fixture.Claim(preparation);
+        var claim = await fixture.Claim(preparation);
         var foreign = ApplicationCoreCodec.AuthorDmc2(
             fixture.NetworkId,
             Bytes(32, 0xe6),
@@ -259,16 +287,15 @@ public sealed class ManagedInitiatorInitialSessionFactoryTests
             [],
             ApplicationCoreCodec.CreateMessageCreatePayload("foreign"));
 
-        Assert.Throws<CryptographicException>(() => preparation.Complete(
+        await Assert.ThrowsAsync<CryptographicException>(async () => await fixture.CompleteAsync(preparation,
             claim,
-            fixture.SessionInit.CanonicalBytes.Span,
-            foreign.CanonicalBytes.Span));
+            fixture.SessionInit.CanonicalBytes,
+            foreign.CanonicalBytes));
     }
 
-    [Fact]
-    public void FreshPreparationsNeverReuseTheSenderCommitment()
+    private void FreshPreparationsNeverReuseTheSenderCommitment()
     {
-        using var fixture = new Fixture();
+        using var fixture = CreateFixture();
         using var first = fixture.Prepare();
         using var second = fixture.Prepare();
 
@@ -277,10 +304,9 @@ public sealed class ManagedInitiatorInitialSessionFactoryTests
             second.SenderEphemeralCommitment.ToArray());
     }
 
-    [Fact]
-    public void OwnedRatchetSecretAndAtomicPayloadAreUnavailableAfterDispose()
+    private async Task OwnedRatchetSecretAndAtomicPayloadAreUnavailableAfterDispose()
     {
-        using var fixture = new Fixture();
+        using var fixture = CreateFixture();
         SecretBuffer? captured = null;
         using var hook = MessagingCryptoFaultInjection.InstallDarkForTests(
             new MessagingCryptoFaultProbe
@@ -296,12 +322,95 @@ public sealed class ManagedInitiatorInitialSessionFactoryTests
         Assert.Throws<MessagingCryptoException>(() => captured!.Copy());
 
         using var next = fixture.Prepare();
-        var claim = fixture.Claim(next);
-        using var commit = next.Complete(claim, fixture.SessionInit.CanonicalBytes.Span);
+        var claim = await fixture.Claim(next);
+        using var commit = await fixture.CompleteAsync(next, claim, fixture.SessionInit.CanonicalBytes);
         var payload = commit.ConsumeForAtomicStore();
         payload.Dispose();
         Assert.Throws<ObjectDisposedException>(() => _ = payload.ExactTrs1);
         Assert.Throws<ObjectDisposedException>(() => _ = payload.ExactDph2);
+    }
+
+    private async Task CurrentCompletionRejectsExpiryCancellationAndConcurrentDispose()
+    {
+        using var fixture = CreateFixture();
+        foreach (var samples in new[] { new ulong[] { 7 }, new ulong[] { 3, 7 },
+                     new ulong[] { 2 }, new ulong[] { 3, 2 } })
+        {
+            using var preparation = fixture.Prepare();
+            var receipt = await fixture.Claim(preparation);
+            var clock = new OperationClock(fixture.Boot, samples);
+            await Assert.ThrowsAnyAsync<CryptographicException>(async () =>
+                await preparation.CompleteAsync(receipt, fixture.Contact.Freshness,
+                    new OnionTrustedTimeAuthority(clock), fixture.SessionInit.CanonicalBytes));
+            await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+                await fixture.CompleteAsync(preparation, receipt, fixture.SessionInit.CanonicalBytes));
+        }
+        foreach (var cancelAt in new[] { 0, 1, 2 })
+        {
+            using var cancellation = new CancellationTokenSource();
+            using var preparation = fixture.Prepare();
+            var receipt = await fixture.Claim(preparation);
+            var clock = new OperationClock(fixture.Boot, [3, 3],
+                read => { if (read == cancelAt) cancellation.Cancel(); });
+            if (cancelAt == 0) cancellation.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+                await preparation.CompleteAsync(receipt, fixture.Contact.Freshness,
+                    new OnionTrustedTimeAuthority(clock), fixture.SessionInit.CanonicalBytes,
+                    cancellationToken: cancellation.Token));
+            Assert.Equal(cancelAt, clock.Reads);
+            await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+                await fixture.CompleteAsync(preparation, receipt, fixture.SessionInit.CanonicalBytes));
+        }
+        using (var preparation = fixture.Prepare())
+        {
+            var receipt = await fixture.Claim(preparation);
+            await Assert.ThrowsAnyAsync<CryptographicException>(async () =>
+                await preparation.CompleteAsync(receipt, fixture.Contact.Freshness,
+                    new OnionTrustedTimeAuthority(new OperationClock(Bytes(16, 0xe8), [3])),
+                    fixture.SessionInit.CanonicalBytes));
+        }
+        foreach (var suspendAt in new[] { 1, 2 })
+        {
+            using var preparation = fixture.Prepare();
+            var receipt = await fixture.Claim(preparation);
+            var clock = new SuspendedClock(fixture.Boot, suspendAt);
+            var completing = preparation.CompleteAsync(receipt, fixture.Contact.Freshness,
+                new OnionTrustedTimeAuthority(clock), fixture.SessionInit.CanonicalBytes).AsTask();
+            await clock.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            preparation.Dispose();
+            clock.Release.TrySetResult();
+            await Assert.ThrowsAsync<ObjectDisposedException>(async () => await completing);
+        }
+        // Caller-owned memory can change while a protected-clock read suspends.
+        // The authored event must remain the exact pre-suspension owned copy.
+        using (var preparation = fixture.Prepare())
+        {
+            var receipt = await fixture.Claim(preparation);
+            var session = fixture.SessionInit.CanonicalBytes.ToArray();
+            var clock = new SuspendedClock(fixture.Boot, 1);
+            var completing = preparation.CompleteAsync(receipt, fixture.Contact.Freshness,
+                new OnionTrustedTimeAuthority(clock), session).AsTask();
+            await clock.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            session[0] ^= 1;
+            clock.Release.TrySetResult();
+            using var commit = await completing;
+            using var outbound = commit.ConsumeForAtomicStore();
+            var dph2 = Dph2Codec.Decode(outbound.ExactDph2.Span);
+            using var responderClaim = await fixture.ResponderClaim(dph2);
+            using var responder = fixture.ResponderFactory();
+            using var material = fixture.RecoverInitial(responder, responderClaim);
+            Assert.Equal(fixture.SessionInit.CanonicalBytes.ToArray(), material.SessionInitDmc2.ToArray());
+            CryptographicOperations.ZeroMemory(session);
+        }
+        using (var preparation = fixture.Prepare())
+        {
+            var receipt = await fixture.Claim(preparation);
+            var clock = new OperationClock(fixture.Boot, [3]);
+            await Assert.ThrowsAnyAsync<CryptographicException>(async () =>
+                await preparation.CompleteAsync(receipt, fixture.Contact.Freshness,
+                    new OnionTrustedTimeAuthority(clock), new byte[33083]));
+            Assert.Equal(0, clock.Reads);
+        }
     }
 
     [Fact]
@@ -326,6 +435,15 @@ public sealed class ManagedInitiatorInitialSessionFactoryTests
         Assert.Empty(typeof(InitiatorDph2ClaimPreparation).GetConstructors());
         Assert.Empty(typeof(InitiatorInitialSessionCommitCapability).GetConstructors());
         Assert.Empty(typeof(InitiatorInitialSessionAtomicStorePayload).GetConstructors());
+        var completion = Assert.Single(typeof(InitiatorDph2ClaimPreparation)
+            .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly),
+            method => !method.IsSpecialName && method.Name != nameof(IDisposable.Dispose));
+        Assert.Equal("CompleteAsync", completion.Name);
+        Assert.Equal(typeof(ValueTask<InitiatorInitialSessionCommitCapability>), completion.ReturnType);
+        Assert.Equal(new[] { typeof(VerifiedXpc1V2PreKeyClaimReceipt),
+            typeof(VerifiedDeepIdV2DirectoryFreshness), typeof(OnionTrustedTimeAuthority),
+            typeof(ReadOnlyMemory<byte>), typeof(ReadOnlyMemory<byte>), typeof(CancellationToken) },
+            completion.GetParameters().Select(parameter => parameter.ParameterType));
 
         var publicParameters = typeof(ManagedInitiatorInitialSessionFactory).Assembly
             .GetExportedTypes()
@@ -339,7 +457,8 @@ public sealed class ManagedInitiatorInitialSessionFactoryTests
         Assert.DoesNotContain(publicParameters, static parameter =>
             parameter.ParameterType == typeof(IMlKem768Provider) ||
             parameter.Name!.Contains("private", StringComparison.OrdinalIgnoreCase) ||
-            parameter.Name.Contains("trust", StringComparison.OrdinalIgnoreCase) ||
+            typeof(Delegate).IsAssignableFrom(parameter.ParameterType) ||
+            parameter.ParameterType == typeof(IDph2VerificationCallbacks) ||
             parameter.Name.Contains("provider", StringComparison.OrdinalIgnoreCase));
     }
 
@@ -347,48 +466,57 @@ public sealed class ManagedInitiatorInitialSessionFactoryTests
     {
         private readonly SyntheticMlKemProvider _mlKem = new();
         private readonly DeterministicEntropy _entropy = new();
-        private readonly byte[] _localAgreementPrivate = Sequence(1);
-        private readonly byte[] _responderIdentityPrivate = Sequence(65);
-        private readonly byte[] _responderSignedPrivate = Sequence(97);
-        private readonly byte[] _responderOneTimePrivate = Sequence(129);
+        private readonly byte[] _localAgreementPrivate = Bytes(32, 0x51);
+        private readonly byte[] _responderIdentityPrivate = Bytes(32, 0x51);
+        private readonly byte[] _responderSignedPrivate = Bytes(32, 0x81);
+        private readonly byte[] _responderOneTimePrivate;
+        private readonly ParsedDcr1V2 closure;
+        private readonly VerifiedContactServicePlacement placement;
+        private readonly byte[] boot;
+        private readonly Func<VerifiedDpk2Offering, byte[], byte[],
+            ValueTask<VerifiedXpc1V2PreKeyClaimReceipt>> claim;
 
-        internal Fixture(
-            Dpk2PrekeyKind kind = Dpk2PrekeyKind.OneTime,
-            ushort lastResortCounter = 0,
-            byte responderDeviceFill = 0x22)
+        internal Fixture(DeepIdV2CurrentContactAuthorization contact,
+            ParsedDcr1V2 closure, VerifiedContactServicePlacement placement,
+            ParsedDpk2V2 member, byte[] boot,
+            Func<VerifiedDpk2Offering, byte[], byte[],
+                ValueTask<VerifiedXpc1V2PreKeyClaimReceipt>> claim)
         {
-            Kind = kind;
-            Counter = kind == Dpk2PrekeyKind.OneTime ? (ushort)0 :
-                lastResortCounter == 0 ? (ushort)7 : lastResortCounter;
-            NetworkId = Bytes(16, 0x11);
-            AccountId = Bytes(32, 0x14);
-            DeviceId = Bytes(32, 0x15);
+            Contact = contact;
+            this.closure = closure;
+            this.placement = placement;
+            this.boot = boot;
+            this.claim = claim;
+            Kind = member.Kind;
+            Counter = Kind == Dpk2PrekeyKind.OneTime ? (ushort)0 : (ushort)1;
+            NetworkId = contact.Freshness.NetworkId.ToArray();
+            var checkpoint = contact.Freshness.CurrentCheckpoint!;
+            Directory = checkpoint.Directory.Record;
+            AccountId = Directory.DeepAccountId.ToArray();
+            DeviceId = checkpoint.Binding.Identity.ActiveDevices.Single().Certificate.DeviceId.ToArray();
             OperationId = Bytes(32, 0x42);
-            Directory = ApplicationCoreFixture.Directory(NetworkId, AccountId, DeviceId);
             ExactDpd1Hash = Directory.ActiveDevices[0].Dpd1Reference.CanonicalHash.ToArray();
-            OfferingRecord = BuildOffering(kind, responderDeviceFill);
-            Offering = new VerifiedDpk2Offering(
-                OfferingRecord,
-                MessagingWireCryptographicInputs.ComputeExactDpk2Hash(OfferingRecord));
+            OfferingRecord = member.Record;
+            Offering = DeepIdV2Dpk2PreClaimVerifier.Verify(member.CanonicalBytes.Span,
+                contact.Freshness, boot, 3);
+            _responderOneTimePrivate = Kind == Dpk2PrekeyKind.OneTime
+                ? member.OneTimePrekeyId.ToArray() : Bytes(32, 0x10);
             var sessionPayload = ApplicationCoreCodec.CreateSessionInitPayload(
-                Bytes(32, 0x44),
-                Directory,
+                Bytes(32, 0x44), Directory,
                 SessionInitCapabilities.TextCore | SessionInitCapabilities.DeviceControl);
             SessionInit = ApplicationCoreFixture.Message(
                 sessionPayload, NetworkId, AccountId, DeviceId);
-            FirstMessage = ApplicationCoreCodec.AuthorDmc2(
-                NetworkId,
-                Bytes(32, 0x16),
-                SessionInit.ConversationId.Span,
-                AccountId,
-                DeviceId,
-                2,
-                1_001,
-                0,
-                Dmc2Flags.None,
-                [],
-                ApplicationCoreCodec.CreateMessageCreatePayload("hello"));
+            FirstMessage = AuthorFirstMessage("hello");
         }
+
+        internal DeepIdV2CurrentContactAuthorization Contact { get; }
+        internal byte[] Boot => boot;
+        internal OnionTrustedTimeAuthority Time => new(new Clock(boot));
+
+        internal ValueTask<InitiatorInitialSessionCommitCapability> CompleteAsync(
+            InitiatorDph2ClaimPreparation preparation, VerifiedXpc1V2PreKeyClaimReceipt receipt,
+            ReadOnlyMemory<byte> session, ReadOnlyMemory<byte> first = default) =>
+            preparation.CompleteAsync(receipt, Contact.Freshness, Time, session, first);
 
         internal Dpk2PrekeyKind Kind { get; }
         internal ushort Counter { get; }
@@ -430,7 +558,7 @@ public sealed class ManagedInitiatorInitialSessionFactoryTests
                 ciphertext = new byte[dph2.InitialCiphertext.Length];
                 dph2.InitialCiphertext.CopyCiphertextTo(ciphertext);
                 aad = MessagingWireCryptographicInputs.GetDph2InitialAeadAssociatedData(
-                    OfferingRecord, dph2);
+                    Offering.ExactBytes.Span, dph2);
                 nonce = dph2.InitialPayloadNonce.ToArray();
                 return SecretAeadXChaCha20Poly1305.Decrypt(
                     ciphertext, nonce, key!, aad);
@@ -444,21 +572,23 @@ public sealed class ManagedInitiatorInitialSessionFactoryTests
             }
         }
 
-        internal VerifiedInitialSessionPreKeyClaim ResponderClaim(Dph2Record dph2)
+        internal async ValueTask<VerifiedInitialSessionPreKeyClaim> ResponderClaim(Dph2Record dph2)
         {
-            var initiation = new VerifiedDph2Initiation(
-                dph2, Offering,
-                MessagingWireCryptographicInputs.ComputeDph2TranscriptHash(OfferingRecord, dph2),
-                MessagingWireCryptographicInputs.ComputeDph2FullReplayHash(dph2),
-                MessagingWireCryptographicInputs.ComputeDph2ClaimBinding(dph2),
-                Directory.RecordHash.Span);
-            return new VerifiedInitialSessionPreKeyClaim(
-                Kind, dph2.LastResortUseCounter, dph2.ClaimOperationId.Span,
-                dph2.SessionId.Span,
-                MessagingWireCryptographicInputs.ComputeExactDpk2Hash(OfferingRecord),
-                Bytes(32, 0x53), initiation.FullReplayHash.Span,
-                Kind == Dpk2PrekeyKind.OneTime ? OfferingRecord.OneTimeX25519PrekeyId.Span : [],
-                OfferingRecord.MlKemPrekeyId.Span, initiation);
+            var header = Dph2VerificationPlan.Create(dph2, Offering).Prevalidate(
+                new Dph2ResolvedInitiator(dph2.InitiatorDeviceAgreementPublicKey.Span,
+                    Directory.RecordHash.Span));
+            using var responder = HybridResponderStaticKeyMaterial.Import(
+                _responderIdentityPrivate, _responderSignedPrivate);
+            var keys = new OwnedDpk2PreKeyMaterial(_responderSignedPrivate.ToArray(),
+                Kind == Dpk2PrekeyKind.OneTime ? _responderOneTimePrivate.ToArray() : null,
+                SyntheticMlKemProvider.PublicKey.ToArray());
+            using var previewKey = HybridPreKeyHandshake.PreviewInitialAeadKey(
+                responder, keys, header, _mlKem);
+            var pair = Dph2InitialPayloadReader.PreviewClaimTranscript(header, previewKey);
+            var preview = new Dph2InitialClaimPreview(header, pair.Request, pair.Result);
+            var verified = await preview.VerifyCurrentAsync(placement, Contact, closure,
+                Contact.Freshness, Time);
+            return verified.BindForInitialSession();
         }
 
         internal ResponderInitialSessionMaterial RecoverInitial(
@@ -479,10 +609,12 @@ public sealed class ManagedInitiatorInitialSessionFactoryTests
                 NetworkId,
                 AccountId,
                 DeviceId,
-                3,
+                Contact.Freshness.CurrentCheckpoint!.Binding.Identity.ActiveDevices.Single()
+                    .Certificate.DeviceGeneration,
                 ExactDpd1Hash,
                 Directory.DirectoryGeneration,
                 Directory.RecordHash.Span,
+                Contact.Freshness.CurrentCheckpoint!.Binding.DeepId.CanonicalBytes.Span,
                 _localAgreementPrivate,
                 OperationId,
                 _mlKem,
@@ -504,24 +636,15 @@ public sealed class ManagedInitiatorInitialSessionFactoryTests
                 [],
                 ApplicationCoreCodec.CreateMessageCreatePayload(text));
 
-        internal VerifiedXpc1PreKeyClaimReceipt Claim(
-            InitiatorDph2ClaimPreparation preparation,
-            byte[]? senderCommitment = null) =>
-            ClaimFor(
-                Offering,
-                OperationId,
+        internal ValueTask<VerifiedXpc1V2PreKeyClaimReceipt> Claim(
+            InitiatorDph2ClaimPreparation preparation, byte[]? senderCommitment = null) =>
+            ClaimFor(Offering, OperationId,
                 senderCommitment ?? preparation.SenderEphemeralCommitment.ToArray());
 
-        internal VerifiedXpc1PreKeyClaimReceipt ClaimFor(
-            VerifiedDpk2Offering offering,
-            ReadOnlySpan<byte> operationId,
-            ReadOnlySpan<byte> senderCommitment) =>
-            VerifiedXpc1PreKeyClaimReceipt.CreateInitiatorRecoveryTestReceipt(
-                offering.Record,
-                operationId,
-                Bytes(32, 0x52),
-                senderCommitment,
-                offering.Record.MlKemKind == Dpk2PrekeyKind.OneTime ? (ushort)0 : Counter);
+        internal ValueTask<VerifiedXpc1V2PreKeyClaimReceipt> ClaimFor(
+            VerifiedDpk2Offering offering, ReadOnlyMemory<byte> operationId,
+            ReadOnlyMemory<byte> senderCommitment) =>
+            claim(offering, operationId.ToArray(), senderCommitment.ToArray());
 
         public void Dispose()
         {
@@ -536,34 +659,6 @@ public sealed class ManagedInitiatorInitialSessionFactoryTests
             CryptographicOperations.ZeroMemory(ExactDpd1Hash);
         }
 
-        private Dpk2Record BuildOffering(Dpk2PrekeyKind kind, byte responderDeviceFill) =>
-            new(
-                NetworkId,
-                Bytes(32, 0x21),
-                Bytes(32, responderDeviceFill),
-                5,
-                Reference(0x23),
-                7,
-                Bytes(32, 0x24),
-                9,
-                11,
-                Bytes(32, 0x25),
-                13,
-                1_700_000_100,
-                1_700_000_000,
-                1_700_100_000,
-                ScalarMult.Base(_responderIdentityPrivate),
-                Bytes(32, 0x26),
-                ScalarMult.Base(_responderSignedPrivate),
-                Bytes(64, 0x27),
-                kind == Dpk2PrekeyKind.OneTime ? Bytes(32, 0x28) : [],
-                kind == Dpk2PrekeyKind.OneTime ? ScalarMult.Base(_responderOneTimePrivate) : [],
-                Bytes(32, 0x29),
-                SyntheticMlKemProvider.PublicKey,
-                kind,
-                kind == Dpk2PrekeyKind.OneTime ? (ushort)0 : (ushort)64,
-                Bytes(64, 0x2a),
-                Bytes(64, 0x2b));
     }
 
     private sealed class DeterministicEntropy
@@ -580,8 +675,7 @@ public sealed class ManagedInitiatorInitialSessionFactoryTests
 
     private sealed class SyntheticMlKemProvider : IMlKem768Provider
     {
-        internal static byte[] PublicKey => Enumerable.Range(0, 1184)
-            .Select(static index => unchecked((byte)(index * 13 + 3))).ToArray();
+        internal static byte[] PublicKey => Bytes(1184, 0xc1);
 
         public string ProviderIdentifier => "synthetic-initiator-boundary";
         public int DecapsulationKeySize => 1184;
@@ -660,17 +754,40 @@ public sealed class ManagedInitiatorInitialSessionFactoryTests
         CreateTestState(seed, signedPreKeyPrivate, initiatorInitialRatchetPublic,
             signedPreKeyPublic, maximumMessagesWithoutPqInjection);
 
-    private static byte[] Reference(byte fill)
+    private sealed class Clock(byte[] boot) : IOnionMonotonicClock
     {
-        var value = new byte[38];
-        "DPD1"u8.CopyTo(value);
-        BinaryPrimitives.WriteUInt16BigEndian(value.AsSpan(4), 1);
-        value.AsSpan(6).Fill(fill);
-        return value;
+        public ValueTask<OnionMonotonicReading> ReadAsync(CancellationToken cancellationToken) =>
+            ValueTask.FromResult(new OnionMonotonicReading(boot, 3));
     }
 
-    private static byte[] Sequence(byte start) =>
-        Enumerable.Range(start, 32).Select(static value => (byte)value).ToArray();
+    private sealed class OperationClock(byte[] boot, ulong[] samples,
+        Action<int>? beforeReturn = null) : IOnionMonotonicClock
+    {
+        internal int Reads { get; private set; }
+        public ValueTask<OnionMonotonicReading> ReadAsync(CancellationToken cancellationToken)
+        {
+            var index = Reads++;
+            beforeReturn?.Invoke(Reads);
+            return ValueTask.FromResult(new OnionMonotonicReading(boot,
+                samples[Math.Min(index, samples.Length - 1)]));
+        }
+    }
+
+    private sealed class SuspendedClock(byte[] boot, int suspendAt) : IOnionMonotonicClock
+    {
+        private int reads;
+        internal TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public async ValueTask<OnionMonotonicReading> ReadAsync(CancellationToken cancellationToken)
+        {
+            if (++reads == suspendAt)
+            {
+                Entered.TrySetResult();
+                await Release.Task.WaitAsync(cancellationToken);
+            }
+            return new OnionMonotonicReading(boot, 3);
+        }
+    }
 
     private static byte[] Bytes(int length, byte fill)
     {

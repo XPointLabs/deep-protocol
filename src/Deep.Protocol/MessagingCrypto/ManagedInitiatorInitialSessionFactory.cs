@@ -2,7 +2,8 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using Deep.Protocol.AccountDirectoryV1;
 using Deep.Protocol.ApplicationCore;
-using Deep.Protocol.ContactV1;
+using Deep.Protocol.ContactV2;
+using Deep.Protocol.DeepExtension.PrivacyRouting;
 using Deep.Protocol.Identity;
 using Deep.Protocol.MessagingWire;
 using Sodium;
@@ -140,6 +141,7 @@ public sealed class ManagedInitiatorInitialSessionFactory
         ReadOnlySpan<byte> exactDpd1Hash,
         ulong directoryGeneration,
         ReadOnlySpan<byte> exactDirectoryHash,
+        ReadOnlySpan<byte> exactDid2,
         ReadOnlySpan<byte> agreementPrivateScalar,
         ReadOnlySpan<byte> operationBinding,
         IMlKem768Provider mlKem,
@@ -158,6 +160,7 @@ public sealed class ManagedInitiatorInitialSessionFactory
             exactDpd1Hash,
             directoryGeneration,
             exactDirectoryHash,
+            exactDid2,
             agreementPrivateScalar,
             operationBinding);
         try
@@ -430,13 +433,6 @@ public sealed class ManagedInitiatorInitialSessionFactory
     }
 
 #if DEEP_PROTOCOL_RECOVERY_TEST_SEAM
-    private static byte[] TestDid2MlDsaPublicKey()
-    {
-        var publicKey = new byte[1952];
-        publicKey.AsSpan().Fill(0xA5);
-        return publicKey;
-    }
-
     private sealed class TestAgreement : IDisposable
     {
         private readonly SecretBuffer _privateScalar;
@@ -458,20 +454,16 @@ public sealed class ManagedInitiatorInitialSessionFactory
             ReadOnlySpan<byte> exactDpd1Hash,
             ulong directoryGeneration,
             ReadOnlySpan<byte> exactDirectoryHash,
+            ReadOnlySpan<byte> exactDid2,
             ReadOnlySpan<byte> agreementPrivateScalar,
             ReadOnlySpan<byte> operationBinding)
         {
             var privateCopy = agreementPrivateScalar.ToArray();
             byte[]? publicKey = null;
-            byte[]? exactDid2 = null;
             try
             {
                 MessagingCryptoValidation.NonZeroExact(privateCopy, 32, nameof(agreementPrivateScalar));
                 publicKey = ScalarMult.Base(privateCopy);
-                exactDid2 = DeepIdV2Codec.AuthorDid2(
-                    exactDirectoryHash,
-                    TestDid2MlDsaPublicKey(),
-                    exactDpd1Hash[..16]).CanonicalBytes.ToArray();
                 var facts = new InitiatorAgreementFacts(
                     networkId,
                     accountId,
@@ -491,7 +483,6 @@ public sealed class ManagedInitiatorInitialSessionFactory
             {
                 Zero(privateCopy);
                 Zero(publicKey);
-                Zero(exactDid2);
             }
         }
 
@@ -787,32 +778,107 @@ public sealed class InitiatorDph2ClaimPreparation : IDisposable
     /// Consumes the preparation on every attempt. The exact SessionInit DMC2
     /// is mandatory; a second canonical DMC2 event is optional.
     /// </summary>
-    public InitiatorInitialSessionCommitCapability Complete(
-        VerifiedXpc1PreKeyClaimReceipt verifiedClaim,
-        ReadOnlySpan<byte> exactSessionInitDmc2,
-        ReadOnlySpan<byte> exactFirstApplicationDmc2 = default)
+    public async ValueTask<InitiatorInitialSessionCommitCapability> CompleteAsync(
+        VerifiedXpc1V2PreKeyClaimReceipt verifiedClaim,
+        VerifiedDeepIdV2DirectoryFreshness initiatorFreshness,
+        OnionTrustedTimeAuthority trustedTimeAuthority,
+        ReadOnlyMemory<byte> exactSessionInitDmc2,
+        ReadOnlyMemory<byte> exactFirstApplicationDmc2 = default,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(verifiedClaim);
+        ArgumentNullException.ThrowIfNull(initiatorFreshness);
+        ArgumentNullException.ThrowIfNull(trustedTimeAuthority);
         lock (_gate)
         {
             if (Interlocked.CompareExchange(ref _state, 1, 0) != 0)
                 throw new InvalidOperationException("The DPH2 claim preparation is single-use.");
-            try
+        }
+        byte[]? session = null;
+        byte[]? first = null;
+        InitiatorInitialSessionCommitCapability? commit = null;
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (exactSessionInitDmc2.Length is < 282 or > 33082 ||
+                (!exactFirstApplicationDmc2.IsEmpty &&
+                 exactFirstApplicationDmc2.Length is < 282 or > 33082))
+                throw new CryptographicException("The initial DMC2 event size is invalid.");
+            session = exactSessionInitDmc2.ToArray();
+            first = exactFirstApplicationDmc2.ToArray();
+            Dph2Record preview;
+            lock (_gate)
             {
-                return CompleteCore(verifiedClaim, exactSessionInitDmc2, exactFirstApplicationDmc2);
+                RequireCompleting();
+                RequireClaimPublicBinding(verifiedClaim);
+                _ = ValidateInitialDmc2(session, first);
+                preview = CreateRecord(verifiedClaim, new byte[24],
+                    _prepared!.Ciphertext.Span, new byte[4112]);
+                verifiedClaim.RequireMatchesDph2Header(preview);
             }
-            finally
+            var reading = await trustedTimeAuthority.ReadCurrentAsync(cancellationToken)
+                .ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            RequireCurrentEndpoints(preview, verifiedClaim, initiatorFreshness, reading);
+            Dph2Record finalRecord;
+            lock (_gate)
             {
+                RequireCompleting();
+                cancellationToken.ThrowIfCancellationRequested();
+                commit = CompleteCore(verifiedClaim, session, first, out finalRecord);
                 DisposeOwned();
             }
+            reading = await trustedTimeAuthority.ReadCurrentAsync(cancellationToken)
+                .ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            RequireCurrentEndpoints(finalRecord, verifiedClaim, initiatorFreshness, reading);
+            lock (_gate)
+            {
+                RequireCompleting();
+                cancellationToken.ThrowIfCancellationRequested();
+                verifiedClaim.ConsumeForInitiator(finalRecord);
+                _state = 2;
+                var result = commit;
+                commit = null;
+                return result;
+            }
+        }
+        finally
+        {
+            commit?.Dispose();
+            Zero(session);
+            Zero(first);
+            lock (_gate)
+            {
+                _state = 2;
+                DisposeOwned();
+            }
+            GC.SuppressFinalize(this);
         }
     }
 
-    private InitiatorInitialSessionCommitCapability CompleteCore(
-        VerifiedXpc1PreKeyClaimReceipt claim,
-        ReadOnlySpan<byte> exactSessionInitDmc2,
-        ReadOnlySpan<byte> exactFirstApplicationDmc2)
+    private void RequireCompleting()
     {
+        if (_state != 1)
+            throw new ObjectDisposedException(nameof(InitiatorDph2ClaimPreparation));
+    }
+
+    private void RequireCurrentEndpoints(Dph2Record record,
+        VerifiedXpc1V2PreKeyClaimReceipt claim,
+        VerifiedDeepIdV2DirectoryFreshness freshness, OnionMonotonicReading reading)
+    {
+        _ = Dph2InitialClaimPreview.RequireCurrentInitiator(record,
+            _local.ExactDirectoryHash, freshness, reading.BootId.Span, reading.SampleSeconds);
+        claim.RequireCurrentAt(reading);
+    }
+
+    private InitiatorInitialSessionCommitCapability CompleteCore(
+        VerifiedXpc1V2PreKeyClaimReceipt claim,
+        ReadOnlySpan<byte> exactSessionInitDmc2,
+        ReadOnlySpan<byte> exactFirstApplicationDmc2,
+        out Dph2Record completedRecord)
+    {
+        completedRecord = null!;
         RequireClaimPublicBinding(claim);
         var sessionInit = ValidateInitialDmc2(exactSessionInitDmc2, exactFirstApplicationDmc2);
         byte[]? payload = null;
@@ -849,13 +915,12 @@ public sealed class InitiatorDph2ClaimPreparation : IDisposable
             var finalRecord = CreateRecord(claim, nonce, mlKemCiphertext, ciphertext);
             exactDph2 = Dph2Codec.Encode(finalRecord);
             var verified = MessagingWireVerification.VerifyDph2(exactDph2, _offering, callbacks);
-            _ = claim.ConsumeForHandshake(verified);
             RequireSameTranscript(provisionalVerified, verified);
 
             decrypted = DecryptInitialPayload(finalRecord, handshake);
             if (!Fixed(payload, decrypted))
                 throw new CryptographicException("The self-verified DPH2 initial payload changed during encryption.");
-            VerifyDecodedInitialPayload(decrypted, sessionInit, finalRecord, claimPrefix.Length != 0);
+            VerifyDecodedInitialPayload(decrypted, sessionInit, finalRecord);
 
             initialPrivate = _initialRatchetPrivate!.Copy();
             using var seed = VerifiedTripleRatchetSeedCapability.FromVerifiedHandshake(handshake);
@@ -880,6 +945,7 @@ public sealed class InitiatorDph2ClaimPreparation : IDisposable
                 verified.ClaimOperationId.Span,
                 verified.FullReplayHash.Span,
                 verified.ClaimBinding.Span);
+            completedRecord = finalRecord;
             exactDph2 = null;
             exactTrs1 = null;
             return result;
@@ -938,28 +1004,22 @@ public sealed class InitiatorDph2ClaimPreparation : IDisposable
         return session;
     }
 
-    private void RequireClaimPublicBinding(VerifiedXpc1PreKeyClaimReceipt claim)
+    private void RequireClaimPublicBinding(VerifiedXpc1V2PreKeyClaimReceipt claim)
     {
         var offering = _offering.Record;
         if (!Fixed(claim.NetworkId.Span, _local.NetworkId) ||
             !Fixed(claim.OperationId.Span, _local.OperationBinding) ||
             !Fixed(claim.ExactDpk2Hash.Span, _offering.ExactHash.Span) ||
-            !Fixed(claim.ResponderAccountId.Span, offering.ResponderAccountIdSpan) ||
-            !Fixed(claim.ResponderDeviceId.Span, offering.ResponderDeviceIdSpan) ||
-            claim.ResponderDeviceGeneration != offering.ResponderDeviceGeneration ||
-            !Fixed(claim.SignedX25519PrekeyId.Span, offering.SignedX25519PrekeyIdSpan) ||
-            !Fixed(claim.MlKemPrekeyId.Span, offering.MlKemPrekeyIdSpan) ||
-            claim.PrekeyKind != offering.MlKemKind ||
-            (claim.PrekeyKind == Dpk2PrekeyKind.OneTime &&
-             !Fixed(claim.SelectedOneTimePrekeyId.Span, offering.OneTimeX25519PrekeyIdSpan)) ||
-            (claim.PrekeyKind == Dpk2PrekeyKind.LastResort &&
+            !Fixed(claim.Offering.ExactBytes.Span, _offering.ExactBytes.Span) ||
+            (offering.MlKemKind == Dpk2PrekeyKind.OneTime && claim.LastResortUseCounter != 0) ||
+            (offering.MlKemKind == Dpk2PrekeyKind.LastResort &&
              (claim.LastResortUseCounter is < 1 or > 64 ||
               claim.LastResortUseCounter > offering.ReuseLimit)))
             throw new CryptographicException("The verified XPC1 receipt does not bind this prepared DPK2 initiation.");
     }
 
     private Dph2Record CreateRecord(
-        VerifiedXpc1PreKeyClaimReceipt claim,
+        VerifiedXpc1V2PreKeyClaimReceipt claim,
         ReadOnlySpan<byte> nonce,
         ReadOnlySpan<byte> mlKemCiphertext,
         ReadOnlySpan<byte> initialCiphertext)
@@ -1076,16 +1136,10 @@ public sealed class InitiatorDph2ClaimPreparation : IDisposable
     }
 
     private static byte[] EncodeClaimPrefix(
-        VerifiedXpc1PreKeyClaimReceipt claim,
+        VerifiedXpc1V2PreKeyClaimReceipt claim,
         Dph2Record preview)
     {
-#if DEEP_PROTOCOL_RECOVERY_TEST_SEAM
-        // Recovery fault-injection fixtures predate the signed XPC1 service
-        // transcript. This branch is absent from production assemblies.
-        if (!claim.HasExactClaimTranscriptForTests)
-            return [];
-#endif
-        var (xpk1, xpc1Wire) = claim.CopyEncryptedInitialClaimTranscript();
+        var (xpk1, xpc1Wire) = claim.CopyEncryptedInitialClaimTranscript(preview);
         try
         {
             return Dph2InitialClaimTranscriptCodec.Encode(xpk1, xpc1Wire, preview);
@@ -1135,8 +1189,7 @@ public sealed class InitiatorDph2ClaimPreparation : IDisposable
     private static void VerifyDecodedInitialPayload(
         ReadOnlySpan<byte> padded,
         ParsedDmc2 expectedSession,
-        Dph2Record dph2,
-        bool hasClaimTranscript)
+        Dph2Record dph2)
     {
         if (padded.Length is not (4096 or 16384 or 32768))
             throw new CryptographicException("The decrypted DPH2 payload has an invalid bucket.");
@@ -1144,9 +1197,7 @@ public sealed class InitiatorDph2ClaimPreparation : IDisposable
         if (unpaddedLength is < 1 or > 32764 || unpaddedLength > padded.Length - 4)
             throw new CryptographicException("The decrypted DPH2 payload length is invalid.");
         var body = padded[..unpaddedLength];
-        var offset = hasClaimTranscript
-            ? Dph2InitialClaimTranscriptCodec.DecodePrefix(body, dph2).Consumed
-            : 0;
+        var offset = Dph2InitialClaimTranscriptCodec.DecodePrefix(body, dph2).Consumed;
         var count = body[offset];
         if (count is not (1 or 2))
             throw new CryptographicException("The decrypted DPH2 event count is invalid.");
@@ -1254,7 +1305,7 @@ public sealed class InitiatorDph2ClaimPreparation : IDisposable
 
     private sealed class InitiatorVerificationCallbacks(
         InitiatorAgreementFacts local,
-        VerifiedXpc1PreKeyClaimReceipt claim) : IDph2VerificationCallbacks
+        VerifiedXpc1V2PreKeyClaimReceipt claim) : IDph2VerificationCallbacks
     {
         public Dph2ResolvedInitiator ResolveInitiator(Dph2Record initiation)
         {
