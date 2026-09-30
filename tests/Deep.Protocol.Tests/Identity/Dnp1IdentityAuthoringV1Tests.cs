@@ -1043,6 +1043,8 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
         Assert.Throws<InvalidOperationException>(() =>
             second.RequireCurrentInitiator(authority, currentDirectory,
                 currentAccount, bootId, 3));
+        await AssertPreClaimPersistenceAsync(factory, authority, otherAuthority,
+            currentDirectory, currentAccount, bootId);
     }
 
     [Fact]

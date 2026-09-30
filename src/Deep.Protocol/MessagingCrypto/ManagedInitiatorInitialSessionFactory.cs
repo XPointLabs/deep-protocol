@@ -76,12 +76,8 @@ public sealed class ManagedInitiatorInitialSessionFactory
         }
         var operationId = RandomNonzero32();
         return BeginClaimCore(
-            InitiatorAgreementFacts.FromAuthority(
-                localAuthority,
-                directory.DirectoryGeneration,
-                directory.RecordHash.Span,
-                checkpoint.Binding.DeepId.CanonicalBytes.Span,
-                operationId),
+            InitiatorAgreementFacts.FromCurrent(localAuthority, exactCurrentDirectory,
+                currentAccount, currentBootId, currentMonotonicSample, operationId),
             FillProductionEntropy);
     }
 
@@ -542,17 +538,23 @@ public sealed class InitiatorDph2PreKeyClaim : IDisposable
         ReadOnlySpan<byte> senderCommitment)
     {
         _local = local ?? throw new ArgumentNullException(nameof(local));
-        _ephemeralPrivate = SecretBuffer.ImportExact(
-            ephemeralPrivate, 32, nameof(ephemeralPrivate));
-        _initialRatchetPrivate = SecretBuffer.ImportExact(
-            initialRatchetPrivate, 32, nameof(initialRatchetPrivate));
-        MessagingCryptoFaultInjection.OwnedSecret(
-            "initial-session.preclaim-ephemeral-private", _ephemeralPrivate);
-        MessagingCryptoFaultInjection.OwnedSecret(
-            "initial-session.preclaim-ratchet-private", _initialRatchetPrivate);
-        _ephemeralPublic = ephemeralPublic.ToArray();
-        _initialRatchetPublic = initialRatchetPublic.ToArray();
-        _senderCommitment = senderCommitment.ToArray();
+        MessagingCryptoValidation.NonZeroExact(ephemeralPublic, 32, nameof(ephemeralPublic));
+        MessagingCryptoValidation.NonZeroExact(initialRatchetPublic, 32, nameof(initialRatchetPublic));
+        MessagingCryptoValidation.NonZeroExact(senderCommitment, 32, nameof(senderCommitment));
+        SecretBuffer? ephemeral = null, ratchet = null;
+        try
+        {
+            ephemeral = SecretBuffer.ImportExact(ephemeralPrivate, 32, nameof(ephemeralPrivate));
+            ratchet = SecretBuffer.ImportExact(initialRatchetPrivate, 32, nameof(initialRatchetPrivate));
+            MessagingCryptoFaultInjection.OwnedSecret("initial-session.preclaim-ephemeral-private", ephemeral);
+            MessagingCryptoFaultInjection.OwnedSecret("initial-session.preclaim-ratchet-private", ratchet);
+            _ephemeralPublic = ephemeralPublic.ToArray();
+            _initialRatchetPublic = initialRatchetPublic.ToArray();
+            _senderCommitment = senderCommitment.ToArray();
+            _ephemeralPrivate = ephemeral; ephemeral = null;
+            _initialRatchetPrivate = ratchet; ratchet = null;
+        }
+        finally { ephemeral?.Dispose(); ratchet?.Dispose(); }
     }
 
     ~InitiatorDph2PreKeyClaim() => DisposeCore();
@@ -576,25 +578,8 @@ public sealed class InitiatorDph2PreKeyClaim : IDisposable
         ArgumentNullException.ThrowIfNull(localAuthority);
         ArgumentNullException.ThrowIfNull(exactCurrentDirectory);
         ArgumentNullException.ThrowIfNull(currentAccount);
-        var directory = localAuthority
-            .RequireActiveDirectoryForProtocolOperation(exactCurrentDirectory)
-            .Record;
-        var checkpoint = currentAccount.CurrentCheckpoint;
-        if (checkpoint is null ||
-            currentAccount.ResultKind != AccountDirectoryAdp1ResultKind.CurrentValue ||
-            !currentAccount.IsCurrentAtMonotonic(currentBootId,
-                currentMonotonicSample) ||
-            !Fixed(currentAccount.NetworkId.Span, localAuthority.NetworkId.Span) ||
-            !Fixed(checkpoint.Directory.Record.CanonicalBytes.Span,
-                directory.CanonicalBytes.Span) ||
-            !Fixed(checkpoint.Binding.Identity.Account.Certificate.NetworkId.Span,
-                localAuthority.NetworkId.Span))
-            throw new CryptographicException(
-                "The current DID2 proof and local DMD1 directory do not share exact authority.");
-        var current = InitiatorAgreementFacts.FromAuthority(localAuthority,
-            directory.DirectoryGeneration, directory.RecordHash.Span,
-            checkpoint.Binding.DeepId.CanonicalBytes.Span,
-            _local.OperationBinding);
+        var current = InitiatorAgreementFacts.FromCurrent(localAuthority, exactCurrentDirectory,
+            currentAccount, currentBootId, currentMonotonicSample, _local.OperationBinding);
         lock (_gate)
         {
             if (_state != 0)
@@ -1482,6 +1467,30 @@ internal sealed class InitiatorAgreementFacts
     internal byte[] ExactDid2 { get; }
     internal byte[] AgreementPublicKey { get; }
     internal byte[] OperationBinding { get; }
+
+    internal static InitiatorAgreementFacts FromCurrent(LocalDeviceX25519AgreementAuthority authority,
+        Dmd1LineageState exactCurrentDirectory, VerifiedDeepIdV2DirectoryFreshness currentAccount,
+        ReadOnlySpan<byte> currentBootId, ulong currentMonotonicSample, ReadOnlySpan<byte> operationBinding)
+    {
+        ArgumentNullException.ThrowIfNull(authority);
+        ArgumentNullException.ThrowIfNull(exactCurrentDirectory);
+        ArgumentNullException.ThrowIfNull(currentAccount);
+        var directory = authority.RequireActiveDirectoryForProtocolOperation(exactCurrentDirectory).Record;
+        var checkpoint = currentAccount.CurrentCheckpoint;
+        if (checkpoint is null ||
+            !Fixed(checkpoint.Directory.Record.CanonicalBytes.Span, directory.CanonicalBytes.Span) ||
+            !Fixed(checkpoint.Binding.Identity.Account.Certificate.NetworkId.Span, authority.NetworkId.Span))
+            throw new CryptographicException("The current DID2 proof and local DMD1 directory differ.");
+        var facts = FromAuthority(authority, directory.DirectoryGeneration, directory.RecordHash.Span,
+            checkpoint.Binding.DeepId.CanonicalBytes.Span, operationBinding);
+        var dpdReference = ApplicationCoreCodec.CreateArtifactReference(
+            (ushort)Deep.Protocol.DeepNative.ArtifactType.Dpd1,
+            checked((uint)Deep.Protocol.DeepNative.RecordDefinitions.Dpd1.MinimumLength), facts.ExactDpd1Hash);
+        _ = Dph2InitialClaimPreview.RequireCurrentInitiatorCore(facts.NetworkId, facts.AccountId, facts.DeviceId,
+            facts.DeviceGeneration, dpdReference.CanonicalBytes.Span, facts.ExactDid2, facts.AgreementPublicKey,
+            facts.ExactDirectoryHash, currentAccount, currentBootId, currentMonotonicSample);
+        return facts;
+    }
 
     internal static InitiatorAgreementFacts FromAuthority(
         LocalDeviceX25519AgreementAuthority authority,

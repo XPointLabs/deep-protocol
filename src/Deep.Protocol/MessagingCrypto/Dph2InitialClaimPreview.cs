@@ -94,6 +94,18 @@ public sealed class Dph2InitialClaimPreview
         ReadOnlySpan<byte> currentBootId, ulong currentMonotonicSample)
     {
         ArgumentNullException.ThrowIfNull(record);
+        return RequireCurrentInitiatorCore(record.NetworkId.Span, record.InitiatorAccountId.Span,
+            record.InitiatorDeviceId.Span, record.InitiatorDeviceGeneration, record.InitiatorDpd1Ref.Span,
+            record.InitiatorDid2.Span, record.InitiatorDeviceAgreementPublicKey.Span,
+            initiatorDirectoryHeadHash, initiatorFreshness, currentBootId, currentMonotonicSample);
+    }
+
+    internal static VerifiedAdc1V2 RequireCurrentInitiatorCore(ReadOnlySpan<byte> networkId,
+        ReadOnlySpan<byte> accountId, ReadOnlySpan<byte> deviceId, ulong deviceGeneration,
+        ReadOnlySpan<byte> dpdReference, ReadOnlySpan<byte> exactDid2, ReadOnlySpan<byte> agreementPublic,
+        ReadOnlySpan<byte> initiatorDirectoryHeadHash, VerifiedDeepIdV2DirectoryFreshness initiatorFreshness,
+        ReadOnlySpan<byte> currentBootId, ulong currentMonotonicSample)
+    {
         ArgumentNullException.ThrowIfNull(initiatorFreshness);
         var current = initiatorFreshness.CurrentCheckpoint;
         if (initiatorFreshness.ResultKind !=
@@ -102,13 +114,13 @@ public sealed class Dph2InitialClaimPreview
             !initiatorFreshness.IsCurrentAtMonotonic(
                 currentBootId, currentMonotonicSample) ||
             !Fixed(initiatorFreshness.NetworkId.Span,
-                record.NetworkId.Span) ||
+                networkId) ||
             !Fixed(current.Directory.Record.DeepAccountId.Span,
-                record.InitiatorAccountId.Span) ||
+                accountId) ||
             !Fixed(current.Directory.Record.RecordHash.Span,
                 initiatorDirectoryHeadHash) ||
             !Fixed(current.Binding.DeepId.CanonicalBytes.Span,
-                record.InitiatorDid2.Span))
+                exactDid2))
             throw new CryptographicException(
                 "The DPH2 initiator directory is not the current verified account-directory value.");
         ulong lower, upper;
@@ -122,18 +134,19 @@ public sealed class Dph2InitialClaimPreview
         {
             throw new CryptographicException("The DPH2 initiator time interval overflowed.", exception);
         }
+        var selectedDeviceId = deviceId.ToArray();
         var entry = current.Directory.Record.ActiveDevices.SingleOrDefault(device =>
-            Fixed(device.DeviceId.Span, record.InitiatorDeviceId.Span));
+            Fixed(device.DeviceId.Span, selectedDeviceId));
         var device = current.Binding.Identity.ActiveDevices.SingleOrDefault(candidate =>
-            Fixed(candidate.Certificate.DeviceId.Span, record.InitiatorDeviceId.Span));
+            Fixed(candidate.Certificate.DeviceId.Span, selectedDeviceId));
         if (entry is null || device is null || lower > upper ||
-            device.Certificate.DeviceGeneration != record.InitiatorDeviceGeneration ||
+            device.Certificate.DeviceGeneration != deviceGeneration ||
             device.Certificate.IssuedAtUnixSeconds > lower ||
             device.Certificate.ExpiresAtUnixSeconds <= upper ||
-            !Fixed(entry.Dpd1Reference.CanonicalBytes.Span, record.InitiatorDpd1Ref.Span) ||
+            !Fixed(entry.Dpd1Reference.CanonicalBytes.Span, dpdReference) ||
             !Fixed(entry.Dpd1Reference.CanonicalHash.Span, device.Certificate.CanonicalHash.Span) ||
             !Fixed(device.Certificate.DeviceX25519PublicKey.Span,
-                record.InitiatorDeviceAgreementPublicKey.Span))
+                agreementPublic))
             throw new CryptographicException(
                 "The DPH2 initiator is not the exact current DID2 device for the complete time interval.");
         return current;

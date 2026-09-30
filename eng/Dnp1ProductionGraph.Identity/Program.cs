@@ -556,12 +556,12 @@ internal static class GraphPolicy
         {
             ["Deep.Protocol"] =
             [
-                // Reviewed DR-0017 V2-only prefix/promotion and neutral two-lane
-                // handoff (Debug, normalized Release). The receipt alone has no
-                // session binding; current proof/promotion still grants no ACK.
+                // Reviewed DR-0017/18 V2 completion and DR-0019's three opaque
+                // local preclaim-persistence types (Debug, normalized Release).
+                // No raw private export, device lease, session or ACK shortcut.
                 // Pre-cutover/public-API predecessor snapshots are not accepted.
-                "Deep.Protocol|13035|675400692E2D4158318B7F1147F25AB225B69EC930B818E8B827E9F8A10663E1",
-                "Deep.Protocol|13035|7983DB58DB07A81C55620B49C2F6FE835620483FE4E2AAF641059284D825D38C"
+                "Deep.Protocol|13053|8B87A195C8E77FD9462365E818296632DC13EE160565E4585E4B1921556045E9",
+                "Deep.Protocol|13053|DB6E432A4C38832B4904356733EA48579E6B2EAD10682F49D1BAEC27E089DD6D"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

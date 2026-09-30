@@ -80,16 +80,14 @@ not activate message delivery, masked acquisition or a release claim.
   replacement must use the exact DID2/DAB2 endpoint closure required by
   [DR-0008](../../docs/survival-program/decisions/DR-0008-did2-dph2-wire-clean-break.md).
   MAUI inbound composition and the endpoint cutover remain incomplete.
-- [`DR-0005`](../../docs/survival-program/decisions/DR-0005-inbound-dph2-claim-evidence.md)
-  requires a pre-activation DPH2 initial-payload clean break because the
-  existing event-only body gives the responder no exact XPK1/XPC1 proof. The
-  internal prefix and its receipt consumers still depend on V1 XPK1/XPC1.
-  A DID2 outer DPH2 does not convert that evidence into V2 authority. The
-  coherent prefix/receipt/sender/responder cutover required by DR-0008 remains
-  open, together with protected initiator preparation recovery, endpoint
-  verification and shipping mailbox composition. The current preview cannot
-  promote a production DID2 session. Structural parsing alone cannot mint
-  `VerifiedDph2Initiation` or authorize a production receive.
+- [DR-0017](../../docs/survival-program/decisions/DR-0017-did2-initial-claim-promotion.md)
+  implements the single V2 encrypted claim prefix/current responder promotion;
+  [DR-0018](../../docs/survival-program/decisions/DR-0018-did2-initiator-completion.md)
+  implements the V2-only sender completion and exact recovery fixtures. The
+  event-only body and V1 completion overload are removed, not fallback paths.
+  Structural parsing alone cannot mint `VerifiedDph2Initiation` or authorize
+  a production receive. Durable shipping mailbox/inbox/ACK composition and
+  physical delivery remain incomplete.
 - `DeepIdV2Dpk2PreClaimVerifier` authenticates one exact V2 offering against
   current DID2 directory custody. It advances both trusted-time bounds from
   the proof's monotonic sample to the operation sample before checking the
@@ -108,9 +106,17 @@ not activate message delivery, masked acquisition or a release claim.
   complete request and padded result, not merely the signed claim tuple.
   Shared/XNode/Registry/MAUI must rebuild against the reviewed API snapshots;
   this addition changes no remote wire or protected database generation and
-  requires no authority repin/reset. Prefix/session consumers still require
-  a coherent V2 cutover, authenticated durable replica completion and protected
-  initiator preparation before activation or device delivery can be claimed.
+  requires no authority repin/reset. Authenticated durable replica completion,
+  protected initiator preparation and shipping consumers remain required
+  before activation or device delivery can be claimed.
+- [DR-0019](../../docs/survival-program/decisions/DR-0019-did2-preclaim-secret-persistence.md)
+  adds exactly three opaque local pre-XPK1 persistence types. Seal consumes
+  the started claim; restore authenticates the database/intent scope and
+  rechecks the exact current identity at both protected-clock samples. No
+  scalar export, provider callback, device-agreement lease replay or remote
+  wire change is added. Debug/Release actual API snapshots are reviewed;
+  downstream consumers must rebuild. Durable Shared intent custody and the
+  later atomic device-DH burn/prepared-secret boundary remain unimplemented.
 - The frozen XRF1/XRL1/XRE1/XPR1/XRS1 codec is implemented, but its sealed
   production capability producers, asynchronous public API and runtime composition
   are absent/inactive. PMA2/PMT2/PMS2 route-authority activation remains a separate
