@@ -51,7 +51,7 @@ public sealed class ApplicationCoreVerificationTests
     }
 
     [Fact]
-    public void Dab2_RequiresExactAccountClosureAndBothRootSignatures()
+    public async Task Dab2_RequiresExactAccountClosureAndBothRootSignatures()
     {
         var fixture = VerifiedFixture.Create();
         var pqPublicKey = ApplicationCoreFixture.Bytes(1952, 0x71);
@@ -657,6 +657,15 @@ public sealed class ApplicationCoreVerificationTests
             root: inventoryRoot,
             lastResortHash: lastResortMember.ExactHash.ToArray()),
             fixture.DeviceKey);
+        var higherReuseMember = SignedMember(kind: Dpk2PrekeyKind.LastResort, reuseLimit: 2);
+        var higherReuseManifest = SignInventory(InventoryFields(
+            SHA256.HashData(xps), directory.Record.RecordHash.ToArray(),
+            root: inventoryRoot, lastResortHash: higherReuseMember.ExactHash.ToArray()),
+            fixture.DeviceKey);
+        await Deep.Protocol.Tests.ContactV2.DeepIdV2PreKeyClaimReceiptVerifierTests
+            .AssertCurrentRecipientClaimsAsync(closure, currentContact,
+                completeManifest, oneTimeMembers, lastResortMember,
+                higherReuseManifest, higherReuseMember, bootId);
         Assert.False(DeepIdV2PreKeyInventoryVerifier.RuntimeActivation);
         DeepIdV2PreKeyInventoryVerifier.VerifyComplete(closure, currentContact,
             completeManifest, oneTimeMembers, lastResortMember, bootId, 3);

@@ -98,6 +98,19 @@ not activate message delivery, masked acquisition or a release claim.
   This grants neither inventory publication nor an XPC1 receipt/session.
   The correction changes no wire or public API; consumers must rebuild before
   using the corrected operation-time check.
+- `DeepIdV2PreKeyClaimReceiptVerifier.VerifyAsync` implements the bounded
+  current-recipient API frozen by
+  [DR-0016](../../docs/survival-program/decisions/DR-0016-did2-prekey-claim-receipt.md).
+  It accepts no V1 claim input and mints no session or ACK. Both selected
+  signatures, exact current DID2 service binding and the conservative union
+  of protected network/recipient time intervals are mandatory; they are
+  rechecked after the final protected-clock read. Exact replay retains the
+  complete request and padded result, not merely the signed claim tuple.
+  Shared/XNode/Registry/MAUI must rebuild against the reviewed API snapshots;
+  this addition changes no remote wire or protected database generation and
+  requires no authority repin/reset. Prefix/session consumers still require
+  a coherent V2 cutover, authenticated durable replica completion and protected
+  initiator preparation before activation or device delivery can be claimed.
 - The frozen XRF1/XRL1/XRE1/XPR1/XRS1 codec is implemented, but its sealed
   production capability producers, asynchronous public API and runtime composition
   are absent/inactive. PMA2/PMT2/PMS2 route-authority activation remains a separate
