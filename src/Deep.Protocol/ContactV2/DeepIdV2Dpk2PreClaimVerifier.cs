@@ -26,12 +26,26 @@ public static class DeepIdV2Dpk2PreClaimVerifier
                 currentMonotonicSample))
             throw new CryptographicException(
                 "The DID2 DPK2 peer proof is not current at this operation.");
+        ulong lower, upper;
+        try
+        {
+            var elapsed = checked(currentMonotonicSample - peerProof.MonotonicSample);
+            lower = checked(peerProof.TrustedLowerUnixSeconds + elapsed);
+            upper = checked(peerProof.TrustedUpperUnixSeconds + elapsed);
+        }
+        catch (OverflowException exception)
+        {
+            throw new CryptographicException(
+                "The DID2 DPK2 trusted-time interval overflowed.", exception);
+        }
         return MessagingWireVerification.VerifyDpk2V2(exactDpk2,
-            new CurrentPeerCallbacks(peerProof));
+            new CurrentPeerCallbacks(peerProof, lower, upper));
     }
 
     private sealed class CurrentPeerCallbacks(
-        VerifiedDeepIdV2DirectoryFreshness peerProof)
+        VerifiedDeepIdV2DirectoryFreshness peerProof,
+        ulong trustedLowerUnixSeconds,
+        ulong trustedUpperUnixSeconds)
         : IDpk2VerificationCallbacks
     {
         public Dpk2ResolvedDevice ResolveActiveDevice(Dpk2Record offering)
@@ -50,8 +64,8 @@ public static class DeepIdV2Dpk2PreClaimVerifier
                 !Fixed(offering.DeviceDirectoryHeadHash.Span,
                     directory.RecordHash.Span) ||
                 offering.IssuedAt < directory.IssuedAtUnixSeconds ||
-                peerProof.TrustedLowerUnixSeconds < offering.NotBefore ||
-                peerProof.TrustedUpperUnixSeconds >= offering.ExpiresAt)
+                trustedLowerUnixSeconds < offering.NotBefore ||
+                trustedUpperUnixSeconds >= offering.ExpiresAt)
                 throw new CryptographicException(
                     "DPK2 is outside the exact current DID2 peer directory or validity window.");
             var entry = directory.ActiveDevices.SingleOrDefault(device =>

@@ -85,7 +85,7 @@ public sealed class ApplicationCoreVerificationTests
         Assert.Same(valid, verified.Record);
         Assert.Same(did, verified.DeepId);
 
-        var directory = fixture.AuthorAndVerifyDmd1(1, new byte[32]);
+        var directory = fixture.AuthorAndVerifyDmd1(1, new byte[32], issuedAt: 10);
         ParsedDca1V2 AuthorContact(ReadOnlySpan<byte> accountSignature,
             ReadOnlySpan<byte> exactDidHash, ApplicationArtifactReference dabReference) =>
             DeepIdV2ContactAuthorizationCodec.Author(fixture.Network, fixture.AccountId,
@@ -606,6 +606,36 @@ public sealed class ApplicationCoreVerificationTests
                     dmdHash, prekeySeed, kind, reuseLimit)));
         }
         var member = SignedMember();
+        // A directory proof can remain current after an individual offering
+        // expires. Advance both authenticated time bounds at the operation;
+        // the proof's original interval must not freeze pre-key validity.
+        var preClaimMember = member;
+        Assert.Equal(preClaimMember.ExactHash.ToArray(),
+            DeepIdV2Dpk2PreClaimVerifier.Verify(preClaimMember.CanonicalBytes.Span,
+                freshness, bootId, 3).ExactHash.ToArray());
+        Assert.Equal(preClaimMember.ExactHash.ToArray(),
+            DeepIdV2Dpk2PreClaimVerifier.Verify(preClaimMember.CanonicalBytes.Span,
+                freshness, bootId, 6).ExactHash.ToArray());
+        Assert.True(freshness.IsCurrentAtMonotonic(bootId, 7));
+        foreach (var sample in new ulong[] { 7, 8, 60 })
+            Assert.Throws<CryptographicException>(() =>
+                DeepIdV2Dpk2PreClaimVerifier.Verify(preClaimMember.CanonicalBytes.Span,
+                    freshness, bootId, sample));
+        Assert.Throws<CryptographicException>(() =>
+            DeepIdV2Dpk2PreClaimVerifier.Verify(preClaimMember.CanonicalBytes.Span,
+                freshness, bootId, 2));
+        Assert.Throws<CryptographicException>(() =>
+            DeepIdV2Dpk2PreClaimVerifier.Verify(preClaimMember.CanonicalBytes.Span,
+                freshness, ApplicationCoreFixture.Bytes(16, 0x7e), 3));
+        var overflowingTime = new VerifiedDeepIdV2DirectoryFreshness(
+            exactHead, [], [], fixture.Network,
+            checkpoint.Checkpoint.DirectoryLeafKey.Span,
+            new AccountDirectoryMonotonicRequestWindow(bootId, 1, 2, 3),
+            60, ulong.MaxValue - 1, ulong.MaxValue,
+            AccountDirectoryAdp1ResultKind.CurrentValue, checkpoint, false, null);
+        Assert.Throws<CryptographicException>(() =>
+            DeepIdV2Dpk2PreClaimVerifier.Verify(preClaimMember.CanonicalBytes.Span,
+                overflowingTime, bootId, 4));
         Assert.False(DeepIdV2Dpk2MemberBinding.RuntimeActivation);
         DeepIdV2Dpk2MemberBinding.Verify(closure, currentContact,
             manifest, member, bootId, 3);

@@ -1,6 +1,6 @@
 # Protocol Surface - DNP1 Wave 1
 
-Updated: 2026-09-07.
+Updated: 2026-09-30.
 
 The production package closure is exactly `Deep.Protocol`,
 `Deep.Protocol.MembershipRoutes`, and `Deep.Protocol.ProfileCarrier`.
@@ -75,38 +75,29 @@ not activate message delivery, masked acquisition or a release claim.
   incomplete; their presence is not a release claim. The narrow trusted
   durable-authority DMC2 handoff is separately frozen in the superproject's
   `DPE2-INBOUND-DURABLE-HANDOFF-AUTHORIZATION.md`.
-- ContactHello endpoint verification now derives the safety number from two
-  verifier-minted non-forked DAB1 lineages and checks exact DAB1/DMD1 identity
-  fields plus XUR1 author, DPD1 signature and creation-time validity. The
-  contact `DAB1` reference uses CONTACT-CODEC magic/version/hash bytes, not
-  ApplicationCore's distinct artifact-reference encoding. This pure verifier
-  does not close XUR1 to PMT2, persist a relationship or authorize ACK;
-  MAUI inbound composition remains incomplete. Public API snapshot additions
-  require downstream consumer rebuild/repin before activation.
-  Production DPH2/XPC1 promotion retains its verified current initiator
-  checkpoint and recipient bundle for the subsequent Shared responder
-  ContactHello endpoint check; the test-only claim path does not mint these
-  current-value capabilities.
+- The remaining DAB1-based ContactHello/safety-number implementation is a
+  pre-cutover consumer, not authority for a DID2 relationship or ACK. Its
+  replacement must use the exact DID2/DAB2 endpoint closure required by
+  [DR-0008](../../docs/survival-program/decisions/DR-0008-did2-dph2-wire-clean-break.md).
+  MAUI inbound composition and the endpoint cutover remain incomplete.
 - [`DR-0005`](../../docs/survival-program/decisions/DR-0005-inbound-dph2-claim-evidence.md)
   requires a pre-activation DPH2 initial-payload clean break because the
   existing event-only body gives the responder no exact XPK1/XPC1 proof. The
-  new internal claim-prefix codec checks framing and DPH2 correlation only;
-  the production sender retains exact XPK1/XPC1 wire for encrypted authoring
-  and the production payload reader structurally requires the prefix. An
-  internal pre-claim DPH2 header cannot authorize commit/ACK and promotes only
-  with a verifier-minted exact XPC1 capability. The preview primitive derives
-  only the initial AEAD key from an exact local DPK2 secret copy, then strictly
-  opens the encrypted claim transcript. The responder factory now accepts a
-  verified, non-forked initiator DMD1 lineage, and its unverified preview can
-  promote only with the independently verified exact XPC1 wire. Shared has a
-  read-only SQLCipher preview selection. The preview now calls the production
-  XPC1 two-replica verifier with a verified placement, recipient bundle,
-  network authority and trusted time before promoting DPH2, and requires a
-  matching current initiator DMD1 checkpoint at the live monotonic sample.
-  The account owner exposes this path before session-store creation; mailbox
-  receive composition and new vectors are not yet wired
-  end-to-end. Structural parsing alone cannot
-  mint `VerifiedDph2Initiation` or authorize a production receive.
+  internal prefix and its receipt consumers still depend on V1 XPK1/XPC1.
+  A DID2 outer DPH2 does not convert that evidence into V2 authority. The
+  coherent prefix/receipt/sender/responder cutover required by DR-0008 remains
+  open, together with protected initiator preparation recovery, endpoint
+  verification and shipping mailbox composition. The current preview cannot
+  promote a production DID2 session. Structural parsing alone cannot mint
+  `VerifiedDph2Initiation` or authorize a production receive.
+- `DeepIdV2Dpk2PreClaimVerifier` authenticates one exact V2 offering against
+  current DID2 directory custody. It advances both trusted-time bounds from
+  the proof's monotonic sample to the operation sample before checking the
+  offering. Expiry, a different boot, backward sample or overflow rejects;
+  a still-current directory proof does not extend a pre-key's validity.
+  This grants neither inventory publication nor an XPC1 receipt/session.
+  The correction changes no wire or public API; consumers must rebuild before
+  using the corrected operation-time check.
 - The frozen XRF1/XRL1/XRE1/XPR1/XRS1 codec is implemented, but its sealed
   production capability producers, asynchronous public API and runtime composition
   are absent/inactive. PMA2/PMT2/PMS2 route-authority activation remains a separate
