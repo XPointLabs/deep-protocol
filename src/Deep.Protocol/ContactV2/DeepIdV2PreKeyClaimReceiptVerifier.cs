@@ -17,6 +17,7 @@ public sealed class VerifiedXpc1V2PreKeyClaimReceipt
     private readonly ParsedXpc1V2 result;
     private readonly byte[] exactReplayHash;
     private readonly byte[][] replicas;
+    private readonly VerifiedContactServicePlacement placement;
 
     internal VerifiedXpc1V2PreKeyClaimReceipt(ParsedXpk1V2 request,
         ParsedXpc1V2 result, VerifiedDpk2Offering offering,
@@ -25,6 +26,7 @@ public sealed class VerifiedXpc1V2PreKeyClaimReceipt
     {
         this.request = request;
         this.result = result;
+        this.placement = placement;
         Offering = offering;
         RecipientAuthorization = recipientAuthorization;
         RecipientClosure = recipientClosure;
@@ -83,6 +85,30 @@ public sealed class VerifiedXpc1V2PreKeyClaimReceipt
                     "The DPH2 header differs from the exact verified DID2 claim.");
         }
         finally { CryptographicOperations.ZeroMemory(commitment); }
+    }
+
+    // Final operation-time recheck after the other endpoint's proof work.
+    // Immutable signature/inclusion evidence is retained; neither endpoint
+    // may freeze time at the earlier receipt-verification sample.
+    internal void RequireCurrentAt(OnionMonotonicReading reading)
+    {
+        placement.Network.EnsureCurrent();
+        var current = DeepIdV2CurrentContactAuthorizationVerifier.Verify(
+            RecipientAuthorization.Freshness, RecipientAuthorization.Authorization,
+            reading.BootId.Span, reading.SampleSeconds);
+        var interval = DeepIdV2PreKeyClaimReceiptVerifier.VerifyTime(
+            request, placement, current, reading);
+        DeepIdV2ResolverClosureCodec.VerifyIdentityAndSupport(RecipientClosure,
+            current.Authorization, interval.Lower);
+        DeepIdV2ResolverClosureCodec.VerifyIdentityAndSupport(RecipientClosure,
+            current.Authorization, interval.Upper);
+        var manifest = DeepIdV2PreKeyManifestCodec.Decode(result.Field(26).Span);
+        if (U64(manifest.Field(14).Span) > interval.Lower ||
+            U64(manifest.Field(15).Span) <= interval.Upper ||
+            Offering.Record.NotBefore > interval.Lower ||
+            Offering.Record.ExpiresAt <= interval.Upper)
+            throw new CryptographicException(
+                "The current DID2 claim expired before final promotion.");
     }
 
     internal static void RequireExactReplay(VerifiedXpc1V2PreKeyClaimReceipt retained,
@@ -171,7 +197,7 @@ public static class DeepIdV2PreKeyClaimReceiptVerifier
         return new(request, result, offering, current, recipientClosure, placement);
     }
 
-    private static (ulong Lower, ulong Upper) VerifyTime(ParsedXpk1V2 request,
+    internal static (ulong Lower, ulong Upper) VerifyTime(ParsedXpk1V2 request,
         VerifiedContactServicePlacement placement,
         DeepIdV2CurrentContactAuthorization current, OnionMonotonicReading reading)
     {

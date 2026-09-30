@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 using Deep.Protocol.AccountDirectoryV1;
-using Deep.Protocol.ContactV1;
+using Deep.Protocol.ContactV2;
 using Deep.Protocol.DeepExtension.PrivacyRouting;
 using Deep.Protocol.MessagingWire;
 using Deep.Protocol.XPointNetworkV1;
@@ -14,28 +14,63 @@ namespace Deep.Protocol.MessagingCrypto;
 public sealed class Dph2InitialClaimPreview
 {
     private readonly Dph2PreClaimHeader _header;
-    private readonly Xpk1Request _request;
-    private readonly Xpc1Result _result;
+    private readonly ParsedXpk1V2 _request;
+    private readonly ParsedXpc1V2 _result;
     private int _promoted;
 
     internal Dph2InitialClaimPreview(
         Dph2PreClaimHeader header,
-        Xpk1Request request,
-        Xpc1Result result)
+        ParsedXpk1V2 request,
+        ParsedXpc1V2 result)
     {
         _header = header;
         _request = request;
         _result = result;
     }
 
-    public Xpk1Request Request => _request;
-    public Xpc1Result Result => _result;
+    public ParsedXpk1V2 Request => _request;
+    public ParsedXpc1V2 Result => _result;
+
+    /// <summary>Promotes only the exact AEAD-opened V2 claim after current
+    /// initiator/device and recipient verification. This does not commit
+    /// prekeys, ratchet state, semantic inbox or transport acknowledgement.</summary>
+    public async ValueTask<VerifiedDph2InitialClaim> VerifyCurrentAsync(
+        VerifiedContactServicePlacement placement,
+        DeepIdV2CurrentContactAuthorization recipientAuthorization,
+        ParsedDcr1V2 recipientClosure,
+        VerifiedDeepIdV2DirectoryFreshness initiatorFreshness,
+        OnionTrustedTimeAuthority trustedTimeAuthority,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(placement);
+        ArgumentNullException.ThrowIfNull(recipientAuthorization);
+        ArgumentNullException.ThrowIfNull(recipientClosure);
+        ArgumentNullException.ThrowIfNull(initiatorFreshness);
+        ArgumentNullException.ThrowIfNull(trustedTimeAuthority);
+        cancellationToken.ThrowIfCancellationRequested();
+        _ = await VerifyCurrentInitiatorAsync(initiatorFreshness,
+            trustedTimeAuthority, cancellationToken).ConfigureAwait(false);
+        var claim = await DeepIdV2PreKeyClaimReceiptVerifier.VerifyAsync(
+            _request, _result, placement, recipientAuthorization, recipientClosure,
+            trustedTimeAuthority, cancellationToken).ConfigureAwait(false);
+        var reading = await trustedTimeAuthority.ReadCurrentAsync(cancellationToken)
+            .ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        var checkpoint = RequireCurrentInitiator(_header.Record,
+            _header.InitiatorDirectoryHeadHash, initiatorFreshness,
+            reading.BootId.Span, reading.SampleSeconds);
+        claim.RequireCurrentAt(reading);
+        placement.Network.EnsureCurrent();
+        cancellationToken.ThrowIfCancellationRequested();
+        return new VerifiedDph2InitialClaim(claim, Promote(claim), checkpoint,
+            recipientClosure);
+    }
 
     /// <summary>
     /// Checks only the DID2 initiator side of an initial claim against a
     /// current, nonce-bound V2 directory proof. This deliberately cannot
-    /// promote a session: the recipient publication and XPC1 path are still
-    /// V1 and must be replaced before production promotion is exposed.
+    /// promote a session: current-recipient and exact V2 receipt verification
+    /// are independent requirements of VerifyCurrentAsync.
     /// </summary>
     internal async ValueTask<VerifiedAdc1V2> VerifyCurrentInitiatorAsync(
         VerifiedDeepIdV2DirectoryFreshness initiatorFreshness,
@@ -104,34 +139,17 @@ public sealed class Dph2InitialClaimPreview
         return current;
     }
 
-    // Narrow protocol tests may independently exercise the threshold verifier
-    // with synthetic initiator directories. Production uses VerifyCurrentAsync.
-#if DEEP_PROTOCOL_RECOVERY_TEST_SEAM
-    internal async ValueTask<VerifiedDph2InitialClaim> VerifyClaimForTestsAsync(
-        VerifiedContactServicePlacement placement,
-        VerifiedContactNetworkAuthority recipientAuthority,
-        VerifiedContactBundleClosure recipientBundle,
-        OnionTrustedTimeAuthority trustedTimeAuthority,
-        CancellationToken cancellationToken = default)
-    {
-        var claim = await Xpc1PreKeyClaimReceiptVerifier.VerifyAsync(
-            _request, _result, placement, recipientAuthority, recipientBundle,
-            trustedTimeAuthority, cancellationToken).ConfigureAwait(false);
-        return new VerifiedDph2InitialClaim(claim, Promote(claim), null, null);
-    }
-#endif
-
     /// <summary>
     /// Allows one promotion only after an independent authority verifies the
     /// exact decrypted XPK1/XPC1 pair. A receipt for a different padded wire
     /// result, even with matching projected fields, cannot be substituted.
     /// </summary>
-    internal VerifiedDph2Initiation Promote(VerifiedXpc1PreKeyClaimReceipt verifiedClaim)
+    private VerifiedDph2Initiation Promote(VerifiedXpc1V2PreKeyClaimReceipt verifiedClaim)
     {
         ArgumentNullException.ThrowIfNull(verifiedClaim);
         if (Interlocked.CompareExchange(ref _promoted, 1, 0) != 0)
             throw new InvalidOperationException("The initial claim preview is single-use.");
-        var (xpk1, xpc1Wire) = verifiedClaim.CopyEncryptedInitialClaimTranscript();
+        var (xpk1, xpc1Wire) = verifiedClaim.CopyEncryptedInitialClaimTranscript(_header.Record);
         try
         {
             if (!Fixed(xpk1, _request.CanonicalBytes.Span) ||
@@ -158,22 +176,41 @@ public sealed class Dph2InitialClaimPreview
 /// </summary>
 public sealed class VerifiedDph2InitialClaim
 {
+    private int _bound;
+
     internal VerifiedDph2InitialClaim(
-        VerifiedXpc1PreKeyClaimReceipt claim,
+        VerifiedXpc1V2PreKeyClaimReceipt claim,
         VerifiedDph2Initiation initiation,
-        VerifiedAdc1V2? initiatorCheckpoint,
-        VerifiedContactBundleClosure? recipientBundle)
+        VerifiedAdc1V2 initiatorCheckpoint,
+        ParsedDcr1V2 recipientClosure)
     {
-        Claim = claim;
-        Initiation = initiation;
-        InitiatorCheckpoint = initiatorCheckpoint;
-        RecipientBundle = recipientBundle;
+        Claim = claim ?? throw new ArgumentNullException(nameof(claim));
+        Initiation = initiation ?? throw new ArgumentNullException(nameof(initiation));
+        InitiatorCheckpoint = initiatorCheckpoint ?? throw new ArgumentNullException(nameof(initiatorCheckpoint));
+        RecipientClosure = recipientClosure ?? throw new ArgumentNullException(nameof(recipientClosure));
     }
 
-    public VerifiedXpc1PreKeyClaimReceipt Claim { get; }
+    public VerifiedXpc1V2PreKeyClaimReceipt Claim { get; }
     public VerifiedDph2Initiation Initiation { get; }
     /// <summary>The current initiator DID2/DAB2/ADC1 V2/DMD1 closure used at promotion.</summary>
-    public VerifiedAdc1V2? InitiatorCheckpoint { get; }
+    public VerifiedAdc1V2 InitiatorCheckpoint { get; }
     /// <summary>The exact recipient publication verified with XPC1.</summary>
-    public VerifiedContactBundleClosure? RecipientBundle { get; }
+    public ParsedDcr1V2 RecipientClosure { get; }
+
+    /// <summary>Transfers two independent, single-use claim lanes only after
+    /// current V2 promotion. This still grants no durable session or ACK.</summary>
+    public VerifiedInitialSessionPreKeyClaim BindForInitialSession()
+    {
+        if (Interlocked.CompareExchange(ref _bound, 1, 0) != 0)
+            throw new InvalidOperationException("The verified initial claim is single-use.");
+        Claim.RequireMatchesDph2Header(Initiation.Record);
+        var offering = Claim.Offering.Record;
+        return new VerifiedInitialSessionPreKeyClaim(offering.MlKemKind,
+            Claim.LastResortUseCounter, Claim.OperationId.Span,
+            Initiation.SessionId.Span, Claim.ExactDpk2Hash.Span,
+            Claim.ExactReplayHash.Span, Initiation.FullReplayHash.Span,
+            offering.MlKemKind == Dpk2PrekeyKind.OneTime
+                ? offering.OneTimeX25519PrekeyId.Span : [],
+            offering.MlKemPrekeyId.Span, Initiation);
+    }
 }

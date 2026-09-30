@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
-using Deep.Protocol.ContactV1;
+using Deep.Protocol.ContactV2;
 using Deep.Protocol.MessagingWire;
 
 namespace Deep.Protocol.MessagingCrypto;
@@ -34,7 +34,7 @@ internal static class Dph2InitialClaimTranscriptCodec
         return prefix;
     }
 
-    internal static (Xpk1Request Request, Xpc1Result Result, int Consumed) DecodePrefix(
+    internal static (ParsedXpk1V2 Request, ParsedXpc1V2 Result, int Consumed) DecodePrefix(
         ReadOnlySpan<byte> unpaddedBody,
         Dph2Record dph2)
     {
@@ -50,7 +50,7 @@ internal static class Dph2InitialClaimTranscriptCodec
         return (request, result, offset);
     }
 
-    private static (Xpk1Request Request, Xpc1Result Result) DecodeRecords(
+    private static (ParsedXpk1V2 Request, ParsedXpc1V2 Result) DecodeRecords(
         ReadOnlySpan<byte> exactXpk1,
         ReadOnlySpan<byte> exactXpc1Wire,
         Dph2Record dph2)
@@ -59,33 +59,35 @@ internal static class Dph2InitialClaimTranscriptCodec
             exactXpk1.Length > MaximumUnpaddedPayloadBytes - 8 ||
             exactXpc1Wire.Length > MaximumUnpaddedPayloadBytes - 8)
             throw new CryptographicException("The DPH2 claim transcript has invalid record bounds.");
-        var request = Xpk1Codec.Decode(exactXpk1);
-        var result = Xpc1Codec.Decode(exactXpc1Wire, exactXpk1);
-        if (result.Status is not (Xpc1Status.Claimed or Xpc1Status.Replay) ||
-            result.MutationOutcome != ContactServiceMutationOutcome.DurablyCommitted)
+        var request = DeepIdV2PreKeyClaimRequestCodec.Decode(exactXpk1);
+        var result = DeepIdV2PreKeyClaimResultCodec.Decode(exactXpc1Wire, exactXpk1);
+        if (result.Status is not (Xpc1V2Status.Claimed or Xpc1V2Status.Replay) ||
+            result.MutationOutcome != Xpc1V2MutationOutcome.DurablyCommitted)
             throw new CryptographicException("The DPH2 claim transcript is not a durable claim.");
-        var dpk2 = Dpk2Codec.Decode(result.Field(16).Span);
-        Dph2Codec.ValidateSelection(dph2, dpk2);
-        var dpk2Hash = MessagingWireCryptographicInputs.ComputeExactDpk2Hash(dpk2);
+        var dpk2 = DeepIdV2Dpk2Codec.Decode(result.Field(16).Span);
+        // Retain the exact version-2/suite-0x0301 envelope for its hash. The
+        // identity-neutral projected record is not a V1 encoding authority.
+        Dph2Codec.ValidateSelectionCore(dph2, dpk2.Record, dpk2.ExactHash.Span);
         var commitment = MessagingWireCryptographicInputs.ComputeSenderEphemeralCommitment(dph2);
         try
         {
-            if (!Fixed(request.NetworkId.Span, dph2.NetworkId.Span) ||
-                !Fixed(request.OperationId.Span, dph2.ClaimOperationId.Span) ||
-                !Fixed(request.ClaimOperationId.Span, dph2.ClaimOperationId.Span) ||
-                !Fixed(request.ResponderDeviceId.Span, dph2.ResponderDeviceId.Span) ||
-                !Fixed(request.SenderEphemeralCommitment.Span, commitment) ||
+            if (!Fixed(request.Field(1).Span, dph2.NetworkId.Span) ||
+                !Fixed(request.Field(2).Span, dph2.ClaimOperationId.Span) ||
+                !Fixed(request.Field(22).Span, dph2.ClaimOperationId.Span) ||
+                !Fixed(request.Field(19).Span, dph2.ResponderDeviceId.Span) ||
+                !Fixed(request.Field(21).Span, commitment) ||
                 !Fixed(result.Field(18).Span, dph2.ClaimReceiptHash.Span) ||
                 !Fixed(result.Field(17).Span,
                     dph2.SelectedPrekey.OneTimeX25519PrekeyIdOrZero.Span) ||
-                !Fixed(dpk2Hash, dph2.ExactDpk2Hash.Span))
+                !Fixed(dpk2.ExactHash.Span, dph2.ExactDpk2Hash.Span) ||
+                BinaryPrimitives.ReadUInt16BigEndian(result.Field(23).Span) !=
+                    dph2.LastResortUseCounter)
                 throw new CryptographicException(
                     "The encrypted claim transcript differs from the exact DPH2 header.");
             return (request, result);
         }
         finally
         {
-            CryptographicOperations.ZeroMemory(dpk2Hash);
             CryptographicOperations.ZeroMemory(commitment);
         }
     }

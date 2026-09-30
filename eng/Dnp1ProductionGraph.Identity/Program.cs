@@ -556,12 +556,12 @@ internal static class GraphPolicy
         {
             ["Deep.Protocol"] =
             [
-                // Reviewed DR-0014/15 history/renewal and DR-0016 current-recipient
-                // V2 claim receipt (Debug, normalized Release). The closed receipt
-                // does not grant session, durable mutation or ACK authority.
+                // Reviewed DR-0017 V2-only prefix/promotion and neutral two-lane
+                // handoff (Debug, normalized Release). The receipt alone has no
+                // session binding; current proof/promotion still grants no ACK.
                 // Pre-cutover/public-API predecessor snapshots are not accepted.
-                "Deep.Protocol|13033|473FCFC921F3718B5E5DC56473507E48EB16B4FA16D51F8946DD00E13F3B01D3",
-                "Deep.Protocol|13033|16173C1E81EFBE152F221F4B68DB8F6193CD7FA8663552F6BDC33BA80547F999"
+                "Deep.Protocol|13035|5A3DDB708C2041833E1CB9DEC7506349387D40D3DE83C3F1C735056B20D2C77D",
+                "Deep.Protocol|13035|D919C1E97B2E1B3C9F3FC7CF52979861C5B7BD6DAFD949848CFB8750721AF01C"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

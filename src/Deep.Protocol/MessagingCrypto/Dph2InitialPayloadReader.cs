@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using Deep.Protocol.ApplicationCore;
-using Deep.Protocol.ContactV1;
+using Deep.Protocol.ContactV2;
 using Deep.Protocol.MessagingWire;
 using Sodium;
 
@@ -9,7 +9,7 @@ namespace Deep.Protocol.MessagingCrypto;
 
 internal static class Dph2InitialPayloadReader
 {
-    internal static (Xpk1Request Request, Xpc1Result Result) PreviewClaimTranscript(
+    internal static (ParsedXpk1V2 Request, ParsedXpc1V2 Result) PreviewClaimTranscript(
         Dph2PreClaimHeader header,
         SecretBuffer initialAeadKey)
     {

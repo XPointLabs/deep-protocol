@@ -13,7 +13,7 @@ using Sodium;
 
 namespace Deep.Protocol.Tests.ContactV2;
 
-public sealed class DeepIdV2PreKeyClaimReceiptVerifierTests
+public sealed partial class DeepIdV2PreKeyClaimReceiptVerifierTests
 {
     [Fact]
     public void SurfaceIsClosedAndCannotGrantSessionOrAck()
@@ -154,8 +154,9 @@ public sealed class DeepIdV2PreKeyClaimReceiptVerifierTests
         // re-encoding of the identity-neutral projected record.
         foreach (var selected in new[] { oneTime[0], lastResort })
         {
-            var candidate = await Verify(request, Result(request, selected, manifest,
-                selected.Kind == Dpk2PrekeyKind.OneTime ? (ushort)0 : (ushort)1));
+            var candidateResult = Result(request, selected, manifest,
+                selected.Kind == Dpk2PrekeyKind.OneTime ? (ushort)0 : (ushort)1);
+            var candidate = await Verify(request, candidateResult);
             foreach (var bucket in new[] { 4112, 16400, 32784 })
             {
                 var bound = Header(selected, candidate.ClaimReceiptHash.ToArray(), bucket);
@@ -165,6 +166,9 @@ public sealed class DeepIdV2PreKeyClaimReceiptVerifierTests
                 Assert.Equal(candidate.ClaimReceiptHash.ToArray(), bound.ClaimReceiptHash.ToArray());
                 Assert.Equal(selected.ExactHash.ToArray(), bound.ExactDpk2Hash.ToArray());
             }
+            await AssertV2EncryptedPrefixAsync(request, candidateResult,
+                Header(selected, candidate.ClaimReceiptHash.ToArray(), 16400),
+                candidate, placement, contact, closure, boot);
         }
         foreach (var change in new[]
         {
@@ -381,13 +385,13 @@ public sealed class DeepIdV2PreKeyClaimReceiptVerifierTests
     }
 
     private sealed class Clock(byte[] boot, ulong[]? samples = null,
-        CancellationTokenSource? cancel = null) : IOnionMonotonicClock
+        CancellationTokenSource? cancel = null, int cancelAtRead = 2) : IOnionMonotonicClock
     {
         internal int Reads { get; private set; }
         public ValueTask<OnionMonotonicReading> ReadAsync(CancellationToken cancellationToken)
         {
             var index = Reads++;
-            if (Reads == 2) cancel?.Cancel();
+            if (Reads == cancelAtRead) cancel?.Cancel();
             return ValueTask.FromResult(new OnionMonotonicReading(boot,
                 samples?[Math.Min(index, samples.Length - 1)] ?? 3));
         }

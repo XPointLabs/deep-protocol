@@ -41,6 +41,8 @@ public sealed class MessagingCryptoSurfaceTests
                 nameof(Dpk2PreKeySecretCapability),
                 nameof(Dph2InitialClaimPreview),
                 nameof(VerifiedDph2InitialClaim),
+                nameof(VerifiedInitialSessionPreKeyClaim),
+                nameof(VerifiedDevicePreKeyClaimReservation),
                 nameof(IExactDpe2DurableTransactionAuthority),
                 nameof(InitiatorDph2ClaimPreparation),
                 nameof(InitiatorDph2PreKeyClaim),

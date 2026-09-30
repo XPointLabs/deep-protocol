@@ -571,7 +571,7 @@ public static class Dph2Codec
             exactOffering.ExactHash.Span);
     }
 
-    private static void ValidateSelectionCore(Dph2Record record,
+    internal static void ValidateSelectionCore(Dph2Record record,
         Dpk2Record exactOffering, ReadOnlySpan<byte> expectedHash)
     {
         var selected = record.SelectedPrekey;

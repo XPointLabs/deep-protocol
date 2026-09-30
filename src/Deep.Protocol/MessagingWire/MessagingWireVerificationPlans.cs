@@ -344,7 +344,7 @@ internal sealed class Dph2PreClaimHeader
     internal ReadOnlySpan<byte> ClaimBinding => _claimBinding;
     internal ReadOnlySpan<byte> InitiatorDirectoryHeadHash => _initiatorDirectoryHeadHash;
 
-    internal VerifiedDph2Initiation Promote(VerifiedXpc1PreKeyClaimReceipt verifiedClaim)
+    internal VerifiedDph2Initiation Promote(Deep.Protocol.ContactV2.VerifiedXpc1V2PreKeyClaimReceipt verifiedClaim)
     {
         ArgumentNullException.ThrowIfNull(verifiedClaim);
         verifiedClaim.RequireMatchesDph2Header(Record);
