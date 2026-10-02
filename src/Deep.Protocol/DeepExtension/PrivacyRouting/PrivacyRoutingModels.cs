@@ -17,7 +17,7 @@ internal static class PrivacyRoutingLimits
     public const int MinimumFrameBytes = 176;
     public const int MaximumFrameBytes = 1_572_864;
     public const int MaximumApplicationPayloadBytes = 1_048_576;
-    public const int MaximumContactResolverRequestBytes = 155_222;
+    public const int MaximumContactResolverRequestBytes = 171_610;
     public const int MaximumContactResolverResponseBytes = 131_072;
     public const int MaximumGroupControlRequestBytes = 33_160;
     public const int MaximumGroupControlResponseBytes = 65_535;

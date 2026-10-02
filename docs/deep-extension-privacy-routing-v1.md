@@ -40,7 +40,7 @@ before scalar multiplication and rejects an all-zero X25519 shared secret.
 | router ID, key-owner ID, key ID, replay ID, operation ID, attempt ID | 32 bytes, nonzero |
 | exact `MAU2` mailbox request | 1..1,048,576 bytes |
 | complete `XPR1` | 20..1,048,576 bytes |
-| exact Contact Resolver request (closed sub-operation codecs) | 1..155,222 bytes |
+| exact Contact Resolver request (closed sub-operation codecs; DR79 publication envelope) | 1..171,610 bytes |
 | exact Contact Resolver success (closed request-paired codecs) | 1..131,072 bytes |
 | exact GroupControl request (`GSW1/GSQ1`) | 1..33,160 bytes |
 | exact GroupControl success (`GSS1`) | 1..65,535 bytes |

@@ -67,7 +67,8 @@ public static partial class DeepIdV2PublicationAuthorityAuthor
                 U64(contact.Closure.Bundle.Field(8).Span),
                 predecessor is null ? new byte[32] : predecessor.Object.CiphertextHash.ToArray(),
                 contact.ProtectedDcr1.Span, first.LowerUnixSeconds, expiry,
-                U64(contact.Closure.Bundle.Field(18).Span), owner, placeholder);
+                U64(contact.Closure.Bundle.Field(18).Span), owner, placeholder,
+                predecessor is null ? ReadOnlySpan<byte>.Empty : predecessor.Result.WireBytes.Span);
             RequirePlaintext(route, wire, first, predecessor, ct);
             var signature = device.SignCurrentContactPublicationRequest(wire, route.Recipient.Authorization);
             try
@@ -92,7 +93,7 @@ public static partial class DeepIdV2PublicationAuthorityAuthor
         VerifyRequestCoreAsync(route, request, null, ct);
 
     private static async ValueTask VerifyRequestCoreAsync(VerifiedDeepIdV2ContactRouteClosure route,
-        ContactPublicationAuthorityWireRequest request, VerifiedDeepIdV2PublicationPredecessor? predecessor, CancellationToken ct)
+        ContactPublicationAuthorityWireRequest request, IVerifiedDeepIdV2PublicationLineage? predecessor, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(route); ArgumentNullException.ThrowIfNull(request);
         ct.ThrowIfCancellationRequested();
@@ -111,7 +112,7 @@ public static partial class DeepIdV2PublicationAuthorityAuthor
     private static async ValueTask<VerifiedDeepIdV2PublicationAuthorization> AuthorThresholdCoreAsync(
         VerifiedDeepIdV2ContactRouteClosure route, ContactPublicationAuthorityWireRequest request,
         IReadOnlyList<IXpa1PublicationAuthorizationWitnessSigner> witnesses,
-        VerifiedDeepIdV2PublicationPredecessor? predecessor, CancellationToken ct)
+        IVerifiedDeepIdV2PublicationLineage? predecessor, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(route); ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(witnesses); ct.ThrowIfCancellationRequested();
@@ -195,7 +196,7 @@ public static partial class DeepIdV2PublicationAuthorityAuthor
 
     internal static async ValueTask<VerifiedDeepIdV2PublicationAuthorization> VerifyResponseCoreAsync(
         VerifiedDeepIdV2ContactRouteClosure route, ContactPublicationAuthorityWireRequest request,
-        ReadOnlyMemory<byte> exactXpu1, VerifiedDeepIdV2PublicationPredecessor? predecessor, CancellationToken ct)
+        ReadOnlyMemory<byte> exactXpu1, IVerifiedDeepIdV2PublicationLineage? predecessor, CancellationToken ct)
     {
         // Parse/copy before clock awaits. A parsed response is not a capability.
         var parsed = DeepIdV2ContactPublicationCodec.DecodeXpu1(exactXpu1.Span);
@@ -215,7 +216,7 @@ public static partial class DeepIdV2PublicationAuthorityAuthor
 
     private static void RequirePlaintext(VerifiedDeepIdV2ContactRouteClosure route,
         ContactPublicationAuthorityWireRequest request, DeepIdV2ContactRouteTimeWindow current,
-        VerifiedDeepIdV2PublicationPredecessor? predecessor, CancellationToken ct)
+        IVerifiedDeepIdV2PublicationLineage? predecessor, CancellationToken ct)
     {
         var dca = route.Recipient.Authorization; var freshness = route.Recipient.Freshness;
         var closure = DeepIdV2ResolverClosureCodec.Decode(request.ExactDcr1.Span); var bundle = closure.Bundle;
@@ -245,7 +246,7 @@ public static partial class DeepIdV2PublicationAuthorityAuthor
         try
         {
             if (!PublicKeyAuth.VerifyDetached(request.PublisherSignature.ToArray(), input, device.Certificate.DeviceEd25519PublicKey.ToArray()))
-                throw new CryptographicException("The publisher did not sign the complete exact V2 request.");
+                throw new CryptographicException("The publisher did not sign the complete exact V3 request.");
         }
         finally { CryptographicOperations.ZeroMemory(input); }
     }
@@ -267,7 +268,7 @@ public static partial class DeepIdV2PublicationAuthorityAuthor
         new(r.NetworkId.Span, r.RequestNonce.Span, r.DirectoryLookupKey.Span, r.MinimumAdh1Generation,
             r.MinimumAdh1CoreHash.Span, r.ExactDca1.Span, r.ExactDcr1.Span, r.ExactRouteClosure.Span,
             r.OperationId.Span, r.Generation, r.PredecessorObjectHash.Span, r.ObjectCiphertext.Span,
-            r.IssuedAtUnixSeconds, r.ExpiresAtUnixSeconds, r.EffectiveExpiresAtUnixSeconds, r.OwnerRetrieveCapability.Span, sig);
+            r.IssuedAtUnixSeconds, r.ExpiresAtUnixSeconds, r.EffectiveExpiresAtUnixSeconds, r.OwnerRetrieveCapability.Span, sig, r.ExactPriorXpo1.Span);
     private static byte[] Encode(ReadOnlySpan<byte> magic, ushort[] tags, ReadOnlyMemory<byte>[] fields)
     {
         var bytes = new byte[12 + fields.Sum(value => 8 + value.Length)];

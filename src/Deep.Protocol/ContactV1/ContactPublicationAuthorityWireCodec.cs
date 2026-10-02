@@ -23,6 +23,7 @@ public sealed class ContactPublicationAuthorityWireRequest
     private readonly byte[] predecessorObjectHash;
     private readonly byte[] objectCiphertext;
     private readonly byte[] ownerRetrieveCapability;
+    private readonly byte[] exactPriorXpo1;
     private readonly byte[] publisherSignature;
 
     public ContactPublicationAuthorityWireRequest(
@@ -42,7 +43,8 @@ public sealed class ContactPublicationAuthorityWireRequest
         ulong expiresAtUnixSeconds,
         ulong effectiveExpiresAtUnixSeconds,
         ReadOnlySpan<byte> ownerRetrieveCapability,
-        ReadOnlySpan<byte> publisherSignature)
+        ReadOnlySpan<byte> publisherSignature,
+        ReadOnlySpan<byte> exactPriorXpo1 = default)
     {
         this.networkId = Required(networkId, 16, nameof(networkId));
         this.requestNonce = Required(requestNonce, 32, nameof(requestNonce));
@@ -82,6 +84,21 @@ public sealed class ContactPublicationAuthorityWireRequest
             throw new ArgumentException(
                 "The predecessor object hash must be zero exactly at generation zero.",
                 nameof(predecessorObjectHash));
+        if (generation == 0)
+        {
+            if (!exactPriorXpo1.IsEmpty)
+                throw new ArgumentException("Genesis publication cannot carry a predecessor receipt.", nameof(exactPriorXpo1));
+        }
+        else
+        {
+            if (exactPriorXpo1.Length is < 256 or > 16_384)
+                throw new ArgumentOutOfRangeException(nameof(exactPriorXpo1));
+            // Structural binding only. Closed verification must still authenticate
+            // both node signatures against the exact historical XPU and placement.
+            ServiceWire.ValidatePublicationPredecessor(exactPriorXpo1, this.networkId,
+                generation, this.predecessorObjectHash);
+        }
+        this.exactPriorXpo1 = exactPriorXpo1.ToArray();
         if (objectCiphertext.Length != exactDcr1.Length + 40 ||
             objectCiphertext.Length > DeepIdV2ContactPublicationCodec.MaximumCiphertextLength)
             throw new ArgumentOutOfRangeException(nameof(objectCiphertext));
@@ -126,6 +143,7 @@ public sealed class ContactPublicationAuthorityWireRequest
     public ulong ExpiresAtUnixSeconds { get; }
     public ulong EffectiveExpiresAtUnixSeconds { get; }
     public ReadOnlyMemory<byte> OwnerRetrieveCapability => ownerRetrieveCapability.ToArray();
+    public ReadOnlyMemory<byte> ExactPriorXpo1 => exactPriorXpo1.ToArray();
     public ReadOnlyMemory<byte> PublisherSignature => publisherSignature.ToArray();
 
     private static byte[] Required(ReadOnlySpan<byte> value, int length, string name)
@@ -184,24 +202,24 @@ public sealed class ContactPublicationAuthorityWireResponse
 
 public static class ContactPublicationAuthorityWireCodec
 {
-    public const ushort Version = 2;
+    public const ushort Version = 3;
     public const int MinimumDcr1Bytes = 62 + DeepIdV2ContactBundleCodec.MinimumLength + 1;
     public const int MaximumDcr1Bytes = 65_535;
-    public const int MinimumRequestBytes = 805 + MinimumDcr1Bytes +
+    public const int MinimumRequestBytes = 809 + MinimumDcr1Bytes +
         ContactRouteClosureCodec.MinimumEncodedBytes + DeepIdV2ContactPublicationCodec.MinimumCiphertextLength;
-    public const int MaximumRequestBytes = 155_210;
+    public const int MaximumRequestBytes = 171_598;
     public const int MinimumResponseBytes = 60 + DeepIdV2ContactPublicationCodec.MinimumXpuLength;
     public const int MaximumResponseBytes = 93_092;
     public const string RequestMediaType =
-        "application/vnd.deep.contact-publication-authority-request.v2+octet-stream";
+        "application/vnd.deep.contact-publication-authority-request.v3+octet-stream";
     public const string ResponseMediaType =
-        "application/vnd.deep.contact-publication-authority-response.v2+octet-stream";
+        "application/vnd.deep.contact-publication-authority-response.v3+octet-stream";
 
     public static byte[] EncodeRequest(ContactPublicationAuthorityWireRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var length = checked(805 + request.ExactDcr1.Length +
-            request.ExactRouteClosure.Length + request.ObjectCiphertext.Length);
+        var length = checked(809 + request.ExactDcr1.Length +
+            request.ExactRouteClosure.Length + request.ObjectCiphertext.Length + request.ExactPriorXpo1.Length);
         if (length is < MinimumRequestBytes or > MaximumRequestBytes)
             throw new InvalidOperationException("The publication-authority request length is invalid.");
         var result = new byte[length];
@@ -223,6 +241,7 @@ public static class ContactPublicationAuthorityWireCodec
         BinaryPrimitives.WriteUInt64BigEndian(result.AsSpan(offset), request.ExpiresAtUnixSeconds); offset += 8;
         BinaryPrimitives.WriteUInt64BigEndian(result.AsSpan(offset), request.EffectiveExpiresAtUnixSeconds); offset += 8;
         request.OwnerRetrieveCapability.Span.CopyTo(result.AsSpan(offset)); offset += 32;
+        WriteArtifact(result, ref offset, request.ExactPriorXpo1.Span);
         request.PublisherSignature.Span.CopyTo(result.AsSpan(offset)); offset += 64;
         if (offset != result.Length)
             throw new InvalidOperationException("The publication-authority request was not exact.");
@@ -245,12 +264,15 @@ public static class ContactPublicationAuthorityWireCodec
         var ciphertext = ReadArtifact(encoded, ref offset,
             DeepIdV2ContactPublicationCodec.MinimumCiphertextLength,
             DeepIdV2ContactPublicationCodec.MaximumCiphertextLength);
-        if (offset > encoded.Length - 120)
+        if (offset > encoded.Length - 124)
             throw new FormatException("The publication-authority request is truncated.");
         var issued = BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(offset, 8)); offset += 8;
         var expires = BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(offset, 8)); offset += 8;
         var effective = BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(offset, 8)); offset += 8;
         var owner = encoded.Slice(offset, 32); offset += 32;
+        var priorXpo = ReadArtifact(encoded, ref offset, 0, 16_384);
+        if (offset > encoded.Length - 64)
+            throw new FormatException("The publication-authority signature is truncated.");
         var signature = encoded.Slice(offset, 64); offset += 64;
         if (offset != encoded.Length)
             throw new FormatException("The publication-authority request has trailing bytes.");
@@ -259,7 +281,7 @@ public static class ContactPublicationAuthorityWireCodec
             BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(88, 8)), encoded.Slice(96, 32),
             encoded.Slice(128, ContactRouteAuthorityWireCodec.ExactDca1Bytes), dcr, route,
             operation, generation, predecessor, ciphertext, issued, expires, effective,
-            owner, signature);
+            owner, signature, priorXpo);
     }
 
     public static byte[] EncodeResponse(
@@ -305,7 +327,7 @@ public static class ContactPublicationAuthorityWireCodec
     }
 
 
-    /// <summary>Exact unsigned V2 envelope; never the retired publisher tuple.</summary>
+    /// <summary>Exact unsigned V3 envelope including prior receipts; never a retired publisher tuple.</summary>
     public static byte[] CreatePublisherSigningInput(ContactPublicationAuthorityWireRequest request)
     {
         var encoded = EncodeRequest(request);

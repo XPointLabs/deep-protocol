@@ -30,20 +30,40 @@ public sealed class VerifiedDeepIdV2ContactObjectPredecessor
         DeepIdV2ContactRouteTimeWindow window, CancellationToken ct)
     {
         RequireAtCurrentContext(next.VerifyContextAtWindow(window, ct));
-        Route.RequireThresholdSuccessor(next.Route.Authorization,
-            new(next.Route.Selection.CanonicalBytes.Span, next.Route.Route.CanonicalBytes.Span,
-                next.Route.Successor.CanonicalBytes.Span));
-        VerifiedDeepIdV2ContactRoutePredecessor.RequireIncrement(Route.Invite.Field(3).Span, next.Invite.Field(3).Span);
-        if (!DeepIdV2RouteContext.Fixed(Route.Invite.Field(2).Span, next.Invite.Field(2).Span) ||
-            !DeepIdV2RouteContext.Fixed(Route.Invite.ObjectHash.Span, next.Invite.Field(4).Span))
-            throw new CryptographicException("Contact successor changed its exact reusable invite lineage.");
+        DeepIdV2ContactObjectLineage.RequireSuccessorRoute(Route, next);
     }
 
     internal void RequireSuccessorBundle(VerifiedDeepIdV2ContactRouteClosure next, ParsedDcb1V2 bundle,
         DeepIdV2ContactRouteTimeWindow window, CancellationToken ct)
     {
         RequireSuccessorRoute(next, window, ct);
-        var prior = Closure.Bundle;
+        DeepIdV2ContactObjectLineage.RequireSuccessorBundle(Closure.Bundle, next, bundle);
+    }
+
+    internal void RequireSuccessorObject(VerifiedDeepIdV2ContactRouteClosure next, ParsedDcr1V2 closure,
+        DeepIdV2ContactRouteTimeWindow window, CancellationToken ct) =>
+        RequireSuccessorBundle(next, closure.Bundle, window, ct);
+}
+
+// Signed lineage comparisons shared by client decrypt verification and the
+// issuer's independently verified history. This helper cannot mint either fact.
+internal static class DeepIdV2ContactObjectLineage
+{
+    internal static void RequireSuccessorRoute(VerifiedDeepIdV2ContactRoutePredecessor prior,
+        VerifiedDeepIdV2ContactRouteClosure next)
+    {
+        prior.RequireThresholdSuccessor(next.Route.Authorization,
+            new(next.Route.Selection.CanonicalBytes.Span, next.Route.Route.CanonicalBytes.Span,
+                next.Route.Successor.CanonicalBytes.Span));
+        VerifiedDeepIdV2ContactRoutePredecessor.RequireIncrement(prior.Invite.Field(3).Span, next.Invite.Field(3).Span);
+        if (!DeepIdV2RouteContext.Fixed(prior.Invite.Field(2).Span, next.Invite.Field(2).Span) ||
+            !DeepIdV2RouteContext.Fixed(prior.Invite.ObjectHash.Span, next.Invite.Field(4).Span))
+            throw new CryptographicException("Contact successor changed its exact reusable invite lineage.");
+    }
+
+    internal static void RequireSuccessorBundle(ParsedDcb1V2 prior,
+        VerifiedDeepIdV2ContactRouteClosure next, ParsedDcb1V2 bundle)
+    {
         VerifiedDeepIdV2ContactRoutePredecessor.RequireIncrement(prior.Field(8).Span, bundle.Field(8).Span);
         if (!DeepIdV2RouteContext.Fixed(prior.ObjectHash.Span, bundle.Field(9).Span) ||
             DeepIdV2RouteContext.U64(bundle.Field(17).Span) < DeepIdV2RouteContext.U64(prior.Field(17).Span) ||
@@ -57,9 +77,6 @@ public sealed class VerifiedDeepIdV2ContactObjectPredecessor
             throw new CryptographicException("Contact successor does not bind its exact current route generation.");
     }
 
-    internal void RequireSuccessorObject(VerifiedDeepIdV2ContactRouteClosure next, ParsedDcr1V2 closure,
-        DeepIdV2ContactRouteTimeWindow window, CancellationToken ct) =>
-        RequireSuccessorBundle(next, closure.Bundle, window, ct);
 }
 
 public static partial class DeepIdV2ContactObjectAuthor

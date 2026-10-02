@@ -40,6 +40,13 @@ Exact issued-head coordination follows
 Request and response generations are independently closed; every Registry,
 XNode and client consumer must rebuild/repin together. No retired response reader
 or historical-currentness flag is supported. Matched deployment is still gated.
+Publication successor coordination follows
+[DR79](../docs/survival-program/decisions/DR-0079-did2-publication-issuer-successor.md).
+The publisher signs the V3 envelope including exact prior replica receipts.
+Issuer-side signed-history evidence is closed and separate from client
+decryption evidence; it never accepts a resolver capability or grants dispatch.
+Registry provisioning, protected client reset/repin and matched peers remain
+activation requirements; no V2 publication envelope reader is kept.
 Route-time rejection diagnostics use only closed artifact and boundary labels,
 never interval values, identities or bytes. This changes no wire, public API,
 protected format or complete-interval predicate, and requires no account reset.

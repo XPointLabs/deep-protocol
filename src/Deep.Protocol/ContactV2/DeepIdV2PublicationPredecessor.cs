@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
+using Deep.Protocol.ApplicationCore;
 using Deep.Protocol.ContactV1;
 using Deep.Protocol.DeepExtension.PrivacyRouting;
 using Deep.Protocol.XPointNetworkV1;
@@ -9,7 +10,7 @@ namespace Deep.Protocol.ContactV2;
 
 /// <summary>Authenticated historical two-replica publication lineage only.
 /// Not current publication, dispatch, a server reservation or client CAS.</summary>
-public sealed class VerifiedDeepIdV2PublicationPredecessor
+public sealed class VerifiedDeepIdV2PublicationPredecessor : IVerifiedDeepIdV2PublicationLineage
 {
     internal VerifiedDeepIdV2PublicationPredecessor(VerifiedDeepIdV2ContactObjectPredecessor contact,
         ContactPublicationAuthorityWireRequest owned, Xpu1Request request, Xpo1Result result)
@@ -29,11 +30,12 @@ public sealed class VerifiedDeepIdV2PublicationPredecessor
         RequireAtCurrentContext(next.VerifyContextAtWindow(window, ct));
         var closure = DeepIdV2ResolverClosureCodec.Decode(request.ExactDcr1.Span);
         Object.RequireSuccessorObject(next, closure, window, ct);
-        if (Generation == ulong.MaxValue || request.Generation != Generation + 1 ||
-            !DeepIdV2RouteContext.Fixed(request.PredecessorObjectHash.Span, Object.CiphertextHash.Span) ||
-            !DeepIdV2RouteContext.Fixed(request.OwnerRetrieveCapability.Span, OwnedRequest.OwnerRetrieveCapability.Span))
-            throw new CryptographicException("Publication successor differs from its exact committed predecessor or owner custody.");
+        DeepIdV2PublicationCommitVerifier.RequirePublicationSuccessor(OwnedRequest, Result, request);
     }
+
+    void IVerifiedDeepIdV2PublicationLineage.RequireSuccessor(VerifiedDeepIdV2ContactRouteClosure next,
+        ContactPublicationAuthorityWireRequest request, DeepIdV2ContactRouteTimeWindow window, CancellationToken ct) =>
+        RequireSuccessor(next, request, window, ct);
 }
 
 public static partial class DeepIdV2PublicationAuthorityAuthor
@@ -105,15 +107,30 @@ public static partial class DeepIdV2PublicationCommitVerifier
         var contact = predecessor.Object; var owned = predecessor.OwnedRequest;
         var request = predecessor.Request; var result = predecessor.Result;
         contact.RequireAtCurrentContext(current);
-        var minimum = contact.Closure.Bundle.Field(21).Span;
+        if (!Fixed(SHA256.HashData(owned.ObjectCiphertext.Span), contact.CiphertextHash.Span) ||
+            !Fixed(request.LocatorHash.Span, contact.LocatorHash.Span))
+            throw new CryptographicException("Historical publication differs from decrypted client custody.");
+        RequireHistoricalPublication(contact.Route, contact.Closure, owned, request, result, current);
+    }
+
+    internal static void RequireHistoricalPublication(VerifiedDeepIdV2ContactRoutePredecessor route,
+        ParsedDcr1V2 closure, ContactPublicationAuthorityWireRequest owned, Xpu1Request request,
+        Xpo1Result result, DeepIdV2RouteContext current)
+    {
+        route.RequireAtCurrentContext(current);
+        DeepIdV2ContactObjectAuthor.RequireHistoricalObject(route, closure, current);
+        ContactPublicationAuthorityWireCodec.RequireExactBody(owned, request.CanonicalBytes.Span);
+        var minimum = closure.Bundle.Field(21).Span;
+        var locatorInput = new byte[48]; owned.NetworkId.Span.CopyTo(locatorInput);
+        closure.Bundle.Field(22).Span.CopyTo(locatorInput.AsSpan(16));
+        var locator = ApplicationCoreFormat.Sha256Domain("Deep/ContactResolver/V2/permanent-locator", locatorInput);
         if (!Fixed(owned.NetworkId.Span, current.Network.NetworkId.Span) ||
             !Fixed(owned.ExactDca1.Span, current.Recipient.Authorization.Record.CanonicalBytes.Span) ||
             !Fixed(owned.DirectoryLookupKey.Span, current.Recipient.Freshness.QueriedDirectoryLeafKey.Span) ||
-            !Fixed(owned.ExactDcr1.Span, contact.Closure.CanonicalBytes.Span) ||
-            !Fixed(SHA256.HashData(owned.ObjectCiphertext.Span), contact.CiphertextHash.Span) ||
-            !Fixed(owned.ExactRouteClosure.Span, contact.Route.ExactRouteClosure.Span) ||
-            !Fixed(request.LocatorHash.Span, contact.LocatorHash.Span) || request.UsageLimit != 0 ||
-            owned.Generation != BinaryPrimitives.ReadUInt64BigEndian(contact.Closure.Bundle.Field(8).Span) ||
+            !Fixed(owned.ExactDcr1.Span, closure.CanonicalBytes.Span) ||
+            !Fixed(owned.ExactRouteClosure.Span, route.ExactRouteClosure.Span) ||
+            !Fixed(request.LocatorHash.Span, locator) || request.UsageLimit != 0 ||
+            owned.Generation != BinaryPrimitives.ReadUInt64BigEndian(closure.Bundle.Field(8).Span) ||
             owned.IssuedAtUnixSeconds > current.Lower ||
             owned.MinimumAdh1Generation != BinaryPrimitives.ReadUInt64BigEndian(minimum) ||
             !Fixed(owned.MinimumAdh1CoreHash.Span, minimum[8..]))
@@ -134,5 +151,15 @@ public static partial class DeepIdV2PublicationCommitVerifier
         if (!Fixed(placement.ViewHash.Span, request.ViewHash.Span) || !Fixed(placement.PlacementHash.Span, request.PlacementHash.Span))
             throw new CryptographicException("Historical publication requires separately authorized placement rollover.");
         VerifyReceipts(request, result, placement);
+    }
+
+    internal static void RequirePublicationSuccessor(ContactPublicationAuthorityWireRequest prior,
+        Xpo1Result priorResult, ContactPublicationAuthorityWireRequest next)
+    {
+        if (prior.Generation == ulong.MaxValue || next.Generation != prior.Generation + 1 ||
+            !Fixed(next.PredecessorObjectHash.Span, SHA256.HashData(prior.ObjectCiphertext.Span)) ||
+            !Fixed(next.OwnerRetrieveCapability.Span, prior.OwnerRetrieveCapability.Span) ||
+            !Fixed(next.ExactPriorXpo1.Span, priorResult.WireBytes.Span))
+            throw new CryptographicException("Publication successor differs from its exact committed predecessor or owner custody.");
     }
 }

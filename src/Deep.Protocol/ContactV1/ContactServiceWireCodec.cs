@@ -436,9 +436,31 @@ internal static class ServiceWire
         if(!r[1].SequenceEqual(parsed[1])||!r[2].SequenceEqual(parsed[2])) Reject(ContactValidationStage.Scalar,"ResultRequestIdentityMismatch");
         var hash=RequestHash(expectedMagic, request);
         if(!CryptographicOperations.FixedTimeEquals(hash,r[3])) Reject(ContactValidationStage.Derived,"RequestHashMismatch");
+        ValidateResultScalars(r);
+    }
+
+    private static void ValidateResultScalars(ServiceRecord r)
+    {
         if(r[5][0]>2) Reject(ContactValidationStage.Scalar,"UnknownMutationOutcome");
         ValidatePadding(U16(r[8]),r.Magic==ProtocolMagic.XUS1,r.Magic==ProtocolMagic.XIS1);
         if(r.Magic is not (ProtocolMagic.XUS1 or ProtocolMagic.XIS1)&&U16(r[8])!=SmallestPaddingClass(r.Canonical.Length,false)) Reject(ContactValidationStage.Scalar,"NonCanonicalPaddingClass");
+    }
+
+    // No public unbound result parser or verified capability is exposed here.
+    internal static void ValidatePublicationPredecessor(ReadOnlySpan<byte> encoded,
+        ReadOnlySpan<byte> network, ulong nextGeneration, ReadOnlySpan<byte> predecessorHash)
+    {
+        var r = ParseResult(encoded, ProtocolMagic.XPO1, false);
+        ExactLengths(r,(1,16),(2,32),(3,32),(4,2),(5,1),(6,8),(7,4),(8,2)); NonZero(r,1,2,3);
+        ValidateResultScalars(r);
+        ValidateXpo(r);
+        if (U16(r[4]) is not ((ushort)Xpo1Status.Committed) and not ((ushort)Xpo1Status.ExactReplay) ||
+            r[5][0] != (byte)ContactServiceMutationOutcome.DurablyCommitted ||
+            !CryptographicOperations.FixedTimeEquals(r[1], network) ||
+            U64(r[16]) == ulong.MaxValue || U64(r[16]) + 1 != nextGeneration ||
+            U64(r[18]) != nextGeneration ||
+            !CryptographicOperations.FixedTimeEquals(r[17], predecessorHash))
+            Reject(ContactValidationStage.Derived, "PublicationPredecessorMismatch");
     }
 
     private static Dictionary<ushort,byte[]> ParseRequestEnvelope(ReadOnlySpan<byte> bytes,string magic)

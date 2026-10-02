@@ -58,7 +58,7 @@ public sealed class PublicationStoreAuthoritySurfaceTests
         Assert.Empty(typeof(VerifiedDeepIdV2PublicationCommit).GetConstructors());
         var methods = typeof(DeepIdV2PublicationCommitVerifier).GetMethods(
             BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
-        Assert.Equal(["VerifyCommittedAsync", "VerifyPredecessorAsync"], methods.Select(value => value.Name).Order().ToArray());
+        Assert.Equal(["VerifyCommittedAsync", "VerifyIssuerPredecessorAsync", "VerifyPredecessorAsync"], methods.Select(value => value.Name).Order().ToArray());
         var method = Assert.Single(methods, value => value.Name == "VerifyCommittedAsync");
         Assert.Equal("VerifyCommittedAsync", method.Name);
         Assert.Equal([typeof(VerifiedDeepIdV2ContactRouteClosure), typeof(AuthoredDeepIdV2ContactObject),
@@ -67,6 +67,28 @@ public sealed class PublicationStoreAuthoritySurfaceTests
             method.GetParameters().Select(parameter => parameter.ParameterType).ToArray());
         Assert.All(typeof(VerifiedDeepIdV2PublicationCommit).GetProperties(), property => Assert.False(property.CanWrite));
         Assert.Equal(16_384, DeepIdV2PublicationCommitVerifier.MaximumResultBytes);
+    }
+
+    [Fact]
+    public void IssuerHistoryIsSeparateClosedSignedEvidenceWithoutClientDecryptionOrDispatch()
+    {
+        var type = typeof(VerifiedDeepIdV2PublicationIssuerPredecessor);
+        Assert.Empty(type.GetConstructors());
+        Assert.Equal(["Generation"], type.GetProperties().Select(property => property.Name).ToArray());
+        Assert.DoesNotContain(type.GetMethods(), method => method.Name is "SignAsync" or "DispatchAsync" or "EnsureCurrentAsync");
+        var verify = Assert.Single(typeof(DeepIdV2PublicationCommitVerifier).GetMethods(), method => method.Name == "VerifyIssuerPredecessorAsync");
+        Assert.Equal([typeof(DeepIdV2CurrentContactAuthorization), typeof(VerifiedOnionNetworkContext), typeof(VerifiedXPointNetworkAuthority),
+            typeof(ContactPublicationAuthorityWireRequest), typeof(ReadOnlyMemory<byte>), typeof(ReadOnlyMemory<byte>),
+            typeof(OnionTrustedTimeAuthority), typeof(CancellationToken)], verify.GetParameters().Select(parameter => parameter.ParameterType).ToArray());
+        foreach (var name in new[] { "VerifyIssuerSuccessorRequestAsync", "AuthorIssuerThresholdSuccessorAsync", "VerifyIssuerSuccessorResponseAsync" })
+        {
+            var method = Assert.Single(typeof(DeepIdV2PublicationAuthorityAuthor).GetMethods(), value => value.Name == name);
+            Assert.False(Assert.Single(method.GetParameters(), parameter => parameter.ParameterType == type).IsOptional);
+        }
+        Assert.Equal(3, ContactPublicationAuthorityWireCodec.Version);
+        Assert.Equal(23_306, ContactPublicationAuthorityWireCodec.MinimumRequestBytes);
+        Assert.Equal(171_598, ContactPublicationAuthorityWireCodec.MaximumRequestBytes);
+        Assert.Equal(171_610, ContactCoordinationOnionCodec.MaximumRequestBytes);
     }
 
     [Fact]
