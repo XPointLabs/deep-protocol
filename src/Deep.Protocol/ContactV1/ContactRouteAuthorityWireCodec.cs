@@ -17,6 +17,8 @@ public sealed class ContactRouteAuthorityWireRequest
     private readonly byte[] minimumAdh1CoreHash;
     private readonly byte[] exactDca1;
     private readonly byte[] exactXra1;
+    private readonly byte[] exactPredecessorXir1V2;
+    private readonly byte[] exactPredecessorRouteClosure;
 
     public ContactRouteAuthorityWireRequest(
         ReadOnlySpan<byte> networkId,
@@ -25,7 +27,9 @@ public sealed class ContactRouteAuthorityWireRequest
         ulong minimumAdh1Generation,
         ReadOnlySpan<byte> minimumAdh1CoreHash,
         ReadOnlySpan<byte> exactDca1,
-        ReadOnlySpan<byte> exactXra1)
+        ReadOnlySpan<byte> exactXra1,
+        ReadOnlySpan<byte> exactPredecessorXir1V2 = default,
+        ReadOnlySpan<byte> exactPredecessorRouteClosure = default)
     {
         this.networkId = Required(networkId, 16, nameof(networkId));
         this.requestNonce = Required(requestNonce, 32, nameof(requestNonce));
@@ -43,9 +47,27 @@ public sealed class ContactRouteAuthorityWireRequest
             !Fixed(xra.Field(1).Span, this.networkId))
             throw new CryptographicException(
                 "The route-authority request contains cross-network records.");
+        var genesis = BinaryPrimitives.ReadUInt64BigEndian(xra.Field(3).Span) == 0;
+        if (genesis)
+        {
+            if (!exactPredecessorXir1V2.IsEmpty || !exactPredecessorRouteClosure.IsEmpty)
+                throw new ArgumentException("Genesis coordination cannot carry a predecessor.");
+        }
+        else
+        {
+            if (exactPredecessorXir1V2.Length != ContactV2.DeepIdV2InviteRendezvousCodec.CanonicalLength ||
+                exactPredecessorRouteClosure.Length is < ContactRouteClosureCodec.MinimumEncodedBytes or > ContactRouteClosureCodec.MaximumEncodedBytes)
+                throw new ArgumentException("Successor coordination requires both bounded exact predecessor records.");
+            var invite = ContactV2.DeepIdV2InviteRendezvousCodec.Decode(exactPredecessorXir1V2);
+            var closure = ContactRouteClosureCodec.Decode(exactPredecessorRouteClosure);
+            if (!Fixed(invite.Field(1).Span, this.networkId) || !Fixed(closure.Authorization.Field(1).Span, this.networkId))
+                throw new CryptographicException("Route predecessor belongs to another network.");
+        }
         MinimumAdh1Generation = minimumAdh1Generation;
         this.exactDca1 = exactDca1.ToArray();
         this.exactXra1 = exactXra1.ToArray();
+        this.exactPredecessorXir1V2 = exactPredecessorXir1V2.ToArray();
+        this.exactPredecessorRouteClosure = exactPredecessorRouteClosure.ToArray();
     }
 
     public ReadOnlyMemory<byte> NetworkId => networkId.ToArray();
@@ -55,6 +77,9 @@ public sealed class ContactRouteAuthorityWireRequest
     public ReadOnlyMemory<byte> MinimumAdh1CoreHash => minimumAdh1CoreHash.ToArray();
     public ReadOnlyMemory<byte> ExactDca1 => exactDca1.ToArray();
     public ReadOnlyMemory<byte> ExactXra1 => exactXra1.ToArray();
+    public ReadOnlyMemory<byte> ExactPredecessorXir1V2 => exactPredecessorXir1V2.ToArray();
+    public ReadOnlyMemory<byte> ExactPredecessorRouteClosure => exactPredecessorRouteClosure.ToArray();
+    public bool HasPredecessor => exactPredecessorXir1V2.Length != 0;
 
     private static byte[] Required(ReadOnlySpan<byte> value, int length, string name)
     {
@@ -133,26 +158,28 @@ public sealed class ContactRouteAuthorityWireResponse
 
 public static class ContactRouteAuthorityWireCodec
 {
-    public const ushort RequestVersion = 2, ResponseVersion = 3;
+    public const ushort RequestVersion = 3, ResponseVersion = 3;
     public const int ExactDca1Bytes = 473;
     public const int ExactXra1Bytes = 550;
-    public const int RequestBytes = 1_151;
+    public const int RequestPrefixBytes = 1_151;
+    public const int MinimumRequestBytes = 1_159, MaximumRequestBytes = 25_065;
     // ADH1 header 12 + thirteen field headers 104 + fixed fields 217
     // + one 96-byte witness receipt. The independent custody cap is 4096.
     public const int MinimumIssuanceAdh1Bytes = 429, MaximumIssuanceAdh1Bytes = 4096;
     public const int MinimumResponseBytes = 2_584;
     public const int MaximumResponseBytes = 15_179;
     public const string RequestMediaType =
-        "application/vnd.deep.contact-route-authority-request.v2+octet-stream";
+        "application/vnd.deep.contact-route-authority-request.v3+octet-stream";
     public const string ResponseMediaType =
         "application/vnd.deep.contact-route-authority-response.v3+octet-stream";
 
     public static byte[] EncodeRequest(ContactRouteAuthorityWireRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var result = new byte[RequestBytes];
+        var length = checked(MinimumRequestBytes + request.ExactPredecessorXir1V2.Length + request.ExactPredecessorRouteClosure.Length);
+        var result = new byte[length];
         BinaryPrimitives.WriteUInt16BigEndian(result, RequestVersion);
-        BinaryPrimitives.WriteUInt32BigEndian(result.AsSpan(4), RequestBytes);
+        BinaryPrimitives.WriteUInt32BigEndian(result.AsSpan(4), checked((uint)length));
         request.NetworkId.Span.CopyTo(result.AsSpan(8));
         request.RequestNonce.Span.CopyTo(result.AsSpan(24));
         request.DirectoryLookupKey.Span.CopyTo(result.AsSpan(56));
@@ -161,12 +188,19 @@ public static class ContactRouteAuthorityWireCodec
         request.MinimumAdh1CoreHash.Span.CopyTo(result.AsSpan(96));
         request.ExactDca1.Span.CopyTo(result.AsSpan(128));
         request.ExactXra1.Span.CopyTo(result.AsSpan(601));
+        var offset = RequestPrefixBytes;
+        WriteArtifact(result, ref offset, request.ExactPredecessorXir1V2.Span);
+        WriteArtifact(result, ref offset, request.ExactPredecessorRouteClosure.Span);
         return result;
     }
 
     public static ContactRouteAuthorityWireRequest DecodeRequest(ReadOnlySpan<byte> encoded)
     {
-        ValidateHeader(encoded, RequestBytes, RequestBytes, RequestVersion);
+        ValidateHeader(encoded, MinimumRequestBytes, MaximumRequestBytes, RequestVersion);
+        var offset = RequestPrefixBytes;
+        var priorInvite = ReadArtifact(encoded, ref offset, 0, ContactV2.DeepIdV2InviteRendezvousCodec.CanonicalLength);
+        var priorRoute = ReadArtifact(encoded, ref offset, 0, ContactRouteClosureCodec.MaximumEncodedBytes);
+        if (offset != encoded.Length) throw new FormatException("Route request has trailing bytes.");
         return new ContactRouteAuthorityWireRequest(
             encoded.Slice(8, 16),
             encoded.Slice(24, 32),
@@ -174,7 +208,7 @@ public static class ContactRouteAuthorityWireCodec
             BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(88, 8)),
             encoded.Slice(96, 32),
             encoded.Slice(128, ExactDca1Bytes),
-            encoded.Slice(601, ExactXra1Bytes));
+            encoded.Slice(601, ExactXra1Bytes), priorInvite, priorRoute);
     }
 
     public static byte[] EncodeResponse(
@@ -252,14 +286,14 @@ public static class ContactRouteAuthorityWireCodec
         int maximum)
     {
         if (offset > encoded.Length - 4)
-            throw new FormatException("The route-authority response is truncated.");
+            throw new FormatException("The route-authority envelope is truncated.");
         var declared = BinaryPrimitives.ReadUInt32BigEndian(encoded.Slice(offset, 4));
         if (declared < (uint)minimum || declared > (uint)maximum)
-            throw new FormatException("A route-authority response artifact is outside its bound.");
+            throw new FormatException("A route-authority envelope artifact is outside its bound.");
         var length = (int)declared;
         offset += 4;
         if (length < minimum || length > maximum || offset > encoded.Length - length)
-            throw new FormatException("A route-authority response artifact is outside its bound.");
+            throw new FormatException("A route-authority envelope artifact is outside its bound.");
         var value = encoded.Slice(offset, length);
         offset += length;
         return value;

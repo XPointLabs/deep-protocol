@@ -82,7 +82,8 @@ public static class ContactCoordinationPeerAuthentication
     {
         var valid = target switch
         {
-            ContactCoordinationTarget.Route => body.Length == ContactRouteAuthorityWireCodec.RequestBytes,
+            ContactCoordinationTarget.Route => body.Length >= ContactRouteAuthorityWireCodec.MinimumRequestBytes &&
+                body.Length <= ContactRouteAuthorityWireCodec.MaximumRequestBytes,
             ContactCoordinationTarget.Publication => body.Length >= ContactPublicationAuthorityWireCodec.MinimumRequestBytes &&
                 body.Length <= ContactPublicationAuthorityWireCodec.MaximumRequestBytes,
             _ => false

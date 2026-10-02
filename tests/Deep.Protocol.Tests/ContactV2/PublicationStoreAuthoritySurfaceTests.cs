@@ -11,6 +11,27 @@ namespace Deep.Protocol.Tests.ContactV2;
 public sealed class PublicationStoreAuthoritySurfaceTests
 {
     [Fact]
+    public void SuccessorCoordinationHasOnlyBoundedParsedBytesAndClosedReadOnlyVerification()
+    {
+        Assert.Equal(3, ContactRouteAuthorityWireCodec.RequestVersion);
+        Assert.Equal(3, ContactRouteAuthorityWireCodec.ResponseVersion);
+        Assert.Equal(1_159, ContactRouteAuthorityWireCodec.MinimumRequestBytes);
+        Assert.Equal(25_065, ContactRouteAuthorityWireCodec.MaximumRequestBytes);
+        Assert.All(typeof(ContactRouteAuthorityWireRequest).GetProperties(), property => Assert.False(property.CanWrite));
+        Assert.Null(typeof(ContactRouteAuthorityWireCodec).GetField("RequestBytes"));
+        Assert.Empty(typeof(VerifiedDeepIdV2ContactRoutePredecessor).GetConstructors());
+        var verify = Assert.Single(typeof(DeepIdV2ContactRouteVerifier).GetMethods(),
+            method => method.Name == "VerifyAdvertisementSuccessorAsync");
+        Assert.Equal([typeof(DeepIdV2CurrentContactAuthorization), typeof(VerifiedOnionNetworkContext),
+            typeof(VerifiedXPointNetworkAuthority), typeof(VerifiedDeepIdV2ContactRoutePredecessor),
+            typeof(ReadOnlyMemory<byte>), typeof(OnionTrustedTimeAuthority), typeof(CancellationToken)],
+            verify.GetParameters().Select(parameter => parameter.ParameterType).ToArray());
+        Assert.Equal(typeof(ValueTask), verify.ReturnType);
+        Assert.False(verify.GetParameters()[3].IsOptional);
+        Assert.DoesNotContain(verify.GetParameters(), parameter => typeof(Delegate).IsAssignableFrom(parameter.ParameterType));
+    }
+
+    [Fact]
     public void PermanentResolveCannotMintTrustFromParsedBytesOrCallerKeys()
     {
         Assert.Empty(typeof(ParsedDeepIdV2PermanentContactCandidate).GetConstructors());

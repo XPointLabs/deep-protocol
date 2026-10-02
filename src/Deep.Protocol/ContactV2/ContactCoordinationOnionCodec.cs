@@ -95,7 +95,7 @@ public static class ContactCoordinationOnionCodec
     {
         var limits = (target, response) switch
         {
-            (ContactCoordinationTarget.Route, false) => (ContactRouteAuthorityWireCodec.RequestBytes, ContactRouteAuthorityWireCodec.RequestBytes),
+            (ContactCoordinationTarget.Route, false) => (ContactRouteAuthorityWireCodec.MinimumRequestBytes, ContactRouteAuthorityWireCodec.MaximumRequestBytes),
             (ContactCoordinationTarget.Route, true) => (ContactRouteAuthorityWireCodec.MinimumResponseBytes, ContactRouteAuthorityWireCodec.MaximumResponseBytes),
             (ContactCoordinationTarget.Publication, false) => (ContactPublicationAuthorityWireCodec.MinimumRequestBytes, ContactPublicationAuthorityWireCodec.MaximumRequestBytes),
             (ContactCoordinationTarget.Publication, true) => (ContactPublicationAuthorityWireCodec.MinimumResponseBytes, ContactPublicationAuthorityWireCodec.MaximumResponseBytes),

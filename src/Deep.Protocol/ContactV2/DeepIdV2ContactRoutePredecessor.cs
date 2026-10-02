@@ -66,6 +66,28 @@ public sealed class VerifiedDeepIdV2ContactRoutePredecessor
 
 public static partial class DeepIdV2ContactRouteVerifier
 {
+    /// <summary>Checks a current exact candidate against authenticated retained
+    /// lineage before any durable reservation or witness callback. No signing,
+    /// mutation or dispatch authority is returned.</summary>
+    public static async ValueTask VerifyAdvertisementSuccessorAsync(
+        DeepIdV2CurrentContactAuthorization recipient, VerifiedOnionNetworkContext network,
+        VerifiedXPointNetworkAuthority authority, VerifiedDeepIdV2ContactRoutePredecessor predecessor,
+        ReadOnlyMemory<byte> exactXra1, OnionTrustedTimeAuthority trustedTime,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(predecessor); cancellationToken.ThrowIfCancellationRequested();
+        if (exactXra1.Length != 550) throw new CryptographicException("XRA1 must have its exact bounded size.");
+        var xra = ContactCodec.Decode(ProtocolMagic.XRA1, exactXra1.Span);
+        predecessor.RequireAdvertisementSuccessor(xra);
+        var first = await DeepIdV2RouteContext.ReadAsync(recipient, network, authority, trustedTime,
+            cancellationToken).ConfigureAwait(false);
+        Require(first);
+        Require(await first.RecheckAsync(cancellationToken).ConfigureAwait(false));
+        cancellationToken.ThrowIfCancellationRequested();
+        void Require(DeepIdV2RouteContext current)
+        { predecessor.RequireAtCurrentContext(current); current.RequireAdvertisement(xra); }
+    }
+
     /// <summary>Authenticates exact historical route input against independently
     /// current DID2/network authority. Expiry is not extended and no live route
     /// or mutation permission is returned.</summary>

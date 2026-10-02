@@ -55,6 +55,10 @@ The DID2 coordination sub-operation and its gateway placement are owned by
 [DR-0049](../../docs/survival-program/decisions/DR-0049-did2-three-hop-coordination-carrier.md)
 and [CONTACT-COORDINATION-02](../../docs/survival-program/releases/v3.0.0/specs/contact-coordination-v2.registry.json).
 It uses existing ContactResolve operation 4, not a sixth outer operation.
+The enclosed route request and exact predecessor authentication follow
+[DR-0077](../../docs/survival-program/decisions/DR-0077-did2-route-successor-coordination.md).
+The wrapper, selected placement and full-body node signature remain independent
+of the issuer's current DID2/witness checks; parsing is never historical authority.
 Each other sub-operation retains its own closed codec bounds; the outer ceiling
 is not permission to increase a mailbox/contact record or bypass canonical checks.
 Ingress decrypts only a relay layer, core only a relay layer, and service exit
