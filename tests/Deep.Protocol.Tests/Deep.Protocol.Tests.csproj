@@ -25,6 +25,12 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <!-- Operator capture only. The default complete test assembly is unchanged. -->
+  <ItemGroup Condition="'$(ProtectedCaptureFocused)' == 'true'">
+    <Compile Remove="**\*.cs" />
+    <Compile Include="XPointNetworkV1\ProtectedPredecessorCaptureTests.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <EmbeddedResource Include="Identity\deep-recovery-v1.vector.json"
                       LogicalName="Deep.Protocol.Tests.Identity.deep-recovery-v1.vector.json" />
