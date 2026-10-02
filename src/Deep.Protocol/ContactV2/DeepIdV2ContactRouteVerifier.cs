@@ -80,7 +80,7 @@ public sealed class VerifiedDeepIdV2ContactRouteClosure
     }
 }
 
-public static class DeepIdV2ContactRouteVerifier
+public static partial class DeepIdV2ContactRouteVerifier
 {
     /// <summary>Validates an exact DID2 device proposal before contacting an
     /// authority. This does not mint signing, publication or route authority.</summary>
@@ -150,6 +150,17 @@ public static class DeepIdV2ContactRouteVerifier
             throw new CryptographicException("The route PMT2 differs from the exact verified network projection.");
         current.RequireAdvertisement(xra);
         current.RequireThreshold(xra, route.Selection, route.Route, route.Successor, requireCurrentDirectory: false);
+        RequireIdentityBindings(invite, route, current);
+        current.Covers(DeepIdV2RouteContext.U64(invite.FieldSpan(13)), DeepIdV2RouteContext.U64(invite.FieldSpan(14)), DeepIdV2RouteTimeArtifact.Xir1V2);
+        current.Covers(DeepIdV2RouteContext.U64(xrr.FieldSpan(16)), DeepIdV2RouteContext.U64(xrr.FieldSpan(17)), DeepIdV2RouteTimeArtifact.Xrr1);
+        // Structural framing already validates every exact route graph reference.
+        DeepIdV2InviteRendezvousCodec.VerifyIssuerAndDca1(invite, current.Recipient.Authorization, current.Upper);
+    }
+
+    internal static void RequireIdentityBindings(ParsedXir1V2 invite,
+        ParsedContactRouteClosure route, DeepIdV2RouteContext current)
+    {
+        var xra = route.Authorization; var xrr = route.Reachability;
         if (!DeepIdV2RouteContext.Fixed(invite.FieldSpan(1), current.Network.NetworkId.Span) ||
             !DeepIdV2RouteContext.Fixed(invite.FieldSpan(5), current.PmtReference.Span) ||
             !DeepIdV2RouteContext.Fixed(invite.FieldSpan(18), ContactCodec.ArtifactReference(ProtocolMagic.XRA1, xra).CanonicalBytes.Span) ||
@@ -166,10 +177,6 @@ public static class DeepIdV2ContactRouteVerifier
             !DeepIdV2RouteContext.Fixed(xrr.FieldSpan(11), xra.FieldSpan(9)) ||
             !DeepIdV2RouteContext.Fixed(xrr.FieldSpan(13), xra.FieldSpan(8)))
             throw new CryptographicException("The DID2 invite/reachability differs from its exact device, delegation or route scope.");
-        current.Covers(DeepIdV2RouteContext.U64(invite.FieldSpan(13)), DeepIdV2RouteContext.U64(invite.FieldSpan(14)), DeepIdV2RouteTimeArtifact.Xir1V2);
-        current.Covers(DeepIdV2RouteContext.U64(xrr.FieldSpan(16)), DeepIdV2RouteContext.U64(xrr.FieldSpan(17)), DeepIdV2RouteTimeArtifact.Xrr1);
-        // Structural framing already validates every exact route graph reference.
-        DeepIdV2InviteRendezvousCodec.VerifyIssuerAndDca1(invite, current.Recipient.Authorization, current.Upper);
     }
     internal static void RequireBundleIssuanceAnchor(VerifiedDeepIdV2ContactRouteClosure route, ParsedDcb1V2 bundle)
     {

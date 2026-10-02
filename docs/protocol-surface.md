@@ -39,6 +39,18 @@ genesis-only threshold rejection are unchanged. The full protected renewal,
 private predecessor-bound coordination, publication and retained-account device
 flow remain gated; there is no wire or schema reset in this API increment.
 
+[DR-0072](../../docs/survival-program/decisions/DR-0072-did2-route-renewal-lineage.md)
+adds the closed historical `VerifiedDeepIdV2ContactRoutePredecessor` and
+`VerifyPredecessorAsync`, `AuthorThresholdSuccessorAsync`, `CompleteSuccessorAsync`.
+These authenticate exact predecessor scope/graph/signatures independently of
+current artifact expiry, derive new issuance from protected time and bind the
+successor back to that exact history. The normal route verifier accepts only
+current artifacts; genesis authoring still rejects successor input. XSS successor
+graph handling follows its actual prior XRC reference. Current-only six-record
+parsing is not a persisted route floor. Private durable per-generation issuance,
+protected pending/publication lineage and device recovery remain unimplemented
+activation gates. Existing bytes/domains and the reviewed D--G graph are unchanged.
+
 ### Opaque DID2 mailbox issuance candidate
 
 Superproject DR-0054 defines `ContactV2.DeepIdV2MailboxGrantIssuanceVerifier`,

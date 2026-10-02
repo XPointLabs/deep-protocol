@@ -8,6 +8,46 @@ namespace Deep.Protocol.ContactV2;
 
 public static partial class DeepIdV2ContactRouteAuthor
 {
+    /// <summary>Authors only the current threshold successor candidate. The
+    /// private issuer must serialize exact lineage/winners durably before release.</summary>
+    public static async ValueTask<ParsedDeepIdV2RouteThreshold> AuthorThresholdSuccessorAsync(
+        DeepIdV2CurrentContactAuthorization currentAuthorization, VerifiedOnionNetworkContext network,
+        VerifiedXPointNetworkAuthority networkAuthority, VerifiedDeepIdV2ContactRoutePredecessor predecessor,
+        ReadOnlyMemory<byte> exactXra1, IReadOnlyList<IContactRouteAuthorityWitnessSigner> witnessSigners,
+        ulong expiresAtUnixSeconds, OnionTrustedTimeAuthority trustedTime,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(predecessor); cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(witnessSigners);
+        if (exactXra1.Length != 550) throw new CryptographicException("XRA1 must have its exact bounded size.");
+        var signers = ValidateSigners(networkAuthority, witnessSigners);
+        var owned = exactXra1.ToArray();
+        try
+        {
+            predecessor.RequireAdvertisementSuccessor(ContactCodec.Decode(ProtocolMagic.XRA1, owned));
+            var current = await DeepIdV2RouteContext.ReadAsync(currentAuthorization, network, networkAuthority,
+                trustedTime, cancellationToken).ConfigureAwait(false);
+            predecessor.RequireAtCurrentContext(current);
+            return await AuthorThresholdCoreAsync(currentAuthorization, network, networkAuthority, owned,
+                witnessSigners, current.Lower, expiresAtUnixSeconds, trustedTime, predecessor, signers, cancellationToken).ConfigureAwait(false);
+        }
+        finally { CryptographicOperations.ZeroMemory(owned); }
+    }
+
+    /// <summary>Completes the exact reusable route successor from current
+    /// device custody. This does not publish/adopt it or authorize a mailbox.</summary>
+    public static ValueTask<VerifiedDeepIdV2ContactRouteClosure> CompleteSuccessorAsync(
+        DeepIdV2CurrentContactAuthorization currentAuthorization, VerifiedOnionNetworkContext network,
+        VerifiedXPointNetworkAuthority networkAuthority, OwnedGenesisDeviceSecrets deviceSecrets,
+        VerifiedDeepIdV2ContactRoutePredecessor predecessor, ReadOnlyMemory<byte> exactXra1,
+        ParsedDeepIdV2RouteThreshold threshold, ushort minimumReader, OnionTrustedTimeAuthority trustedTime,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(predecessor);
+        return CompleteCoreAsync(currentAuthorization, network, networkAuthority, deviceSecrets,
+            exactXra1, threshold, minimumReader, trustedTime, predecessor, cancellationToken);
+    }
+
     /// <summary>Authors only a device-signed XRA1 successor candidate. An expired
     /// predecessor remains expired; this does not renew a threshold, route,
     /// publication, dispatch permission or grant. Durable exact custody belongs

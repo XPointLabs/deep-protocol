@@ -55,23 +55,38 @@ public static partial class DeepIdV2ContactRouteAuthor
         finally { Clear(fields); Clear(policy, keyId, publicKey); if (signature is not null) Clear(signature); }
     }
 
-    public static async ValueTask<ParsedDeepIdV2RouteThreshold> AuthorThresholdAsync(
+    public static ValueTask<ParsedDeepIdV2RouteThreshold> AuthorThresholdAsync(
         DeepIdV2CurrentContactAuthorization currentAuthorization, VerifiedOnionNetworkContext network,
         VerifiedXPointNetworkAuthority networkAuthority, ReadOnlyMemory<byte> exactXra1,
         IReadOnlyList<IContactRouteAuthorityWitnessSigner> witnessSigners,
         ulong issuedAtUnixSeconds, ulong expiresAtUnixSeconds, OnionTrustedTimeAuthority trustedTime,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        AuthorThresholdCoreAsync(currentAuthorization, network, networkAuthority, exactXra1, witnessSigners,
+            issuedAtUnixSeconds, expiresAtUnixSeconds, trustedTime, null, null, cancellationToken);
+
+    private static async ValueTask<ParsedDeepIdV2RouteThreshold> AuthorThresholdCoreAsync(
+        DeepIdV2CurrentContactAuthorization currentAuthorization, VerifiedOnionNetworkContext network,
+        VerifiedXPointNetworkAuthority networkAuthority, ReadOnlyMemory<byte> exactXra1,
+        IReadOnlyList<IContactRouteAuthorityWitnessSigner> witnessSigners,
+        ulong issuedAtUnixSeconds, ulong expiresAtUnixSeconds, OnionTrustedTimeAuthority trustedTime,
+        VerifiedDeepIdV2ContactRoutePredecessor? predecessor, SignerBinding[]? signerSnapshot,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(witnessSigners);
         cancellationToken.ThrowIfCancellationRequested();
         RequireLifetime(issuedAtUnixSeconds, expiresAtUnixSeconds, 86_400);
         if (exactXra1.Length != 550) throw new CryptographicException("XRA1 must have its exact bounded size.");
         var xra = ContactCodec.Decode(ProtocolMagic.XRA1, exactXra1.Span);
-        RequireGenesis(xra, 3);
+        if (predecessor is null) RequireGenesis(xra, 3);
+        else predecessor.RequireAdvertisementSuccessor(xra);
         // Snapshot signer identities and verify the whole set before any callback.
-        var signers = ValidateSigners(networkAuthority, witnessSigners);
+        var signers = signerSnapshot ?? ValidateSigners(networkAuthority, witnessSigners);
         var current = await DeepIdV2RouteContext.ReadAsync(currentAuthorization, network,
             networkAuthority, trustedTime, cancellationToken).ConfigureAwait(false);
+        predecessor?.RequireAtCurrentContext(current);
+        if (predecessor is not null && (DeepIdV2RouteContext.U64(predecessor.Route.Route.Field(3).Span) >= ulong.MaxValue - 1 ||
+            expiresAtUnixSeconds <= DeepIdV2RouteContext.U64(predecessor.Route.Route.Field(18).Span)))
+            throw new CryptographicException("The retained route generation or expiry cannot advance.");
         current.RequireAdvertisement(xra); current.Covers(issuedAtUnixSeconds, expiresAtUnixSeconds, DeepIdV2RouteTimeArtifact.ThresholdAuthoring);
         if (issuedAtUnixSeconds < DeepIdV2RouteContext.U64(xra.FieldSpan(12)) ||
             expiresAtUnixSeconds > DeepIdV2RouteContext.U64(xra.FieldSpan(13)) ||
@@ -92,23 +107,35 @@ public static partial class DeepIdV2ContactRouteAuthor
                 new byte[] { checked((byte)signers.Length) }, PlaceholderReceipts(signers)];
             selection[6] = ContactCodec.Sha256Domain("Deep/XPoint/V1/PMS2/selection",
                 ContactRouteThresholdAuthor.EncodeProjection(ProtocolMagic.PMS2, selection, 6));
-            var pms = await SignRecordAsync(current, ProtocolMagic.PMS2, selection, 10,
+            if (predecessor is not null)
+                for (var tag = 1; tag <= 7; tag++)
+                    if (!DeepIdV2RouteContext.Fixed(selection[tag - 1].Span, predecessor.Route.Selection.Field(tag).Span))
+                        throw new CryptographicException("A route successor cannot change its selection projection.");
+            var oldSelection = predecessor?.Route.Selection;
+            var reuseSelection = oldSelection is not null &&
+                DeepIdV2RouteContext.U64(oldSelection.Field(8).Span) <= current.Lower &&
+                expiresAtUnixSeconds <= DeepIdV2RouteContext.U64(oldSelection.Field(9).Span);
+            var pms = reuseSelection ? oldSelection! : await SignRecordAsync(current, ProtocolMagic.PMS2, selection, 10,
                 ContactRouteAuthoritySignaturePurpose.Selection, signers, cancellationToken).ConfigureAwait(false);
-            var count = pms.FieldSpan(5)[0]; var replicas = new byte[count * 64];
-            for (var index = 0; index < count; index++)
+            var priorRoute = predecessor?.Route.Route;
+            var count = pms.FieldSpan(5)[0]; var replicas = priorRoute?.Field(15).ToArray() ?? new byte[count * 64];
+            for (var index = 0; priorRoute is null && index < count; index++)
             {
                 ranked.AsSpan(index * 32, 32).CopyTo(replicas.AsSpan(index * 64));
                 var cap = Random32();
                 try { cap.CopyTo(replicas, index * 64 + 32); } finally { Clear(cap); }
             }
-            live = [network.NetworkId, Random32(), U64(0), new byte[32],
+            live = [network.NetworkId, priorRoute?.Field(2) ?? Random32(),
+                U64(priorRoute is null ? 0 : DeepIdV2RouteContext.U64(priorRoute.Field(3).Span) + 1), priorRoute?.CoreHash ?? new byte[32],
                 Reference(xra), current.PmtReference, pms.ArtifactHash, current.ViewReference, current.HeadReference,
-                Random32(), xra.Field(10), xra.Field(11), U64(keyEpoch), new byte[] { count }, replicas,
+                priorRoute?.Field(10) ?? Random32(), xra.Field(10), xra.Field(11), U64(keyEpoch), new byte[] { count },
+                replicas,
                 U64(issuedAtUnixSeconds), U64(issuedAtUnixSeconds), U64(expiresAtUnixSeconds), current.DirectoryReference,
                 new byte[] { checked((byte)signers.Length) }, PlaceholderReceipts(signers)];
             var xrc = await SignRecordAsync(current, ProtocolMagic.XRC1, live, 20,
                 ContactRouteAuthoritySignaturePurpose.LiveRoute, signers, cancellationToken).ConfigureAwait(false);
-            successor = [network.NetworkId, xrc.Field(2), U64(1), xrc.CoreHash, Reference(xrc), Reference(xrc),
+            successor = [network.NetworkId, xrc.Field(2), U64(DeepIdV2RouteContext.U64(xrc.Field(3).Span) + 1),
+                priorRoute?.CoreHash ?? xrc.CoreHash, Reference(xrc), Reference(priorRoute ?? xrc),
                 current.PmtReference, current.ViewReference, pms.ArtifactHash, U64(issuedAtUnixSeconds),
                 U64(expiresAtUnixSeconds), current.DirectoryReference, new byte[] { checked((byte)signers.Length) },
                 PlaceholderReceipts(signers)];
@@ -116,16 +143,27 @@ public static partial class DeepIdV2ContactRouteAuthor
                 ContactRouteAuthoritySignaturePurpose.SuccessorCheckpoint, signers, cancellationToken).ConfigureAwait(false);
             var final = await current.RecheckAsync(cancellationToken).ConfigureAwait(false);
             final.RequireAdvertisement(xra); final.RequireThreshold(xra, pms, xrc, xss);
-            return new(pms.CanonicalBytes.Span, xrc.CanonicalBytes.Span, xss.CanonicalBytes.Span);
+            var result = new ParsedDeepIdV2RouteThreshold(pms.CanonicalBytes.Span, xrc.CanonicalBytes.Span, xss.CanonicalBytes.Span);
+            predecessor?.RequireAtCurrentContext(final); predecessor?.RequireThresholdSuccessor(xra, result);
+            return result;
         }
         finally { Clear(selection); Clear(live); Clear(successor); Clear(ranked); }
     }
 
-    public static async ValueTask<VerifiedDeepIdV2ContactRouteClosure> CompleteGenesisAsync(
+    public static ValueTask<VerifiedDeepIdV2ContactRouteClosure> CompleteGenesisAsync(
         DeepIdV2CurrentContactAuthorization currentAuthorization, VerifiedOnionNetworkContext network,
         VerifiedXPointNetworkAuthority networkAuthority, OwnedGenesisDeviceSecrets deviceSecrets,
         ReadOnlyMemory<byte> exactXra1, ParsedDeepIdV2RouteThreshold threshold, ushort minimumReader,
-        OnionTrustedTimeAuthority trustedTime, CancellationToken cancellationToken = default)
+        OnionTrustedTimeAuthority trustedTime, CancellationToken cancellationToken = default) =>
+        CompleteCoreAsync(currentAuthorization, network, networkAuthority, deviceSecrets, exactXra1,
+            threshold, minimumReader, trustedTime, null, cancellationToken);
+
+    private static async ValueTask<VerifiedDeepIdV2ContactRouteClosure> CompleteCoreAsync(
+        DeepIdV2CurrentContactAuthorization currentAuthorization, VerifiedOnionNetworkContext network,
+        VerifiedXPointNetworkAuthority networkAuthority, OwnedGenesisDeviceSecrets deviceSecrets,
+        ReadOnlyMemory<byte> exactXra1, ParsedDeepIdV2RouteThreshold threshold, ushort minimumReader,
+        OnionTrustedTimeAuthority trustedTime, VerifiedDeepIdV2ContactRoutePredecessor? predecessor,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(deviceSecrets); ArgumentNullException.ThrowIfNull(threshold);
         cancellationToken.ThrowIfCancellationRequested();
@@ -135,28 +173,42 @@ public static partial class DeepIdV2ContactRouteAuthor
             throw new CryptographicException("This delegation does not authorize the reusable genesis invite.");
         if (exactXra1.Length != 550) throw new CryptographicException("XRA1 must have its exact bounded size.");
         var xra = ContactCodec.Decode(ProtocolMagic.XRA1, exactXra1.Span);
-        RequireGenesis(xra, 3);
+        if (predecessor is null) RequireGenesis(xra, 3);
+        else predecessor.RequireThresholdSuccessor(xra, threshold);
         var current = await DeepIdV2RouteContext.ReadAsync(currentAuthorization, network,
             networkAuthority, trustedTime, cancellationToken).ConfigureAwait(false);
+        predecessor?.RequireAtCurrentContext(current);
         current.RequireAdvertisement(xra);
         var pms = threshold.Selection; var xrc = threshold.LiveRoute; var xss = threshold.Successor;
-        RequireGenesis(xrc, 3);
-        if (DeepIdV2RouteContext.U64(xss.FieldSpan(3)) != 1)
-            throw new CryptographicException("Genesis completion cannot adopt a successor route lineage.");
+        if (predecessor is null)
+        {
+            RequireGenesis(xrc, 3);
+            if (DeepIdV2RouteContext.U64(xss.FieldSpan(3)) != 1)
+                throw new CryptographicException("Genesis completion cannot adopt a successor route lineage.");
+        }
+        else if (DeepIdV2RouteContext.U64(predecessor.Route.Reachability.Field(3).Span) == ulong.MaxValue ||
+                 DeepIdV2RouteContext.U64(predecessor.Invite.Field(3).Span) == ulong.MaxValue ||
+                 minimumReader != BinaryPrimitives.ReadUInt16BigEndian(predecessor.Invite.Field(11).Span))
+            throw new CryptographicException("Invite successor cannot advance or changes the retained reader policy.");
         current.RequireThreshold(xra, pms, xrc, xss);
         ReadOnlyMemory<byte>[] reachability = []; ReadOnlyMemory<byte>[] invitation = [];
         byte[]? xrrSignature = null; byte[]? xirSignature = null; byte[]? closure = null;
         try
         {
-            reachability = [network.NetworkId, Random32(), U64(0), new byte[32], Reference(xra),
+            var priorReachability = predecessor?.Route.Reachability; var priorInvite = predecessor?.Invite;
+            reachability = [network.NetworkId, priorReachability?.Field(2) ?? Random32(),
+                U64(priorReachability is null ? 0 : DeepIdV2RouteContext.U64(priorReachability.Field(3).Span) + 1),
+                priorReachability?.CoreHash ?? new byte[32], Reference(xra),
                 Reference(xrc), Reference(xss), current.PmtReference, pms.ArtifactHash, xrc.Field(10), xra.Field(9),
-                new byte[] { 3 }, xra.Field(8), U16(minimumReader), xrc.Field(16), xrc.Field(17), xrc.Field(18),
+                priorReachability?.Field(12) ?? new byte[] { 3 }, xra.Field(8), U16(minimumReader), xrc.Field(16), xrc.Field(17), xrc.Field(18),
                 current.DeviceReference, PlaceholderSignature(), new byte[2]];
             var provisional = ContactCodec.AuthorForOperationalAuthority(ProtocolMagic.XRR1, reachability);
             xrrSignature = deviceSecrets.SignCurrentContactRouteRecord(provisional, currentAuthorization.Authorization);
             reachability[18] = xrrSignature;
             var xrr = ContactCodec.AuthorForOperationalAuthority(ProtocolMagic.XRR1, reachability);
-            invitation = [network.NetworkId, Random32(), U64(0), new byte[32], current.PmtReference,
+            invitation = [network.NetworkId, priorInvite?.Field(2) ?? Random32(),
+                U64(priorInvite is null ? 0 : DeepIdV2RouteContext.U64(priorInvite.Field(3).Span) + 1),
+                priorInvite?.ObjectHash ?? new byte[32], current.PmtReference,
                 xra.Field(6), xra.Field(10), xra.Field(11), new byte[] { 1 }, U32(0), U16(minimumReader),
                 xra.Field(9), xra.Field(12), xra.Field(13), current.DeviceReference, current.DcaReference,
                 PlaceholderSignature(), Reference(xra)];
@@ -164,7 +216,8 @@ public static partial class DeepIdV2ContactRouteAuthor
             xirSignature = deviceSecrets.SignCurrentContactInvite(inviteCandidate, currentAuthorization.Authorization);
             invitation[16] = xirSignature;
             var invite = DeepIdV2InviteRendezvousCodec.AuthorForOperationalAuthority(invitation);
-            await current.RecheckAsync(cancellationToken).ConfigureAwait(false);
+            var final = await current.RecheckAsync(cancellationToken).ConfigureAwait(false);
+            predecessor?.RequireAtCurrentContext(final);
             closure = ContactRouteClosureCodec.EncodeRecords([xrr, xra, xrc, xss, current.Pmt, pms]);
             return await DeepIdV2ContactRouteVerifier.VerifyAsync(currentAuthorization, network, networkAuthority,
                 invite.CanonicalBytes, closure, trustedTime, cancellationToken).ConfigureAwait(false);

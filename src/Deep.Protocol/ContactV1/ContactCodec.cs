@@ -308,14 +308,18 @@ public static class ContactCodec
             Reject(ContactValidationStage.Closure, "Xrc1AuthorityBindingMismatch");
         RequireReplicaSet(xrc1, pms2);
 
-        RequireReference(xss1, 5, xrc1); RequireReference(xss1, 6, xrc1);
+        RequireReference(xss1, 5, xrc1);
         RequireReference(xss1, 7, pmt2); RequireHash(xss1, 9, pms2);
         var xrcGeneration = U64(xrc1.FieldSpan(3));
         if (xrcGeneration == ulong.MaxValue || !xss1.FieldSpan(2).SequenceEqual(xrc1.FieldSpan(2)) ||
             U64(xss1.FieldSpan(3)) != xrcGeneration + 1 ||
-            !xss1.FieldSpan(4).SequenceEqual(xrc1.CoreHash.Span) ||
+            !xss1.FieldSpan(4).SequenceEqual(xrcGeneration == 0 ? xrc1.CoreHash.Span : xrc1.FieldSpan(4)) ||
             !xss1.FieldSpan(8).SequenceEqual(xrc1.FieldSpan(8)))
             Reject(ContactValidationStage.Closure, "Xss1PredecessorCurrentMismatch");
+        if (xrcGeneration == 0)
+            RequireReference(xss1, 6, xrc1);
+        else if (xss1.FieldSpan(6).SequenceEqual(xss1.FieldSpan(5)))
+            Reject(ContactValidationStage.Closure, "Xss1SuccessorRequiresDistinctPredecessor");
 
         if (U64(xrc1.FieldSpan(17)) < U64(xra1.FieldSpan(12)) ||
             U64(xrc1.FieldSpan(18)) > U64(xra1.FieldSpan(13)) ||
