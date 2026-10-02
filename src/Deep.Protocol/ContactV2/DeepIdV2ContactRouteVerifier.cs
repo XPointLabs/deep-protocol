@@ -166,8 +166,8 @@ public static class DeepIdV2ContactRouteVerifier
             !DeepIdV2RouteContext.Fixed(xrr.FieldSpan(11), xra.FieldSpan(9)) ||
             !DeepIdV2RouteContext.Fixed(xrr.FieldSpan(13), xra.FieldSpan(8)))
             throw new CryptographicException("The DID2 invite/reachability differs from its exact device, delegation or route scope.");
-        current.Covers(DeepIdV2RouteContext.U64(invite.FieldSpan(13)), DeepIdV2RouteContext.U64(invite.FieldSpan(14)));
-        current.Covers(DeepIdV2RouteContext.U64(xrr.FieldSpan(16)), DeepIdV2RouteContext.U64(xrr.FieldSpan(17)));
+        current.Covers(DeepIdV2RouteContext.U64(invite.FieldSpan(13)), DeepIdV2RouteContext.U64(invite.FieldSpan(14)), DeepIdV2RouteTimeArtifact.Xir1V2);
+        current.Covers(DeepIdV2RouteContext.U64(xrr.FieldSpan(16)), DeepIdV2RouteContext.U64(xrr.FieldSpan(17)), DeepIdV2RouteTimeArtifact.Xrr1);
         // Structural framing already validates every exact route graph reference.
         DeepIdV2InviteRendezvousCodec.VerifyIssuerAndDca1(invite, current.Recipient.Authorization, current.Upper);
     }
@@ -264,13 +264,13 @@ internal sealed class DeepIdV2RouteContext
             Fixed(candidate.Certificate.DeviceId.Span, recipient.Authorization.Record.PublisherDeviceId.Span)) ??
             throw new CryptographicException("The route publisher is not an active DID2 device.");
         var result = new DeepIdV2RouteContext(recipient, network, authority, time, reading, device, lower, upper);
-        result.Covers(authority.NotBefore, authority.ExpiresAt);
-        result.Covers(closure.View.NotBefore, closure.View.ExpiresAt);
-        result.Covers(closure.Head.ValidFrom, closure.Head.ValidUntil);
-        result.Covers(head.ValidFrom, head.ValidUntil);
-        result.Covers(device.Certificate.IssuedAtUnixSeconds, device.Certificate.ExpiresAtUnixSeconds);
-        result.Covers(recipient.Authorization.Record.NotBeforeUnixSeconds, recipient.Authorization.Record.ExpiresAtUnixSeconds);
-        result.Covers(U64(closure.Pmt.FieldSpan(11)), U64(closure.Pmt.FieldSpan(12)));
+        result.Covers(authority.NotBefore, authority.ExpiresAt, DeepIdV2RouteTimeArtifact.Xna1);
+        result.Covers(closure.View.NotBefore, closure.View.ExpiresAt, DeepIdV2RouteTimeArtifact.Xnv1);
+        result.Covers(closure.Head.ValidFrom, closure.Head.ValidUntil, DeepIdV2RouteTimeArtifact.Xnh1);
+        result.Covers(head.ValidFrom, head.ValidUntil, DeepIdV2RouteTimeArtifact.Adh1);
+        result.Covers(device.Certificate.IssuedAtUnixSeconds, device.Certificate.ExpiresAtUnixSeconds, DeepIdV2RouteTimeArtifact.DeviceCertificate);
+        result.Covers(recipient.Authorization.Record.NotBeforeUnixSeconds, recipient.Authorization.Record.ExpiresAtUnixSeconds, DeepIdV2RouteTimeArtifact.Dca1);
+        result.Covers(U64(closure.Pmt.FieldSpan(11)), U64(closure.Pmt.FieldSpan(12)), DeepIdV2RouteTimeArtifact.Pmt2);
         return result;
     }
 
@@ -282,11 +282,8 @@ internal sealed class DeepIdV2RouteContext
             throw new CryptographicException("Route authoring crossed a protected clock discontinuity.");
         return next;
     }
-    internal void Covers(ulong start, ulong expiry)
-    {
-        if (Lower > Upper || start > Lower || Upper >= expiry)
-            throw new CryptographicException("A route artifact does not cover the complete authenticated time interval.");
-    }
+    internal void Covers(ulong start, ulong expiry, DeepIdV2RouteTimeArtifact artifact) =>
+        DeepIdV2RouteTimeCoverage.Require(Lower, Upper, start, expiry, artifact);
     internal void RequireAdvertisement(ContactRecord xra)
     {
         if (xra.Magic != ProtocolMagic.XRA1 || !Fixed(xra.FieldSpan(1), Network.NetworkId.Span) ||
@@ -299,7 +296,7 @@ internal sealed class DeepIdV2RouteContext
             U64(xra.FieldSpan(13)) > Device.Certificate.ExpiresAtUnixSeconds ||
             U64(xra.FieldSpan(13)) > Recipient.Authorization.Record.ExpiresAtUnixSeconds)
             throw new CryptographicException("The XRA1 proposal differs from current DID2 device/delegation scope.");
-        Covers(U64(xra.FieldSpan(12)), U64(xra.FieldSpan(13)));
+        Covers(U64(xra.FieldSpan(12)), U64(xra.FieldSpan(13)), DeepIdV2RouteTimeArtifact.Xra1);
         DeepIdV2ContactUpdateRendezvousAuthor.RequireAgreementKey(xra.FieldSpan(11));
         ContactCodec.VerifyDeviceSignature(xra, Device.Certificate.DeviceEd25519PublicKey.Span);
     }
@@ -315,9 +312,9 @@ internal sealed class DeepIdV2RouteContext
         for (var offset = 0; offset < pms.FieldSpan(6).Length; offset += 32)
             if (Network.ResolveNode(pms.FieldSpan(6).Slice(offset, 32)).KeyEpoch != U64(xrc.FieldSpan(13)))
                 throw new CryptographicException("The live route names a different current node traffic-key epoch.");
-        Covers(U64(pms.FieldSpan(8)), U64(pms.FieldSpan(9)));
-        Covers(U64(xrc.FieldSpan(17)), U64(xrc.FieldSpan(18)));
-        Covers(U64(xss.FieldSpan(10)), U64(xss.FieldSpan(11)));
+        Covers(U64(pms.FieldSpan(8)), U64(pms.FieldSpan(9)), DeepIdV2RouteTimeArtifact.Pms2);
+        Covers(U64(xrc.FieldSpan(17)), U64(xrc.FieldSpan(18)), DeepIdV2RouteTimeArtifact.Xrc1);
+        Covers(U64(xss.FieldSpan(10)), U64(xss.FieldSpan(11)), DeepIdV2RouteTimeArtifact.Xss1);
         if (U64(xrc.FieldSpan(18)) > Network.Closure!.HardUpperUnixSeconds)
             throw new CryptographicException("The live route outlives its verified network/key closure.");
         VerifyWitnesses(pms, 11, Authority); VerifyWitnesses(xrc, 21, Authority); VerifyWitnesses(xss, 14, Authority);

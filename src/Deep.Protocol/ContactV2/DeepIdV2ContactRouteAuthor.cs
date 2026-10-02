@@ -36,7 +36,7 @@ public static class DeepIdV2ContactRouteAuthor
             DeepIdV2ContactUpdateRendezvousAuthor.RequireAgreementKey(publicKey);
             var current = await DeepIdV2RouteContext.ReadAsync(currentAuthorization, network,
                 networkAuthority, trustedTime, cancellationToken).ConfigureAwait(false);
-            current.Covers(issuedAtUnixSeconds, expiresAtUnixSeconds);
+            current.Covers(issuedAtUnixSeconds, expiresAtUnixSeconds, DeepIdV2RouteTimeArtifact.Xra1);
             RequireAdvertisementLifetime(current, issuedAtUnixSeconds, expiresAtUnixSeconds);
             if (DeepIdV2RouteContext.Fixed(publicKey, current.Device.Certificate.DeviceX25519PublicKey.Span))
                 throw new CryptographicException("Metadata sealing cannot reuse the device agreement key.");
@@ -72,7 +72,7 @@ public static class DeepIdV2ContactRouteAuthor
         var signers = ValidateSigners(networkAuthority, witnessSigners);
         var current = await DeepIdV2RouteContext.ReadAsync(currentAuthorization, network,
             networkAuthority, trustedTime, cancellationToken).ConfigureAwait(false);
-        current.RequireAdvertisement(xra); current.Covers(issuedAtUnixSeconds, expiresAtUnixSeconds);
+        current.RequireAdvertisement(xra); current.Covers(issuedAtUnixSeconds, expiresAtUnixSeconds, DeepIdV2RouteTimeArtifact.ThresholdAuthoring);
         if (issuedAtUnixSeconds < DeepIdV2RouteContext.U64(xra.FieldSpan(12)) ||
             expiresAtUnixSeconds > DeepIdV2RouteContext.U64(xra.FieldSpan(13)) ||
             expiresAtUnixSeconds > network.Closure!.HardUpperUnixSeconds)

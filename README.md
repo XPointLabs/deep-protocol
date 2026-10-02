@@ -35,6 +35,11 @@ closed read evidence does not accept a contact or establish message delivery.
 DR-0042 distinguishes signed route issuance anchors from independently current
 identity: unrelated directory admission does not invalidate retained contacts.
 New issuance and publication dispatch still require current authority.
+Route-time rejection diagnostics use only closed artifact and boundary labels,
+never interval values, identities or bytes. This changes no wire, public API,
+protected format or complete-interval predicate, and requires no account reset.
+Downstream diagnostic clients must rebuild against the committed source; a
+label is failure classification only, not authority or delivery evidence.
 Private node-to-coordinator transport admission follows
 [DR-0048](../docs/survival-program/decisions/DR-0048-private-contact-coordination-peer-authentication.md).
 `ContactV2.ContactCoordinationPeerAuthentication` binds the existing node key
