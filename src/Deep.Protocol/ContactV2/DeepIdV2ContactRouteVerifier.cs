@@ -286,6 +286,23 @@ internal sealed class DeepIdV2RouteContext
         DeepIdV2RouteTimeCoverage.Require(Lower, Upper, start, expiry, artifact);
     internal void RequireAdvertisement(ContactRecord xra)
     {
+        RequireAdvertisementScope(xra);
+        Covers(U64(xra.FieldSpan(12)), U64(xra.FieldSpan(13)), DeepIdV2RouteTimeArtifact.Xra1);
+        VerifyAdvertisementSignature(xra);
+    }
+
+    // A signed predecessor is usable only as input to successor authoring.
+    // Never release it as a live route/proposal or skip expiry in normal verification.
+    internal void RequireAdvertisementPredecessor(ContactRecord xra)
+    {
+        RequireAdvertisementScope(xra);
+        VerifyAdvertisementSignature(xra);
+        if (U64(xra.FieldSpan(12)) > Lower)
+            throw new CryptographicException("The reachability predecessor is issued after current trusted time.");
+    }
+
+    private void RequireAdvertisementScope(ContactRecord xra)
+    {
         if (xra.Magic != ProtocolMagic.XRA1 || !Fixed(xra.FieldSpan(1), Network.NetworkId.Span) ||
             !Fixed(xra.FieldSpan(5), PmtReference.Span) ||
             !Fixed(xra.FieldSpan(14), Device.Certificate.DeviceId.Span) ||
@@ -296,7 +313,10 @@ internal sealed class DeepIdV2RouteContext
             U64(xra.FieldSpan(13)) > Device.Certificate.ExpiresAtUnixSeconds ||
             U64(xra.FieldSpan(13)) > Recipient.Authorization.Record.ExpiresAtUnixSeconds)
             throw new CryptographicException("The XRA1 proposal differs from current DID2 device/delegation scope.");
-        Covers(U64(xra.FieldSpan(12)), U64(xra.FieldSpan(13)), DeepIdV2RouteTimeArtifact.Xra1);
+    }
+
+    private void VerifyAdvertisementSignature(ContactRecord xra)
+    {
         DeepIdV2ContactUpdateRendezvousAuthor.RequireAgreementKey(xra.FieldSpan(11));
         ContactCodec.VerifyDeviceSignature(xra, Device.Certificate.DeviceEd25519PublicKey.Span);
     }

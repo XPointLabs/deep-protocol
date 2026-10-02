@@ -9,9 +9,9 @@ using Sodium;
 
 namespace Deep.Protocol.ContactV2;
 
-/// <summary>Direct DID2 genesis route author. Three phases do not publish,
+/// <summary>Direct DID2 route author. Genesis phases and successor candidates do not publish,
 /// adopt durable custody, issue mailbox grants or establish contact consent.</summary>
-public static class DeepIdV2ContactRouteAuthor
+public static partial class DeepIdV2ContactRouteAuthor
 {
     public static async ValueTask<ContactRecord> AuthorAdvertisementAsync(
         DeepIdV2CurrentContactAuthorization currentAuthorization, VerifiedOnionNetworkContext network,

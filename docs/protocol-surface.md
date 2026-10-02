@@ -26,6 +26,19 @@ an independent current monotonic clock. Directory issuance remains with the
 directory owner. This source/API candidate changes no wire and grants no
 production activation or permission to reset genesis, floors or node keys.
 
+### DID2 reachability successor candidate
+
+[DR-0071](../../docs/survival-program/decisions/DR-0071-did2-reachability-advertisement-successor.md)
+adds `DeepIdV2ContactRouteAuthor.AuthorAdvertisementSuccessorAsync` for the
+artifact-specific owned-device candidate. The exact signed predecessor is
+authenticated against current DID2/device/PMT authority; past expiry is allowed
+only as lineage input, never as a current route or dispatch capability. The
+author derives issue time from the protected interval and verifies the signed
+successor again at release. Existing proposal/threshold/route expiry checks and
+genesis-only threshold rejection are unchanged. The full protected renewal,
+private predecessor-bound coordination, publication and retained-account device
+flow remain gated; there is no wire or schema reset in this API increment.
+
 ### Opaque DID2 mailbox issuance candidate
 
 Superproject DR-0054 defines `ContactV2.DeepIdV2MailboxGrantIssuanceVerifier`,
