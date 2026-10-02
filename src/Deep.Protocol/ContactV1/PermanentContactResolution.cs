@@ -60,59 +60,6 @@ public static class PermanentContactResolutionDerivation
     private const string ReadSaltDomain = "Deep/ContactResolver/V1/public-read-salt";
     private const string ReadKeyDomain = "Deep/ContactResolver/V1/public-read-key";
 
-    public static PermanentContactResolution Derive(
-        ReadOnlySpan<byte> networkId16,
-        ParsedDid1 permanentDeepId)
-    {
-        ArgumentNullException.ThrowIfNull(permanentDeepId);
-        if (networkId16.Length != 16 || networkId16.IndexOfAnyExcept((byte)0) < 0)
-            throw new ArgumentException("Network ID must be exactly 16 nonzero bytes.", nameof(networkId16));
-
-        var addressPublicKey = permanentDeepId.AddressPublicKey.ToArray();
-        var readCapability = permanentDeepId.ResolverReadCapability.ToArray();
-        byte[]? locatorInput = null;
-        byte[]? salt = null;
-        byte[]? info = null;
-        byte[]? prk = null;
-        byte[]? resolverKey = null;
-        try
-        {
-            locatorInput = new byte[48];
-            networkId16.CopyTo(locatorInput);
-            addressPublicKey.CopyTo(locatorInput, 16);
-            var locator = Sha256Domain(LocatorDomain, locatorInput);
-
-            salt = Sha512Domain(ReadSaltDomain, networkId16);
-            prk = new byte[64];
-            if (HKDF.Extract(HashAlgorithmName.SHA512, readCapability, salt, prk) != prk.Length)
-                throw new CryptographicException("HKDF extract returned an unexpected length.");
-
-            var label = Encoding.ASCII.GetBytes(ReadKeyDomain);
-            info = new byte[label.Length + 1 + 4 + addressPublicKey.Length];
-            label.CopyTo(info, 0);
-            BinaryPrimitives.WriteUInt32BigEndian(
-                info.AsSpan(label.Length + 1, 4),
-                checked((uint)addressPublicKey.Length));
-            addressPublicKey.CopyTo(info, label.Length + 5);
-
-            resolverKey = new byte[32];
-            HKDF.Expand(HashAlgorithmName.SHA512, prk, resolverKey, info);
-            var result = new PermanentContactResolution(locator, resolverKey);
-            CryptographicOperations.ZeroMemory(locator);
-            return result;
-        }
-        finally
-        {
-            CryptographicOperations.ZeroMemory(addressPublicKey);
-            CryptographicOperations.ZeroMemory(readCapability);
-            Zero(locatorInput);
-            Zero(salt);
-            Zero(info);
-            Zero(prk);
-            Zero(resolverKey);
-        }
-    }
-
     private static byte[] Sha256Domain(string domain, ReadOnlySpan<byte> payload) =>
         HashDomain(domain, payload, SHA256.HashData, 32);
 

@@ -150,7 +150,7 @@ public sealed class VerifiedDeepIdV2DirectoryFreshness :
 /// <summary>
 /// Public DID2-only ADH1/DTT1/ADP1 V2 verification. It shares only the
 /// identity-neutral witness/time primitives with the pre-cutover reader;
-/// ADP1 V1 and DID1/DAB1 are never decoded or accepted here.
+/// Retired identity and ADP1 V1 are never decoded or accepted here.
 /// </summary>
 public static class DeepIdV2DirectoryCurrentProofVerifier
 {

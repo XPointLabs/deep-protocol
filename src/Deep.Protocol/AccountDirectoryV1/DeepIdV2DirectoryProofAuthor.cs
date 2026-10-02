@@ -127,7 +127,7 @@ public sealed class DeepIdV2ForwardTailAuthoringInput
 /// <summary>
 /// DID2-only proof issuance. The shared DTT1/XNV1 witness primitives are
 /// identity-neutral; the proof material, wire and self-verification are V2.
-/// This cannot issue a V1 ADP1 or admit a DID1 account.
+/// This cannot issue a V1 ADP1 or admit a retired identity account.
 /// </summary>
 public static class DeepIdV2DirectoryProofAuthor
 {

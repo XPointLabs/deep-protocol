@@ -44,7 +44,6 @@ public static class DeepProtocolIdentifiers
         public const string CAO1 = "CAO1";
         public const string CAR1 = "CAR1";
         public const string CMD1 = "CMD1";
-        public const string DAB1 = "DAB1";
         public const string DAB2 = "DAB2";
         public const string DAM1 = "DAM1";
         public const string DAO1 = "DAO1";
@@ -71,7 +70,6 @@ public static class DeepProtocolIdentifiers
         public const string DHQ2 = "DHQ2";
         public const string DHR2 = "DHR2";
         public const string DIA1 = "DIA1";
-        public const string DID1 = "DID1";
         public const string DID2 = "DID2";
         public const string DIE1 = "DIE1";
         public const string DMC2 = "DMC2";
@@ -127,6 +125,7 @@ public static class DeepProtocolIdentifiers
         public const string GSS1 = "GSS1";
         public const string GSW1 = "GSW1";
         public const string GTI1 = "GTI1";
+        public const string IPK2 = "IPK2";
         public const string KRF1 = "KRF1";
         public const string KRT1 = "KRT1";
         public const string MAK1 = "MAK1";
@@ -215,10 +214,12 @@ public static class DeepProtocolIdentifiers
         public const string WHL1 = "WHL1";
         public const string XBA1 = "XBA1";
         public const string XBB1 = "XBB1";
+        public const string XCA2 = "XCA2";
         public const string XCB1 = "XCB1";
         public const string XCC1 = "XCC1";
         public const string XCD1 = "XCD1";
         public const string XCP1 = "XCP1";
+        public const string XCS2 = "XCS2";
         public const string XHA1 = "XHA1";
         public const string XHC1 = "XHC1";
         public const string XIB1 = "XIB1";
@@ -275,7 +276,6 @@ public static class DeepProtocolIdentifiers
         public static System.ReadOnlySpan<byte> CAO1 => "CAO1"u8;
         public static System.ReadOnlySpan<byte> CAR1 => "CAR1"u8;
         public static System.ReadOnlySpan<byte> CMD1 => "CMD1"u8;
-        public static System.ReadOnlySpan<byte> DAB1 => "DAB1"u8;
         public static System.ReadOnlySpan<byte> DAB2 => "DAB2"u8;
         public static System.ReadOnlySpan<byte> DAM1 => "DAM1"u8;
         public static System.ReadOnlySpan<byte> DAO1 => "DAO1"u8;
@@ -302,7 +302,6 @@ public static class DeepProtocolIdentifiers
         public static System.ReadOnlySpan<byte> DHQ2 => "DHQ2"u8;
         public static System.ReadOnlySpan<byte> DHR2 => "DHR2"u8;
         public static System.ReadOnlySpan<byte> DIA1 => "DIA1"u8;
-        public static System.ReadOnlySpan<byte> DID1 => "DID1"u8;
         public static System.ReadOnlySpan<byte> DID2 => "DID2"u8;
         public static System.ReadOnlySpan<byte> DIE1 => "DIE1"u8;
         public static System.ReadOnlySpan<byte> DMC2 => "DMC2"u8;
@@ -358,6 +357,7 @@ public static class DeepProtocolIdentifiers
         public static System.ReadOnlySpan<byte> GSS1 => "GSS1"u8;
         public static System.ReadOnlySpan<byte> GSW1 => "GSW1"u8;
         public static System.ReadOnlySpan<byte> GTI1 => "GTI1"u8;
+        public static System.ReadOnlySpan<byte> IPK2 => "IPK2"u8;
         public static System.ReadOnlySpan<byte> KRF1 => "KRF1"u8;
         public static System.ReadOnlySpan<byte> KRT1 => "KRT1"u8;
         public static System.ReadOnlySpan<byte> MAK1 => "MAK1"u8;
@@ -446,10 +446,12 @@ public static class DeepProtocolIdentifiers
         public static System.ReadOnlySpan<byte> WHL1 => "WHL1"u8;
         public static System.ReadOnlySpan<byte> XBA1 => "XBA1"u8;
         public static System.ReadOnlySpan<byte> XBB1 => "XBB1"u8;
+        public static System.ReadOnlySpan<byte> XCA2 => "XCA2"u8;
         public static System.ReadOnlySpan<byte> XCB1 => "XCB1"u8;
         public static System.ReadOnlySpan<byte> XCC1 => "XCC1"u8;
         public static System.ReadOnlySpan<byte> XCD1 => "XCD1"u8;
         public static System.ReadOnlySpan<byte> XCP1 => "XCP1"u8;
+        public static System.ReadOnlySpan<byte> XCS2 => "XCS2"u8;
         public static System.ReadOnlySpan<byte> XHA1 => "XHA1"u8;
         public static System.ReadOnlySpan<byte> XHC1 => "XHC1"u8;
         public static System.ReadOnlySpan<byte> XIB1 => "XIB1"u8;
@@ -546,7 +548,7 @@ internal readonly record struct GeneratedRegistryIdentifier(
 
 internal static class DeepProtocolRegistryGenerated
 {
-    internal const string RegistrySha256 = "b3e344bcbadc6d01f874d71bead767b75c1e66dba64402d8625ebcb83d523901";
+    internal const string RegistrySha256 = "653c8c9e98f8fa0a5db85e71bb8fc80bab8d56dcebbc2abe261dddb74ea95c2c";
     internal const string Dnp1RegistrySha256 = "e036a0b6acb260e05e18ac536a723b0b8561d2ba1d813429304505b0e7a7da7b";
     internal const string Dnp1ApprovedCommit = "a8456987efe031388ca2eb9006886fb78f31e06c";
 
@@ -572,7 +574,6 @@ internal static class DeepProtocolRegistryGenerated
         new("magic", "CAO1", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "CAR1", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "CMD1", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
-        new("magic", "DAB1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "DAB2", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "DAM1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "DAO1", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
@@ -599,7 +600,6 @@ internal static class DeepProtocolRegistryGenerated
         new("magic", "DHQ2", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "DHR2", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "DIA1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
-        new("magic", "DID1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "DID2", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "DIE1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "DMC2", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
@@ -655,6 +655,7 @@ internal static class DeepProtocolRegistryGenerated
         new("magic", "GSS1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "GSW1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "GTI1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
+        new("magic", "IPK2", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "KRF1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "KRT1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "MAK1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
@@ -743,10 +744,12 @@ internal static class DeepProtocolRegistryGenerated
         new("magic", "WHL1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "XBA1", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "XBB1", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
+        new("magic", "XCA2", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "XCB1", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "XCC1", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "XCD1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "XCP1", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
+        new("magic", "XCS2", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "XHA1", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "XHC1", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "XIB1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),

@@ -19,41 +19,6 @@ public static class Dcr1ObjectProtectionCodec
     private const int MaximumDcr1Bytes = 65_535;
     private const int MaximumProtectedBytes = NonceBytes + MaximumDcr1Bytes + TagBytes;
 
-    public static byte[] SealPermanent(
-        ContactRecord exactDcr1,
-        ReadOnlySpan<byte> networkId16,
-        ParsedDid1 exactPermanentDeepId,
-        PermanentContactResolution resolution)
-    {
-        return SealPermanentCore(
-            exactDcr1, networkId16, exactPermanentDeepId, resolution,
-            static destination => RandomNumberGenerator.Fill(destination));
-    }
-
-    public static ContactRecord OpenPermanent(
-        ReadOnlySpan<byte> nonceAndCiphertext,
-        ReadOnlySpan<byte> networkId16,
-        ParsedDid1 exactPermanentDeepId,
-        PermanentContactResolution resolution)
-    {
-        ArgumentNullException.ThrowIfNull(exactPermanentDeepId);
-        ArgumentNullException.ThrowIfNull(resolution);
-        ValidateNetwork(networkId16);
-        var aad = PermanentAad(networkId16, exactPermanentDeepId);
-        var protectedOwned = nonceAndCiphertext.ToArray();
-        var networkOwned = networkId16.ToArray();
-        try
-        {
-            return resolution.UseResolverKey(key => OpenCore(protectedOwned, key, aad, networkOwned));
-        }
-        finally
-        {
-            CryptographicOperations.ZeroMemory(aad);
-            CryptographicOperations.ZeroMemory(protectedOwned);
-            CryptographicOperations.ZeroMemory(networkOwned);
-        }
-    }
-
     public static byte[] SealOneTime(ContactRecord exactDcr1, ContactRecord exactDia1)
     {
         return SealOneTimeCore(
@@ -75,28 +40,6 @@ public static class Dcr1ObjectProtectionCodec
         finally
         {
             CryptographicOperations.ZeroMemory(key);
-            CryptographicOperations.ZeroMemory(aad);
-        }
-    }
-
-    internal static byte[] SealPermanentCore(
-        ContactRecord exactDcr1,
-        ReadOnlySpan<byte> networkId16,
-        ParsedDid1 exactPermanentDeepId,
-        PermanentContactResolution resolution,
-        Dcr1NonceEntropy entropy)
-    {
-        ArgumentNullException.ThrowIfNull(exactPermanentDeepId);
-        ArgumentNullException.ThrowIfNull(resolution);
-        ArgumentNullException.ThrowIfNull(entropy);
-        ValidateDcr1Network(exactDcr1, networkId16);
-        var aad = PermanentAad(networkId16, exactPermanentDeepId);
-        try
-        {
-            return resolution.UseResolverKey(key => SealCore(exactDcr1, key, aad, entropy));
-        }
-        finally
-        {
             CryptographicOperations.ZeroMemory(aad);
         }
     }
@@ -195,17 +138,6 @@ public static class Dcr1ObjectProtectionCodec
             if (plaintext is not null)
                 CryptographicOperations.ZeroMemory(plaintext);
         }
-    }
-
-    private static byte[] PermanentAad(ReadOnlySpan<byte> networkId16, ParsedDid1 did1)
-    {
-        ValidateNetwork(networkId16);
-        var exactDid1 = did1.CanonicalBytes.ToArray();
-        var aad = new byte[checked(16 + exactDid1.Length)];
-        networkId16.CopyTo(aad);
-        exactDid1.CopyTo(aad, 16);
-        CryptographicOperations.ZeroMemory(exactDid1);
-        return aad;
     }
 
     private static byte[] OneTimeAad(ContactRecord dia1)

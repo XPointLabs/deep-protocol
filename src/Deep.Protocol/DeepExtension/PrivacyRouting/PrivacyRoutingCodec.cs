@@ -452,7 +452,7 @@ internal static class PrivacyRoutingPayloadVerifier
 
         try
         {
-            if (request[..4].SequenceEqual("XCA2"u8))
+            if (request[..4].SequenceEqual(ProtocolMagicBytes.XCA2))
             {
                 var coordination = Deep.Protocol.ContactV2.ContactCoordinationOnionCodec.DecodeRequest(request);
                 if (!CryptographicOperations.FixedTimeEquals(coordination.NetworkId.Span, networkId))
@@ -606,7 +606,7 @@ internal static class PrivacyRoutingPayloadVerifier
 
         try
         {
-            if (exactRequest[..4].SequenceEqual("XCA2"u8))
+            if (exactRequest[..4].SequenceEqual(ProtocolMagicBytes.XCA2))
             {
                 _ = Deep.Protocol.ContactV2.ContactCoordinationOnionCodec.DecodeResponse(
                     Deep.Protocol.ContactV2.ContactCoordinationOnionCodec.DecodeRequest(exactRequest), body);

@@ -160,7 +160,7 @@ internal static class InitiatorDph2PreKeyClaimPersistenceCodec
     internal static void Validate(ReadOnlySpan<byte> value)
     {
         if (value.Length != InitiatorDph2PreKeyClaimPersistenceBlob.CanonicalByteCount ||
-            !value[..4].SequenceEqual("IPK2"u8) || value[4] != 1 || value[5] != 1 ||
+            !value[..4].SequenceEqual(ProtocolMagicBytes.IPK2) || value[4] != 1 || value[5] != 1 ||
             value[6] != 0 || value[7] != 0 || BinaryPrimitives.ReadUInt32BigEndian(value[8..12]) != value.Length)
             throw new CryptographicException("The sealed preclaim has no canonical local format.");
         foreach (var offset in new[] { 12, 44, 92, 124, 164, 204, 2288, 2320, 2352, 2384, 2416 })
@@ -192,7 +192,7 @@ internal static class InitiatorDph2PreKeyClaimPersistenceCodec
         byte[]? ephemeral = null, ratchet = null, derived = null, ciphertext = null;
         try
         {
-            "IPK2"u8.CopyTo(value); value[4] = 1; value[5] = 1;
+            ProtocolMagicBytes.IPK2.CopyTo(value); value[4] = 1; value[5] = 1;
             BinaryPrimitives.WriteUInt32BigEndian(value.AsSpan(8, 4), checked((uint)value.Length));
             scope.InstanceSpan.CopyTo(value.AsSpan(12)); scope.IntentSpan.CopyTo(value.AsSpan(44));
             var local = material.Local;

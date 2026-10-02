@@ -25,9 +25,6 @@ public static class ContactCodec
     private static readonly IReadOnlyDictionary<string, Definition> Definitions =
         new Dictionary<string, Definition>(StringComparer.Ordinal)
         {
-            [ProtocolMagic.DCB1] = new(ProtocolMagic.DCB1, [16, 32, 644, 38, -1, 473, 32, 8, 32, 32, 1, -1, 1, 651, -1, 4, 8, 8, 64, 228, 40, 32, 32, 394], 3_757, 10_275,
-                "Deep/Application/V1/contact-bundle", null, [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,20,21,22,23,24]),
-            [ProtocolMagic.DCR1] = new(ProtocolMagic.DCR1, [16, -1, 2, -1], 1, MaximumBytes, null, null, []),
             [ProtocolMagic.DIA1] = new(ProtocolMagic.DIA1, [16, 32, 1, 2, 16, 32, 32, 8, 2], 225, 225, null, null, []),
             [ProtocolMagic.XIR1] = new(ProtocolMagic.XIR1, [16, 32, 8, 32, 38, 32, 32, 32, 1, 4, 2, 32, 8, 8, 38, 38, 64, 38], 611, 611,
                 "Deep/ContactResolver/V1/XIR1", null, [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,18]),
@@ -237,105 +234,6 @@ public static class ContactCodec
     }
 
     /// <summary>
-    /// Promotes a parsed DCR1 only from an authenticated, nonce-bound current
-    /// account-directory proof and the exact DCA1 capability closed by its ADC1.
-    /// Raw DPA1/DRS1/DPD1/ADC1 bytes never form this capability.
-    /// </summary>
-    public static VerifiedContactBundleClosure VerifyDcr1Closure(
-        ContactRecord dcr1,
-        CurrentlyAuthoritativeDca1 authorization,
-        VerifiedAccountDirectoryFreshness freshness,
-        ReadOnlySpan<byte> currentBootId,
-        ulong currentMonotonicSample)
-    {
-        ArgumentNullException.ThrowIfNull(dcr1);
-        ArgumentNullException.ThrowIfNull(authorization);
-        ArgumentNullException.ThrowIfNull(freshness);
-        RequireRecord(dcr1, ProtocolMagic.DCR1);
-
-        if (freshness.ResultKind != AccountDirectoryAdp1ResultKind.CurrentValue)
-            Reject(ContactValidationStage.Closure, "CurrentAccountDirectoryCheckpointRequired");
-        var checkpoint = freshness.CurrentCheckpoint ??
-            throw new ContactFormatException(
-                ContactValidationStage.Closure, "CurrentAccountDirectoryCheckpointRequired");
-        if (!freshness.IsCurrentAtMonotonic(currentBootId, currentMonotonicSample))
-            Reject(ContactValidationStage.Closure, "DirectoryFreshnessExpired");
-
-        var binding = checkpoint.Binding;
-        var directory = checkpoint.Directory;
-        var identity = directory.Identity;
-        if (!ReferenceEquals(binding.Identity, identity) ||
-            !ReferenceEquals(authorization.Verified.Binding, binding) ||
-            !ReferenceEquals(authorization.Verified.Directory, directory))
-            Reject(ContactValidationStage.Closure, "VerifiedIdentityClosureMismatch");
-        if (checkpoint.IsDcaAuthorizationRevoked(authorization.Verified.Record.AuthorizationId.Span))
-            Reject(ContactValidationStage.Closure, "DcaAuthorizationRevoked");
-
-        var bundle = Decode(ProtocolMagic.DCB1, dcr1.FieldSpan(2));
-        var account = identity.Account.Certificate;
-        var revocations = identity.Revocations.Snapshot;
-        if (!bundle.FieldSpan(1).SequenceEqual(account.NetworkId.Span) ||
-            !bundle.FieldSpan(2).SequenceEqual(identity.Account.DeepAccountIdHash.Span) ||
-            !bundle.FieldSpan(3).SequenceEqual(account.CanonicalBytes.Span) ||
-            !ReferenceMatches(bundle.FieldSpan(4), revocations, ProtocolMagic.DRS1) ||
-            !bundle.FieldSpan(5).SequenceEqual(directory.Record.CanonicalBytes.Span) ||
-            !bundle.FieldSpan(6).SequenceEqual(authorization.Verified.Record.CanonicalBytes.Span) ||
-            !bundle.FieldSpan(24).SequenceEqual(binding.Record.CanonicalBytes.Span) ||
-            !dcr1.FieldSpan(1).SequenceEqual(account.NetworkId.Span))
-            Reject(ContactValidationStage.Closure, "VerifiedBundleIdentityMismatch");
-
-        AccountDirectoryAdl1 lookup;
-        try { lookup = AccountDirectoryAdl1Codec.Decode(bundle.FieldSpan(20)); }
-        catch (Exception exception) when (exception is FormatException or ArgumentException)
-        {
-            Reject(ContactValidationStage.Closure, "DirectoryLookupRejected");
-            throw new InvalidOperationException("Unreachable after Contact rejection.", exception);
-        }
-        var lookupLeaf = AccountDirectoryCrypto.Sha256Domain(
-            AccountDirectoryAdc1Verifier.LeafDomain, lookup.DirectoryLookupKey.Span);
-        var bundleFloorGeneration = U64(bundle.FieldSpan(21)[..8]);
-        var bundleFloorHash = bundle.FieldSpan(21)[8..];
-        var floorMismatch = lookup.MinimumAdhGeneration != bundleFloorGeneration ||
-            !CryptographicOperations.FixedTimeEquals(lookup.MinimumAdhHash.Span, bundleFloorHash) ||
-            freshness.AdhGeneration < bundleFloorGeneration ||
-            (freshness.AdhGeneration == bundleFloorGeneration &&
-             !CryptographicOperations.FixedTimeEquals(
-                 bundleFloorHash, freshness.ExactAdh1CoreHash.Span));
-        if (!freshness.NetworkId.Span.SequenceEqual(account.NetworkId.Span) ||
-            !lookup.NetworkId.Span.SequenceEqual(freshness.NetworkId.Span) ||
-            !CryptographicOperations.FixedTimeEquals(lookupLeaf, freshness.DirectoryLeafKey.Span) ||
-            floorMismatch ||
-            !bundle.FieldSpan(22).SequenceEqual(binding.DeepId.RecordHash.Span) ||
-            !bundle.FieldSpan(23).SequenceEqual(binding.DeepId.AddressPublicKey.Span))
-            Reject(ContactValidationStage.Closure, "DirectoryFreshnessIdentityMismatch");
-
-        var dca = authorization.Verified.Record;
-        var xir = Decode(ProtocolMagic.XIR1, bundle.FieldSpan(14).Slice(40, 611));
-        var trustedLower = freshness.TrustedLowerUnixSeconds;
-        var trustedUpper = freshness.TrustedUpperUnixSeconds;
-        if (authorization.TrustedUnixSeconds < trustedLower || authorization.TrustedUnixSeconds > trustedUpper ||
-            dca.NotBeforeUnixSeconds > trustedLower || dca.ExpiresAtUnixSeconds <= trustedUpper ||
-            U64(bundle.FieldSpan(17)) > trustedLower || U64(bundle.FieldSpan(18)) <= trustedUpper ||
-            U64(xir.FieldSpan(13)) > trustedLower || U64(xir.FieldSpan(14)) <= trustedUpper)
-            Reject(ContactValidationStage.Closure, "ContactValidityDoesNotCoverAuthenticatedTime");
-
-        var kindBit = xir.FieldSpan(9)[0] switch { 1 => (byte)0x01, 2 => (byte)0x02, _ => (byte)0 };
-        var publisher = FindVerifiedDevice(identity, bundle.FieldSpan(10));
-        if (kindBit == 0 || (dca.AllowedInviteKindMask & kindBit) == 0 ||
-            U64(bundle.FieldSpan(8)) > dca.MaximumBundleGeneration ||
-            (U32(bundle.FieldSpan(16)) & kindBit) == 0 ||
-            !xir.FieldSpan(15).SequenceEqual(ArtifactReferenceFor(ProtocolMagic.DPD1, publisher.Certificate.CanonicalHash.Span)) ||
-            !xir.FieldSpan(16).SequenceEqual(ArtifactReferenceFor(ProtocolMagic.DCA1, dca.RecordHash.Span)))
-            Reject(ContactValidationStage.Closure, "ContactPublicationPolicyMismatch");
-
-        VerifyDeviceSignature(bundle, publisher.Certificate.DeviceEd25519PublicKey.Span);
-        VerifyDeviceSignature(xir, publisher.Certificate.DeviceEd25519PublicKey.Span);
-        VerifyDcrSupportObjects(dcr1, directory, identity);
-        VerifyBundleXpsSignatures(bundle, identity, trustedLower, trustedUpper);
-        return new VerifiedContactBundleClosure(dcr1, bundle, binding, directory, authorization, freshness);
-    }
-
-    /// <summary>
     /// Resolves only contact-owned records by their exact artifact reference.
     /// Network/identity evidence stays behind its owning verifier.
     /// </summary>
@@ -424,70 +322,6 @@ public static class ContactCodec
             U64(xrc1.FieldSpan(17)) < U64(pmt2.FieldSpan(11)) ||
             U64(xrc1.FieldSpan(18)) > U64(pmt2.FieldSpan(12)))
             Reject(ContactValidationStage.Closure, "RouteValidityIntersectionMismatch");
-    }
-
-    /// <summary>
-    /// Promotes a route only from a production-owned network/directory authority
-    /// capability. Raw records, caller-selected keys and structural validity are
-    /// insufficient to create this result.
-    /// </summary>
-    public static VerifiedContactRouteClosure VerifyRouteUpdateClosure(
-        ContactRecord xir1, ContactRecord xrr1, ContactRecord xra1, ContactRecord xrc1,
-        ContactRecord xss1, ContactRecord pmt2, ContactRecord pms2,
-        VerifiedContactNetworkAuthority authority)
-    {
-        ArgumentNullException.ThrowIfNull(xir1); ArgumentNullException.ThrowIfNull(authority);
-        RequireRecord(xir1, ProtocolMagic.XIR1);
-        ValidateRouteUpdateGraph(xrr1, xra1, xrc1, xss1, pmt2, pms2);
-
-        var trusted = authority.TrustedUnixSeconds;
-        var network = authority.NetworkId.Span;
-        foreach (var record in new[] { xir1, xrr1, xra1, xrc1, xss1, pmt2, pms2 })
-            if (!record.FieldSpan(1).SequenceEqual(network))
-                Reject(ContactValidationStage.Closure, "AuthorityNetworkMismatch");
-
-        RequireReference(xir1, 5, pmt2); RequireReference(xir1, 18, xra1);
-        if (!xir1.FieldSpan(6).SequenceEqual(xra1.FieldSpan(6)) ||
-            !xir1.FieldSpan(7).SequenceEqual(xra1.FieldSpan(10)) ||
-            !xir1.FieldSpan(8).SequenceEqual(xra1.FieldSpan(11)) ||
-            !xir1.FieldSpan(12).SequenceEqual(xra1.FieldSpan(9)) ||
-            !xir1.FieldSpan(13).SequenceEqual(xra1.FieldSpan(12)) ||
-            !xir1.FieldSpan(14).SequenceEqual(xra1.FieldSpan(13)) ||
-            !xir1.FieldSpan(15).SequenceEqual(xra1.FieldSpan(15)) ||
-            !xrr1.FieldSpan(11).SequenceEqual(xra1.FieldSpan(9)) ||
-            !xra1.FieldSpan(14).SequenceEqual(authority.RecipientDeviceId.Span) ||
-            !xra1.FieldSpan(15).SequenceEqual(authority.RecipientDpd1Reference.Span) ||
-            !xrr1.FieldSpan(18).SequenceEqual(authority.RecipientDpd1Reference.Span) ||
-            !xir1.FieldSpan(16).SequenceEqual(authority.Dca1Reference.Span))
-            Reject(ContactValidationStage.Closure, "InviteRouteAuthorityMismatch");
-
-        // PMT2 tag 14 is an issuance-time audit anchor; XRC1/XSS1 carry the
-        // exact current directory authority for this route closure.
-        if (!pmt2.FieldSpan(5).SequenceEqual(authority.Xnv1CoreReference.Span) ||
-            !ContactCodec.ArtifactReference(ProtocolMagic.PMT2, pmt2).CanonicalBytes.Span.SequenceEqual(authority.Pmt2ArtifactReference.Span) ||
-            !pms2.ArtifactHash.Span.SequenceEqual(authority.Pms2ArtifactHash.Span) ||
-            !xrc1.FieldSpan(8).SequenceEqual(authority.Xnv1CoreReference.Span) ||
-            !xrc1.FieldSpan(9).SequenceEqual(authority.Xnh1CoreReference.Span) ||
-            !xrc1.FieldSpan(19).SequenceEqual(authority.Adh1CoreReference.Span) ||
-            !xss1.FieldSpan(8).SequenceEqual(authority.Xnv1CoreReference.Span) ||
-            !xss1.FieldSpan(12).SequenceEqual(authority.Adh1CoreReference.Span))
-            Reject(ContactValidationStage.Closure, "NetworkDirectoryAuthorityMismatch");
-
-        if (!authority.IsCurrentAt(trusted) ||
-            !CurrentAt(xir1, 13, 14, trusted) || !CurrentAt(xra1, 12, 13, trusted) ||
-            !CurrentAt(pmt2, 11, 12, trusted) || !CurrentAt(pms2, 8, 9, trusted) ||
-            !CurrentAt(xrc1, 17, 18, trusted) || !CurrentAt(xss1, 10, 11, trusted) ||
-            !CurrentAt(xrr1, 16, 17, trusted))
-            Reject(ContactValidationStage.Closure, "RouteNotCurrentAtTrustedTime");
-
-        VerifyDeviceSignature(xir1, authority.RecipientDevicePublicKey.Span);
-        VerifyDeviceSignature(xra1, authority.RecipientDevicePublicKey.Span);
-        VerifyDeviceSignature(xrr1, authority.RecipientDevicePublicKey.Span);
-        VerifyWitnessThreshold(pmt2, 16, authority);
-        VerifyWitnessThreshold(pms2, 11, authority);
-        VerifyWitnessThreshold(xrc1, 21, authority);
-        VerifyWitnessThreshold(xss1, 14, authority);
-        return new VerifiedContactRouteClosure(xir1, xrr1, xra1, xrc1, xss1, pmt2, pms2, authority);
     }
 
     internal static byte[] Project(ContactRecord record, IReadOnlyList<int> tags)
@@ -589,8 +423,6 @@ public static class ContactCodec
         NonZero(f(1));
         switch (r.Magic)
         {
-            case ProtocolMagic.DCB1: ValidateDcb1(r); break;
-            case ProtocolMagic.DCR1: ValidateDcr1(r); break;
             case ProtocolMagic.DIA1:
                 NonZero(f(2)); if (f(3)[0] != 2 || BinaryPrimitives.ReadUInt16BigEndian(f(4)) != 1 || IsZero(f(5)) || IsZero(f(6)) || IsZero(f(7)) || U64(f(8)) == 0 || BinaryPrimitives.ReadUInt16BigEndian(f(9)) != 1) Reject(ContactValidationStage.Scalar, "InvalidInvitationScalar"); break;
             case ProtocolMagic.XIR1:
@@ -676,46 +508,6 @@ public static class ContactCodec
     }
 
     private static int canonicalLength(int baseBytes, int first, int second) => checked(baseBytes + first + second);
-
-    private static void ValidateDcb1(ContactRecord r)
-    {
-        var f = r.FieldSpan;
-        NonZero(f(2)); Reference(f(4), ProtocolMagic.DRS1);
-        AccountCertificate accountCertificate;
-        ParsedDmd1 directory;
-        ParsedDca1 authorization;
-        ParsedDab1 binding;
-        AccountDirectoryAdl1 lookup;
-        try
-        {
-            accountCertificate = IdentityCodec.DecodeAccountCertificate(f(3));
-            directory = ApplicationCoreCodec.DecodeDmd1(f(5));
-            authorization = ApplicationCoreCodec.DecodeDca1(f(6));
-            binding = ApplicationCoreCodec.DecodeDab1(f(24));
-            lookup = AccountDirectoryAdl1Codec.Decode(f(20));
-        }
-        catch (Exception exception) when (exception is FormatException or RecordException or ArgumentException) { throw new ContactFormatException(ContactValidationStage.Derived, "EmbeddedApplicationRecordRejected"); }
-        if (!accountCertificate.NetworkId.Span.SequenceEqual(f(1)) || !directory.NetworkId.Span.SequenceEqual(f(1)) ||
-            !directory.DeepAccountId.Span.SequenceEqual(f(2)) ||
-            !ReferenceMatches(directory.Dpa1Reference, accountCertificate) ||
-            !authorization.NetworkId.Span.SequenceEqual(f(1)) || !authorization.DeepAccountId.Span.SequenceEqual(f(2)) ||
-            !ReferenceMatches(authorization.Dpa1Reference, accountCertificate) ||
-            authorization.AuthorizedDmd1Generation != directory.DirectoryGeneration ||
-            !authorization.AuthorizedDmd1Hash.Span.SequenceEqual(directory.RecordHash.Span) ||
-            !authorization.PublisherDeviceId.Span.SequenceEqual(f(10)) ||
-            !binding.DeepAccountId.Span.SequenceEqual(f(2)) ||
-            !lookup.NetworkId.Span.SequenceEqual(f(1)) ||
-            lookup.MinimumAdhGeneration != U64(f(21)[..8]) ||
-            !CryptographicOperations.FixedTimeEquals(lookup.MinimumAdhHash.Span, f(21)[8..]) ||
-            !ReferenceMatches(binding.Dpa1Reference, accountCertificate))
-            Reject(ContactValidationStage.Derived, "ApplicationClosureMismatch");
-        NonZero(f(7)); GenPredecessor(f(8), f(9)); NonZero(f(10));
-        if (f(11)[0] != directory.ActiveDevices.Count || f(13)[0] != 1) Reject(ContactValidationStage.Derived, "DeviceCoverageMismatch");
-        ValidateXpsList(f(12), directory, f(1)); ValidateDcbDescriptor(f(14));
-        if ((BinaryPrimitives.ReadUInt32BigEndian(f(16)) & ~0x0000000fU) != 0 || !ValidWindow(U64(f(17)), U64(f(18)), ulong.MaxValue)) Reject(ContactValidationStage.Scalar, "InvalidBundleWindow");
-        RequireCanonicalUtf8(f(15));
-        NonZero(f(19)); if (IsZero(f(21)[8..])) Reject(ContactValidationStage.Scalar, "InvalidDirectoryMinimum"); NonZero(f(22)); NonZero(f(23));
-    }
 
     private static void ValidateXpsList(ReadOnlySpan<byte> value, ParsedDmd1 directory, ReadOnlySpan<byte> network)
     {
@@ -908,10 +700,6 @@ public static class ContactCodec
 
     private static bool CurrentAt(ContactRecord record, int fromTag, int untilTag, ulong trusted) =>
         trusted >= U64(record.FieldSpan(fromTag)) && trusted < U64(record.FieldSpan(untilTag));
-
-    private static void VerifyWitnessThreshold(
-        ContactRecord record, int receiptTag, VerifiedContactNetworkAuthority authority)
-        => authority.VerifyWitnessThreshold(record, receiptTag);
 
     private static byte[] ProjectRawRecord(ReadOnlySpan<byte> canonical, int includedFieldCount)
     {
@@ -1145,106 +933,6 @@ public sealed class ContactRecord
     public ReadOnlyMemory<byte> CoreHash=>coreDomain is null ? ArtifactHash : ContactCodec.Sha256Domain(coreDomain,ContactCodec.Project(this,projectionTags));
 }
 
-/// <summary>
-/// Non-forgeable result of <see cref="ContactCodec.VerifyDcr1Closure"/>.  A
-/// consumer must hold this result before treating a contact bundle as an
-/// identity- and revocation-verified publication.
-/// </summary>
-public sealed class VerifiedContactBundleClosure
-{
-    internal VerifiedContactBundleClosure(
-        ContactRecord resolverResponse,
-        ContactRecord bundle,
-        VerifiedDab1 binding,
-        VerifiedDmd1 directory,
-        CurrentlyAuthoritativeDca1 authorization,
-        VerifiedAccountDirectoryFreshness freshness)
-    {
-        ResolverResponse = resolverResponse;
-        Bundle = bundle;
-        Binding = binding;
-        Directory = directory;
-        Authorization = authorization;
-        Freshness = freshness;
-    }
-
-    public ContactRecord ResolverResponse { get; }
-    public ContactRecord Bundle { get; }
-    public VerifiedDab1 Binding { get; }
-    public VerifiedDmd1 Directory { get; }
-    public CurrentlyAuthoritativeDca1 Authorization { get; }
-    public VerifiedAccountDirectoryFreshness Freshness { get; }
-
-    /// <summary>
-    /// Selects the exact XPS1 authorized for the recipient device already
-    /// bound into the current network authority. The returned value is a
-    /// non-forgeable projection of this verified DCB1 closure and is suitable
-    /// for authoring a subsequent XPK1 claim.
-    /// </summary>
-    public VerifiedContactPreKeyServiceClosure GetAuthorizedPreKeyService(
-        VerifiedContactNetworkAuthority authority)
-    {
-        ArgumentNullException.ThrowIfNull(authority);
-        if (!CryptographicOperations.FixedTimeEquals(
-                Bundle.FieldSpan(1), authority.NetworkId.Span))
-        {
-            throw new CryptographicException(
-                "The contact pre-key authority belongs to another network.");
-        }
-
-        var list = Bundle.FieldSpan(12);
-        if (list.IsEmpty)
-        {
-            throw new CryptographicException(
-                "The verified DCB1 contains no pre-key service list.");
-        }
-        var count = list[0];
-        var offset = 1;
-        ContactCodec.Xps1Record? selected = null;
-        for (var index = 0; index < count; index++)
-        {
-            if (list.Length - offset < sizeof(uint))
-            {
-                throw new CryptographicException(
-                    "The verified DCB1 pre-key service list is truncated.");
-            }
-            var length = checked((int)BinaryPrimitives.ReadUInt32BigEndian(
-                list.Slice(offset, sizeof(uint))));
-            offset += sizeof(uint);
-            if (length <= 0 || list.Length - offset < length)
-            {
-                throw new CryptographicException(
-                    "The verified DCB1 pre-key service entry is truncated.");
-            }
-            var candidate = ContactCodec.DecodeXps1(list.Slice(offset, length));
-            offset += length;
-            if (!CryptographicOperations.FixedTimeEquals(
-                    candidate.DeviceId, authority.RecipientDeviceId.Span))
-            {
-                continue;
-            }
-            if (selected is not null)
-            {
-                throw new CryptographicException(
-                    "The verified DCB1 contains duplicate pre-key services for the authorized device.");
-            }
-            selected = candidate;
-        }
-        if (offset != list.Length || selected is null ||
-            !CryptographicOperations.FixedTimeEquals(
-                selected.NetworkId, authority.NetworkId.Span) ||
-            !CryptographicOperations.FixedTimeEquals(
-                selected.Dpd1Reference, authority.RecipientDpd1Reference.Span))
-        {
-            throw new CryptographicException(
-                "The verified DCB1 has no exact pre-key service for the authorized device.");
-        }
-        return new VerifiedContactPreKeyServiceClosure(
-            Bundle.ArtifactHash.Span,
-            selected);
-    }
-}
-
 public sealed class VerifiedContactPreKeyServiceClosure
 {
     private readonly byte[] dcb1Hash;
@@ -1287,34 +975,4 @@ public sealed class VerifiedContactPreKeyServiceClosure
     public ushort LastResortReuseLimit { get; }
     public ulong IssuedAtUnixSeconds { get; }
     public ulong ExpiresAtUnixSeconds { get; }
-}
-
-/// <summary>
-/// Production-owned proof of the exact current XNV/XNH/ADH authority and its
-/// directory witness keys. It has no public construction or caller-key path.
-/// </summary>
-public sealed partial class VerifiedContactNetworkAuthority
-{
-}
-
-/// <summary>Exact route graph authorized by verified network ownership and trusted time.</summary>
-public sealed class VerifiedContactRouteClosure
-{
-    internal VerifiedContactRouteClosure(
-        ContactRecord invite, ContactRecord reachability, ContactRecord authorization,
-        ContactRecord route, ContactRecord successor, ContactRecord projection,
-        ContactRecord selection, VerifiedContactNetworkAuthority authority)
-    {
-        Invite = invite; Reachability = reachability; Authorization = authorization;
-        Route = route; Successor = successor; Projection = projection; Selection = selection;
-        Authority = authority;
-    }
-    public ContactRecord Invite { get; }
-    public ContactRecord Reachability { get; }
-    public ContactRecord Authorization { get; }
-    public ContactRecord Route { get; }
-    public ContactRecord Successor { get; }
-    public ContactRecord Projection { get; }
-    public ContactRecord Selection { get; }
-    public VerifiedContactNetworkAuthority Authority { get; }
 }

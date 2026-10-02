@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using Deep.Protocol.AccountDirectoryV1;
 using Deep.Protocol.ApplicationCore;
 using Deep.Protocol.ContactV2;
@@ -824,10 +825,11 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
     public void Did2Verifier_RejectsV1PacketAndTamperedSignedTime()
     {
         var fixture = Did2EmptyFixture.Create();
-        var old = fixture.Authority.NonMembership();
+        var old = fixture.AdpBytes.ToArray();
+        BinaryPrimitives.WriteUInt16BigEndian(old.AsSpan(4), 1);
         Assert.Equal("InvalidDid2DirectoryProof",
             Assert.Throws<AccountDirectoryFreshnessVerificationException>(() =>
-                fixture.Verify(adp: old.AdpBytes)).Code);
+                fixture.Verify(adp: old)).Code);
 
         var alteredDtt = fixture.DttBytes.ToArray();
         alteredDtt[^1] ^= 1;

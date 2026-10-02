@@ -38,7 +38,7 @@ public static class DeepIdV2ContactUpdateRendezvousVerifier
         if (exactXur1.Length != 538)
             throw new ArgumentException("An exact bounded inbound XUR1 is required.", nameof(exactXur1));
         // The decoder owns all fields before any asynchronous clock read.
-        // XUR1 is identity-neutral; no DID1/DAB1 author/verifier is used.
+        // XUR1 is identity-neutral; no retired identity author/verifier is used.
         var record = ContactCodec.Decode(ProtocolMagic.XUR1, exactXur1.Span);
         var first = await trustedTime.ReadCurrentAsync(cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();

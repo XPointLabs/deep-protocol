@@ -14,7 +14,6 @@ public enum XPointNetworkOperationalSignaturePurpose : byte
     NodeDescriptor = 1,
     NetworkView = 2,
     NetworkHead = 3,
-    DirectoryHead = 4,
     MailboxTopology = 5,
 }
 
@@ -192,7 +191,6 @@ public sealed class XPointNetworkOperationalNode
 public sealed class XPointNetworkOperationalGenesisRequest
 {
     private readonly byte[] ceremonyId;
-    private readonly byte[] directoryQueryLeafKey;
     private readonly byte[] xcc1CoreCommitment;
     private readonly byte[] xcb1ArtifactCommitment;
     private readonly byte[] mailboxAuthorityId;
@@ -205,7 +203,6 @@ public sealed class XPointNetworkOperationalGenesisRequest
         IReadOnlyList<IXPointNetworkBootstrapRootSigner> rootSigners,
         IReadOnlyList<IXPointNetworkWitnessSigner> witnessSigners,
         IReadOnlyList<XPointNetworkOperationalNode> nodes,
-        ReadOnlySpan<byte> directoryQueryLeafKey,
         ReadOnlySpan<byte> xcc1CoreCommitment,
         ReadOnlySpan<byte> xcb1ArtifactCommitment,
         ReadOnlySpan<byte> mailboxAuthorityId,
@@ -214,25 +211,17 @@ public sealed class XPointNetworkOperationalGenesisRequest
         ulong issuedAtUnixSeconds,
         ulong notBeforeUnixSeconds,
         ulong expiresAtUnixSeconds,
-        ReadOnlySpan<byte> snapshotNonce,
-        ReadOnlySpan<byte> snapshotBootId,
-        ulong snapshotNonceCreatedAtMonotonicSeconds,
-        ulong snapshotResponseReceivedAtMonotonicSeconds,
-        ulong snapshotCurrentMonotonicSeconds,
-        ulong observedUnixTime,
-        uint uncertaintySeconds,
         ushort minimumReader = 1,
         ulong rootPolicyExpiresAtUnixSeconds = 0)
     {
         this.ceremonyId = Required(ceremonyId, 32, nameof(ceremonyId));
         Bootstrap = bootstrap ?? throw new ArgumentNullException(nameof(bootstrap));
         ArgumentNullException.ThrowIfNull(rootSigners);
-        RootSigners = rootSigners.ToArray();
+        RootSigners = Array.AsReadOnly(rootSigners.ToArray());
         ArgumentNullException.ThrowIfNull(witnessSigners);
-        WitnessSigners = witnessSigners.ToArray();
+        WitnessSigners = Array.AsReadOnly(witnessSigners.ToArray());
         ArgumentNullException.ThrowIfNull(nodes);
-        Nodes = nodes.ToArray();
-        this.directoryQueryLeafKey = Required(directoryQueryLeafKey, 32, nameof(directoryQueryLeafKey));
+        Nodes = Array.AsReadOnly(nodes.ToArray());
         this.xcc1CoreCommitment = Required(xcc1CoreCommitment, 32, nameof(xcc1CoreCommitment));
         this.xcb1ArtifactCommitment = Required(xcb1ArtifactCommitment, 32, nameof(xcb1ArtifactCommitment));
         this.mailboxAuthorityId = Required(mailboxAuthorityId, 32, nameof(mailboxAuthorityId));
@@ -251,13 +240,6 @@ public sealed class XPointNetworkOperationalGenesisRequest
         if (RootPolicyExpiresAtUnixSeconds < expiresAtUnixSeconds ||
             RootPolicyExpiresAtUnixSeconds > Bootstrap.Authority.ExpiresAt)
             throw new ArgumentException("Root policy delegation must cover operations inside the verified authority interval.");
-        SnapshotNonce = Required(snapshotNonce, 32, nameof(snapshotNonce));
-        SnapshotBootId = Required(snapshotBootId, 16, nameof(snapshotBootId));
-        SnapshotNonceCreatedAtMonotonicSeconds = snapshotNonceCreatedAtMonotonicSeconds;
-        SnapshotResponseReceivedAtMonotonicSeconds = snapshotResponseReceivedAtMonotonicSeconds;
-        SnapshotCurrentMonotonicSeconds = snapshotCurrentMonotonicSeconds;
-        ObservedUnixTime = observedUnixTime;
-        UncertaintySeconds = uncertaintySeconds;
         MinimumReader = minimumReader;
 
         if (RootSigners.Count == 0 || WitnessSigners.Count is < 2 or > 32 || Nodes.Count is < 3 or > 512)
@@ -265,15 +247,6 @@ public sealed class XPointNetworkOperationalGenesisRequest
         if (issuedAtUnixSeconds == 0 || issuedAtUnixSeconds > notBeforeUnixSeconds ||
             notBeforeUnixSeconds >= expiresAtUnixSeconds || expiresAtUnixSeconds - notBeforeUnixSeconds > 86_400)
             throw new ArgumentException("The operational genesis interval must be non-empty and at most 24 hours.");
-        if (uncertaintySeconds is < 1 or > 30 || observedUnixTime <= uncertaintySeconds ||
-            observedUnixTime + uncertaintySeconds >= expiresAtUnixSeconds ||
-            observedUnixTime - uncertaintySeconds < notBeforeUnixSeconds)
-            throw new ArgumentException("The authenticated time interval is outside the operational genesis interval.");
-        if (snapshotNonceCreatedAtMonotonicSeconds > snapshotResponseReceivedAtMonotonicSeconds ||
-            snapshotResponseReceivedAtMonotonicSeconds > snapshotCurrentMonotonicSeconds ||
-            snapshotResponseReceivedAtMonotonicSeconds - snapshotNonceCreatedAtMonotonicSeconds >
-            AccountDirectoryCurrentProofVerifier.MaximumNonceRoundTripSeconds)
-            throw new ArgumentException("The snapshot monotonic window is invalid.");
         if (minimumReader == 0) throw new ArgumentOutOfRangeException(nameof(minimumReader));
     }
 
@@ -282,7 +255,6 @@ public sealed class XPointNetworkOperationalGenesisRequest
     public IReadOnlyList<IXPointNetworkBootstrapRootSigner> RootSigners { get; }
     public IReadOnlyList<IXPointNetworkWitnessSigner> WitnessSigners { get; }
     public IReadOnlyList<XPointNetworkOperationalNode> Nodes { get; }
-    public ReadOnlyMemory<byte> DirectoryQueryLeafKey => directoryQueryLeafKey.ToArray();
     public ReadOnlyMemory<byte> Xcc1CoreCommitment => xcc1CoreCommitment.ToArray();
     public ReadOnlyMemory<byte> Xcb1ArtifactCommitment => xcb1ArtifactCommitment.ToArray();
     public ReadOnlyMemory<byte> MailboxAuthorityId => mailboxAuthorityId.ToArray();
@@ -292,13 +264,6 @@ public sealed class XPointNetworkOperationalGenesisRequest
     public ulong NotBeforeUnixSeconds { get; }
     public ulong ExpiresAtUnixSeconds { get; }
     public ulong RootPolicyExpiresAtUnixSeconds { get; }
-    public ReadOnlyMemory<byte> SnapshotNonce { get; }
-    public ReadOnlyMemory<byte> SnapshotBootId { get; }
-    public ulong SnapshotNonceCreatedAtMonotonicSeconds { get; }
-    public ulong SnapshotResponseReceivedAtMonotonicSeconds { get; }
-    public ulong SnapshotCurrentMonotonicSeconds { get; }
-    public ulong ObservedUnixTime { get; }
-    public uint UncertaintySeconds { get; }
     public ushort MinimumReader { get; }
 
     private static byte[] Required(ReadOnlySpan<byte> value, int length, string name)
@@ -309,8 +274,35 @@ public sealed class XPointNetworkOperationalGenesisRequest
     }
 }
 
+/// <summary>Signed network artifacts awaiting independently verified DID2
+/// directory evidence. This result grants no network or dispatch authority.</summary>
+public sealed class PendingXPointNetworkOperationalGenesis
+{
+    private readonly byte[] policy, view, head, mailboxAuthority;
+    private readonly byte[][] descriptors;
+
+    internal PendingXPointNetworkOperationalGenesis(XPointNetworkOperationalGenesisRequest request,
+        byte[] policy, byte[][] descriptors, byte[] view, byte[] head, byte[] mailboxAuthority)
+    {
+        Request = request;
+        this.policy = policy.ToArray(); this.descriptors = descriptors.Select(value => value.ToArray()).ToArray();
+        this.view = view.ToArray(); this.head = head.ToArray(); this.mailboxAuthority = mailboxAuthority.ToArray();
+    }
+
+    internal XPointNetworkOperationalGenesisRequest Request { get; }
+    public ReadOnlyMemory<byte> ExactXvp1 => policy.ToArray();
+    public IReadOnlyList<ReadOnlyMemory<byte>> ExactXnd1 =>
+        Array.AsReadOnly(descriptors.Select(value => (ReadOnlyMemory<byte>)value.ToArray()).ToArray());
+    public ReadOnlyMemory<byte> ExactXnv1 => view.ToArray();
+    public ReadOnlyMemory<byte> ExactXnh1 => head.ToArray();
+    public ReadOnlyMemory<byte> ExactPma2 => mailboxAuthority.ToArray();
+}
+
 public sealed class AuthoredXPointNetworkOperationalGenesis
 {
+    private readonly byte[] policy, view, head, adh, dtt, adp, mailboxAuthority, topology;
+    private readonly byte[][] descriptors;
+
     internal AuthoredXPointNetworkOperationalGenesis(
         XPointNetworkOperationalGenesisRequest request,
         byte[] xvp1,
@@ -325,30 +317,25 @@ public sealed class AuthoredXPointNetworkOperationalGenesis
         VerifiedOnionNetworkContext verifiedNetwork)
     {
         Request = request;
-        ExactXvp1 = xvp1.ToArray();
-        ExactXnd1 = Array.AsReadOnly(xnd1.Select(static value => (ReadOnlyMemory<byte>)value.ToArray()).ToArray());
-        ExactXnv1 = xnv1.ToArray();
-        ExactXnh1 = xnh1.ToArray();
-        ExactAdh1 = adh1.ToArray();
-        ExactDtt1 = dtt1.ToArray();
-        ExactAdp1 = adp1.ToArray();
-        ExactPma2 = pma2.ToArray();
-        ExactPmt2 = pmt2.ToArray();
+        policy = xvp1.ToArray(); descriptors = xnd1.Select(value => value.ToArray()).ToArray();
+        view = xnv1.ToArray(); head = xnh1.ToArray(); adh = adh1.ToArray(); dtt = dtt1.ToArray();
+        adp = adp1.ToArray(); mailboxAuthority = pma2.ToArray(); topology = pmt2.ToArray();
         VerifiedNetwork = verifiedNetwork;
     }
 
     public XPointNetworkOperationalGenesisRequest Request { get; }
     public ReadOnlyMemory<byte> ExactXna1 => Request.Bootstrap.ExactXna1;
     public ReadOnlyMemory<byte> ExactDts1 => Request.Bootstrap.ExactDts1;
-    public ReadOnlyMemory<byte> ExactXvp1 { get; }
-    public IReadOnlyList<ReadOnlyMemory<byte>> ExactXnd1 { get; }
-    public ReadOnlyMemory<byte> ExactXnv1 { get; }
-    public ReadOnlyMemory<byte> ExactXnh1 { get; }
-    public ReadOnlyMemory<byte> ExactAdh1 { get; }
-    public ReadOnlyMemory<byte> ExactDtt1 { get; }
-    public ReadOnlyMemory<byte> ExactAdp1 { get; }
-    public ReadOnlyMemory<byte> ExactPma2 { get; }
-    public ReadOnlyMemory<byte> ExactPmt2 { get; }
+    public ReadOnlyMemory<byte> ExactXvp1 => policy.ToArray();
+    public IReadOnlyList<ReadOnlyMemory<byte>> ExactXnd1 =>
+        Array.AsReadOnly(descriptors.Select(value => (ReadOnlyMemory<byte>)value.ToArray()).ToArray());
+    public ReadOnlyMemory<byte> ExactXnv1 => view.ToArray();
+    public ReadOnlyMemory<byte> ExactXnh1 => head.ToArray();
+    public ReadOnlyMemory<byte> ExactAdh1 => adh.ToArray();
+    public ReadOnlyMemory<byte> ExactDtt1 => dtt.ToArray();
+    public ReadOnlyMemory<byte> ExactAdp1 => adp.ToArray();
+    public ReadOnlyMemory<byte> ExactPma2 => mailboxAuthority.ToArray();
+    public ReadOnlyMemory<byte> ExactPmt2 => topology.ToArray();
     public VerifiedOnionNetworkContext VerifiedNetwork { get; }
 }
 
@@ -359,118 +346,71 @@ public sealed class AuthoredXPointNetworkOperationalGenesis
 /// </summary>
 public static class XPointNetworkOperationalGenesisAuthor
 {
-    public static async ValueTask<AuthoredXPointNetworkOperationalGenesis> AuthorAsync(
-        XPointNetworkOperationalGenesisRequest request,
-        CancellationToken cancellationToken = default)
+    public static async ValueTask<PendingXPointNetworkOperationalGenesis> AuthorNetworkCandidateAsync(
+        XPointNetworkOperationalGenesisRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
         var authority = request.Bootstrap.Authority;
-        var network = authority.NetworkId.ToArray();
         var witnesses = ValidateWitnesses(authority, request.WitnessSigners);
-        var nodes = ValidateNodes(network, request.Nodes);
-
-        var xvp = await AuthorPolicyAsync(request, authority, cancellationToken).ConfigureAwait(false);
-        var xnd = new byte[nodes.Length][];
+        var nodes = ValidateNodes(authority.NetworkId.ToArray(), request.Nodes);
+        var policy = await AuthorPolicyAsync(request, authority, cancellationToken).ConfigureAwait(false);
+        var descriptors = new byte[nodes.Length][];
         for (var index = 0; index < nodes.Length; index++)
-            xnd[index] = await AuthorNodeAsync(request, nodes[index], cancellationToken).ConfigureAwait(false);
-        Array.Sort(xnd, static (left, right) =>
+            descriptors[index] = await AuthorNodeAsync(request, nodes[index], cancellationToken).ConfigureAwait(false);
+        Array.Sort(descriptors, static (left, right) =>
             XPointNetworkCodec.Parse<Xnd1Record>(left).NodeId.Span.SequenceCompareTo(
                 XPointNetworkCodec.Parse<Xnd1Record>(right).NodeId.Span));
-
-        var xnv = await AuthorViewAsync(request, authority, xvp, xnd, witnesses, cancellationToken)
+        var view = await AuthorViewAsync(request, authority, policy, descriptors, witnesses, cancellationToken)
             .ConfigureAwait(false);
-        var xnh = await AuthorHeadAsync(request, authority, xnv, witnesses, cancellationToken)
-            .ConfigureAwait(false);
-        var adh = await AuthorDirectoryHeadAsync(request, authority, witnesses, cancellationToken)
-            .ConfigureAwait(false);
-
-        var adhRecord = AccountDirectoryAdh1Codec.Decode(adh);
-        var adhHash = AccountDirectoryCrypto.ComputeAdh1CoreHash(adhRecord);
-        var protectedHead = AccountDirectoryProtectedLkgFactory.Restore(authority, adh, adhHash);
-        var proof = AccountDirectoryAdp1ProofMaterial.NonMembership(
-            request.DirectoryQueryLeafKey.Span,
-            callerProtectedLkg: null,
-            consistencyProofNodes: [],
-            exactAfp1: ReadOnlyMemory<byte>.Empty,
-            sparseMapBitmap: new byte[32],
-            sparseMapSiblings: []);
-        var issuanceEpoch = AccountDirectoryDtt1IssuanceEpoch.Derive(
-            authority, request.ObservedUnixTime, request.UncertaintySeconds);
-        var proofRequest = new AccountDirectoryProofAuthoringRequest(
-            network,
-            request.SnapshotNonce.Span,
-            request.SnapshotBootId.Span,
-            request.SnapshotNonceCreatedAtMonotonicSeconds,
-            adh,
-            xnv,
-            request.ObservedUnixTime,
-            request.UncertaintySeconds,
-            request.ObservedUnixTime - request.UncertaintySeconds,
-            checked(request.ObservedUnixTime + request.UncertaintySeconds +
-                AccountDirectoryCurrentProofVerifier.MaximumNonceRoundTripSeconds),
-            issuanceEpoch,
-            request.MinimumReader);
-        var authoredProof = await AccountDirectoryProofAuthor.IssueAsync(
-            authority,
-            protectedHead,
-            proofRequest,
-            proof,
-            witnesses.Cast<IAccountDirectoryDtt1WitnessSigner>().ToArray(),
-            cancellationToken).ConfigureAwait(false);
-        var monotonic = new AccountDirectoryMonotonicRequestWindow(
-            request.SnapshotBootId.Span,
-            request.SnapshotNonceCreatedAtMonotonicSeconds,
-            request.SnapshotResponseReceivedAtMonotonicSeconds,
-            request.SnapshotCurrentMonotonicSeconds);
-        var freshness = AccountDirectoryCurrentProofVerifier.Verify(
-            authority,
-            adh,
-            authoredProof.ExactDtt1,
-            authoredProof.ExactAdp1,
-            request.SnapshotNonce.Span,
-            request.DirectoryQueryLeafKey.Span,
-            monotonic,
-            protectedLkg: null,
-            currentCheckpoint: null,
-            request.MinimumReader);
-        var pma = await AuthorMailboxAuthorityAsync(
-            request, authority, cancellationToken).ConfigureAwait(false);
-        var verifiedMailboxAuthority = MailboxAuthorityV2Verifier.Verify(
-            authority,
-            pma,
-            freshness.TrustedLowerUnixSeconds,
-            freshness.TrustedUpperUnixSeconds);
-        var pmt = await AuthorMailboxTopologyAsync(
-            request, authority, verifiedMailboxAuthority, xnv, xnd, freshness, witnesses, cancellationToken)
-            .ConfigureAwait(false);
-        var verified = await OnionNetworkContextVerifier.VerifyAsync(
-            authority,
-            freshness,
-            [xvp],
-            [xnv],
-            [xnh],
-            xnd.Select(static value => (ReadOnlyMemory<byte>)value).ToArray(),
-            [pmt],
-            protectedPrevious: null,
-            new OnionTrustedTimeAuthority(new FixedMonotonicClock(
-                request.SnapshotBootId.Span,
-                request.SnapshotCurrentMonotonicSeconds)),
-            cancellationToken).ConfigureAwait(false);
-        verified.EnsureCurrent();
-        return new AuthoredXPointNetworkOperationalGenesis(
-            request,
-            xvp,
-            xnd,
-            xnv,
-            xnh,
-            adh,
-            authoredProof.ExactDtt1.ToArray(),
-            authoredProof.ExactAdp1.ToArray(),
-            pma,
-            pmt,
-            verified);
+        var head = await AuthorHeadAsync(request, authority, view, witnesses, cancellationToken).ConfigureAwait(false);
+        var mailbox = await AuthorMailboxAuthorityAsync(request, authority, cancellationToken).ConfigureAwait(false);
+        return new(request, policy, descriptors, view, head, mailbox);
     }
+
+    public static async ValueTask<AuthoredXPointNetworkOperationalGenesis> CompleteDid2Async(
+        PendingXPointNetworkOperationalGenesis pending, VerifiedDeepIdV2DirectoryFreshness freshness,
+        OnionTrustedTimeAuthority trustedTime,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(pending);
+        ArgumentNullException.ThrowIfNull(freshness);
+        ArgumentNullException.ThrowIfNull(trustedTime);
+        cancellationToken.ThrowIfCancellationRequested();
+        var request = pending.Request;
+        var authority = request.Bootstrap.Authority;
+        var view = XPointNetworkCodec.Parse<Xnv1Record>(pending.ExactXnv1.Span);
+        var dtt = AccountDirectoryDtt1Codec.Decode(freshness.ExactDtt1.Span);
+        var reading = await trustedTime.ReadCurrentAsync(cancellationToken).ConfigureAwait(false);
+        if (!freshness.IsCurrentAtMonotonic(reading.BootId.Span, reading.SampleSeconds)
+            || !CryptographicOperations.FixedTimeEquals(freshness.NetworkId.Span, authority.NetworkId.Span)
+            || !CryptographicOperations.FixedTimeEquals(dtt.AuthorizingXna1CoreReference.Span, authority.AuthorityCoreReference.Span)
+            || !CryptographicOperations.FixedTimeEquals(dtt.WitnessPolicyHash.Span, authority.DirectoryWitnessPolicyHash.Span)
+            || !CryptographicOperations.FixedTimeEquals(dtt.CurrentXnv1CoreHash.Span, view.CoreHash.Span))
+            throw new CryptographicException("Operational genesis requires current DID2 proof bound to the exact candidate view and authority.");
+        var elapsed = checked(reading.SampleSeconds - freshness.MonotonicSample);
+        var lower = checked(freshness.TrustedLowerUnixSeconds + elapsed);
+        var upper = checked(freshness.TrustedUpperUnixSeconds + elapsed);
+        if (lower < request.NotBeforeUnixSeconds || upper >= request.ExpiresAtUnixSeconds)
+            throw new CryptographicException("The operational genesis interval does not cover current authenticated time.");
+        var mailbox = MailboxAuthorityV2Verifier.Verify(authority, pending.ExactPma2.Span, lower, upper);
+        var descriptors = pending.ExactXnd1.Select(value => value.ToArray()).ToArray();
+        var pmt = await AuthorMailboxTopologyAsync(request, authority, mailbox, pending.ExactXnv1.ToArray(),
+            descriptors, freshness, ValidateWitnesses(authority, request.WitnessSigners), cancellationToken).ConfigureAwait(false);
+        var finalReading = await trustedTime.ReadCurrentAsync(cancellationToken).ConfigureAwait(false);
+        if (!freshness.IsCurrentAtMonotonic(finalReading.BootId.Span, finalReading.SampleSeconds)
+            || finalReading.SampleSeconds < reading.SampleSeconds
+            || checked(freshness.TrustedUpperUnixSeconds + (finalReading.SampleSeconds - freshness.MonotonicSample)) >= request.ExpiresAtUnixSeconds)
+            throw new CryptographicException("Operational genesis time changed or expired during topology signing.");
+        var verified = await OnionNetworkContextVerifier.VerifyAsync(authority, freshness,
+            [pending.ExactXvp1], [pending.ExactXnv1], [pending.ExactXnh1], pending.ExactXnd1, [pmt], null,
+            trustedTime, cancellationToken).ConfigureAwait(false);
+        verified.EnsureCurrent();
+        return new(request, pending.ExactXvp1.ToArray(), descriptors, pending.ExactXnv1.ToArray(),
+            pending.ExactXnh1.ToArray(), freshness.ExactAdh1.ToArray(), freshness.ExactDtt1.ToArray(),
+            freshness.ExactAdp1V2.ToArray(), pending.ExactPma2.ToArray(), pmt, verified);
+    }
+
 
     private static async ValueTask<byte[]> AuthorMailboxAuthorityAsync(
         XPointNetworkOperationalGenesisRequest request,
@@ -716,45 +656,13 @@ public static class XPointNetworkOperationalGenesisAuthor
             XPointNetworkOperationalSignaturePurpose.NetworkHead, cancellationToken).ConfigureAwait(false);
     }
 
-    private static async ValueTask<byte[]> AuthorDirectoryHeadAsync(
-        XPointNetworkOperationalGenesisRequest request,
-        VerifiedXPointNetworkAuthority authority,
-        IXPointNetworkWitnessSigner[] witnesses,
-        CancellationToken cancellationToken)
-    {
-        var placeholder = witnesses.Select(static (signer, index) => new AccountDirectoryAdh1WitnessEntry(
-            signer.SignerId.Span, Placeholder64(checked((byte)(index + 1)))))
-            .ToArray();
-        var unsigned = new AccountDirectoryAdh1(
-            authority.NetworkId.Span, 0, new byte[32], 0,
-            AccountDirectoryRfc6962.ComputeEmptyTreeHash(), AccountDirectorySparseMap.EmptyMapRoot.Span,
-            authority.AuthorityCoreReference.Span, authority.DirectoryWitnessPolicyHash.Span,
-            request.NotBeforeUnixSeconds, request.ExpiresAtUnixSeconds, request.MinimumReader, placeholder);
-        var input = AccountDirectoryCrypto.ComputeAdh1SigningInput(unsigned);
-        var receipts = new List<AccountDirectoryAdh1WitnessEntry>();
-        foreach (var signer in witnesses)
-        {
-            var signature = await SignOperationalAsync(
-                request, signer, XPointNetworkOperationalSignaturePurpose.DirectoryHead,
-                0, input, cancellationToken).ConfigureAwait(false);
-            receipts.Add(new AccountDirectoryAdh1WitnessEntry(signer.SignerId.Span, signature));
-            CryptographicOperations.ZeroMemory(signature);
-        }
-        receipts.Sort(static (left, right) => left.WitnessId.Span.SequenceCompareTo(right.WitnessId.Span));
-        return AccountDirectoryAdh1Codec.Encode(new AccountDirectoryAdh1(
-            authority.NetworkId.Span, 0, new byte[32], 0,
-            AccountDirectoryRfc6962.ComputeEmptyTreeHash(), AccountDirectorySparseMap.EmptyMapRoot.Span,
-            authority.AuthorityCoreReference.Span, authority.DirectoryWitnessPolicyHash.Span,
-            request.NotBeforeUnixSeconds, request.ExpiresAtUnixSeconds, request.MinimumReader, receipts));
-    }
-
     private static async ValueTask<byte[]> AuthorMailboxTopologyAsync(
         XPointNetworkOperationalGenesisRequest request,
         VerifiedXPointNetworkAuthority authority,
         VerifiedMailboxAuthorityV2 mailboxAuthority,
         byte[] exactXnv1,
         byte[][] exactXnd1,
-        VerifiedAccountDirectoryFreshness freshness,
+        VerifiedDeepIdV2DirectoryFreshness freshness,
         IXPointNetworkWitnessSigner[] witnesses,
         CancellationToken cancellationToken)
     {
@@ -775,7 +683,7 @@ public static class XPointNetworkOperationalGenesisAuthor
             XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XNV1, view.CoreHash.Span),
             U64(1), new byte[] { 2 }, U16(checked((ushort)nodes.Length)), Join(rows),
             U64(request.IssuedAtUnixSeconds), U64(request.NotBeforeUnixSeconds), U64(request.ExpiresAtUnixSeconds),
-            new byte[32], freshness.ExactAdh1CoreReference,
+            new byte[32], ((IVerifiedDirectoryNetworkTime)freshness).ExactAdh1CoreReference,
             new byte[] { checked((byte)witnesses.Length) },
             SignatureRows(witnesses.Select(static (signer, index) =>
                 (signer.SignerId.ToArray(), Placeholder64(checked((byte)(index + 1))))).ToArray()),
@@ -980,22 +888,6 @@ public static class XPointNetworkOperationalGenesisAuthor
 
     private static bool Fixed(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right) =>
         left.Length == right.Length && CryptographicOperations.FixedTimeEquals(left, right);
-
-    private sealed class FixedMonotonicClock(byte[] bootId, ulong sample) : IOnionMonotonicClock
-    {
-        private readonly byte[] boot = bootId.ToArray();
-
-        internal FixedMonotonicClock(ReadOnlySpan<byte> bootId, ulong sample)
-            : this(bootId.ToArray(), sample)
-        {
-        }
-
-        public ValueTask<OnionMonotonicReading> ReadAsync(CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            return ValueTask.FromResult(new OnionMonotonicReading(boot, sample));
-        }
-    }
 
     private sealed class ByteArrayComparer : IComparer<byte[]>
     {

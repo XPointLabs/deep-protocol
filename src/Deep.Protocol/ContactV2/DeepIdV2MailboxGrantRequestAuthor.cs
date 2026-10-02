@@ -7,7 +7,7 @@ using Sodium;
 namespace Deep.Protocol.ContactV2;
 
 /// <summary>Direct current DID2 XMG1 authoring. Not issuance, holder custody,
-/// durable retry, installation or dispatch. No DID1 route overload.</summary>
+/// durable retry, installation or dispatch. No retired identity route overload.</summary>
 public static class DeepIdV2MailboxGrantRequestAuthor
 {
     /// <summary>Restores only an exact still-current pending request. Never

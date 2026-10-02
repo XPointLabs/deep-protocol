@@ -9,17 +9,9 @@ namespace Deep.Protocol.Tests.ApplicationCore;
 public sealed class ApplicationCoreIndependentVectorTests
 {
     [Fact]
-    public void EveryActiveRecord_MatchesManualCanonicalConstruction()
+    public void Dmd1AndDao1_MatchManualCanonicalConstruction()
     {
-        var did = ApplicationCoreCodec.AuthorDid1(B(32, 0x11), B(16, 0x12));
-        Assert.Equal(ManualRecord("DID1", B(32, 0x11), B(16, 0x12)), did.CanonicalBytes.ToArray());
-
         var dpa = ApplicationCoreFixture.Reference((ushort)ArtifactType.Dpa1, 644, 0x21);
-        var dab = ApplicationCoreCodec.AuthorDab1(B(32, 0x13), B(32, 0x14), 0, new byte[32],
-            B(32, 0x15), 1, dpa, B(64, 0x16), B(64, 0x17));
-        Assert.Equal(ManualRecord("DAB1", B(32, 0x13), B(32, 0x14), U64(0), new byte[32],
-            B(32, 0x15), U64(1), dpa.CanonicalBytes.ToArray(), B(64, 0x16), B(64, 0x17)),
-            dab.CanonicalBytes.ToArray());
 
         var network = B(16, 0x31);
         var account = B(32, 0x32);
@@ -34,13 +26,6 @@ public sealed class ApplicationCoreIndependentVectorTests
         Assert.Equal(ManualRecord("DMD1", network, account, U64(1), dpa.CanonicalBytes.ToArray(),
             drsRef.CanonicalBytes.ToArray(), U64(1), new byte[32], U16(1), entryBytes, U16(0x0201),
             U64(100), B(64, 0x35)), dmd.CanonicalBytes.ToArray());
-
-        var dabRef = ApplicationCoreFixture.Reference(ApplicationCoreCodec.Dab1ArtifactTypeCode, 394, 0x41);
-        var dca = ApplicationCoreCodec.AuthorDca1(network, account, dpa, 1, B(32, 0x42), B(32, 0x43),
-            B(32, 0x44), 3, 10, 20, 30, B(64, 0x45), B(32, 0x46), dabRef);
-        Assert.Equal(ManualRecord("DCA1", network, account, dpa.CanonicalBytes.ToArray(), U64(1),
-            B(32, 0x42), B(32, 0x43), B(32, 0x44), [3], U64(10), U64(20), U64(30),
-            B(64, 0x45), B(32, 0x46), dabRef.CanonicalBytes.ToArray()), dca.CanonicalBytes.ToArray());
 
         var dao = ApplicationCoreCodec.AuthorDao1(network, B(32, 0x51), B(32, 0x52), B(32, 0x53),
             B(24, 0x54), B(4529, 0x55));

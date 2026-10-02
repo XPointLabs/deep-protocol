@@ -6,6 +6,50 @@ namespace Deep.Protocol.Tests.Registry;
 public sealed class DeepProtocolRegistryTests
 {
     [Fact]
+    public void RetiredIdentityCannotBeAuthoredDecodedOrPromotedFromTheAssembly()
+    {
+        var codec = typeof(Deep.Protocol.ApplicationCore.ApplicationCoreCodec);
+        string[] retiredMethods =
+        ["AuthorDid1", "DecodeDid1", "DecodeDeepIdText", "AuthorDab1", "DecodeDab1",
+            "AuthorDca1", "DecodeDca1", "CreateDab1ArtifactReference"];
+        Assert.DoesNotContain(codec.GetMethods(), method => retiredMethods.Contains(method.Name));
+        string[] retiredTypes =
+        [
+            "ApplicationCore.ParsedDid1", "ApplicationCore.ParsedDab1",
+            "ApplicationCore.ParsedDca1", "ApplicationCore.VerifiedDab1",
+            "ApplicationCore.VerifiedDca1", "ApplicationCore.CurrentlyAuthoritativeDca1",
+            "AccountDirectoryV1.VerifiedAccountDirectoryFreshness",
+            "ContactV1.VerifiedContactBundleClosure", "ContactV1.VerifiedContactNetworkAuthority",
+            "ContactV1.VerifiedContactRouteClosure", "GroupV1.GroupIdentityClosure"
+        ];
+        Assert.All(retiredTypes, name => Assert.Null(codec.Assembly.GetType("Deep.Protocol." + name)));
+    }
+
+    [Fact]
+    public void Did2PreclaimAndCoordinationUseAllocatedButInactiveIdentifiers()
+    {
+        Assert.Equal("IPK2", DeepProtocolIdentifiers.Magic.IPK2);
+        Assert.Equal("XCA2", DeepProtocolIdentifiers.Magic.XCA2);
+        Assert.Equal("XCS2", DeepProtocolIdentifiers.Magic.XCS2);
+        Assert.True(DeepProtocolIdentifiers.MagicBytes.IPK2.SequenceEqual("IPK2"u8));
+        Assert.True(DeepProtocolIdentifiers.MagicBytes.XCA2.SequenceEqual("XCA2"u8));
+        Assert.True(DeepProtocolIdentifiers.MagicBytes.XCS2.SequenceEqual("XCS2"u8));
+        foreach (var magic in new[] { "IPK2", "XCA2", "XCS2" })
+            Assert.Equal(ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE,
+                Assert.Single(DeepProtocolRegistryGenerated.Identifiers,
+                    value => value.Namespace == "magic" && value.CanonicalName == magic).Lifecycle);
+        foreach (var magic in new[] { "DID1", "DAB1" })
+        {
+            Assert.DoesNotContain(DeepProtocolRegistryGenerated.Identifiers,
+                value => value.Namespace == "magic" && value.CanonicalName == magic);
+            Assert.Null(typeof(DeepProtocolIdentifiers.Magic).GetField(magic));
+        }
+        Assert.Equal(ProtocolIdentifierLifecycle.TARGET_UNFROZEN,
+            Assert.Single(DeepProtocolRegistryGenerated.Identifiers,
+                value => value.Namespace == "interface" && value.CanonicalName == "IAttachmentBlobTransport").Lifecycle);
+    }
+
+    [Fact]
     public void GeneratedIdentifiers_AreCollisionFreeWithinTheirNamespaces()
     {
         foreach (var group in DeepProtocolRegistryGenerated.Identifiers.GroupBy(static value => value.Namespace))

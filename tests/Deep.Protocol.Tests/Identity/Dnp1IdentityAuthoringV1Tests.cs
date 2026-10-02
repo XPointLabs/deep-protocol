@@ -527,14 +527,30 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
             .Where(static method => (method.IsAssembly || method.IsFamilyOrAssembly)
                 && method.Name.StartsWith("Sign", StringComparison.Ordinal))
             .ToArray();
-        var deviceSigner = Assert.Single(friendCallableDeviceSigners);
-        Assert.Equal("SignGenesisDeviceCertificate", deviceSigner.Name);
+        Assert.Equal(new[]
+        {
+            "SignContactUpdateRendezvous", "SignCurrentContactBundle",
+            "SignCurrentContactInvite", "SignCurrentContactPublicationRequest",
+            "SignCurrentContactRouteRecord", "SignGenesisDeviceCertificate"
+        }, friendCallableDeviceSigners.Select(method => method.Name).Order().ToArray());
+        var deviceSigner = Assert.Single(friendCallableDeviceSigners,
+            method => method.Name == "SignGenesisDeviceCertificate");
         Assert.Contains(deviceSigner.GetParameters(), static parameter =>
             parameter.ParameterType.Name == "GenesisDeviceCertificateSigningIntent");
-        Assert.DoesNotContain(deviceSigner.GetParameters(), static parameter =>
-            parameter.ParameterType.Name == "OwnedRecord"
-            || parameter.ParameterType == typeof(ReadOnlySpan<byte>)
-            || parameter.ParameterType == typeof(byte[]));
+        Assert.All(friendCallableDeviceSigners, method =>
+        {
+            Assert.Equal(typeof(byte[]), method.ReturnType);
+            Assert.DoesNotContain(method.GetParameters(), parameter =>
+                parameter.ParameterType.Name == "OwnedRecord"
+                || parameter.ParameterType == typeof(ReadOnlySpan<byte>)
+                || parameter.ParameterType == typeof(byte[])
+                || typeof(Delegate).IsAssignableFrom(parameter.ParameterType));
+            if (method != deviceSigner)
+                Assert.Contains(method.GetParameters(), parameter =>
+                    parameter.ParameterType == (method.Name == "SignContactUpdateRendezvous"
+                        ? typeof(Deep.Protocol.AccountDirectoryV1.VerifiedDeepIdV2DirectoryFreshness)
+                        : typeof(Deep.Protocol.ApplicationCore.VerifiedDca1V2)));
+        });
         foreach (var intentType in typeof(Dnp1IdentityAuthoringV1).GetNestedTypes(
                      BindingFlags.NonPublic).Where(static type =>
                      type.Name.EndsWith("SigningIntent", StringComparison.Ordinal)))
@@ -557,81 +573,6 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
             typeof(IssuedGenesisDevice).GetProperties(BindingFlags.Public | BindingFlags.Instance),
             static property => property.Name.Contains("Proof", StringComparison.OrdinalIgnoreCase) ||
                 property.Name.Contains("Dxp", StringComparison.OrdinalIgnoreCase));
-    }
-
-    [Fact]
-    public async Task GenesisResultsExposeVerifierMintedFactsForPublicApplicationComposition()
-    {
-        using var recovery = Recovery(Network);
-        var account = Dnp1IdentityAuthoringV1.AuthorGenesisAccount(
-            recovery, 1_900_000_000, 1, new FillRandom(0xa1));
-        using var device = Device();
-        var issued = await IssueDevice(recovery, account, device);
-
-        var identity = issued.Verified.Identity;
-        Assert.Equal(account.CanonicalDpa1.ToArray(),
-            identity.Account.Certificate.CanonicalBytes.ToArray());
-        Assert.Equal(issued.CanonicalDpd1.ToArray(),
-            issued.Verified.Certificate.CanonicalBytes.ToArray());
-        var closure = ApplicationCoreVerifier.CreateIdentityClosure(
-            identity, [issued.Verified]);
-        Assert.Same(identity.Account, closure.Account);
-        Assert.Single(closure.ActiveDevices);
-        var currentDirectory = recovery.AuthorGenesisDmd1(closure, 1_900_000_200);
-        Assert.False(currentDirectory.ForkLatched);
-        Assert.Equal(1UL, currentDirectory.Head.Record.DirectoryGeneration);
-        Assert.Equal(issued.Verified.Certificate.DeviceId.ToArray(),
-            Assert.Single(currentDirectory.Head.Record.ActiveDevices).DeviceId.ToArray());
-        var addressBinding = recovery.AuthorGenesisDab1(closure, deploymentProfileId: 1);
-        Assert.False(addressBinding.ForkLatched);
-        Assert.Equal(0UL, addressBinding.Head.Record.BindingGeneration);
-        Assert.Equal(account.Identity.Account.DeepAccountIdHash.ToArray(),
-            addressBinding.Head.Record.DeepAccountId.ToArray());
-        var contactAuthorization = recovery.AuthorGenesisDca1(
-            addressBinding,
-            currentDirectory,
-            issued.Verified,
-            trustedUnixSeconds: 1_900_000_300);
-        Assert.Equal(issued.Verified.Certificate.DeviceId.ToArray(),
-            contactAuthorization.Verified.Record.PublisherDeviceId.ToArray());
-        Assert.Equal(0x03, contactAuthorization.Verified.Record.AllowedInviteKindMask);
-        var directoryCheckpoint = recovery.AuthorGenesisAdc1(
-            addressBinding,
-            currentDirectory,
-            issuedAtUnixSeconds: 1_900_000_300);
-        Assert.Equal(addressBinding.Head.Record.RecordHash.ToArray(),
-            directoryCheckpoint.Checkpoint.ExactDab1Hash.ToArray());
-        Assert.Equal(currentDirectory.Head.Record.RecordHash.ToArray(),
-            directoryCheckpoint.Checkpoint.ExactDmd1Hash.ToArray());
-        Assert.Equal(AccountDirectoryAdc1Verifier.ComputeDirectoryLeafKey(
-                Network, addressBinding.Head.DeepId.CanonicalBytes.Span),
-            directoryCheckpoint.Checkpoint.DirectoryLeafKey.ToArray());
-        using var dpk2Authority = device.CreateDpk2AuthoringAuthority(issued.Verified);
-        var dpk2Context = new Dpk2AuthoringContext(
-            currentDirectory, 1, 1, 1,
-            1_900_000_300, 1_900_000_250, 1_900_086_700);
-        Assert.Same(currentDirectory, dpk2Context.CurrentDirectory);
-
-        var wrongNetwork = Network.ToArray();
-        wrongNetwork[0] ^= 0x80;
-        using var wrongRecovery = Recovery(wrongNetwork);
-        Assert.Throws<RecordException>(() =>
-            wrongRecovery.AuthorGenesisDmd1(closure, 1_900_000_200));
-        Assert.Throws<RecordException>(() =>
-            wrongRecovery.AuthorGenesisDab1(closure, deploymentProfileId: 1));
-        Assert.Throws<RecordException>(() =>
-            wrongRecovery.AuthorGenesisDca1(
-                addressBinding,
-                currentDirectory,
-                issued.Verified,
-                trustedUnixSeconds: 1_900_000_300));
-        Assert.Throws<RecordException>(() =>
-            wrongRecovery.AuthorGenesisAdc1(
-                addressBinding,
-                currentDirectory,
-                issuedAtUnixSeconds: 1_900_000_300));
-        Assert.Empty(typeof(VerifiedIdentityRelative).GetConstructors());
-        Assert.Empty(typeof(VerifiedDeviceRelative).GetConstructors());
     }
 
     [Fact]

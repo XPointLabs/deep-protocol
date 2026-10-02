@@ -18,6 +18,23 @@ namespace Deep.Protocol.Tests.XPointNetworkV1;
 public sealed class XPointOnionCapabilityProducerTests
 {
     [Fact]
+    public async Task TrustedTimeLeaseSubtractsElapsedTimeFromNetworkHardExpiry()
+    {
+        var freshness = Fixture.Create().Did2TimeEvidence();
+        var networkTime = (IVerifiedDirectoryNetworkTime)freshness;
+        var later = checked(freshness.MonotonicSample + 1);
+        var expired = checked(freshness.MonotonicSample + 2);
+        Assert.True(expired < freshness.FreshnessDeadlineMonotonicSeconds);
+        var hardUpper = checked(freshness.TrustedUpperUnixSeconds + 2);
+        var current = new OnionTrustedTimeAuthority(new FixedClock(networkTime.BootId.ToArray(), later));
+        var lease = await current.MintAsync(freshness, hardUpper, default);
+        Assert.InRange(lease.Remaining, TimeSpan.Zero, TimeSpan.FromSeconds(1));
+        var tooLate = new OnionTrustedTimeAuthority(new FixedClock(networkTime.BootId.ToArray(), expired));
+        var error = await Assert.ThrowsAsync<OnionBoundaryException>(() => tooLate.MintAsync(freshness, hardUpper, default).AsTask());
+        Assert.Equal("trusted-time-invalid", error.Code);
+    }
+
+    [Fact]
     public async Task ProtectedHistory_EqualTipRetainsActualPredecessor()
     {
         var fixture = Fixture.Create();
@@ -830,7 +847,8 @@ public sealed class XPointOnionCapabilityProducerTests
         Assert.Empty(typeof(VerifiedOnionReceiveContext).GetConstructors());
         Assert.Empty(typeof(VerifiedOnionPathCandidateSnapshot).GetConstructors());
         Assert.Empty(typeof(VerifiedOnionPathCandidate).GetConstructors());
-        Assert.Empty(typeof(VerifiedGroupControlPlacement).GetConstructors());
+        Assert.Null(typeof(PrivacyRoutingCodec).Assembly.GetType(
+            "Deep.Protocol.DeepExtension.PrivacyRouting.VerifiedGroupControlPlacement"));
 
         var historyMethods = typeof(OnionNetworkProtectedHistoryCodec).GetMethods(
             BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
@@ -852,9 +870,9 @@ public sealed class XPointOnionCapabilityProducerTests
 
         var verifyMethods = typeof(OnionNetworkContextVerifier).GetMethods(
             BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
-        Assert.Equal(["VerifyAsync", "VerifyAsync", "VerifyFromForwardCheckpointAsync",
+        Assert.Equal(["VerifyAsync", "VerifyFromForwardCheckpointAsync",
                 "VerifyFromProtectedHistoryAsync",
-                "VerifyRehydratedCurrentAsync", "VerifyRehydratedCurrentAsync"],
+                "VerifyRehydratedCurrentAsync"],
             verifyMethods.Select(static method => method.Name).Order(StringComparer.Ordinal).ToArray());
         Assert.All(verifyMethods, verify => Assert.DoesNotContain(verify.GetParameters(), parameter =>
             typeof(Delegate).IsAssignableFrom(parameter.ParameterType) ||
@@ -865,15 +883,13 @@ public sealed class XPointOnionCapabilityProducerTests
 
         var creates = typeof(OnionPathContextFactory).GetMethods(
             BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
-        Assert.Equal(["CreateContactResolver", "CreateGroupControl", "CreateMailbox"],
+        Assert.Equal(["CreateContactResolver", "CreateMailbox"],
             creates.Select(static method => method.Name).Order(StringComparer.Ordinal).ToArray());
         Assert.All(creates, create => Assert.DoesNotContain(create.GetParameters(), parameter =>
             parameter.Name?.Contains("hop", StringComparison.OrdinalIgnoreCase) == true ||
             parameter.Name?.Contains("key", StringComparison.OrdinalIgnoreCase) == true));
-        var groupPlacementVerify = Assert.Single(typeof(GroupControlPlacementVerifier).GetMethods(
+        Assert.Empty(typeof(GroupControlPlacementVerifier).GetMethods(
             BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly));
-        Assert.Equal([typeof(VerifiedOnionNetworkContext), typeof(VerifiedGroupControlRendezvous)],
-            groupPlacementVerify.GetParameters().Select(static parameter => parameter.ParameterType));
         Assert.Equal(["EntryRouterId"], typeof(VerifiedOnionPathContext).GetProperties(
             BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly).Select(static value => value.Name));
 
@@ -1181,7 +1197,7 @@ public sealed class XPointOnionCapabilityProducerTests
 
     private sealed record SigningKey(byte[] Id, KeyPair Pair, byte[] FailureDomain);
 
-    private sealed class Fixture
+    internal sealed class Fixture
     {
         private readonly byte _networkMarker;
         private readonly ulong _selectionEpoch;
@@ -1202,7 +1218,7 @@ public sealed class XPointOnionCapabilityProducerTests
 
         internal byte[] Pmt => _pmt.ToArray();
         private readonly VerifiedXPointNetworkAuthority _authority;
-        private readonly VerifiedAccountDirectoryFreshness _freshness;
+        private readonly VerifiedDeepIdV2DirectoryFreshness _freshness;
 
         private Fixture(
             byte networkMarker,
@@ -1454,7 +1470,7 @@ public sealed class XPointOnionCapabilityProducerTests
                 new byte[] { 1 }, _authority.AuthorityCoreReference,
                 new byte[] { 1 }, XPointNetworkCodec.EncodeCoreReference("XNF1", xnfRecord.CoreHash.Span),
                 new byte[] { 1 }, leaves[1],
-                XPointNetworkCodec.EncodeCoreReference("DTT1", successors.Freshness.ExactDtt1CoreHash.Span), U16(1),
+                XPointNetworkCodec.EncodeCoreReference("DTT1", ((IVerifiedDirectoryNetworkTime)successors.Freshness).ExactDtt1CoreHash.Span), U16(1),
             ];
             var nfp = XPointNetworkCodec.Write(XPointNetworkRegistry.Nfp1, nfpFields);
             var lkg = new XPointNetworkProtectedLkg(
@@ -1634,7 +1650,7 @@ public sealed class XPointOnionCapabilityProducerTests
                 witnesses.Take(2).Select(static value => (value.Id, value.Pair.PrivateKey)).ToArray());
         }
 
-        private static VerifiedAccountDirectoryFreshness BuildFreshness(
+        private static VerifiedDeepIdV2DirectoryFreshness BuildFreshness(
             byte[] network,
             VerifiedXPointNetworkAuthority authority,
             Xnv1Record view,
@@ -1664,19 +1680,16 @@ public sealed class XPointOnionCapabilityProducerTests
             var exactDtt = AccountDirectoryDtt1Codec.Encode(dtt);
             var dttHash = AccountDirectoryCrypto.ComputeDtt1CoreHash(dtt);
             var query = Bytes(32, 0x75);
-            var proof = new AccountDirectoryAdp1(
-                [1], network, AccountDirectoryAdp1ResultKind.NonMembership, query, adh, 0, new byte[32],
-                [], new byte[32], [], false, AccountDirectoryAdp1HistoryMode.ConsistencyOrGenesis, [], dttHash, null);
             var monotonic = new AccountDirectoryMonotonicRequestWindow(Bytes(16, 0xc1), 990, 995, 1_000);
-            return new VerifiedAccountDirectoryFreshness(
-                exactAdh, adh, adhHash, exactDtt, dttHash, [1], Bytes(32, 0x76), proof, [],
-                195, 205, monotonic, 1_050, null);
+            return new VerifiedDeepIdV2DirectoryFreshness(
+                exactAdh, exactDtt, [], network, query, monotonic, 1_050,
+                195, 205, AccountDirectoryAdp1ResultKind.NonMembership, null, false, null);
         }
 
         private static byte[] BuildPmt(
             byte[] network,
             Xnv1Record view,
-            VerifiedAccountDirectoryFreshness freshness,
+            VerifiedDeepIdV2DirectoryFreshness freshness,
             byte[][] nodes,
             SigningKey[] witnesses,
             ulong selectionEpoch,
@@ -1696,7 +1709,7 @@ public sealed class XPointOnionCapabilityProducerTests
                 network, U64(generation), predecessorCoreHash ?? new byte[32], ArtifactReference("PMA2", Bytes(32, 0x77)),
                 XPointNetworkCodec.EncodeCoreReference("XNV1", view.CoreHash.Span), U64(selectionEpoch),
                 new byte[] { 2 }, U16(3), Join(rows), U64(100), U64(100), U64(300), new byte[32],
-                freshness.ExactAdh1CoreReference, new byte[] { 2 },
+                ((IVerifiedDirectoryNetworkTime)freshness).ExactAdh1CoreReference, new byte[] { 2 },
                 SignatureRows(witnesses.Take(2).Select(static (value, index) =>
                     (value.Id, Bytes(64, checked((byte)(0xa9 + index))))).ToArray()),
             ];
@@ -1708,9 +1721,9 @@ public sealed class XPointOnionCapabilityProducerTests
         }
     }
 
-    private sealed class SuccessorFixture(
+    internal sealed class SuccessorFixture(
         VerifiedXPointNetworkAuthority authority,
-        VerifiedAccountDirectoryFreshness freshness,
+        VerifiedDeepIdV2DirectoryFreshness freshness,
         byte[][] policies,
         byte[][] views,
         byte[][] heads,
@@ -1723,7 +1736,7 @@ public sealed class XPointOnionCapabilityProducerTests
         internal byte[][] Policies => policies.Select(static value => value.ToArray()).ToArray();
         internal byte[][] Nodes => nodes.Select(static value => value.ToArray()).ToArray();
         internal byte[][] Pmts => pmts.Select(static value => value.ToArray()).ToArray();
-        internal VerifiedAccountDirectoryFreshness Freshness => freshness;
+        internal VerifiedDeepIdV2DirectoryFreshness Freshness => freshness;
 
         internal ValueTask<VerifiedOnionNetworkContext> VerifyAsync(VerifiedOnionNetworkContext previous) =>
             OnionNetworkContextVerifier.VerifyAsync(
@@ -1751,9 +1764,9 @@ public sealed class XPointOnionCapabilityProducerTests
             values.Select(static value => (ReadOnlyMemory<byte>)value).ToArray();
     }
 
-    private sealed record ForwardPackage(
+    internal sealed record ForwardPackage(
         VerifiedXPointNetworkAuthority Authority,
-        VerifiedAccountDirectoryFreshness Freshness,
+        VerifiedDeepIdV2DirectoryFreshness Freshness,
         XPointNetworkProtectedLkg Lkg,
         ReadOnlyMemory<byte>[] AuthorityChain,
         byte[] Xnf,

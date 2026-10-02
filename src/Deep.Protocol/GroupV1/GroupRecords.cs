@@ -70,15 +70,6 @@ public sealed class GroupControlWriteRecord : GroupRecord { internal GroupContro
 public sealed class GroupControlQueryRecord : GroupRecord { internal GroupControlQueryRecord(byte[] c, byte[][] f) : base(ProtocolMagic.GSQ1, c, f, 0, null, [1,2,3,4,5,6,16,17,18,19,20]) { } }
 public sealed class GroupControlResultRecord : GroupRecord { internal GroupControlResultRecord(byte[] c, byte[][] f) : base(ProtocolMagic.GSS1, c, f, 0, null, [1,2,3,4,5,6,7,8,16,17,18,19,20]) { } }
 
-/// <summary>Non-forgeable, current-identity-verified GSR1 rendezvous.</summary>
-public sealed class VerifiedGroupControlRendezvous
-{
-    internal VerifiedGroupControlRendezvous(GroupControlRendezvousRecord record, VerifiedContactBundleClosure owner)
-    { Record = record; Owner = owner; }
-    public GroupControlRendezvousRecord Record { get; }
-    public VerifiedContactBundleClosure Owner { get; }
-}
-
 public interface IGroupClosureResolver { ReadOnlyMemory<byte>? Resolve(GroupArtifactReference reference); }
 public sealed class GroupFormatException(GroupValidationStage stage, string code) : FormatException(code) { public GroupValidationStage Stage { get; } = stage; public string Code { get; } = code; }
 public enum GroupValidationStage { Length, Header, FieldScan, Bounds, Scalar, Reference, Signature, Closure, Transition }
@@ -123,55 +114,5 @@ public abstract class VerifiedGroupTransition
         System.Security.Cryptography.SHA256.HashData(candidateCanonicalGcp1Bytes, candidateSha256);
         return System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
             exactVerifiedGcp1Sha256, candidateSha256);
-    }
-}
-
-/// <summary>
-/// Non-authoring input to group verification.  Values can only be promoted
-/// from the public Contact verifier's non-forgeable current-directory result.
-/// Base and current sets are distinct so removal and replacement verify both
-/// sides of every DMD1 lineage instead of trusting only the resulting state.
-/// </summary>
-public sealed class GroupIdentityClosure
-{
-    private readonly VerifiedContactBundleClosure[] baseDirectories;
-    private readonly VerifiedContactBundleClosure[] currentDirectories;
-    private readonly byte[] currentBootId;
-
-    private GroupIdentityClosure(
-        IReadOnlyList<VerifiedContactBundleClosure> baseDirectories,
-        IReadOnlyList<VerifiedContactBundleClosure> currentDirectories,
-        ReadOnlySpan<byte> currentBootId,
-        ulong currentMonotonicSample)
-    {
-        this.baseDirectories = Copy(baseDirectories, nameof(baseDirectories));
-        this.currentDirectories = Copy(currentDirectories, nameof(currentDirectories));
-        if (this.currentDirectories.Length == 0)
-            throw new ArgumentException("At least one current verified directory is required.", nameof(currentDirectories));
-        if (currentBootId.Length != 16 || currentBootId.IndexOfAnyExcept((byte)0) < 0)
-            throw new ArgumentException(
-                "The current monotonic boot ID must be exactly 16 non-zero bytes.", nameof(currentBootId));
-        this.currentBootId = currentBootId.ToArray();
-        CurrentMonotonicSample = currentMonotonicSample;
-    }
-
-    public static GroupIdentityClosure FromVerifiedContactDirectories(
-        IReadOnlyList<VerifiedContactBundleClosure> baseDirectories,
-        IReadOnlyList<VerifiedContactBundleClosure> currentDirectories,
-        ReadOnlySpan<byte> currentBootId,
-        ulong currentMonotonicSample) =>
-        new(baseDirectories, currentDirectories, currentBootId, currentMonotonicSample);
-
-    internal IReadOnlyList<VerifiedContactBundleClosure> BaseDirectories => baseDirectories;
-    internal IReadOnlyList<VerifiedContactBundleClosure> CurrentDirectories => currentDirectories;
-    internal ReadOnlySpan<byte> CurrentBootId => currentBootId;
-    internal ulong CurrentMonotonicSample { get; }
-
-    private static VerifiedContactBundleClosure[] Copy(
-        IReadOnlyList<VerifiedContactBundleClosure> values, string parameter)
-    {
-        ArgumentNullException.ThrowIfNull(values, parameter);
-        return values.Select(value => value ??
-            throw new ArgumentException("A null verified contact directory is not allowed.", parameter)).ToArray();
     }
 }

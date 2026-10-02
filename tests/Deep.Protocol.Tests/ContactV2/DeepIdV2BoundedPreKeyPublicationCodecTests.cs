@@ -4,17 +4,16 @@ using Deep.Protocol.ApplicationCore;
 using Deep.Protocol.ContactV2;
 using Deep.Protocol.DeepExtension.PrivacyRouting;
 using Deep.Protocol.MessagingWire;
-using Deep.Protocol.Tests.ContactV1;
+using Deep.Protocol.Tests.XPointNetworkV1;
 
 namespace Deep.Protocol.Tests.ContactV2;
 
 public sealed class DeepIdV2BoundedPreKeyPublicationCodecTests
 {
     [Fact]
-    public void OnionTerminal_AcceptsOnlyV2FragmentsAndPhaseBoundResults()
+    public async Task OnionTerminal_AcceptsOnlyV2FragmentsAndPhaseBoundResults()
     {
-        var network = ContactNetworkAuthorityVerifierTests.Fixture.Create()
-            .CurrentNetwork;
+        var network = await XPointOnionCapabilityProducerTests.Fixture.Create().VerifyDid2Async();
         var aggregate = AggregateForNetwork(network.NetworkId.Span);
         var sequence = DeepIdV2BoundedPreKeyPublicationCodec.CreateSequence(
             aggregate, Bytes(32, 0x31), Did2(), Dca1(), Xps1());

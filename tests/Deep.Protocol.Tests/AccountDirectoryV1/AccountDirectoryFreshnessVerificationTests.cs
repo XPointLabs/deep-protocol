@@ -11,251 +11,6 @@ namespace Deep.Protocol.Tests.AccountDirectoryV1;
 
 public sealed partial class AccountDirectoryFreshnessVerificationTests
 {
-    [Fact]
-    public void ReadOnlyIssuanceReadinessUsesTheAuthoringBoundaryAndRejectsForgedViews()
-    {
-        var authority = AuthorityFixture.Create();
-        var fixture = authority.CurrentValue();
-        var request = AuthoringRequest(fixture);
-        var head = new AccountDirectoryProtectedLkg(fixture.HeadBytes);
-        var before = head.ExactAdh1.ToArray();
-        for (var index = 0; index < 20; index++)
-            AccountDirectoryProofAuthor.RequireIssuanceReady(authority.Verified, head, request);
-        Assert.Equal(before, head.ExactAdh1.ToArray());
-        var view = request.ExactCurrentXnv1.ToArray();
-        view[^1] ^= 1;
-        var forged = new AccountDirectoryProofAuthoringRequest(request.NetworkId.Span,
-            request.Nonce.Span, request.BootId.Span, request.ClientMonotonicSendSample,
-            request.ExactCurrentAdh1.Span, view, request.ObservedUnixTime,
-            request.UncertaintySeconds, request.IssuedAtUnixTime,
-            request.ExpiresAtUnixTime, request.IssuanceEpoch, request.SupportedReader);
-        Assert.Equal("CurrentViewWitnessInvalid", Assert.Throws<AccountDirectoryProofAuthoringException>(() =>
-            AccountDirectoryProofAuthor.RequireIssuanceReady(authority.Verified, head, forged)).Code);
-        var changedHead = fixture.HeadBytes.ToArray();
-        changedHead[^1] ^= 1;
-        Assert.Equal("ExactAdhMismatch", Assert.Throws<AccountDirectoryProofAuthoringException>(() =>
-            AccountDirectoryProofAuthor.RequireIssuanceReady(authority.Verified, head,
-                AuthoringRequest(fixture, exactAdh1: changedHead))).Code);
-        Assert.Throws<ArgumentNullException>(() =>
-            AccountDirectoryProofAuthor.RequireIssuanceReady(null!, head, request));
-    }
-
-    [Fact]
-    public async Task Author_CurrentValueProducesCanonicalNonceBoundPackageWithDeterministicSigners()
-    {
-        var authority = AuthorityFixture.Create();
-        var fixture = authority.CurrentValue();
-        var request = AuthoringRequest(fixture, monotonicSend: 7_654);
-        var material = AuthoringMaterial(fixture);
-        var second = new ObservingWitnessSigner(authority.Witnesses[1]);
-        var first = new ObservingWitnessSigner(authority.Witnesses[0]);
-        IAccountDirectoryDtt1WitnessSigner[] signers =
-        [
-            second,
-            first,
-        ];
-
-        var package = await AccountDirectoryProofAuthor.IssueAsync(
-            authority.Verified,
-            new AccountDirectoryProtectedLkg(fixture.HeadBytes),
-            request,
-            material,
-            signers);
-
-        var dtt = AccountDirectoryDtt1Codec.Decode(package.ExactDtt1.Span);
-        var adp = AccountDirectoryAdp1Codec.Decode(package.ExactAdp1.Span);
-        Assert.Equal(fixture.Nonce, dtt.ClientNonce.ToArray());
-        Assert.Equal(fixture.Query, package.QueriedDirectoryLeafKey.ToArray());
-        Assert.Equal(request.BootId.ToArray(), package.BootId.ToArray());
-        Assert.Equal(7_654UL, package.ClientMonotonicSendSample);
-        Assert.Equal(AccountDirectoryAdp1ResultKind.CurrentValue, adp.ResultKind);
-        Assert.Equal(AccountDirectoryDtt1Codec.Encode(dtt), package.ExactDtt1.ToArray());
-        Assert.Equal(AccountDirectoryAdp1Codec.Encode(adp), package.ExactAdp1.ToArray());
-        Assert.True(dtt.Witnesses[0].WitnessId.Span.SequenceCompareTo(dtt.Witnesses[1].WitnessId.Span) < 0);
-        Assert.All(first.LastSigningInput!.Value.ToArray(), value => Assert.Equal(0, value));
-        Assert.All(second.LastSigningInput!.Value.ToArray(), value => Assert.Equal(0, value));
-
-        var packageCopy = package.ExactAdp1.ToArray();
-        var exactPackage = package.ExactAdp1.ToArray();
-        packageCopy.AsSpan().Fill(0);
-        var requestCopy = request.ExactCurrentAdh1.ToArray();
-        requestCopy.AsSpan().Fill(0);
-        Assert.Equal(exactPackage, package.ExactAdp1.ToArray());
-        Assert.Equal(fixture.HeadBytes, request.ExactCurrentAdh1.ToArray());
-    }
-
-    [Fact]
-    public async Task Author_NonMembershipBindsExactNonceAndMonotonicEcho()
-    {
-        var authority = AuthorityFixture.Create();
-        var fixture = authority.NonMembership();
-        var request = AuthoringRequest(fixture, monotonicSend: 42);
-
-        var package = await AccountDirectoryProofAuthor.IssueAsync(
-            authority.Verified,
-            new AccountDirectoryProtectedLkg(fixture.HeadBytes),
-            request,
-            AuthoringMaterial(fixture),
-            ValidAuthorSigners(authority));
-
-        var dtt = AccountDirectoryDtt1Codec.Decode(package.ExactDtt1.Span);
-        var adp = AccountDirectoryAdp1Codec.Decode(package.ExactAdp1.Span);
-        Assert.Equal(request.Nonce.ToArray(), package.Nonce.ToArray());
-        Assert.Equal(request.Nonce.ToArray(), dtt.ClientNonce.ToArray());
-        Assert.Equal(request.BootId.ToArray(), package.BootId.ToArray());
-        Assert.Equal(request.ClientMonotonicSendSample, package.ClientMonotonicSendSample);
-        Assert.Equal(AccountDirectoryAdp1ResultKind.NonMembership, adp.ResultKind);
-        Assert.Null(adp.CurrentValue);
-    }
-
-    [Fact]
-    public async Task Author_RejectsInsufficientDuplicateUnknownFailingAndWrongSigners()
-    {
-        var authority = AuthorityFixture.Create();
-        var fixture = authority.NonMembership();
-        var current = new AccountDirectoryProtectedLkg(fixture.HeadBytes);
-        var request = AuthoringRequest(fixture);
-        var material = AuthoringMaterial(fixture);
-        var valid = WitnessSigner.Valid(authority.Witnesses[0]);
-
-        await AssertAuthorFailure("InsufficientSigners", () => AccountDirectoryProofAuthor.IssueAsync(
-            authority.Verified, current, request, material, [valid]).AsTask());
-        await AssertAuthorFailure("DuplicateOrInvalidSigner", () => AccountDirectoryProofAuthor.IssueAsync(
-            authority.Verified, current, request, material, [valid, valid]).AsTask());
-        await AssertAuthorFailure("UnknownSigner", () => AccountDirectoryProofAuthor.IssueAsync(
-            authority.Verified, current, request, material,
-            [valid, new WitnessSigner(Bytes(32, 0xee), authority.Witnesses[1].Key.PrivateKey)]).AsTask());
-        await AssertAuthorFailure("SignerFailed", () => AccountDirectoryProofAuthor.IssueAsync(
-            authority.Verified, current, request, material,
-            [valid, new FailingWitnessSigner(authority.Witnesses[1].Id)]).AsTask());
-
-        var unrelated = PublicKeyAuth.GenerateKeyPair(Bytes(32, 0xef));
-        await AssertAuthorFailure("InvalidSignerResult", () => AccountDirectoryProofAuthor.IssueAsync(
-            authority.Verified, current, request, material,
-            [valid, new WitnessSigner(authority.Witnesses[1].Id, unrelated.PrivateKey)]).AsTask());
-    }
-
-    [Fact]
-    public async Task Author_RejectsTamperedExactAdhLeafAndSparseProof()
-    {
-        var authority = AuthorityFixture.Create();
-        var fixture = authority.CurrentValue();
-        var current = new AccountDirectoryProtectedLkg(fixture.HeadBytes);
-
-        var tamperedAdh = fixture.HeadBytes.ToArray();
-        tamperedAdh[^1] ^= 1;
-        await AssertAuthorFailure("ExactAdhMismatch", () => AccountDirectoryProofAuthor.IssueAsync(
-            authority.Verified,
-            current,
-            AuthoringRequest(fixture, exactAdh1: tamperedAdh),
-            AuthoringMaterial(fixture),
-            ValidAuthorSigners(authority)).AsTask());
-
-        var decoded = AccountDirectoryAdp1Codec.Decode(fixture.AdpBytes);
-        var tamperedTransition = decoded.CurrentValue!.ExactTransitionBytes.ToArray();
-        tamperedTransition[10] ^= 1;
-        var wrongLeaf = AccountDirectoryAdp1ProofMaterial.CurrentValue(
-            fixture.Checkpoint!, fixture.Lkg, decoded.ConsistencyProofNodes, decoded.ExactAfp1,
-            decoded.SparseMapBitmap.Span, decoded.SparseMapSiblings,
-            tamperedTransition, decoded.CurrentValue.AppendLogIndex, decoded.CurrentValue.InclusionProofNodes);
-        await AssertAuthorFailure("AuthoringRejected", () => AccountDirectoryProofAuthor.IssueAsync(
-            authority.Verified, current, AuthoringRequest(fixture), wrongLeaf, ValidAuthorSigners(authority)).AsTask());
-
-        var bitmap = new byte[32];
-        bitmap[0] = 1;
-        var wrongSparse = AccountDirectoryAdp1ProofMaterial.CurrentValue(
-            fixture.Checkpoint!, fixture.Lkg, decoded.ConsistencyProofNodes, decoded.ExactAfp1,
-            bitmap, [Bytes(32, 0xdd)], decoded.CurrentValue.ExactTransitionBytes,
-            decoded.CurrentValue.AppendLogIndex, decoded.CurrentValue.InclusionProofNodes);
-        await AssertAuthorFailure("AuthoringRejected", () => AccountDirectoryProofAuthor.IssueAsync(
-            authority.Verified, current, AuthoringRequest(fixture), wrongSparse, ValidAuthorSigners(authority)).AsTask());
-    }
-
-    [Fact]
-    public void Verify_NonMembershipReturnsDefensiveCurrentCapability()
-    {
-        var authority = AuthorityFixture.Create();
-        var proof = authority.NonMembership();
-
-        var verified = Verify(proof);
-
-        Assert.Equal(AccountDirectoryAdp1ResultKind.NonMembership, verified.ResultKind);
-        Assert.Empty(verified.ExactAdc1Reference.ToArray());
-        Assert.Null(verified.CurrentCheckpoint);
-        Assert.Equal(proof.Query, verified.DirectoryLeafKey.ToArray());
-        Assert.Equal(proof.Head.LogGeneration, verified.AdhGeneration);
-        Assert.Equal(proof.Head.TreeSize, verified.TreeSize);
-        Assert.True(verified.TrustedLowerUnixSeconds <= verified.TrustedUpperUnixSeconds);
-        Assert.True(verified.IsCurrentAtMonotonic(Window().BootId.Span, Window().CurrentSample));
-        Assert.False(verified.IsCurrentAtMonotonic(Bytes(16, 0xfe), Window().CurrentSample));
-
-        var copy = verified.ExactAdp1.ToArray();
-        copy.AsSpan().Fill(0);
-        Assert.Equal(proof.AdpBytes, verified.ExactAdp1.ToArray());
-        Assert.Equal(proof.HeadBytes, verified.NextProtectedLkg.ExactAdh1.ToArray());
-    }
-
-    [Fact]
-    public void Verify_CurrentValueClosesRealAdcCapabilityAndEmptyTreeLkg()
-    {
-        var authority = AuthorityFixture.Create();
-        var proof = authority.CurrentValue();
-
-        var verified = Verify(proof);
-
-        Assert.Equal(AccountDirectoryAdp1ResultKind.CurrentValue, verified.ResultKind);
-        Assert.Same(proof.Checkpoint, verified.CurrentCheckpoint);
-        Assert.Equal(Reference("ADC1", AccountDirectoryCrypto.ComputeAdc1ArtifactHash(
-            proof.Checkpoint!.Checkpoint)), verified.ExactAdc1Reference.ToArray());
-        Assert.NotNull(proof.Lkg);
-        Assert.Equal(0UL, proof.Lkg!.TreeSize);
-        Assert.NotEqual(AccountDirectoryRfc6962.ComputeEmptyTreeHash(), proof.Lkg.CoreHash.ToArray());
-        Assert.Equal(proof.Lkg.CoreHash.ToArray(),
-            AccountDirectoryAdp1Codec.Decode(proof.AdpBytes).CallerLkgAdh1CoreHash.ToArray());
-    }
-
-    [Fact]
-    public void Verify_RejectsWitnessSignerSubstitutionAndThresholdFailure()
-    {
-        var authority = AuthorityFixture.Create();
-        var baseProof = authority.NonMembership();
-        var oneAdh = authority.Head(0, new byte[32], 0,
-            AccountDirectoryRfc6962.ComputeEmptyTreeHash(), AccountDirectorySparseMap.EmptyMapRoot.ToArray(),
-            [WitnessSigner.Valid(authority.Witnesses[0])]);
-        Reject(authority.NonMembership(oneAdh), "WrongWitnessThreshold");
-
-        var oneDtt = authority.Dtt(baseProof.Head, baseProof.Nonce,
-            [WitnessSigner.Valid(authority.Witnesses[0])]);
-        Reject(authority.NonMembership(baseProof.Head, oneDtt), "WrongWitnessThreshold");
-
-        var attackers = new[]
-        {
-            PublicKeyAuth.GenerateKeyPair(Bytes(32, 0xd0)),
-            PublicKeyAuth.GenerateKeyPair(Bytes(32, 0xd1)),
-        };
-        var invalidAdh = authority.Head(0, new byte[32], 0,
-            AccountDirectoryRfc6962.ComputeEmptyTreeHash(), AccountDirectorySparseMap.EmptyMapRoot.ToArray(),
-            authority.Witnesses.Take(2).Select((witness, index) =>
-                new WitnessSigner(witness.Id, attackers[index].PrivateKey)).ToArray());
-        Reject(authority.NonMembership(invalidAdh), "InvalidWitnessSignature");
-    }
-
-    [Fact]
-    public void Verify_RejectsExpiredFutureAndWrongNonceDtt()
-    {
-        var authority = AuthorityFixture.Create();
-        var proof = authority.NonMembership();
-
-        Reject(proof, "NonceMismatch", nonce: Bytes(32, 0xee));
-        Reject(proof, "NonceWindowExpired",
-            window: new AccountDirectoryMonotonicRequestWindow(Bytes(16, 0x44), 1_000, 1_031, 1_031));
-        Reject(proof, "DttExpired",
-            window: new AccountDirectoryMonotonicRequestWindow(Bytes(16, 0x44), 1_000, 1_002, 1_058));
-
-        var future = authority.Dtt(proof.Head, proof.Nonce,
-            observed: authority.Verified.ExpiresAt + 100);
-        Reject(authority.NonMembership(proof.Head, future), "AuthorityTimeMismatch");
-    }
 
     [Fact]
     public void IssuanceEpoch_IsStableWithinOneUtcDayAndBoundToTheVerifiedAuthority()
@@ -294,123 +49,44 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
     [Fact]
     public void Verify_RejectsAValidlySignedDttFromTheWrongIssuanceEpoch()
     {
-        var authority = AuthorityFixture.Create();
-        var proof = authority.NonMembership();
+        var proof = Did2EmptyFixture.Create();
+        var authority = proof.Authority;
+        var head = AccountDirectoryAdh1Codec.Decode(proof.HeadBytes);
         var nextEpoch = AccountDirectoryDtt1IssuanceEpoch.Derive(
             authority.Verified,
             AccountDirectoryDtt1IssuanceEpoch.Derive(
                 authority.Verified, 1_700_000_200, 5).ValidUntil + 6,
             5);
         var wrongEpochDtt = authority.Dtt(
-            proof.Head, proof.Nonce, epochId: nextEpoch.Id.ToArray());
+            head, proof.Nonce, epochId: nextEpoch.Id.ToArray());
 
-        Reject(authority.NonMembership(proof.Head, wrongEpochDtt), "IssuanceEpochMismatch");
-    }
-
-    [Fact]
-    public void Verify_RejectsHeadAuthorityPolicyAndQueryCrossLinkSubstitution()
-    {
-        var authority = AuthorityFixture.Create();
-        var proof = authority.NonMembership();
-        var otherHeadDtt = authority.Dtt(proof.Head, proof.Nonce, adhHash: Bytes(32, 0xa1));
-        Reject(authority.NonMembership(proof.Head, otherHeadDtt), "DttHeadMismatch");
-
-        var wrongAuthorityHead = authority.Head(0, new byte[32], 0,
-            AccountDirectoryRfc6962.ComputeEmptyTreeHash(), AccountDirectorySparseMap.EmptyMapRoot.ToArray(),
-            authorityReference: Reference("XNA1", Bytes(32, 0xa2)));
-        Reject(authority.NonMembership(wrongAuthorityHead), "AuthorityMismatch");
-
-        var wrongPolicyHead = authority.Head(0, new byte[32], 0,
-            AccountDirectoryRfc6962.ComputeEmptyTreeHash(), AccountDirectorySparseMap.EmptyMapRoot.ToArray(),
-            witnessPolicy: Bytes(32, 0xa3));
-        Reject(authority.NonMembership(wrongPolicyHead), "WitnessPolicyMismatch");
-
-        Reject(proof, "AdpCrossLinkMismatch", query: Bytes(32, 0xa4));
-    }
-
-    [Fact]
-    public void Verify_RejectsLkgRollbackSameGenerationForkAndGenerationGap()
-    {
-        var authority = AuthorityFixture.Create();
-        var current = authority.CurrentValue();
-        var currentLkg = new AccountDirectoryProtectedLkg(current.HeadBytes);
-
-        var oldHead = authority.Head(0, new byte[32], 0,
-            AccountDirectoryRfc6962.ComputeEmptyTreeHash(), AccountDirectorySparseMap.EmptyMapRoot.ToArray());
-        Reject(authority.NonMembership(oldHead, lkg: currentLkg), "LkgRollback");
-
-        var forkHead = authority.Head(current.Head.LogGeneration, current.Head.PredecessorAdh1CoreHash.ToArray(),
-            current.Head.TreeSize, Bytes(32, 0xb1), AccountDirectorySparseMap.EmptyMapRoot.ToArray());
-        Reject(authority.NonMembership(forkHead, lkg: currentLkg), "DirectoryFork");
-
-        var gapHead = authority.Head(3, current.Lkg!.CoreHash.ToArray(), 0,
-            AccountDirectoryRfc6962.ComputeEmptyTreeHash(), AccountDirectorySparseMap.EmptyMapRoot.ToArray());
-        Reject(authority.NonMembership(gapHead, lkg: current.Lkg), "ForwardCheckpointRequired");
-    }
-
-    [Fact]
-    public void Verify_RejectsMapOrInclusionTamperAndAdcCapabilitySubstitution()
-    {
-        var authority = AuthorityFixture.Create();
-        var current = authority.CurrentValue();
-        var transitionTamper = MutateField(current.AdpBytes, 25, value => value[^1] ^= 1);
-        Reject(current with { AdpBytes = transitionTamper }, "InvalidAccountDirectoryProof");
-
-        var otherIdentity = AccountDirectoryAdc1VerificationTests.Fixture.Create(0x42);
-        ReadOnlyMemory<byte>[] revoked = [];
-        var otherAdc = otherIdentity.CreateCheckpoint(revoked);
-        var otherCheckpoint = AccountDirectoryAdc1Verifier.Verify(
-            otherAdc, otherIdentity.Binding, otherIdentity.Directory, revoked, 1);
-        Reject(current, "AdcSubstitution", checkpoint: otherCheckpoint);
-    }
-
-    [Fact]
-    public void Verify_ForwardCheckpointClosesSourceMembershipAdfChainAndExactTarget()
-    {
-        var authority = AuthorityFixture.Create();
-        var proof = authority.ForwardCheckpoint();
-
-        var verified = Verify(proof);
-
-        Assert.Equal(3UL, verified.AdhGeneration);
-        Assert.Equal(AccountDirectoryAdp1ResultKind.NonMembership, verified.ResultKind);
-        Assert.Equal(proof.HeadBytes, verified.NextProtectedLkg.ExactAdh1.ToArray());
-    }
-
-    [Theory]
-    [InlineData(ForwardFault.WrongSourceMembership)]
-    [InlineData(ForwardFault.WrongFinalTargetTuple)]
-    [InlineData(ForwardFault.InvalidRootSignature)]
-    [InlineData(ForwardFault.OmittedGenesisCheckpoint)]
-    [InlineData(ForwardFault.ExtraCheckpointAfterTarget)]
-    public void Verify_RejectsHostileForwardCheckpointClosure(ForwardFault fault)
-    {
-        var authority = AuthorityFixture.Create();
-        var proof = authority.ForwardCheckpoint(fault);
-        var error = Assert.Throws<AccountDirectoryFreshnessVerificationException>(() => Verify(proof));
-        Assert.Contains(error.Code, new[] { "InvalidForwardCheckpoint", "InvalidAccountDirectoryProof" });
+        Assert.Equal("IssuanceEpochMismatch",
+            Assert.Throws<AccountDirectoryFreshnessVerificationException>(() =>
+                proof.Verify(dtt: AccountDirectoryDtt1Codec.Encode(wrongEpochDtt))).Code);
     }
 
     [Fact]
     public void ProtectedLkgRestore_ReauthenticatesCanonicalOldHeadWithoutCurrentTime()
     {
-        var authority = AuthorityFixture.Create();
-        var proof = authority.NonMembership();
-        var expectedHash = AccountDirectoryCrypto.ComputeAdh1CoreHash(proof.Head);
+        var proof = Did2EmptyFixture.Create();
+        var authority = proof.Authority;
+        var head = AccountDirectoryAdh1Codec.Decode(proof.HeadBytes);
+        var expectedHash = AccountDirectoryCrypto.ComputeAdh1CoreHash(head);
 
         var restored = AccountDirectoryProtectedLkgFactory.Restore(
             authority.Verified, proof.HeadBytes, expectedHash);
 
         Assert.Equal(proof.HeadBytes, restored.ExactAdh1.ToArray());
         Assert.Equal(expectedHash, restored.CoreHash.ToArray());
-        Assert.True(proof.Head.ValidUntil < (ulong)DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+        Assert.True(head.ValidUntil < (ulong)DateTimeOffset.UtcNow.ToUnixTimeSeconds());
     }
 
     [Fact]
     public void ProtectedLkgRestore_RejectsAlteredBytesAndExpectedHash()
     {
-        var authority = AuthorityFixture.Create(); var proof = authority.NonMembership();
-        var expectedHash = AccountDirectoryCrypto.ComputeAdh1CoreHash(proof.Head);
+        var proof = Did2EmptyFixture.Create(); var authority = proof.Authority;
+        var expectedHash = AccountDirectoryCrypto.ComputeAdh1CoreHash(
+            AccountDirectoryAdh1Codec.Decode(proof.HeadBytes));
         var altered = proof.HeadBytes.ToArray(); altered[^1] ^= 1;
 
         Assert.Equal("InvalidWitnessSignature", Assert.Throws<AccountDirectoryFreshnessVerificationException>(() =>
@@ -422,8 +98,9 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
     [Fact]
     public void ProtectedLkgRestore_RejectsWrongNetworkInsufficientThresholdAndBadSignature()
     {
-        var authority = AuthorityFixture.Create(); var proof = authority.NonMembership();
-        var expectedHash = AccountDirectoryCrypto.ComputeAdh1CoreHash(proof.Head);
+        var proof = Did2EmptyFixture.Create(); var authority = proof.Authority;
+        var expectedHash = AccountDirectoryCrypto.ComputeAdh1CoreHash(
+            AccountDirectoryAdh1Codec.Decode(proof.HeadBytes));
         var wrongNetworkAuthority = AuthorityFixture.Create(networkMarker: 0x12);
         Assert.Equal("NetworkMismatch", Assert.Throws<AccountDirectoryFreshnessVerificationException>(() =>
             AccountDirectoryProtectedLkgFactory.Restore(wrongNetworkAuthority.Verified, proof.HeadBytes, expectedHash)).Code);
@@ -448,108 +125,6 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
                 AccountDirectoryCrypto.ComputeAdh1CoreHash(badSignature))).Code);
     }
 
-    [Fact]
-    public void ProtectedLkgRestore_ThenForwardCheckpointVerificationSucceedsWithoutNullFallback()
-    {
-        var authority = AuthorityFixture.Create(); var proof = authority.ForwardCheckpoint();
-        var persisted = proof.Lkg!;
-        var restored = AccountDirectoryProtectedLkgFactory.Restore(
-            authority.Verified, persisted.ExactAdh1, persisted.CoreHash.Span);
-
-        var verified = AccountDirectoryCurrentProofVerifier.Verify(
-            authority.Verified, proof.HeadBytes, proof.DttBytes, proof.AdpBytes,
-            proof.Nonce, proof.Query, Window(), restored, null, 1);
-
-        Assert.Equal(3UL, verified.NextProtectedLkg.LogGeneration);
-        Assert.Equal(proof.HeadBytes, verified.NextProtectedLkg.ExactAdh1.ToArray());
-    }
-
-    [Fact]
-    public void CapabilityHasNoPublicConstructorAndVerifierHasNoCallbackOrKeyMap()
-    {
-        Assert.Empty(typeof(VerifiedAccountDirectoryFreshness).GetConstructors());
-        Assert.Empty(typeof(AccountDirectoryProtectedLkg).GetConstructors());
-        Assert.Empty(typeof(AccountDirectoryDtt1IssuanceEpoch).GetConstructors());
-        var verify = Assert.Single(typeof(AccountDirectoryCurrentProofVerifier).GetMethods(
-            BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly));
-        Assert.DoesNotContain(verify.GetParameters(), parameter =>
-            typeof(Delegate).IsAssignableFrom(parameter.ParameterType) ||
-            parameter.ParameterType.Name.Contains("Callback", StringComparison.Ordinal) ||
-            parameter.ParameterType.Name.Contains("Verifier", StringComparison.Ordinal) ||
-            parameter.ParameterType.Name.Contains("KeyMap", StringComparison.Ordinal));
-    }
-
-    private static VerifiedAccountDirectoryFreshness Verify(
-        ProofFixture proof,
-        AccountDirectoryMonotonicRequestWindow? window = null,
-        byte[]? nonce = null,
-        byte[]? query = null,
-        VerifiedAccountDirectoryCheckpoint? checkpoint = null) =>
-        AccountDirectoryCurrentProofVerifier.Verify(
-            proof.Authority.Verified, proof.HeadBytes, proof.DttBytes, proof.AdpBytes,
-            nonce ?? proof.Nonce, query ?? proof.Query, window ?? Window(), proof.Lkg,
-            checkpoint ?? proof.Checkpoint, supportedReader: 1);
-
-    private static void Reject(
-        ProofFixture proof,
-        string code,
-        AccountDirectoryMonotonicRequestWindow? window = null,
-        byte[]? nonce = null,
-        byte[]? query = null,
-        VerifiedAccountDirectoryCheckpoint? checkpoint = null)
-    {
-        var error = Assert.Throws<AccountDirectoryFreshnessVerificationException>(() =>
-            AccountDirectoryCurrentProofVerifier.Verify(
-                proof.Authority.Verified, proof.HeadBytes, proof.DttBytes, proof.AdpBytes,
-                nonce ?? proof.Nonce, query ?? proof.Query, window ?? Window(), proof.Lkg,
-                checkpoint ?? proof.Checkpoint, 1));
-        Assert.Equal(code, error.Code);
-    }
-
-    private static AccountDirectoryProofAuthoringRequest AuthoringRequest(
-        ProofFixture fixture,
-        ulong monotonicSend = 1_000,
-        byte[]? exactAdh1 = null) =>
-        new(
-            fixture.Authority.Network,
-            fixture.Nonce,
-            Bytes(16, 0x44),
-            monotonicSend,
-            exactAdh1 ?? fixture.HeadBytes,
-            fixture.Authority.CurrentXnv(),
-            1_700_000_200,
-            5,
-            1_700_000_200,
-            1_700_000_260,
-            AccountDirectoryDtt1IssuanceEpoch.Derive(
-                fixture.Authority.Verified, 1_700_000_200, 5),
-            1);
-
-    private static AccountDirectoryAdp1ProofMaterial AuthoringMaterial(ProofFixture fixture)
-    {
-        var decoded = AccountDirectoryAdp1Codec.Decode(fixture.AdpBytes);
-        if (decoded.ResultKind == AccountDirectoryAdp1ResultKind.NonMembership)
-            return AccountDirectoryAdp1ProofMaterial.NonMembership(
-                decoded.QueriedDirectoryLeafKey.Span,
-                fixture.Lkg,
-                decoded.ConsistencyProofNodes,
-                decoded.ExactAfp1,
-                decoded.SparseMapBitmap.Span,
-                decoded.SparseMapSiblings);
-
-        var current = decoded.CurrentValue!;
-        return AccountDirectoryAdp1ProofMaterial.CurrentValue(
-            fixture.Checkpoint!,
-            fixture.Lkg,
-            decoded.ConsistencyProofNodes,
-            decoded.ExactAfp1,
-            decoded.SparseMapBitmap.Span,
-            decoded.SparseMapSiblings,
-            current.ExactTransitionBytes,
-            current.AppendLogIndex,
-            current.InclusionProofNodes);
-    }
-
     private static IReadOnlyList<IAccountDirectoryDtt1WitnessSigner> ValidAuthorSigners(
         AuthorityFixture authority) =>
         authority.Witnesses.Take(2).Select(WitnessSigner.Valid)
@@ -564,7 +139,16 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
     private static AccountDirectoryMonotonicRequestWindow Window() =>
         new(Bytes(16, 0x44), 1_000, 1_002, 1_003);
 
-    private sealed record Witness(byte[] Id, KeyPair Key, byte[] FailureDomain);
+    internal sealed record Witness(byte[] Id, KeyPair Key, byte[] FailureDomain);
+
+    internal sealed record NetworkFixture(byte[] Network,
+        VerifiedXPointNetworkAuthority Authority, Witness[] Witnesses);
+
+    internal static NetworkFixture CreateNetworkFixture()
+    {
+        var authority = AuthorityFixture.Create(timeBase: 1_000_001);
+        return new(authority.Network, authority.Verified, authority.Witnesses);
+    }
     private sealed record WitnessSigner(byte[] Id, byte[] PrivateKey) : IAccountDirectoryDtt1WitnessSigner
     {
         internal static WitnessSigner Valid(Witness witness) => new(witness.Id, witness.Key.PrivateKey);
@@ -615,18 +199,6 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
         OmittedGenesisCheckpoint,
         ExtraCheckpointAfterTarget,
     }
-
-    private sealed record ProofFixture(
-        AuthorityFixture Authority,
-        AccountDirectoryAdh1 Head,
-        byte[] HeadBytes,
-        AccountDirectoryDtt1 Dtt,
-        byte[] DttBytes,
-        byte[] AdpBytes,
-        byte[] Nonce,
-        byte[] Query,
-        AccountDirectoryProtectedLkg? Lkg,
-        VerifiedAccountDirectoryCheckpoint? Checkpoint);
 
     private sealed class AuthorityFixture
     {
@@ -787,149 +359,6 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
             {
                 CryptographicOperations.ZeroMemory(input);
             }
-        }
-
-        internal ProofFixture NonMembership(
-            AccountDirectoryAdh1? head = null,
-            AccountDirectoryDtt1? dtt = null,
-            AccountDirectoryProtectedLkg? lkg = null)
-        {
-            var nonce = Bytes(32, 0x31);
-            var query = Bytes(32, 0x32);
-            head ??= Head(0, new byte[32], 0,
-                AccountDirectoryRfc6962.ComputeEmptyTreeHash(), AccountDirectorySparseMap.EmptyMapRoot.ToArray());
-            dtt ??= Dtt(head, nonce);
-            var headBytes = AccountDirectoryAdh1Codec.Encode(head);
-            var dttBytes = AccountDirectoryDtt1Codec.Encode(dtt);
-            var dttHash = AccountDirectoryCrypto.ComputeDtt1CoreHash(dtt);
-            var adp = Write("ADP1", 0x0201,
-            [
-                Network, [2], query, headBytes,
-                U64(lkg?.TreeSize ?? 0), lkg?.CoreHash.ToArray() ?? new byte[32],
-                [0], [], new byte[32], U16(0), [], [lkg is null ? (byte)0 : (byte)1],
-                [0], [], dttHash,
-            ]);
-            return new ProofFixture(this, head, headBytes, dtt, dttBytes, adp, nonce, query, lkg, null);
-        }
-
-        internal ProofFixture CurrentValue()
-        {
-            var identity = AccountDirectoryAdc1VerificationTests.Fixture.Create();
-            ReadOnlyMemory<byte>[] revoked = [];
-            var adc = identity.CreateCheckpoint(revoked);
-            var checkpoint = AccountDirectoryAdc1Verifier.Verify(
-                adc, identity.Binding, identity.Directory, revoked, supportedReader: 1);
-            var adcBytes = AccountDirectoryAdc1Codec.Encode(adc);
-            var adcReference = Reference("ADC1", AccountDirectoryCrypto.ComputeAdc1ArtifactHash(adc));
-            var query = adc.DirectoryLeafKey.ToArray();
-            var nonce = Bytes(32, 0x31);
-            var oldHead = Head(0, new byte[32], 0,
-                AccountDirectoryRfc6962.ComputeEmptyTreeHash(), AccountDirectorySparseMap.EmptyMapRoot.ToArray());
-            var oldBytes = AccountDirectoryAdh1Codec.Encode(oldHead);
-            var lkg = new AccountDirectoryProtectedLkg(oldBytes);
-            var bitmap = new byte[32];
-            var mapRoot = AccountDirectorySparseMap.ComputePresentRoot(query, adcReference, bitmap, []);
-            var transition = Join(
-                U16(1), U64(0), query, new byte[38], adcReference,
-                AccountDirectorySparseMap.EmptyMapRoot.ToArray(), mapRoot);
-            var commitment = AccountDirectoryCrypto.Sha256Domain("Deep/AccountDirectory/V1/transition", transition);
-            var appendRoot = AccountDirectoryRfc6962.ComputeLeafHash(commitment);
-            var head = Head(1, lkg.CoreHash.ToArray(), 1, appendRoot, mapRoot);
-            var headBytes = AccountDirectoryAdh1Codec.Encode(head);
-            var dtt = Dtt(head, nonce);
-            var dttBytes = AccountDirectoryDtt1Codec.Encode(dtt);
-            var dttHash = AccountDirectoryCrypto.ComputeDtt1CoreHash(dtt);
-            var devices = identity.Identity.ActiveDevices
-                .OrderBy(static device => device.Certificate.DeviceId.ToArray(), ByteArrayComparer.Instance)
-                .Select(static device => Lp32(device.Certificate.CanonicalBytes.ToArray())).ToArray();
-            var adp = Write("ADP1", 0x0201,
-            [
-                Network, [1], query, headBytes, U64(0), lkg.CoreHash.ToArray(), [0], [], bitmap, U16(0), [], [1], [0], [], dttHash,
-                adcBytes, identity.DeepId.RecordHash.ToArray(), identity.DeepId.AddressPublicKey.ToArray(),
-                identity.Binding.Record.CanonicalBytes.ToArray(), identity.Account.Certificate.CanonicalBytes.ToArray(),
-                identity.Revocations.Snapshot.CanonicalBytes.ToArray(), identity.Directory.Record.CanonicalBytes.ToArray(),
-                [checked((byte)devices.Length)], Join(devices), transition, U64(0), [0], [],
-            ]);
-            return new ProofFixture(this, head, headBytes, dtt, dttBytes, adp, nonce, query, lkg, checkpoint);
-        }
-
-        internal ProofFixture ForwardCheckpoint(ForwardFault fault = ForwardFault.None)
-        {
-            var nonce = Bytes(32, 0x31);
-            var query = Bytes(32, 0x32);
-            var sourceHead = Head(0, new byte[32], 0,
-                AccountDirectoryRfc6962.ComputeEmptyTreeHash(), AccountDirectorySparseMap.EmptyMapRoot.ToArray());
-            var lkg = new AccountDirectoryProtectedLkg(AccountDirectoryAdh1Codec.Encode(sourceHead));
-            var targetHead = Head(3, Bytes(32, 0xb0), 0,
-                AccountDirectoryRfc6962.ComputeEmptyTreeHash(), AccountDirectorySparseMap.EmptyMapRoot.ToArray());
-            var targetBytes = AccountDirectoryAdh1Codec.Encode(targetHead);
-            var targetHash = AccountDirectoryCrypto.ComputeAdh1CoreHash(targetHead);
-            var intermediateHead = Head(1, lkg.CoreHash.ToArray(), 0,
-                AccountDirectoryRfc6962.ComputeEmptyTreeHash(), AccountDirectorySparseMap.EmptyMapRoot.ToArray());
-            var intermediateBytes = AccountDirectoryAdh1Codec.Encode(intermediateHead);
-            var intermediateHash = AccountDirectoryCrypto.ComputeAdh1CoreHash(intermediateHead);
-            var dtt = Dtt(targetHead, nonce);
-            var dttBytes = AccountDirectoryDtt1Codec.Encode(dtt);
-            var dttHash = AccountDirectoryCrypto.ComputeDtt1CoreHash(dtt);
-
-            var sourceLeaf = CoveredHeadLeaf(lkg.LogGeneration, lkg.TreeSize, lkg.CoreHash.Span);
-            var firstTarget = fault is ForwardFault.ExtraCheckpointAfterTarget or ForwardFault.OmittedGenesisCheckpoint
-                ? targetHash
-                : intermediateHash;
-            var first = SignedAdf(
-                fault == ForwardFault.OmittedGenesisCheckpoint ? 1UL : 0UL,
-                fault == ForwardFault.OmittedGenesisCheckpoint ? Bytes(32, 0xa4) : new byte[32],
-                0, 0, 1,
-                fault == ForwardFault.WrongSourceMembership ? Bytes(32, 0xa6) : sourceLeaf,
-                firstTarget, 0, AccountDirectoryRfc6962.ComputeEmptyTreeHash(),
-                AccountDirectorySparseMap.EmptyMapRoot.ToArray(),
-                invalidSignature: fault == ForwardFault.InvalidRootSignature);
-
-            var checkpoints = new List<ReadOnlyMemory<byte>> { AccountDirectoryAdf1Codec.Encode(first) };
-            if (fault != ForwardFault.OmittedGenesisCheckpoint)
-            {
-                var second = SignedAdf(
-                    1, AccountDirectoryCrypto.ComputeAdf1CoreHash(first), 1, 2, 1, Bytes(32, 0xa7),
-                    targetHash, 0, AccountDirectoryRfc6962.ComputeEmptyTreeHash(),
-                    AccountDirectorySparseMap.EmptyMapRoot.ToArray());
-                checkpoints.Add(AccountDirectoryAdf1Codec.Encode(second));
-            }
-
-            var targetHeads = fault == ForwardFault.OmittedGenesisCheckpoint
-                ? new ReadOnlyMemory<byte>[] { targetBytes }
-                : new ReadOnlyMemory<byte>[]
-                {
-                    fault == ForwardFault.ExtraCheckpointAfterTarget ? targetBytes : intermediateBytes,
-                    targetBytes,
-                };
-            var afp = new AccountDirectoryAfp1(
-                Network, lkg.LogGeneration, lkg.TreeSize, lkg.CoreHash.Span, targetHash,
-                [ExactXna1], checkpoints, targetHeads, 0, [], dttHash);
-            var afpBytes = AccountDirectoryAfp1Codec.Encode(afp);
-            if (fault == ForwardFault.WrongFinalTargetTuple)
-            {
-                var wrongTarget = MutateField(targetBytes, 6, value => value[^1] ^= 1);
-                afpBytes = MutateField(afpBytes, 12, value =>
-                {
-                    var offset = 0;
-                    for (var index = 0; index < targetHeads.Length; index++)
-                    {
-                        var length = checked((int)BinaryPrimitives.ReadUInt32BigEndian(value[offset..]));
-                        if (index == targetHeads.Length - 1)
-                        {
-                            wrongTarget.CopyTo(value[(offset + 4)..]);
-                            return;
-                        }
-                        offset += 4 + length;
-                    }
-                });
-            }
-            var adp = Write("ADP1", 0x0201,
-            [
-                Network, [2], query, targetBytes, U64(lkg.TreeSize), lkg.CoreHash.ToArray(),
-                [0], [], new byte[32], U16(0), [], [1], [1], afpBytes, dttHash,
-            ]);
-            return new ProofFixture(this, targetHead, targetBytes, dtt, dttBytes, adp, nonce, query, lkg, null);
         }
 
         internal AccountDirectoryAdf1 SignedAdf(

@@ -34,18 +34,18 @@ public static class ContactCoordinationOnionCodec
     public static byte[] EncodeRequest(ContactCoordinationTarget target, ReadOnlySpan<byte> exactBody)
     {
         RequireLength(target, exactBody.Length, response: false);
-        var encoded = Wrap("XCA2"u8, target, exactBody);
+        var encoded = Wrap(ProtocolMagicBytes.XCA2, target, exactBody);
         _ = DecodeRequest(encoded); return encoded;
     }
 
     public static ParsedContactCoordinationOnionRequest DecodeRequest(ReadOnlySpan<byte> encoded)
     {
-        var target = Header(encoded, "XCA2"u8, response: false);
+        var target = Header(encoded, ProtocolMagicBytes.XCA2, response: false);
         var body = encoded[HeaderBytes..];
         if (target == ContactCoordinationTarget.Route)
         {
             var request = ContactRouteAuthorityWireCodec.DecodeRequest(body);
-            var advertisement = ContactCodec.Decode("XRA1", request.ExactXra1.Span);
+            var advertisement = ContactCodec.Decode(ProtocolMagic.XRA1, request.ExactXra1.Span);
             return new(encoded, target, request.NetworkId.Span, request.RequestNonce.Span, advertisement,
                 BinaryPrimitives.ReadUInt64BigEndian(advertisement.Field(13).Span));
         }
@@ -60,13 +60,13 @@ public static class ContactCoordinationOnionCodec
         ArgumentNullException.ThrowIfNull(request);
         RequireLength(request.Target, exactResponseBody.Length, response: true);
         VerifyPair(request, exactResponseBody);
-        return Wrap("XCS2"u8, request.Target, exactResponseBody);
+        return Wrap(ProtocolMagicBytes.XCS2, request.Target, exactResponseBody);
     }
 
     public static byte[] DecodeResponse(ParsedContactCoordinationOnionRequest request, ReadOnlySpan<byte> encoded)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var target = Header(encoded, "XCS2"u8, response: true);
+        var target = Header(encoded, ProtocolMagicBytes.XCS2, response: true);
         if (target != request.Target) throw new FormatException("Coordination target differs from the exact request.");
         VerifyPair(request, encoded[HeaderBytes..]);
         return encoded[HeaderBytes..].ToArray();

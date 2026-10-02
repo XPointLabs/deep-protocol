@@ -71,7 +71,7 @@ public sealed class Dab2LineageTransitionPlan
 
 /// <summary>
 /// Promotes a parsed binding only after exact DPA1 closure and all three
-/// independent signatures have been checked. No DID1/DAB1 fallback exists.
+/// independent signatures have been checked. No retired identity fallback exists.
 /// </summary>
 public static class DeepIdV2Verifier
 {

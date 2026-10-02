@@ -47,20 +47,6 @@ public sealed class VerifiedApplicationIdentityClosure
         devices.TryGetValue(Convert.ToHexString(deviceId), out device);
 }
 
-public sealed class VerifiedDab1
-{
-    internal VerifiedDab1(ParsedDab1 record, ParsedDid1 deepId, VerifiedApplicationIdentityClosure identity)
-    {
-        Record = record;
-        DeepId = deepId;
-        Identity = identity;
-    }
-
-    public ParsedDab1 Record { get; }
-    public ParsedDid1 DeepId { get; }
-    public VerifiedApplicationIdentityClosure Identity { get; }
-}
-
 public sealed class VerifiedDmd1
 {
     internal VerifiedDmd1(ParsedDmd1 record, VerifiedApplicationIdentityClosure identity)
@@ -73,56 +59,12 @@ public sealed class VerifiedDmd1
     public VerifiedApplicationIdentityClosure Identity { get; }
 }
 
-public sealed class VerifiedDca1
-{
-    internal VerifiedDca1(ParsedDca1 record, VerifiedDab1 binding, VerifiedDmd1 directory)
-    {
-        Record = record;
-        Binding = binding;
-        Directory = directory;
-    }
-
-    public ParsedDca1 Record { get; }
-    public VerifiedDab1 Binding { get; }
-    public VerifiedDmd1 Directory { get; }
-}
-
-/// <summary>
-/// A cryptographically verified DCA1 that is authoritative at one caller-
-/// supplied trusted instant. This capability is deliberately distinct from
-/// <see cref="VerifiedDca1"/>, whose signatures and identity closure remain
-/// valid evidence after its publication window closes.
-/// </summary>
-public sealed class CurrentlyAuthoritativeDca1
-{
-    internal CurrentlyAuthoritativeDca1(VerifiedDca1 verified, ulong trustedUnixSeconds)
-    {
-        Verified = verified;
-        TrustedUnixSeconds = trustedUnixSeconds;
-    }
-
-    public VerifiedDca1 Verified { get; }
-    public ulong TrustedUnixSeconds { get; }
-}
-
 public enum ApplicationLineageDisposition
 {
     AcceptedGenesis = 1,
     AcceptedSuccessor = 2,
     ExactReplay = 3,
     ForkLatched = 4,
-}
-
-public sealed class Dab1LineageState
-{
-    internal Dab1LineageState(VerifiedDab1 head, bool forkLatched)
-    {
-        Head = head;
-        ForkLatched = forkLatched;
-    }
-
-    public VerifiedDab1 Head { get; }
-    public bool ForkLatched { get; }
 }
 
 public sealed class Dmd1LineageState
@@ -135,23 +77,6 @@ public sealed class Dmd1LineageState
 
     public VerifiedDmd1 Head { get; }
     public bool ForkLatched { get; }
-}
-
-public sealed class Dab1LineageTransitionPlan
-{
-    internal Dab1LineageTransitionPlan(
-        Dab1LineageState previous,
-        Dab1LineageState next,
-        ApplicationLineageDisposition disposition)
-    {
-        Previous = previous;
-        Next = next;
-        Disposition = disposition;
-    }
-
-    public Dab1LineageState Previous { get; }
-    public Dab1LineageState Next { get; }
-    public ApplicationLineageDisposition Disposition { get; }
 }
 
 public sealed class Dmd1LineageTransitionPlan
@@ -241,35 +166,6 @@ public static partial class ApplicationCoreVerifier
         return new VerifiedApplicationIdentityClosure(account, revocations, activeDevices);
     }
 
-    public static VerifiedDab1 VerifyDab1(
-        ParsedDab1 parsed,
-        ParsedDid1 deepId,
-        VerifiedApplicationIdentityClosure identity,
-        ushort deploymentProfileId)
-    {
-        ArgumentNullException.ThrowIfNull(parsed);
-        ArgumentNullException.ThrowIfNull(deepId);
-        ArgumentNullException.ThrowIfNull(identity);
-        var account = identity.Account;
-        Span<byte> realmInput = stackalloc byte[18];
-        account.Certificate.NetworkId.Span.CopyTo(realmInput);
-        BinaryPrimitives.WriteUInt16BigEndian(realmInput[16..], deploymentProfileId);
-        var expectedRealm = ApplicationCoreFormat.Sha256Domain(
-            "Deep/Application/V1/address-binding-realm", realmInput);
-
-        if (!parsed.ExactDid1Hash.Span.SequenceEqual(deepId.RecordHash.Span) ||
-            !parsed.IdentityRealmId.Span.SequenceEqual(expectedRealm) ||
-            !parsed.DeepAccountId.Span.SequenceEqual(account.DeepAccountIdHash.Span) ||
-            parsed.AccountGeneration != account.Certificate.AccountGeneration ||
-            !References(parsed.Dpa1Reference, account.Certificate))
-            Reject("DAB1 does not close over the exact DID1/DPA1 identity realm.");
-        VerifySignature(parsed.AddressSignature.Span, parsed.AddressSignatureInput.Span,
-            deepId.AddressPublicKey.Span, "DAB1 address signature");
-        VerifySignature(parsed.AccountSignature.Span, parsed.AccountSignatureInput.Span,
-            account.Certificate.AccountEd25519PublicKey.Span, "DAB1 account signature");
-        return new VerifiedDab1(parsed, deepId, identity);
-    }
-
     public static VerifiedDmd1 VerifyDmd1(
         ParsedDmd1 parsed,
         VerifiedApplicationIdentityClosure identity)
@@ -294,78 +190,6 @@ public static partial class ApplicationCoreVerifier
         VerifySignature(parsed.DeviceIssuerSignature.Span, parsed.SignatureInput.Span,
             account.Certificate.DeviceIssuerEd25519PublicKey.Span, "DMD1 device-issuer signature");
         return new VerifiedDmd1(parsed, identity);
-    }
-
-    public static VerifiedDca1 VerifyDca1(
-        ParsedDca1 parsed,
-        VerifiedDab1 binding,
-        VerifiedDmd1 directory)
-    {
-        ArgumentNullException.ThrowIfNull(parsed);
-        ArgumentNullException.ThrowIfNull(binding);
-        ArgumentNullException.ThrowIfNull(directory);
-        if (!ReferenceEquals(binding.Identity, directory.Identity))
-            Reject("DCA1 binding and directory do not share one verified identity closure.");
-        var account = binding.Identity.Account;
-        if (!parsed.NetworkId.Span.SequenceEqual(account.Certificate.NetworkId.Span) ||
-            !parsed.DeepAccountId.Span.SequenceEqual(account.DeepAccountIdHash.Span) ||
-            !References(parsed.Dpa1Reference, account.Certificate) ||
-            parsed.AuthorizedDmd1Generation != directory.Record.DirectoryGeneration ||
-            !parsed.AuthorizedDmd1Hash.Span.SequenceEqual(directory.Record.RecordHash.Span) ||
-            !parsed.ExactDid1Hash.Span.SequenceEqual(binding.DeepId.RecordHash.Span) ||
-            parsed.Dab1Reference.TypeCode != ApplicationCoreCodec.Dab1ArtifactTypeCode ||
-            parsed.Dab1Reference.CanonicalLength != binding.Record.CanonicalBytes.Length ||
-            !parsed.Dab1Reference.CanonicalHash.Span.SequenceEqual(binding.Record.RecordHash.Span) ||
-            !directory.Record.ActiveDevices.Any(entry =>
-                entry.DeviceId.Span.SequenceEqual(parsed.PublisherDeviceId.Span)))
-            Reject("DCA1 does not close over exact DID1/DAB1/DPA1/DMD1 state or an active publisher.");
-        VerifySignature(parsed.AccountSignature.Span, parsed.SignatureInput.Span,
-            account.Certificate.AccountEd25519PublicKey.Span, "DCA1 account signature");
-        return new VerifiedDca1(parsed, binding, directory);
-    }
-
-    public static CurrentlyAuthoritativeDca1 RequireDca1CurrentlyAuthoritative(
-        VerifiedDca1 verified,
-        ulong trustedUnixSeconds)
-    {
-        ArgumentNullException.ThrowIfNull(verified);
-        if (trustedUnixSeconds < verified.Record.NotBeforeUnixSeconds ||
-            trustedUnixSeconds >= verified.Record.ExpiresAtUnixSeconds)
-            Reject("DCA1 is not currently authoritative at the trusted instant.");
-        return new CurrentlyAuthoritativeDca1(verified, trustedUnixSeconds);
-    }
-
-    public static Dab1LineageTransitionPlan StartDab1Lineage(VerifiedDab1 genesis)
-    {
-        ArgumentNullException.ThrowIfNull(genesis);
-        if (genesis.Record.BindingGeneration != 0 ||
-            !ApplicationCoreFormat.IsZero(genesis.Record.PredecessorDab1Hash.Span))
-            Lineage("A DAB1 lineage starts at generation zero with a zero predecessor.");
-        var initial = new Dab1LineageState(genesis, forkLatched: false);
-        return new Dab1LineageTransitionPlan(initial, initial, ApplicationLineageDisposition.AcceptedGenesis);
-    }
-
-    public static Dab1LineageTransitionPlan PrepareDab1Transition(
-        Dab1LineageState previous,
-        VerifiedDab1 candidate)
-    {
-        ArgumentNullException.ThrowIfNull(previous);
-        ArgumentNullException.ThrowIfNull(candidate);
-        EnsureNotLatched(previous.ForkLatched);
-        var head = previous.Head.Record;
-        var next = candidate.Record;
-        if (!head.IdentityRealmId.Span.SequenceEqual(next.IdentityRealmId.Span) ||
-            !head.ExactDid1Hash.Span.SequenceEqual(next.ExactDid1Hash.Span))
-            Lineage("DAB1 lineages from different permanent Deep IDs cannot be combined.");
-        if (next.BindingGeneration == head.BindingGeneration)
-            return SameGeneration(previous, candidate);
-        if (head.BindingGeneration == ulong.MaxValue)
-            Lineage("A DAB1 lineage cannot advance beyond its maximum generation.");
-        if (next.BindingGeneration != head.BindingGeneration + 1 ||
-            !next.PredecessorDab1Hash.Span.SequenceEqual(head.RecordHash.Span))
-            Lineage("DAB1 must advance exactly one generation and bind the exact predecessor head.");
-        var accepted = new Dab1LineageState(candidate, forkLatched: false);
-        return new Dab1LineageTransitionPlan(previous, accepted, ApplicationLineageDisposition.AcceptedSuccessor);
     }
 
     public static Dmd1LineageTransitionPlan StartDmd1Lineage(VerifiedDmd1 genesis)
@@ -413,16 +237,6 @@ public static partial class ApplicationCoreVerifier
             !parsed.ConversationId.Span.SequenceEqual(authenticatedEnvelope.ConversationId.Span))
             Reject("DMC2 does not equal the authenticated DPE2/ratchet sender and conversation context.");
         return new VerifiedDmc2(parsed, parsed.ParsedPayload, authenticatedEnvelope);
-    }
-
-    private static Dab1LineageTransitionPlan SameGeneration(
-        Dab1LineageState previous,
-        VerifiedDab1 candidate)
-    {
-        if (previous.Head.Record.RecordHash.Span.SequenceEqual(candidate.Record.RecordHash.Span))
-            return new Dab1LineageTransitionPlan(previous, previous, ApplicationLineageDisposition.ExactReplay);
-        var latched = new Dab1LineageState(previous.Head, forkLatched: true);
-        return new Dab1LineageTransitionPlan(previous, latched, ApplicationLineageDisposition.ForkLatched);
     }
 
     private static Dmd1LineageTransitionPlan SameGeneration(

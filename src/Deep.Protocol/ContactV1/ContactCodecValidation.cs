@@ -14,25 +14,6 @@ internal static class ContactCodecValidation
     public static ContactRecord AuthorRecord(string magic, IReadOnlyList<ReadOnlyMemory<byte>> fields) =>
         ContactCodec.AuthorForValidation(magic, fields);
 
-    public static byte[] SealPermanentDcr1(
-        ContactRecord dcr1, ReadOnlySpan<byte> networkId16,
-        ParsedDid1 permanentDeepId, PermanentContactResolution resolution,
-        ReadOnlySpan<byte> nonce24)
-    {
-        var nonce = nonce24.ToArray();
-        return Dcr1ObjectProtectionCodec.SealPermanentCore(
-            dcr1, networkId16, permanentDeepId, resolution,
-            destination => nonce.CopyTo(destination));
-    }
-
-    public static byte[] SealOneTimeDcr1(
-        ContactRecord dcr1, ContactRecord dia1, ReadOnlySpan<byte> nonce24)
-    {
-        var nonce = nonce24.ToArray();
-        return Dcr1ObjectProtectionCodec.SealOneTimeCore(
-            dcr1, dia1, destination => nonce.CopyTo(destination));
-    }
-
     public static ContactHelloDmc2Payload CreateContactHelloPayload(
         ReadOnlySpan<byte> relationshipId32, ReadOnlySpan<byte> initiatorDab1Reference38,
         ReadOnlySpan<byte> initiatorDmd1Hash32, ReadOnlySpan<byte> safetyNumberHash32,

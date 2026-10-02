@@ -116,9 +116,8 @@ public sealed class GroupCodecTests
     public void VerifiedTransitionAndIdentityCapabilitiesAreNotCallerForgeable()
     {
         Assert.Empty(typeof(VerifiedGroupTransition).GetConstructors());
-        Assert.Empty(typeof(GroupIdentityClosure).GetConstructors());
-        Assert.Single(typeof(GroupIdentityClosure).GetMethods(), method =>
-            method.IsPublic && method.IsStatic && method.ReturnType == typeof(GroupIdentityClosure));
+        Assert.Null(typeof(GroupCodec).Assembly.GetType(
+            "Deep.Protocol.GroupV1.GroupIdentityClosure"));
         Assert.DoesNotContain(typeof(GroupSuccessorLatch).GetMethods(), method => method.Name == "Observe");
     }
 
@@ -238,100 +237,8 @@ public sealed class GroupCodecTests
         Assert.Equal("InvalidPersistedGroupLineage",Assert.Throws<GroupFormatException>(()=>GroupSuccessorLatch.Restore(impossibleRevision)).Code);
         Assert.Contains(typeof(GroupSuccessorLatch).GetMethod("ObserveAndPersist")!.GetParameters(),parameter=>parameter.ParameterType==typeof(IGroupSuccessorStateStore));
     }
-
-    [Fact]
-    public void CryptoVerifiedGenesisSuccessorReducerAndDurableForkExecuteEndToEnd()
-    {
-        var fixture=Deep.Protocol.Tests.ContactV1.ContactCodecSecurityTests.CryptoDcrFixture.Create();
-        var contact=fixture.Promote(fixture.Dcr);
-        var identities=GroupIdentityClosure.FromVerifiedContactDirectories([], [contact],fixture.BootId,fixture.CurrentMonotonicSample);
-        var baseAndCurrent=GroupIdentityClosure.FromVerifiedContactDirectories([contact], [contact],fixture.BootId,fixture.CurrentMonotonicSample);
-        var support=VerifiedSupport(fixture,contact);
-        var resolver=new Resolver(support.ToDictionary(item=>Convert.ToHexString(item.Ref),item=>item.Bytes,StringComparer.Ordinal));
-        var network=contact.Directory.Record.NetworkId.ToArray();var account=contact.Directory.Record.DeepAccountId.ToArray();
-        var device=contact.Directory.Identity.ActiveDevices.Single().Certificate.DeviceId.ToArray();
-        var dpdRef=RefHash("DPD1",contact.Directory.Identity.ActiveDevices.Single().Certificate.CanonicalHash.Span);
-        var member=Member(account,GroupRole.Owner,device,contact.Freshness.ExactAdc1Reference.ToArray(),contact.Freshness.ExactAdh1CoreReference.ToArray(),contact.Freshness.ExactAdp1Hash.ToArray(),contact.Directory.Record.RecordHash.ToArray(),RefHash("DRS1",contact.Directory.Identity.Revocations.Snapshot.CanonicalHash.Span),dpdRef);
-
-        var genesis=SignedRecord("DGC1",[network,B(32,0x30),U16(1),U64(0),new byte[32],account,device,dpdRef,U16(0),Array.Empty<byte>(),U16(1),member,Encoding.UTF8.GetBytes("genesis"),new byte[]{0},U32(3600),U64(30),B(64,0xa0)],17,fixture.Device);
-        var genesisPackage=Package(genesis,[],support);
-        var verifiedGenesis=GroupCodec.VerifyCommitPackage(genesisPackage,null,identities,resolver);
-        var expectedPackageHash=SHA256.HashData(genesisPackage.CanonicalBytes.Span);
-        Assert.Equal(expectedPackageHash,verifiedGenesis.ExactVerifiedGcp1Sha256.ToArray());
-        Assert.True(verifiedGenesis.BindsExactGcp1(genesisPackage.CanonicalBytes.Span));
-
-        var exposedHash=verifiedGenesis.ExactVerifiedGcp1Sha256.ToArray();
-        exposedHash[0]^=0xff;
-        Assert.Equal(expectedPackageHash,verifiedGenesis.ExactVerifiedGcp1Sha256.ToArray());
-
-        var changedPackageBytes=genesisPackage.CanonicalBytes.ToArray();
-        changedPackageBytes[FieldOffset(changedPackageBytes,1)]^=0x01;
-        Assert.False(verifiedGenesis.BindsExactGcp1(changedPackageBytes));
-        var changedPackage=Assert.IsType<GroupCommitPackageRecord>(GroupCodec.Decode(changedPackageBytes));
-        Assert.Equal("CommitHeaderMismatch",Assert.Throws<GroupFormatException>(()=>
-            GroupCodec.VerifyCommitPackage(changedPackage,null,identities,resolver)).Code);
-
-        var first=Successor(verifiedGenesis,fixture,contact,support,resolver,baseAndCurrent,"next",1);
-        var second=Successor(verifiedGenesis,fixture,contact,support,resolver,baseAndCurrent,"fork",2);
-        Assert.Equal("next",Encoding.UTF8.GetString(first.Commit.Field(13).Span));
-
-        var invalidProposal=Proposal(verifiedGenesis.Commit,fixture,contact,"expected",3);
-        var invalidCommit=CommitFor(verifiedGenesis.Commit,invalidProposal,fixture,contact,"different");
-        var invalidPackage=Package(invalidCommit,[invalidProposal],support);
-        Assert.Equal("ResultStateMismatch",Assert.Throws<GroupFormatException>(()=>GroupCodec.VerifyCommitPackage(invalidPackage,verifiedGenesis,baseAndCurrent,resolver)).Code);
-
-        var store=new MemoryGroupStore();var latch=GroupSuccessorLatch.CreateEmpty();
-        Assert.Equal(GroupLineageDisposition.AcceptedGenesis,latch.ObserveAndPersist(verifiedGenesis,store));
-        Assert.Equal(GroupLineageDisposition.AcceptedSuccessor,latch.ObserveAndPersist(first,store));
-        Assert.Equal(GroupLineageDisposition.ForkLatched,latch.ObserveAndPersist(second,store));
-        var restored=GroupSuccessorLatch.Restore(store.Value.Span);Assert.True(restored.ForkLatched);
-        Assert.Equal(GroupLineageDisposition.ForkLatched,restored.ObserveAndPersist(first,store));
-    }
-
-    [Fact]
-    public void AcceptedInvitationActivatesOnlyInsideBothSignedExpiryWindows()
-    {
-        var ownerFixture=Deep.Protocol.Tests.ContactV1.ContactCodecSecurityTests.CryptoDcrFixture.Create();
-        var inviteeFixture=Deep.Protocol.Tests.ContactV1.ContactCodecSecurityTests.CryptoDcrFixture.Create(1);
-        var owner=ownerFixture.Promote(ownerFixture.Dcr);var invitee=inviteeFixture.Promote(inviteeFixture.Dcr);
-        var ownerSupport=VerifiedSupport(ownerFixture,owner);var allSupport=ownerSupport.Concat(VerifiedSupport(inviteeFixture,invitee)).OrderBy(x=>x.Kind).ThenBy(x=>x.Ref,ByteComparer.Instance).ToArray();
-        var resolver=new Resolver(allSupport.ToDictionary(item=>Convert.ToHexString(item.Ref),item=>item.Bytes,StringComparer.Ordinal));
-        var ownerOnly=GroupIdentityClosure.FromVerifiedContactDirectories([], [owner],ownerFixture.BootId,ownerFixture.CurrentMonotonicSample);
-        var genesisCommit=Genesis(ownerFixture,owner);
-        var genesis=GroupCodec.VerifyCommitPackage(Package(genesisCommit,[],ownerSupport),null,ownerOnly,new Resolver(ownerSupport.ToDictionary(item=>Convert.ToHexString(item.Ref),item=>item.Bytes,StringComparer.Ordinal)));
-
-        var ownerAccount=owner.Directory.Record.DeepAccountId.ToArray();var ownerDevice=owner.Directory.Identity.ActiveDevices.Single().Certificate.DeviceId.ToArray();var ownerDpd=RefHash("DPD1",owner.Directory.Identity.ActiveDevices.Single().Certificate.CanonicalHash.Span);
-        var inviteeAccount=invitee.Directory.Record.DeepAccountId.ToArray();var inviteeDevice=invitee.Directory.Identity.ActiveDevices.Single().Certificate.DeviceId.ToArray();var inviteeDpd=RefHash("DPD1",invitee.Directory.Identity.ActiveDevices.Single().Certificate.CanonicalHash.Span);
-        var invitation=SignedRecord("GIV1",[owner.Directory.Record.NetworkId,B(32,0x30),B(32,0x44),U64(0),genesis.Commit.ArtifactHash,ownerAccount,ownerDevice,ownerDpd,inviteeAccount,new byte[]{3},invitee.Freshness.ExactAdc1Reference,invitee.Freshness.ExactAdh1CoreReference,invitee.Freshness.ExactAdp1Hash,invitee.Directory.Record.RecordHash,RefHash("DRS1",invitee.Directory.Identity.Revocations.Snapshot.CanonicalHash.Span),U64(20),U64(40),B(64,0xa0)],18,ownerFixture.Device);
-        var acceptance=SignedRecord("GIA1",[invitation.Field(1),invitation.Field(2),invitation.Field(3),GroupCodec.ArtifactReference("GIV1",invitation).CanonicalBytes,inviteeAccount,inviteeDevice,inviteeDpd,invitee.Freshness.ExactAdc1Reference,invitee.Freshness.ExactAdh1CoreReference,invitee.Freshness.ExactAdp1Hash,invitee.Directory.Record.RecordHash,RefHash("DRS1",invitee.Directory.Identity.Revocations.Snapshot.CanonicalHash.Span),U64(25),U64(31),B(64,0xa0)],15,inviteeFixture.Device);
-        var payload=Join(GroupCodec.ArtifactReference("GIV1",invitation).CanonicalBytes.ToArray(),GroupCodec.ArtifactReference("GIA1",acceptance).CanonicalBytes.ToArray(),inviteeAccount,new byte[]{3},invitee.Freshness.ExactAdc1Reference.ToArray(),invitee.Freshness.ExactAdh1CoreReference.ToArray(),invitee.Freshness.ExactAdp1Hash.ToArray(),invitee.Directory.Record.RecordHash.ToArray(),RefHash("DRS1",invitee.Directory.Identity.Revocations.Snapshot.CanonicalHash.Span));
-        var proposal=SignedRecord("DGP1",[owner.Directory.Record.NetworkId,B(32,0x30),U64(0),genesis.Commit.ArtifactHash,B(32,0x45),ownerAccount,ownerDevice,ownerDpd,U16(1),payload,U64(20),U64(60),B(64,0xa0)],13,ownerFixture.Device);
-        var members=new[]{MemberFrom(owner,GroupRole.Owner),MemberFrom(invitee,GroupRole.Member)}.OrderBy(x=>x.AsSpan(2,32).ToArray(),ByteComparer.Instance).SelectMany(x=>x).ToArray();
-        var current=GroupIdentityClosure.FromVerifiedContactDirectories([owner],[owner,invitee],ownerFixture.BootId,ownerFixture.CurrentMonotonicSample);
-        var validCommit=ActivationCommit(genesis.Commit,proposal,ownerFixture,owner,members,30);
-        var pair=(Invitation:invitation,Acceptance:acceptance);
-        var verified=GroupCodec.VerifyCommitPackage(Package(validCommit,[proposal],allSupport,[pair]),genesis,current,resolver);
-        Assert.Equal((ulong)1,BinaryPrimitives.ReadUInt64BigEndian(verified.Commit.Field(4).Span));
-
-        var expiredCommit=ActivationCommit(genesis.Commit,proposal,ownerFixture,owner,members,31);
-        Assert.Equal("InvitationBaseMismatch",Assert.Throws<GroupFormatException>(()=>GroupCodec.VerifyCommitPackage(Package(expiredCommit,[proposal],allSupport,[pair]),genesis,current,resolver)).Code);
-    }
-
-    private static VerifiedGroupTransition Successor(VerifiedGroupTransition genesis,Deep.Protocol.Tests.ContactV1.ContactCodecSecurityTests.CryptoDcrFixture fixture,VerifiedContactBundleClosure contact,(ushort Kind,byte[] Ref,byte[] Bytes)[] support,Resolver resolver,GroupIdentityClosure identities,string name,byte proposalSeed)
-    { var proposal=Proposal(genesis.Commit,fixture,contact,name,proposalSeed);var commit=CommitFor(genesis.Commit,proposal,fixture,contact,name);return GroupCodec.VerifyCommitPackage(Package(commit,[proposal],support),genesis,identities,resolver); }
-    private static GroupRecord Proposal(GroupCommitRecord genesis,Deep.Protocol.Tests.ContactV1.ContactCodecSecurityTests.CryptoDcrFixture fixture,VerifiedContactBundleClosure contact,string name,byte seed)
-    { var account=contact.Directory.Record.DeepAccountId.ToArray();var device=contact.Directory.Identity.ActiveDevices.Single().Certificate.DeviceId.ToArray();var dpd=RefHash("DPD1",contact.Directory.Identity.ActiveDevices.Single().Certificate.CanonicalHash.Span);return SignedRecord("DGP1",[contact.Directory.Record.NetworkId,B(32,0x30),U64(0),genesis.ArtifactHash,B(32,seed),account,device,dpd,U16(6),ProfileAction(name,1,7200),U64(20),U64(60),B(64,0xa0)],13,fixture.Device); }
-    private static GroupRecord CommitFor(GroupCommitRecord genesis,GroupRecord proposal,Deep.Protocol.Tests.ContactV1.ContactCodecSecurityTests.CryptoDcrFixture fixture,VerifiedContactBundleClosure contact,string name)
-    { var account=contact.Directory.Record.DeepAccountId.ToArray();var active=contact.Directory.Identity.ActiveDevices.Single();var device=active.Certificate.DeviceId.ToArray();var dpd=RefHash("DPD1",active.Certificate.CanonicalHash.Span);var member=Member(account,GroupRole.Owner,device,contact.Freshness.ExactAdc1Reference.ToArray(),contact.Freshness.ExactAdh1CoreReference.ToArray(),contact.Freshness.ExactAdp1Hash.ToArray(),contact.Directory.Record.RecordHash.ToArray(),RefHash("DRS1",contact.Directory.Identity.Revocations.Snapshot.CanonicalHash.Span),dpd);return SignedRecord("DGC1",[contact.Directory.Record.NetworkId,B(32,0x30),U16(1),U64(1),genesis.ArtifactHash,account,device,dpd,U16(1),proposal.ArtifactHash,U16(1),member,Encoding.UTF8.GetBytes(name),new byte[]{1},U32(7200),U64(30),B(64,0xa0)],17,fixture.Device); }
-    private static GroupRecord Genesis(Deep.Protocol.Tests.ContactV1.ContactCodecSecurityTests.CryptoDcrFixture fixture,VerifiedContactBundleClosure contact)
-    { var account=contact.Directory.Record.DeepAccountId.ToArray();var active=contact.Directory.Identity.ActiveDevices.Single();var device=active.Certificate.DeviceId.ToArray();var dpd=RefHash("DPD1",active.Certificate.CanonicalHash.Span);return SignedRecord("DGC1",[contact.Directory.Record.NetworkId,B(32,0x30),U16(1),U64(0),new byte[32],account,device,dpd,U16(0),Array.Empty<byte>(),U16(1),MemberFrom(contact,GroupRole.Owner),Encoding.UTF8.GetBytes("genesis"),new byte[]{0},U32(3600),U64(30),B(64,0xa0)],17,fixture.Device); }
-    private static GroupRecord ActivationCommit(GroupCommitRecord genesis,GroupRecord proposal,Deep.Protocol.Tests.ContactV1.ContactCodecSecurityTests.CryptoDcrFixture fixture,VerifiedContactBundleClosure owner,byte[] members,ulong issuedAt)
-    { var active=owner.Directory.Identity.ActiveDevices.Single();return SignedRecord("DGC1",[owner.Directory.Record.NetworkId,B(32,0x30),U16(1),U64(1),genesis.ArtifactHash,owner.Directory.Record.DeepAccountId,active.Certificate.DeviceId,RefHash("DPD1",active.Certificate.CanonicalHash.Span),U16(1),proposal.ArtifactHash,U16(2),members,Encoding.UTF8.GetBytes("genesis"),new byte[]{0},U32(3600),U64(issuedAt),B(64,0xa0)],17,fixture.Device); }
-    private static byte[] MemberFrom(VerifiedContactBundleClosure contact,GroupRole role){var active=contact.Directory.Identity.ActiveDevices.Single();return Member(contact.Directory.Record.DeepAccountId.ToArray(),role,active.Certificate.DeviceId.ToArray(),contact.Freshness.ExactAdc1Reference.ToArray(),contact.Freshness.ExactAdh1CoreReference.ToArray(),contact.Freshness.ExactAdp1Hash.ToArray(),contact.Directory.Record.RecordHash.ToArray(),RefHash("DRS1",contact.Directory.Identity.Revocations.Snapshot.CanonicalHash.Span),RefHash("DPD1",active.Certificate.CanonicalHash.Span));}
     private static GroupCommitPackageRecord Package(GroupRecord commit,IReadOnlyList<GroupRecord> proposals,(ushort Kind,byte[] Ref,byte[] Bytes)[] support,IReadOnlyList<(GroupRecord Invitation,GroupRecord Acceptance)>? pairs=null)
     { pairs??=[];var proposalBytes=proposals.SelectMany(p=>Lp(p.CanonicalBytes.Span)).ToArray();var supportBytes=SupportEntriesExact(support);var pairBytes=pairs.SelectMany(pair=>Join(GroupCodec.ArtifactReference("GIV1",pair.Invitation).CanonicalBytes.ToArray(),Lp(pair.Invitation.CanonicalBytes.Span),GroupCodec.ArtifactReference("GIA1",pair.Acceptance).CanonicalBytes.ToArray(),Lp(pair.Acceptance.CanonicalBytes.Span))).ToArray();return Assert.IsType<GroupCommitPackageRecord>(Record("GCP1",[commit.Field(1),commit.Field(2),commit.Field(4),Lp(commit.CanonicalBytes.Span),U16(checked((ushort)proposals.Count)),proposalBytes,U32(checked((uint)support.Length)),supportBytes,U16(checked((ushort)pairs.Count)),pairBytes,Array.Empty<byte>()])); }
-    private static (ushort Kind,byte[] Ref,byte[] Bytes)[] VerifiedSupport(Deep.Protocol.Tests.ContactV1.ContactCodecSecurityTests.CryptoDcrFixture fixture,VerifiedContactBundleClosure contact)=>
-    [(1,contact.Freshness.ExactAdc1Reference.ToArray(),fixture.Adc),(2,contact.Freshness.ExactAdh1CoreReference.ToArray(),fixture.Adh),(3,RefHash("ADP1",contact.Freshness.ExactAdp1Hash.Span),fixture.Adp),(4,RefHash("DMD1",contact.Directory.Record.RecordHash.Span),contact.Directory.Record.CanonicalBytes.ToArray()),(5,RefHash("DRS1",contact.Directory.Identity.Revocations.Snapshot.CanonicalHash.Span),fixture.Drs),(6,RefHash("DPD1",contact.Directory.Identity.ActiveDevices.Single().Certificate.CanonicalHash.Span),fixture.Dpd)];
     private static byte[] SupportEntriesExact(IEnumerable<(ushort Kind,byte[] Ref,byte[] Bytes)> support){var bytes=new List<byte>();foreach(var item in support.OrderBy(x=>x.Kind).ThenBy(x=>x.Ref,ByteComparer.Instance)){bytes.AddRange(U16(item.Kind));bytes.AddRange(item.Ref);bytes.AddRange(Lp(item.Bytes));}return bytes.ToArray();}
     private static byte[] Join(params byte[][] parts){var result=new byte[parts.Sum(x=>x.Length)];var at=0;foreach(var part in parts){part.CopyTo(result,at);at+=part.Length;}return result;}
     private sealed class MemoryGroupStore:IGroupSuccessorStateStore{private byte[] value=GroupSuccessorLatch.CreateEmpty().Snapshot.ToArray();public ReadOnlyMemory<byte> Value=>value.ToArray();public bool CompareExchange(ReadOnlyMemory<byte> expected,ReadOnlyMemory<byte> replacement){if(!value.AsSpan().SequenceEqual(expected.Span))return false;value=replacement.ToArray();return true;}}

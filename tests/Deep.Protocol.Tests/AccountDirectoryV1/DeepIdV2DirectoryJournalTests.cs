@@ -128,8 +128,8 @@ public sealed class DeepIdV2DirectoryJournalTests
             BinaryPrimitives.ReadUInt16BigEndian(encoded.AsSpan(8)));
         Assert.Equal(AccountDirectoryAdp1ResultKind.NonMembership,
             DeepIdV2Adp1Codec.Decode(encoded).ResultKind);
-        Assert.Throws<AccountDirectoryAdp1FormatException>(() =>
-            AccountDirectoryAdp1Codec.Decode(encoded));
+        Assert.DoesNotContain(typeof(AccountDirectoryAdp1Codec).GetMethods(),
+            method => method.Name == "Decode");
         var oldVersion = encoded.ToArray();
         BinaryPrimitives.WriteUInt16BigEndian(oldVersion.AsSpan(4), 1);
         Assert.Throws<AccountDirectoryAdp1FormatException>(() =>

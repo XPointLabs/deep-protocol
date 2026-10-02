@@ -1,11 +1,30 @@
 # Protocol Surface - DNP1 Wave 1
 
-Updated: 2026-10-01.
+Updated: 2026-10-02.
 
 The production package closure is exactly `Deep.Protocol`,
 `Deep.Protocol.MembershipRoutes`, and `Deep.Protocol.ProfileCarrier`.
 
 ## Production surface
+
+### Retired identity source removal
+
+[DR-0069](../../docs/survival-program/decisions/DR-0069-did2-retired-identity-surface-removal.md)
+removes the old identity author/parser/verifier and their dependent directory,
+contact and group capability producers. Only DID2 freshness enters the
+forward-checkpoint and ONION context factories. Existing preclaim/coordination
+bytes use allocated generated IPK2/XCA2/XCS2 identifiers without activation.
+The neutral contact vector manifest no longer carries old identity-bound
+positive fixtures; retained neutral bytes and malformed checks are unchanged.
+Consumer source rebuilds, exact API/resource snapshots and package repins are
+still required. Published packages and active images are not this source cutover.
+
+[DR-0070](../../docs/survival-program/decisions/DR-0070-did2-operational-genesis-proof-order.md)
+replaces the V1 operational genesis helper with a signed, non-authoritative
+network candidate and a separate completion requiring genuine DID2 proof plus
+an independent current monotonic clock. Directory issuance remains with the
+directory owner. This source/API candidate changes no wire and grants no
+production activation or permission to reset genesis, floors or node keys.
 
 ### Opaque DID2 mailbox issuance candidate
 
@@ -46,8 +65,8 @@ peer proof/NETCODEC/time verification releases the closed
 `VerifiedDeepIdV2PermanentContactResolveClosure`. Neither has a public result
 constructor or trust setter. The neutral node receipt transcript is unchanged;
 unsigned server time is not freshness. This is not consent, a claim/grant,
-account persistence or delivery. The old inactive DID1 consumer graph still
-requires retirement before activation; no fallback accepts its transcript.
+account persistence or delivery. The retired identity consumer producers are
+removed by DR-0069; no fallback accepts their transcript.
 DR-0042 corrects retained-route issuance-anchor semantics without public API or
 wire changes. Current peer/network authority, minimum checkpoint binding,
 threshold signatures and time bounds remain mandatory; new issuance still
@@ -88,15 +107,12 @@ target production surface.
 `Deep.Protocol.ProfileCarrier` retains its existing carrier surface and exact
 `Deep.Protocol` package dependency.
 
-`Deep.Protocol.ContactV1` contains the frozen, inactive CONTACT-CODEC parser
-and structural closure grammar. Ed25519 promotion is protocol-owned: no public
-signature callback or accept-all verifier can mint a bundle or route result.
-`VerifiedContactBundleClosure` additionally requires an unforgeable witnessed
-ADL1/ADH1 freshness capability, and route promotion requires a distinct
-`VerifiedContactRouteClosure` rooted in exact XNV1/XNH1/ADH1 witness authority
-and one trusted instant. These capability producers are deliberately not wired
-into the production composition, so `ContactCodec.RuntimeActivation` remains
-false and parsing does not authorize state mutation or emission.
+`Deep.Protocol.ContactV1` retains identity-neutral CONTACT-CODEC grammar and
+shared primitives used by current DID2 consumers. Old identity-bound bundle,
+route and network capability producers are removed. Current owned bundle and
+route promotion belong to `ContactV2` and require their independently verified
+DID2/device/directory/network authority. `ContactCodec.RuntimeActivation`
+remains false; neutral parsing does not authorize state mutation or emission.
 
 `Deep.Protocol.DeepExtension.PrivacyRouting` contains the implemented frozen
 ONION-01 XRF1/XRL1/XRE1/XPR1/XRS1 codec and deterministic conformance seam. Its

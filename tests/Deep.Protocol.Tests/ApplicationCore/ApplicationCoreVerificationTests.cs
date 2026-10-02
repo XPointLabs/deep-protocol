@@ -20,34 +20,19 @@ public sealed class ApplicationCoreVerificationTests
     {
         var decoders = typeof(ApplicationCoreCodec).GetMethods(BindingFlags.Public | BindingFlags.Static)
             .Where(method => method.Name.StartsWith("Decode", StringComparison.Ordinal))
-            .Where(method => method.Name is "DecodeDid1" or "DecodeDeepIdText" or "DecodeDab1" or
-                "DecodeDmd1" or "DecodeDca1" or "DecodeDao1" or "DecodeDmc2")
+            .Where(method => method.Name is "DecodeDmd1" or "DecodeDao1" or "DecodeDmc2")
             .ToArray();
 
         Assert.NotEmpty(decoders);
         Assert.All(decoders, method => Assert.StartsWith("Parsed", method.ReturnType.Name));
         Assert.Null(typeof(ParsedDmc2).GetProperty("Payload", BindingFlags.Public | BindingFlags.Instance));
         Assert.NotNull(typeof(VerifiedDmc2).GetProperty("Payload", BindingFlags.Public | BindingFlags.Instance));
-        Assert.Empty(typeof(VerifiedDab1).GetConstructors());
+        Assert.Empty(typeof(VerifiedDab2).GetConstructors());
         Assert.Empty(typeof(VerifiedDmd1).GetConstructors());
-        Assert.Empty(typeof(VerifiedDca1).GetConstructors());
+        Assert.Empty(typeof(VerifiedDca1V2).GetConstructors());
         Assert.Empty(typeof(VerifiedDmc2).GetConstructors());
         Assert.Empty(typeof(VerifiedDpe2Envelope).GetConstructors());
         Assert.Empty(typeof(Dpe2AuthenticationOutput).GetConstructors());
-    }
-
-    [Fact]
-    public void Verifier_ClosesDpaDrsDpdAndAllApplicationSignatures()
-    {
-        var fixture = VerifiedFixture.Create();
-        var binding = fixture.AuthorAndVerifyDab1(0, new byte[32]);
-        var directory = fixture.AuthorAndVerifyDmd1(1, new byte[32]);
-        var authorization = fixture.AuthorAndVerifyDca1(binding, directory);
-
-        Assert.Same(fixture.Identity, binding.Identity);
-        Assert.Same(fixture.Identity, directory.Identity);
-        Assert.Same(binding, authorization.Binding);
-        Assert.Same(directory, authorization.Directory);
     }
 
     [Fact]
@@ -880,7 +865,7 @@ public sealed class ApplicationCoreVerificationTests
             DeepIdV2ContactAuthorizationCodec.Decode(oldSuite));
         var oldBindingType = contact.CanonicalBytes.ToArray();
         BinaryPrimitives.WriteUInt16BigEndian(oldBindingType.AsSpan(435, 2),
-            ApplicationCoreCodec.Dab1ArtifactTypeCode);
+            (ushort)0x1001);
         Assert.Throws<ApplicationCoreFormatException>(() =>
             DeepIdV2ContactAuthorizationCodec.Decode(oldBindingType));
         Assert.Same(contactVerified,
@@ -893,7 +878,7 @@ public sealed class ApplicationCoreVerificationTests
                 dab2Reference), verified, directory));
         Assert.Throws<ArgumentException>(() => AuthorContact(contactSignature,
             did.RecordHash.Span, ApplicationCoreCodec.CreateArtifactReference(
-                ApplicationCoreCodec.Dab1ArtifactTypeCode, 339, valid.RecordHash.Span)));
+                (ushort)0x1001, 339, valid.RecordHash.Span)));
         AssertVerificationFailure(() =>
             DeepIdV2ContactAuthorizationCodec.RequireCurrentlyAuthoritative(contactVerified, 20));
 
@@ -1086,85 +1071,6 @@ public sealed class ApplicationCoreVerificationTests
     }
 
     [Fact]
-    public void Verifier_RejectsSignatureAndExactClosureSubstitutions()
-    {
-        var fixture = VerifiedFixture.Create();
-        var binding = fixture.AuthorAndVerifyDab1(0, new byte[32]);
-        var directory = fixture.AuthorAndVerifyDmd1(1, new byte[32]);
-
-        var badBindingBytes = binding.Record.CanonicalBytes.ToArray();
-        badBindingBytes[ApplicationCoreFixture.FieldOffset(badBindingBytes, 8)] ^= 0x01;
-        var badBinding = ApplicationCoreCodec.DecodeDab1(badBindingBytes);
-        AssertVerificationFailure(() => ApplicationCoreVerifier.VerifyDab1(
-            badBinding, fixture.DeepId, fixture.Identity, VerifiedFixture.DeploymentProfileId));
-
-        var emptyClosure = ApplicationCoreVerifier.CreateIdentityClosure(
-            fixture.Account, fixture.Revocations, []);
-        AssertVerificationFailure(() => ApplicationCoreVerifier.VerifyDmd1(directory.Record, emptyClosure));
-
-        var wrongPublisher = ApplicationCoreFixture.Bytes(32, 0xee);
-        var badAuthorization = fixture.AuthorDca1(binding, directory, wrongPublisher);
-        AssertVerificationFailure(() => ApplicationCoreVerifier.VerifyDca1(
-            badAuthorization, binding, directory));
-    }
-
-    [Fact]
-    public void Dab1Lineage_EnforcesSuccessorReplayAndPermanentForkLatch()
-    {
-        var fixture = VerifiedFixture.Create();
-        var genesis = fixture.AuthorAndVerifyDab1(0, new byte[32]);
-        var started = ApplicationCoreVerifier.StartDab1Lineage(genesis);
-        var successor = fixture.AuthorAndVerifyDab1(1, genesis.Record.RecordHash.Span);
-        var accepted = ApplicationCoreVerifier.PrepareDab1Transition(started.Next, successor);
-
-        Assert.Equal(ApplicationLineageDisposition.AcceptedSuccessor, accepted.Disposition);
-        Assert.Equal(ApplicationLineageDisposition.ExactReplay,
-            ApplicationCoreVerifier.PrepareDab1Transition(accepted.Next, successor).Disposition);
-
-        var alternate = VerifiedFixture.Create(fixture.AddressKey, accountValue: 0x91, deviceValue: 0x92);
-        var conflicting = alternate.AuthorAndVerifyDab1(1, genesis.Record.RecordHash.Span);
-        var fork = ApplicationCoreVerifier.PrepareDab1Transition(accepted.Next, conflicting);
-        Assert.Equal(ApplicationLineageDisposition.ForkLatched, fork.Disposition);
-        Assert.True(fork.Next.ForkLatched);
-        Assert.Equal(ApplicationCoreRejection.InvalidLineage,
-            Assert.Throws<ApplicationCoreFormatException>(() =>
-                ApplicationCoreVerifier.PrepareDab1Transition(fork.Next, successor)).Rejection);
-    }
-
-    [Fact]
-    public void Dab1Lineage_RejectsCrossDidSuccessorAndSameGenerationFork()
-    {
-        var owner = VerifiedFixture.Create();
-        var genesis = owner.AuthorAndVerifyDab1(0, new byte[32]);
-        var ownerSuccessor = owner.AuthorAndVerifyDab1(1, genesis.Record.RecordHash.Span);
-        var otherDid = VerifiedFixture.Create(accountValue: 0x91, deviceValue: 0x92);
-        var crossDidSuccessor = otherDid.AuthorAndVerifyDab1(1, genesis.Record.RecordHash.Span);
-
-        var started = ApplicationCoreVerifier.StartDab1Lineage(genesis);
-        AssertLineageFailure(() =>
-            ApplicationCoreVerifier.PrepareDab1Transition(started.Next, crossDidSuccessor));
-
-        var accepted = ApplicationCoreVerifier.PrepareDab1Transition(started.Next, ownerSuccessor);
-        var crossDidSameGeneration = otherDid.AuthorAndVerifyDab1(
-            ownerSuccessor.Record.BindingGeneration,
-            ownerSuccessor.Record.PredecessorDab1Hash.Span);
-        AssertLineageFailure(() =>
-            ApplicationCoreVerifier.PrepareDab1Transition(accepted.Next, crossDidSameGeneration));
-    }
-
-    [Fact]
-    public void Dab1Lineage_MaxGenerationRejectsCanonicallyWithoutOverflow()
-    {
-        var fixture = VerifiedFixture.Create();
-        var maxHead = fixture.AuthorAndVerifyDab1(ulong.MaxValue, ApplicationCoreFixture.Bytes(32, 0x71));
-        var wrappedCandidate = fixture.AuthorAndVerifyDab1(0, new byte[32]);
-        var state = new Dab1LineageState(maxHead, forkLatched: false);
-
-        AssertLineageFailure(() =>
-            ApplicationCoreVerifier.PrepareDab1Transition(state, wrappedCandidate));
-    }
-
-    [Fact]
     public void Dmd1Lineage_EnforcesSuccessorReplayAndPermanentForkLatch()
     {
         var fixture = VerifiedFixture.Create();
@@ -1216,24 +1122,6 @@ public sealed class ApplicationCoreVerificationTests
         }
     }
 
-    [Fact]
-    public void Dca1_CurrentAuthorityRequiresTrustedTimeInsideHalfOpenWindow()
-    {
-        var fixture = VerifiedFixture.Create();
-        var binding = fixture.AuthorAndVerifyDab1(0, new byte[32]);
-        var directory = fixture.AuthorAndVerifyDmd1(1, new byte[32]);
-        var verified = fixture.AuthorAndVerifyDca1(binding, directory);
-
-        Assert.Equal(10UL,
-            ApplicationCoreVerifier.RequireDca1CurrentlyAuthoritative(verified, 10).TrustedUnixSeconds);
-        Assert.Equal(19UL,
-            ApplicationCoreVerifier.RequireDca1CurrentlyAuthoritative(verified, 19).TrustedUnixSeconds);
-        AssertVerificationFailure(() =>
-            ApplicationCoreVerifier.RequireDca1CurrentlyAuthoritative(verified, 9));
-        AssertVerificationFailure(() =>
-            ApplicationCoreVerifier.RequireDca1CurrentlyAuthoritative(verified, 20));
-    }
-
     private static void AssertLineageFailure(Action action)
     {
         var exception = Assert.Throws<ApplicationCoreFormatException>(action);
@@ -1260,8 +1148,7 @@ public sealed class ApplicationCoreVerificationTests
             KeyPair deviceKey,
             VerifiedAccount account,
             VerifiedRevocationState revocations,
-            VerifiedApplicationIdentityClosure identity,
-            ParsedDid1 deepId)
+            VerifiedApplicationIdentityClosure identity)
         {
             Network = network;
             AccountId = accountId;
@@ -1273,7 +1160,6 @@ public sealed class ApplicationCoreVerificationTests
             Account = account;
             Revocations = revocations;
             Identity = identity;
-            DeepId = deepId;
         }
 
         internal const ushort DeploymentProfileId = 7;
@@ -1287,7 +1173,6 @@ public sealed class ApplicationCoreVerificationTests
         internal VerifiedAccount Account { get; }
         internal VerifiedRevocationState Revocations { get; }
         internal VerifiedApplicationIdentityClosure Identity { get; }
-        internal ParsedDid1 DeepId { get; }
 
         internal static VerifiedFixture Create(
             KeyPair? existingAddressKey = null,
@@ -1348,27 +1233,8 @@ public sealed class ApplicationCoreVerificationTests
             var device = new VerifiedDevice(certificateDevice, revocations,
                 new X25519Possession(X25519PossessionRole.Device, dpdFields[20].Span));
             var identity = ApplicationCoreVerifier.CreateIdentityClosure(account, revocations, [device]);
-            var deepId = ApplicationCoreCodec.AuthorDid1(addressKey.PublicKey,
-                ApplicationCoreFixture.Bytes(16, 0x66));
             return new VerifiedFixture(network, accountId, deviceId, addressKey, accountKey,
-                deviceIssuerKey, deviceEd, account, revocations, identity, deepId);
-        }
-
-        internal VerifiedDab1 AuthorAndVerifyDab1(
-            ulong generation,
-            ReadOnlySpan<byte> predecessor)
-        {
-            var realm = ApplicationCoreCodec.DeriveIdentityRealmId(Network, DeploymentProfileId);
-            var dpa = Ref(Account.Certificate);
-            var unsigned = ApplicationCoreCodec.AuthorDab1(DeepId.RecordHash.Span, realm.Span,
-                generation, predecessor, AccountId, 1, dpa, new byte[64], new byte[64]);
-            var addressSignature = PublicKeyAuth.SignDetached(
-                unsigned.AddressSignatureInput.ToArray(), AddressKey.PrivateKey);
-            var accountSignature = PublicKeyAuth.SignDetached(
-                unsigned.AccountSignatureInput.ToArray(), AccountKey.PrivateKey);
-            var parsed = ApplicationCoreCodec.AuthorDab1(DeepId.RecordHash.Span, realm.Span,
-                generation, predecessor, AccountId, 1, dpa, addressSignature, accountSignature);
-            return ApplicationCoreVerifier.VerifyDab1(parsed, DeepId, Identity, DeploymentProfileId);
+                deviceIssuerKey, deviceEd, account, revocations, identity);
         }
 
         internal VerifiedDmd1 AuthorAndVerifyDmd1(
@@ -1386,31 +1252,6 @@ public sealed class ApplicationCoreVerificationTests
                 Ref(Account.Certificate), Ref(Revocations.Snapshot), generation, predecessor,
                 [entry], issuedAt, signature);
             return ApplicationCoreVerifier.VerifyDmd1(parsed, Identity);
-        }
-
-        internal VerifiedDca1 AuthorAndVerifyDca1(VerifiedDab1 binding, VerifiedDmd1 directory) =>
-            ApplicationCoreVerifier.VerifyDca1(
-                AuthorDca1(binding, directory, DeviceId), binding, directory);
-
-        internal ParsedDca1 AuthorDca1(
-            VerifiedDab1 binding,
-            VerifiedDmd1 directory,
-            ReadOnlySpan<byte> publisher)
-        {
-            var dabReference = ApplicationCoreCodec.CreateArtifactReference(
-                ApplicationCoreCodec.Dab1ArtifactTypeCode,
-                checked((uint)binding.Record.CanonicalBytes.Length),
-                binding.Record.RecordHash.Span);
-            var unsigned = ApplicationCoreCodec.AuthorDca1(Network, AccountId, Ref(Account.Certificate),
-                directory.Record.DirectoryGeneration, directory.Record.RecordHash.Span,
-                ApplicationCoreFixture.Bytes(32, 0x77), publisher, 3, 100, 10, 20,
-                new byte[64], DeepId.RecordHash.Span, dabReference);
-            var signature = PublicKeyAuth.SignDetached(
-                unsigned.SignatureInput.ToArray(), AccountKey.PrivateKey);
-            return ApplicationCoreCodec.AuthorDca1(Network, AccountId, Ref(Account.Certificate),
-                directory.Record.DirectoryGeneration, directory.Record.RecordHash.Span,
-                ApplicationCoreFixture.Bytes(32, 0x77), publisher, 3, 100, 10, 20,
-                signature, DeepId.RecordHash.Span, dabReference);
         }
 
         private static ApplicationArtifactReference Ref(CanonicalIdentityArtifact artifact) =>

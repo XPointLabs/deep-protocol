@@ -90,7 +90,7 @@ public sealed class ParsedDab2 : ParsedApplicationCoreRecord
 }
 
 /// <summary>
-/// Closed DID2/DAB2 shape. This codec never interprets retired DID1/DAB1
+/// Closed DID2/DAB2 shape. This codec never interprets retired identity
 /// records; cryptographic promotion requires the separate root verifier.
 /// </summary>
 public static class DeepIdV2Codec

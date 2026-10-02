@@ -5,7 +5,7 @@ using System.Text;
 using Deep.Protocol.AccountDirectoryV1;
 using Deep.Protocol.ApplicationCore;
 using Deep.Protocol.Identity;
-using Deep.Protocol.Tests.ContactV1;
+using Deep.Protocol.Tests.AccountDirectoryV1;
 using Sodium;
 
 namespace Deep.Protocol.Tests.Identity;
@@ -20,7 +20,7 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
         if (!(OperatingSystem.IsWindows() || OperatingSystem.IsLinux()) ||
             RuntimeInformation.ProcessArchitecture is not (Architecture.X64 or Architecture.Arm64))
             return;
-        var network = ContactNetworkAuthorityVerifierTests.Fixture.Create();
+        var network = AccountDirectoryFreshnessVerificationTests.CreateNetworkFixture();
         using var phrase = DeepRecoveryV1.VerifyCanonicalUtf8(
             Encoding.ASCII.GetBytes(Mnemonic));
         using var recovery = DeepRecoveryV1.DeriveAccountCapabilities(
@@ -81,9 +81,8 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
         Assert.Equal(checkpoint.Checkpoint.CanonicalBytes.ToArray(),
             authoredPresent.ExactCurrentAdc1V2.ToArray());
         Assert.Empty(authoredPresent.RevokedDcaAuthorizationIds);
-        Assert.Throws<AccountDirectoryAdp1FormatException>(() =>
-            AccountDirectoryAdp1Codec.Decode(
-                authoredPresent.CanonicalBytes.Span));
+        Assert.DoesNotContain(typeof(AccountDirectoryAdp1Codec).GetMethods(),
+            method => method.Name == "Decode");
         var substitutedDid = authoredPresent.CanonicalBytes.ToArray();
         substitutedDid[V2FieldOffset(substitutedDid, 17) + 100] ^= 1;
         Assert.Throws<AccountDirectoryAdp1FormatException>(() =>
@@ -159,7 +158,7 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
         if (!(OperatingSystem.IsWindows() || OperatingSystem.IsLinux()) ||
             RuntimeInformation.ProcessArchitecture is not (Architecture.X64 or Architecture.Arm64))
             return;
-        var network = ContactNetworkAuthorityVerifierTests.Fixture.Create();
+        var network = AccountDirectoryFreshnessVerificationTests.CreateNetworkFixture();
         var first = await Did2Checkpoint(Mnemonic, network.Network);
         var second = await Did2Checkpoint(OtherMnemonic, network.Network);
         var signers = network.Witnesses.Take(2).Select(static witness =>
@@ -223,7 +222,7 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
     }
 
     private static AccountDirectoryProtectedLkg Did2DirectoryGenesisHead(
-        ContactNetworkAuthorityVerifierTests.Fixture fixture,
+        AccountDirectoryFreshnessVerificationTests.NetworkFixture fixture,
         ushort minimumReader = 2)
     {
         var witnesses = fixture.Witnesses.Take(2).ToArray();
@@ -261,7 +260,7 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
     }
 
     private sealed class Did2WitnessSigner(
-        ContactCodecSecurityTests.CryptoDcrFixture.Witness witness) :
+        AccountDirectoryFreshnessVerificationTests.Witness witness) :
         IAccountDirectoryAdh1WitnessSigner
     {
         public ReadOnlyMemory<byte> WitnessId => witness.Id.ToArray();

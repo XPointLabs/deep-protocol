@@ -6,36 +6,6 @@ namespace Deep.Protocol.Tests.ApplicationCore;
 
 public sealed class ApplicationCoreGoldenTests
 {
-    [Fact]
-    public void Did1_MatchesIndependentCanonicalAndTextGolden()
-    {
-        var record = ApplicationCoreCodec.AuthorDid1(
-            ApplicationCoreFixture.Bytes(32, 0x11), ApplicationCoreFixture.Bytes(16, 0x22));
-
-        Assert.Equal(
-            "4449443100010201000200000001000000000020" + new string('1', 64) +
-            "0002000000000010" + new string('2', 32),
-            Convert.ToHexString(record.CanonicalBytes.Span));
-        Assert.Equal(
-            "deep1qyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zg3zyg3zyg3zyg3zyg3zyg3zygshqyzd0",
-            record.Text);
-        Assert.Equal("81C4C3A115E513AF83CA9343E4AD4A29557427C1EC9726EF01B9F4238FD3AB58",
-            Convert.ToHexString(record.RecordHash.Span));
-    }
-
-    [Fact]
-    public void Dab1_MatchesIndependentRecordAndProjectionGoldens()
-    {
-        var record = ApplicationCoreCodec.AuthorDab1(
-            ApplicationCoreFixture.Bytes(32, 0x11), ApplicationCoreFixture.Bytes(32, 0x12),
-            0, new byte[32], ApplicationCoreFixture.Bytes(32, 0x13), 1,
-            ApplicationCoreFixture.Reference((ushort)ArtifactType.Dpa1, 644, 0x14),
-            ApplicationCoreFixture.Bytes(64, 0x15), ApplicationCoreFixture.Bytes(64, 0x16));
-
-        AssertGolden(record, "AB7E5646D100E52914A9FCD0AFA01B8FFC1684EFADFB89F75AFC446122DCA1CA");
-        Assert.Equal("945815952BA32ED68AF407E8FB85BD909B22429551DD09CBD68D0740C93A00A1",
-            RawHash(record.UnsignedCanonicalBytes.Span));
-    }
 
     [Fact]
     public void Dmd1_MatchesIndependentRecordAndProjectionGoldens()
@@ -56,22 +26,6 @@ public sealed class ApplicationCoreGoldenTests
         AssertGolden(record, "CA1D55C805F4FD3D48B0745BA2366A1378EF934AD6B29386C203F65B4A48CDD1");
         Assert.Equal("43AD9F83DC255E90EC6928229DCBBF7F2209009F26F54494822F8EAC76E73D44",
             RawHash(record.UnsignedCanonicalBytes.Span));
-    }
-
-    [Fact]
-    public void Dca1_MatchesIndependentRecordAndProjectionGoldens()
-    {
-        var record = ApplicationCoreCodec.AuthorDca1(
-            ApplicationCoreFixture.Bytes(16, 0x11), ApplicationCoreFixture.Bytes(32, 0x12),
-            ApplicationCoreFixture.Reference((ushort)ArtifactType.Dpa1, 644, 0x13), 1,
-            ApplicationCoreFixture.Bytes(32, 0x14), ApplicationCoreFixture.Bytes(32, 0x15),
-            ApplicationCoreFixture.Bytes(32, 0x16), 3, 100, 10, 20,
-            ApplicationCoreFixture.Bytes(64, 0x17), ApplicationCoreFixture.Bytes(32, 0x18),
-            ApplicationCoreFixture.Reference(ApplicationCoreCodec.Dab1ArtifactTypeCode, 394, 0x19));
-
-        AssertGolden(record, "020F3006D97556822CDE1ED6DB8D16F9F5A2D4725074B59111D365DB70999036");
-        Assert.Equal("319290CE33A4409F6C270686C94C5DDF4AF270B5EB92DD4BF76AF9CFA6ACE8DE",
-            RawHash(record.SigningProjection.Span));
     }
 
     [Fact]

@@ -5,11 +5,7 @@ namespace Deep.Protocol.ApplicationCore;
 
 public static partial class ApplicationCoreCodec
 {
-    public const ushort Dab1ArtifactTypeCode = 0x1001;
-    private static ReadOnlySpan<byte> DidMagic => ProtocolMagicBytes.DID1;
-    private static ReadOnlySpan<byte> DabMagic => ProtocolMagicBytes.DAB1;
     private static ReadOnlySpan<byte> DmdMagic => ProtocolMagicBytes.DMD1;
-    private static ReadOnlySpan<byte> DcaMagic => ProtocolMagicBytes.DCA1;
     private static ReadOnlySpan<byte> DaoMagic => ProtocolMagicBytes.DAO1;
     private static readonly int[] DaoTotals =
     [
@@ -17,107 +13,6 @@ public static partial class ApplicationCoreCodec
         20477, 33397, 33493, 33557, 34357, 34549, 36861, 49765, 49861, 49925,
         50725, 50917,
     ];
-
-    public static ParsedDid1 DecodeDid1(ReadOnlySpan<byte> canonical)
-    {
-        Span<ApplicationFieldSlice> fields = stackalloc ApplicationFieldSlice[2];
-        ApplicationCoreFormat.Preflight(canonical, DidMagic, 2, 76, 76, fields);
-        ApplicationCoreFormat.ExactLength(fields, 1, 32);
-        ApplicationCoreFormat.ExactLength(fields, 2, 16);
-        ApplicationCoreFormat.NonZero(ApplicationCoreFormat.Field(canonical, fields, 1), "DID1 address public key");
-        ApplicationCoreFormat.NonZero(ApplicationCoreFormat.Field(canonical, fields, 2), "DID1 resolver read capability");
-
-        var owned = canonical.ToArray();
-        return new ParsedDid1(owned, Field(owned, fields, 1), Field(owned, fields, 2));
-    }
-
-    public static ParsedDid1 AuthorDid1(ReadOnlySpan<byte> addressPublicKey32, ReadOnlySpan<byte> resolverReadCapability16)
-    {
-        RequireLength(addressPublicKey32, 32, "address public key");
-        RequireLength(resolverReadCapability16, 16, "resolver read capability");
-        var canonical = AllocateRecord(2, addressPublicKey32.Length + resolverReadCapability16.Length);
-        var writer = new ApplicationRecordWriter(canonical, DidMagic, 2);
-        writer.Write(1, addressPublicKey32);
-        writer.Write(2, resolverReadCapability16);
-        writer.Complete();
-        return DecodeDid1(canonical);
-    }
-
-    public static ParsedDid1 DecodeDeepIdText(string text)
-    {
-        ArgumentNullException.ThrowIfNull(text);
-        var payload = DeepIdText.Decode(text);
-        return AuthorDid1(payload.AsSpan(1, 32), payload.AsSpan(33, 16));
-    }
-
-    public static ParsedDab1 DecodeDab1(ReadOnlySpan<byte> canonical)
-    {
-        Span<ApplicationFieldSlice> fields = stackalloc ApplicationFieldSlice[9];
-        ApplicationCoreFormat.Preflight(canonical, DabMagic, 9, 394, 394, fields);
-        Exact(fields, 32, 32, 8, 32, 32, 8, 38, 64, 64);
-        var didHash = Field(canonical, fields, 1);
-        var realm = Field(canonical, fields, 2);
-        var generation = U64(Field(canonical, fields, 3));
-        var predecessor = Field(canonical, fields, 4);
-        var account = Field(canonical, fields, 5);
-        var accountGeneration = U64(Field(canonical, fields, 6));
-        ApplicationCoreFormat.NonZero(didHash, "DAB1 DID hash");
-        ApplicationCoreFormat.NonZero(realm, "DAB1 identity realm");
-        ApplicationCoreFormat.NonZero(account, "DAB1 account ID");
-        if (accountGeneration == 0)
-            Invalid(ApplicationCoreRejection.InvalidGeneration, "DAB1 account generation starts at one.");
-        ValidatePredecessor(generation, predecessor, zeroGeneration: 0, ProtocolMagic.DAB1);
-        ValidateReference(Field(canonical, fields, 7), 1, 644, 644, ProtocolMagic.DPA1);
-
-        var owned = canonical.ToArray();
-        var dpa = ParseReference(Field(owned, fields, 7), 1, 644, 644, ProtocolMagic.DPA1);
-        var unsigned = Projection(DabMagic, owned, fields, [1, 2, 3, 4, 5, 6, 7]);
-        if (unsigned.Length != 250)
-            throw new InvalidOperationException("The frozen DAB1 projection size is inconsistent.");
-        return new ParsedDab1(owned, Field(owned, fields, 1), Field(owned, fields, 2), generation,
-            Field(owned, fields, 4), Field(owned, fields, 5), accountGeneration, dpa,
-            Field(owned, fields, 8), Field(owned, fields, 9), unsigned);
-    }
-
-    public static ParsedDab1 AuthorDab1(
-        ReadOnlySpan<byte> exactDid1Hash32,
-        ReadOnlySpan<byte> identityRealmId32,
-        ulong bindingGeneration,
-        ReadOnlySpan<byte> predecessorDab1Hash32,
-        ReadOnlySpan<byte> deepAccountId32,
-        ulong accountGeneration,
-        ApplicationArtifactReference exactDpa1Reference,
-        ReadOnlySpan<byte> addressSignature64,
-        ReadOnlySpan<byte> accountSignature64)
-    {
-        RequireLength(exactDid1Hash32, 32, "DID1 hash");
-        RequireLength(identityRealmId32, 32, "identity realm");
-        RequireLength(predecessorDab1Hash32, 32, "DAB1 predecessor");
-        RequireLength(deepAccountId32, 32, "account ID");
-        RequireReference(exactDpa1Reference, 1, 644, 644, ProtocolMagic.DPA1);
-        RequireLength(addressSignature64, 64, "address signature");
-        RequireLength(accountSignature64, 64, "account signature");
-        Span<byte> bindingGenerationBytes = stackalloc byte[8];
-        Span<byte> accountGenerationBytes = stackalloc byte[8];
-        BinaryPrimitives.WriteUInt64BigEndian(bindingGenerationBytes, bindingGeneration);
-        BinaryPrimitives.WriteUInt64BigEndian(accountGenerationBytes, accountGeneration);
-        var dpaReference = exactDpa1Reference.CanonicalBytes;
-        var canonical = AllocateRecord(9, exactDid1Hash32.Length + identityRealmId32.Length +
-            bindingGenerationBytes.Length + predecessorDab1Hash32.Length + deepAccountId32.Length +
-            accountGenerationBytes.Length + dpaReference.Length + addressSignature64.Length + accountSignature64.Length);
-        var writer = new ApplicationRecordWriter(canonical, DabMagic, 9);
-        writer.Write(1, exactDid1Hash32);
-        writer.Write(2, identityRealmId32);
-        writer.Write(3, bindingGenerationBytes);
-        writer.Write(4, predecessorDab1Hash32);
-        writer.Write(5, deepAccountId32);
-        writer.Write(6, accountGenerationBytes);
-        writer.Write(7, dpaReference.Span);
-        writer.Write(8, addressSignature64);
-        writer.Write(9, accountSignature64);
-        writer.Complete();
-        return DecodeDab1(canonical);
-    }
 
     public static ParsedDmd1 DecodeDmd1(ReadOnlySpan<byte> canonical)
     {
@@ -233,103 +128,6 @@ public static partial class ApplicationCoreCodec
         return DecodeDmd1(canonical);
     }
 
-    public static ParsedDca1 DecodeDca1(ReadOnlySpan<byte> canonical)
-    {
-        Span<ApplicationFieldSlice> fields = stackalloc ApplicationFieldSlice[14];
-        ApplicationCoreFormat.Preflight(canonical, DcaMagic, 14, 473, 473, fields);
-        Exact(fields, 16, 32, 38, 8, 32, 32, 32, 1, 8, 8, 8, 64, 32, 38);
-        var account = Field(canonical, fields, 2);
-        var dmdGeneration = U64(Field(canonical, fields, 4));
-        var mask = Field(canonical, fields, 8)[0];
-        var notBefore = U64(Field(canonical, fields, 10));
-        var expiresAt = U64(Field(canonical, fields, 11));
-        ApplicationCoreFormat.NonZero(Field(canonical, fields, 1), "DCA1 network ID");
-        ApplicationCoreFormat.NonZero(account, "DCA1 account ID");
-        ApplicationCoreFormat.NonZero(Field(canonical, fields, 5), "DCA1 DMD1 hash");
-        ApplicationCoreFormat.NonZero(Field(canonical, fields, 6), "DCA1 authorization ID");
-        ApplicationCoreFormat.NonZero(Field(canonical, fields, 7), "DCA1 publisher device ID");
-        ApplicationCoreFormat.NonZero(Field(canonical, fields, 13), "DCA1 DID1 hash");
-        if (dmdGeneration == 0)
-            Invalid(ApplicationCoreRejection.InvalidGeneration, "DCA1 DMD1 generation starts at one.");
-        if (mask == 0 || (mask & ~0x03) != 0)
-            Invalid(ApplicationCoreRejection.InvalidFlags, "DCA1 invite-kind mask is empty or contains unknown bits.");
-        if (expiresAt == 0 || expiresAt <= notBefore)
-            Invalid(ApplicationCoreRejection.InvalidTimeRange, "DCA1 expiry must be after not-before.");
-        ValidateReference(Field(canonical, fields, 3), 1, 644, 644, ProtocolMagic.DPA1);
-        ValidateReference(Field(canonical, fields, 14), Dab1ArtifactTypeCode, 394, 394, ProtocolMagic.DAB1);
-
-        var owned = canonical.ToArray();
-        var dpa = ParseReference(Field(owned, fields, 3), 1, 644, 644, ProtocolMagic.DPA1);
-        var dab = ParseReference(Field(owned, fields, 14), Dab1ArtifactTypeCode, 394, 394, ProtocolMagic.DAB1);
-        var projection = Projection(DcaMagic, owned, fields, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14]);
-        if (projection.Length != 401)
-            throw new InvalidOperationException("The frozen DCA1 projection size is inconsistent.");
-        return new ParsedDca1(owned, Field(owned, fields, 1), Field(owned, fields, 2),
-            dpa, dmdGeneration, Field(owned, fields, 5), Field(owned, fields, 6),
-            Field(owned, fields, 7), mask, U64(Field(owned, fields, 9)), notBefore, expiresAt,
-            Field(owned, fields, 12), Field(owned, fields, 13), dab, projection);
-    }
-
-    public static ParsedDca1 AuthorDca1(
-        ReadOnlySpan<byte> networkId16,
-        ReadOnlySpan<byte> deepAccountId32,
-        ApplicationArtifactReference exactDpa1Reference,
-        ulong authorizedDmd1Generation,
-        ReadOnlySpan<byte> authorizedDmd1Hash32,
-        ReadOnlySpan<byte> authorizationId32,
-        ReadOnlySpan<byte> publisherDeviceId32,
-        byte allowedInviteKindMask,
-        ulong maximumBundleGeneration,
-        ulong notBeforeUnixSeconds,
-        ulong expiresAtUnixSeconds,
-        ReadOnlySpan<byte> accountSignature64,
-        ReadOnlySpan<byte> exactDid1Hash32,
-        ApplicationArtifactReference exactCurrentDab1Reference)
-    {
-        RequireLength(networkId16, 16, "network ID");
-        RequireLength(deepAccountId32, 32, "account ID");
-        RequireReference(exactDpa1Reference, 1, 644, 644, ProtocolMagic.DPA1);
-        RequireLength(authorizedDmd1Hash32, 32, "DMD1 hash");
-        RequireLength(authorizationId32, 32, "authorization ID");
-        RequireLength(publisherDeviceId32, 32, "publisher device ID");
-        RequireLength(accountSignature64, 64, "account signature");
-        RequireLength(exactDid1Hash32, 32, "DID1 hash");
-        RequireReference(exactCurrentDab1Reference, null, 394, 394, ProtocolMagic.DAB1);
-        Span<byte> dmdGenerationBytes = stackalloc byte[8];
-        Span<byte> inviteKindMaskBytes = stackalloc byte[1];
-        Span<byte> maximumBundleGenerationBytes = stackalloc byte[8];
-        Span<byte> notBeforeBytes = stackalloc byte[8];
-        Span<byte> expiresAtBytes = stackalloc byte[8];
-        BinaryPrimitives.WriteUInt64BigEndian(dmdGenerationBytes, authorizedDmd1Generation);
-        inviteKindMaskBytes[0] = allowedInviteKindMask;
-        BinaryPrimitives.WriteUInt64BigEndian(maximumBundleGenerationBytes, maximumBundleGeneration);
-        BinaryPrimitives.WriteUInt64BigEndian(notBeforeBytes, notBeforeUnixSeconds);
-        BinaryPrimitives.WriteUInt64BigEndian(expiresAtBytes, expiresAtUnixSeconds);
-        var dpaReference = exactDpa1Reference.CanonicalBytes;
-        var dabReference = exactCurrentDab1Reference.CanonicalBytes;
-        var canonical = AllocateRecord(14, networkId16.Length + deepAccountId32.Length + dpaReference.Length +
-            dmdGenerationBytes.Length + authorizedDmd1Hash32.Length + authorizationId32.Length +
-            publisherDeviceId32.Length + inviteKindMaskBytes.Length + maximumBundleGenerationBytes.Length +
-            notBeforeBytes.Length + expiresAtBytes.Length + accountSignature64.Length + exactDid1Hash32.Length + dabReference.Length);
-        var writer = new ApplicationRecordWriter(canonical, DcaMagic, 14);
-        writer.Write(1, networkId16);
-        writer.Write(2, deepAccountId32);
-        writer.Write(3, dpaReference.Span);
-        writer.Write(4, dmdGenerationBytes);
-        writer.Write(5, authorizedDmd1Hash32);
-        writer.Write(6, authorizationId32);
-        writer.Write(7, publisherDeviceId32);
-        writer.Write(8, inviteKindMaskBytes);
-        writer.Write(9, maximumBundleGenerationBytes);
-        writer.Write(10, notBeforeBytes);
-        writer.Write(11, expiresAtBytes);
-        writer.Write(12, accountSignature64);
-        writer.Write(13, exactDid1Hash32);
-        writer.Write(14, dabReference.Span);
-        writer.Complete();
-        return DecodeDca1(canonical);
-    }
-
     public static ParsedDao1 DecodeDao1(ReadOnlySpan<byte> canonical)
     {
         if (Array.BinarySearch(DaoTotals, canonical.Length) < 0)
@@ -395,15 +193,6 @@ public static partial class ApplicationCoreCodec
             ApplicationCoreFormat.IsZero(canonicalHash32))
             Invalid(ApplicationCoreRejection.InvalidReference, "An artifact reference must be nonzero and exact.");
         return new ApplicationArtifactReference(typeCode, canonicalLength, canonicalHash32);
-    }
-
-    public static ApplicationArtifactReference CreateDab1ArtifactReference(ParsedDab1 binding)
-    {
-        ArgumentNullException.ThrowIfNull(binding);
-        return new ApplicationArtifactReference(
-            Dab1ArtifactTypeCode,
-            checked((uint)binding.CanonicalBytes.Length),
-            binding.RecordHash.Span);
     }
 
     public static ReadOnlyMemory<byte> DeriveIdentityRealmId(ReadOnlySpan<byte> networkId16, ushort deploymentProfileId)

@@ -107,41 +107,12 @@ public sealed class ApplicationCoreBoundaryTests
 
         AssertZero(() => ApplicationCoreCodec.DeriveIdentityRealmId(zero, 1));
         AssertZero(() => ApplicationCoreFixture.Directory(zero, account, OrderedId(1)));
-        AssertZero(() => ApplicationCoreCodec.AuthorDca1(
-            zero, account,
-            ApplicationCoreFixture.Reference((ushort)ArtifactType.Dpa1, 644, 0x13),
-            1, OrderedId(2), OrderedId(3), OrderedId(4), 1, 1, 10, 20,
-            ApplicationCoreFixture.Bytes(64, 0x15), OrderedId(5),
-            ApplicationCoreFixture.Reference(ApplicationCoreCodec.Dab1ArtifactTypeCode, 394, 0x16)));
         AssertZero(() => ApplicationCoreCodec.AuthorDao1(
             zero, OrderedId(1), OrderedId(2), OrderedId(3),
             ApplicationCoreFixture.Bytes(24, 0x17), ApplicationCoreFixture.Bytes(4529, 0x18)));
         AssertZero(() => ApplicationCoreCodec.AuthorDmc2(
             zero, OrderedId(1), OrderedId(2), OrderedId(3), OrderedId(4),
             1, 1, 0, Dmc2Flags.None, [], payload));
-    }
-
-    [Fact]
-    public void Dca1RejectsUnallocatedDab1ArtifactTypeBeforeVerification()
-    {
-        var exception = Assert.Throws<ApplicationCoreFormatException>(() =>
-            ApplicationCoreCodec.AuthorDca1(
-                ApplicationCoreFixture.Bytes(16, 0x11),
-                ApplicationCoreFixture.Bytes(32, 0x12),
-                ApplicationCoreFixture.Reference((ushort)ArtifactType.Dpa1, 644, 0x13),
-                1,
-                OrderedId(2),
-                OrderedId(3),
-                OrderedId(4),
-                1,
-                1,
-                10,
-                20,
-                ApplicationCoreFixture.Bytes(64, 0x15),
-                OrderedId(5),
-                ApplicationCoreFixture.Reference(0x1002, 394, 0x16)));
-
-        Assert.Equal(ApplicationCoreRejection.InvalidReference, exception.Rejection);
     }
 
     private static ParsedDmd1 AuthorDirectory(

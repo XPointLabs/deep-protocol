@@ -19,9 +19,9 @@ public sealed class ContactCodecTests
         var manifest = File.ReadAllBytes(FindSpec("contact-codec-v1.vectors.json"));
         var canonicalManifest = System.Text.Encoding.UTF8.GetBytes(
             System.Text.Encoding.UTF8.GetString(manifest).Replace("\r\n", "\n", StringComparison.Ordinal));
-        Assert.Equal("0e7d9d6c772c845cd23b87e9eefe3c59ac3348599d12899fff5c1392560c15b4", Convert.ToHexString(SHA256.HashData(canonicalManifest)).ToLowerInvariant());
+        Assert.Equal("af5abbb0f5a680320e0a4f2a5813e8de3c3364fb9c678ea724cc9a65fa2a1b83", Convert.ToHexString(SHA256.HashData(canonicalManifest)).ToLowerInvariant());
         using var anchor = JsonDocument.Parse(File.ReadAllBytes(FindSpec("contact-codec-v1.vectors.anchor.json")));
-        Assert.Equal("0e7d9d6c772c845cd23b87e9eefe3c59ac3348599d12899fff5c1392560c15b4", anchor.RootElement.GetProperty("sha256").GetString());
+        Assert.Equal("af5abbb0f5a680320e0a4f2a5813e8de3c3364fb9c678ea724cc9a65fa2a1b83", anchor.RootElement.GetProperty("sha256").GetString());
         using var document = JsonDocument.Parse(manifest);
         Assert.Equal("FROZEN_TARGET_NOT_ACTIVE", document.RootElement.GetProperty("status").GetString());
         Assert.False(ContactCodec.RuntimeActivation);
@@ -40,8 +40,6 @@ public sealed class ContactCodecTests
                 "xrc1-core-projection" => Records.Xrc.SigningProjection,
                 "xss1-core-projection" => Records.Xss.SigningProjection,
                 "xrr1-core-projection" => Records.Xrr.SigningProjection,
-                "dcb1-signature-projection" => Records.Dcb.SigningProjection,
-                "dcr1-closure-grammar" => Records.Dcr.CanonicalBytes,
                 "dia1-canonical-grammar" => Records.Dia.CanonicalBytes,
                 "dmc2-contact-hello" => ContactFixtures.Hello.CanonicalBytes,
                 "dmc2-contact-accept" => ContactFixtures.Accept.CanonicalBytes,
@@ -291,23 +289,6 @@ public sealed class ContactCodecTests
     }
 
     [Fact]
-    public void ExactXpsAndDpdDirectoryCorrespondenceRejectMutatedCanonicalBytes()
-    {
-        var invalidXps = Records.Dcb.CanonicalBytes.ToArray();
-        invalidXps[FieldOffset(invalidXps, 12) + 5] ^= 1;
-        var xpsError = Assert.Throws<ContactFormatException>(() => ContactCodec.Decode(invalidXps));
-        Assert.Equal(ContactValidationStage.Derived, xpsError.Stage);
-        Assert.Equal("InvalidXps1CanonicalRecord", xpsError.Code);
-
-        var invalidDpd = Records.Dcr.CanonicalBytes.ToArray();
-        var dpdOffset = FieldOffset(invalidDpd, 4) + 6 + 356 + 6;
-        invalidDpd[dpdOffset + 40] ^= 1;
-        var dpdError = Assert.Throws<ContactFormatException>(() => ContactCodec.Decode(invalidDpd));
-        Assert.Equal(ContactValidationStage.Derived, dpdError.Stage);
-        Assert.Equal("EmbeddedDpd1Rejected", dpdError.Code);
-    }
-
-    [Fact]
     public void U32OverflowAndProductionAuthoringGateAreControlled()
     {
         var overflow = Records.Xra.CanonicalBytes.ToArray();
@@ -326,11 +307,6 @@ public sealed class ContactCodecTests
     [Fact]
     public void StrictClosureBoundsAndRouteBindingsRejectBeforeContactActivation()
     {
-        var fields = Enumerable.Range(1, 24).Select(Records.Dcb.Field).ToArray();
-        fields[14] = new byte[] { 0xc0, 0x80 }; // overlong UTF-8 for U+0000
-        var utf8 = Assert.Throws<ContactFormatException>(() => ContactCodecValidation.AuthorRecord("DCB1", fields));
-        Assert.Equal("NonCanonicalUtf8", utf8.Code);
-
         var closure = Records.RouteClosure;
         var xrr = closure.Xrr.CanonicalBytes.ToArray();
         Array.Clear(xrr, FieldOffset(xrr, 14), 2);
@@ -344,24 +320,6 @@ public sealed class ContactCodecTests
             closure.Xrr, closure.Xra, changedXrc, closure.Xss, closure.Pmt, closure.Pms));
         Assert.Equal(ContactValidationStage.Closure, binding.Stage);
 
-        var support = Assert.Throws<ContactFormatException>(() => ContactCodecValidation.AuthorRecord("DCR1", [
-            Records.Dcr.Field(1), Records.Dcr.Field(2), U16(2), new byte[16_385]]));
-        Assert.Equal("InvalidResolverClosureLength", support.Code);
-    }
-
-    [Fact]
-    public void DcrPromotionRequiresApplicationVerifiedCapabilities()
-    {
-        var method = typeof(ContactCodec).GetMethod(nameof(ContactCodec.VerifyDcr1Closure));
-        Assert.NotNull(method);
-        Assert.Equal(typeof(VerifiedContactBundleClosure), method!.ReturnType);
-        Assert.Equal(new[] { typeof(ContactRecord), typeof(CurrentlyAuthoritativeDca1),
-            typeof(VerifiedAccountDirectoryFreshness), typeof(ReadOnlySpan<byte>), typeof(ulong) },
-            method.GetParameters().Select(parameter => parameter.ParameterType));
-        Assert.False(typeof(VerifiedContactBundleClosure).GetConstructors().Any());
-        Assert.False(typeof(VerifiedAccountDirectoryFreshness).GetConstructors().Any());
-        Assert.False(typeof(VerifiedContactNetworkAuthority).GetConstructors().Any());
-        Assert.False(typeof(VerifiedContactRouteClosure).GetConstructors().Any());
     }
 
     private static int FieldOffset(ReadOnlySpan<byte> bytes, int sought)
@@ -409,11 +367,9 @@ public sealed class ContactCodecTests
         internal static readonly ContactRecord Xss = ContactCodecValidation.AuthorRecord("XSS1", [B(16,41),B(32,42),U64(1),B(32,43),Ref("XRC1",44),Ref("XRC1",45),Ref("PMT2",46),Ref("XNV1",47),B(32,48),U64(1),U64(2),Ref("ADH1",49),new byte[] { 2 },Rows(96,2,50)]);
         internal static readonly ContactRecord Xrr = ContactCodecValidation.AuthorRecord("XRR1", [B(16,51),B(32,52),U64(0),new byte[32],Ref("XRA1",53),Ref("XRC1",54),Ref("XSS1",55),Ref("PMT2",56),B(32,57),B(32,58),B(32,59),new byte[] { 1 },U32(1),U16(1),U64(1),U64(1),U64(2),Ref("DPD1",60),B(64,61),new byte[2]]);
         internal static readonly ContactRecord Dia = ContactCodecValidation.AuthorRecord("DIA1", [B(16,62),B(32,63),new byte[] { 2 },U16(1),B(16,64),B(32,65),B(32,66),U64(1),U16(1)]);
-        internal static readonly ContactRecord Dcb = DcbRecord();
-        internal static readonly ContactRecord Dcr = DcrRecord();
         internal static readonly (ContactRecord Xrr, ContactRecord Xra, ContactRecord Xrc, ContactRecord Xss, ContactRecord Pmt, ContactRecord Pms) RouteClosure = CreateRouteClosure(false);
         internal static readonly (ContactRecord Xrr, ContactRecord Xra, ContactRecord Xrc, ContactRecord Xss, ContactRecord Pmt, ContactRecord Pms) MaximumRouteClosure = CreateRouteClosure(true);
-        internal static IEnumerable<ContactRecord> All() => [Dcb,Dcr,Dia,Xir,Xur,Xra,Pmt,Pms,Xrc,Xss,Xrr];
+        internal static IEnumerable<ContactRecord> All() => [Dia,Xir,Xur,Xra,Pmt,Pms,Xrc,Xss,Xrr];
 
         internal static (ContactRecord Xrr, ContactRecord Xra, ContactRecord Xrc, ContactRecord Xss, ContactRecord Pmt, ContactRecord Pms) CreateRouteClosure(bool maximum, ReadOnlyMemory<byte> network = default, ReadOnlyMemory<byte> device = default, ReadOnlyMemory<byte> deviceReference = default)
         {
@@ -430,38 +386,6 @@ public sealed class ContactCodecTests
             var xss = ContactCodecValidation.AuthorRecord("XSS1", [network,xrc.Field(2),U64(1),xrc.CoreHash,ContactCodec.ArtifactReference("XRC1", xrc).CanonicalBytes,ContactCodec.ArtifactReference("XRC1", xrc).CanonicalBytes,ContactCodec.ArtifactReference("PMT2", pmt).CanonicalBytes,xrc.Field(8),pms.ArtifactHash,U64(1),U64(2),Ref("ADH1",23),new byte[] { maximum ? (byte)32 : (byte)2 },Rows(96,maximum ? 32 : 2,24)]);
             var xrr = ContactCodecValidation.AuthorRecord("XRR1", [network,B(32,25),U64(0),new byte[32],ContactCodec.ArtifactReference("XRA1", xra).CanonicalBytes,ContactCodec.ArtifactReference("XRC1", xrc).CanonicalBytes,ContactCodec.ArtifactReference("XSS1", xss).CanonicalBytes,ContactCodec.ArtifactReference("PMT2", pmt).CanonicalBytes,pms.ArtifactHash,B(32,26),B(32,27),new byte[] { 1 },U32(1),U16(1),U64(1),U64(1),U64(2),xra.Field(15),B(64,29),new byte[2]]);
             return (xrr, xra, xrc, xss, pmt, pms);
-        }
-
-        private static ContactRecord DcbRecord()
-        {
-            var network = B(16, 72); var account = B(32, 73); var device = B(32, 74);
-            var dpaFields = Minimum(RecordDefinitions.Dpa1); dpaFields[0] = network; dpaFields[1] = U64(1); dpaFields[2] = U64(1); dpaFields[4] = B(32,75); dpaFields[5] = B(32,76); dpaFields[6] = B(32,77); dpaFields[7] = B(32,78); dpaFields[8] = B(32,79); dpaFields[9] = U64(1); dpaFields[10] = U64(1); dpaFields[11] = U16(1);
-            var dpa = CanonicalGrammar.Encode(RecordDefinitions.Dpa1, dpaFields);
-            var dpaHash = IdentityCodec.DecodeAccountCertificate(dpa).CanonicalHash;
-            var dpaReference = ApplicationCoreCodec.CreateArtifactReference(1, 644, dpaHash.Span);
-            var dpd = DpdRecord(network, account, device);
-            var dpdHash = IdentityCodec.DecodeDeviceCertificate(dpd).CanonicalHash;
-            var dpdReference = ApplicationCoreCodec.CreateArtifactReference(2, 776, dpdHash.Span);
-            var drs = ApplicationCoreFixture.Revocations(network, account);
-            var drsReference = ApplicationCoreCodec.CreateArtifactReference(4,
-                checked((uint)drs.CanonicalBytes.Length), drs.CanonicalHash.Span);
-            var dmd = ApplicationCoreCodec.AuthorDmd1(network, account, 1, dpaReference, drsReference, 1, new byte[32], [new DeviceDirectoryEntry(device, dpdReference)], 100, B(64,84));
-            var dab = ApplicationCoreCodec.AuthorDab1(B(32,85), B(32,86), 0, new byte[32], account, 1, dpaReference, B(64,87), B(64,88));
-            var dabReference = ApplicationCoreCodec.CreateArtifactReference(ApplicationCoreCodec.Dab1ArtifactTypeCode, 394, B(32,80));
-            var dca = ApplicationCoreCodec.AuthorDca1(network, account, dpaReference, 1, dmd.RecordHash.Span, B(32,81), device, 1, 1, 1, 2, B(64,82), B(32,83), dabReference);
-            var xir = Xir.CanonicalBytes.ToArray(); var descriptor = new byte[651]; BinaryPrimitives.WriteUInt16BigEndian(descriptor,1); BinaryPrimitives.WriteUInt16BigEndian(descriptor.AsSpan(2),1); SHA256.HashData(xir).CopyTo(descriptor,4); BinaryPrimitives.WriteUInt32BigEndian(descriptor.AsSpan(36),611); xir.CopyTo(descriptor,40);
-            var xps = Write("XPS1", [network,B(32,89),device,Ref("DPD1",90),U64(0),new byte[32],U16(0x0201),U16(1),U16(1),U64(1),U64(2),B(64,90)]); dpdHash.Span.CopyTo(xps.AsSpan(FieldOffset(xps,4)+6)); var xpsList = new byte[357]; xpsList[0]=1; BinaryPrimitives.WriteUInt32BigEndian(xpsList.AsSpan(1),352); xps.CopyTo(xpsList,5);
-            var adl = AccountDirectoryAdl1Codec.Encode(new AccountDirectoryAdl1(
-                network, B(32,90), 1, B(32,91), 1, new byte[38], new byte[32]));
-            return ContactCodecValidation.AuthorRecord("DCB1", [network,account,dpa,Ref("DRS1",drs.CanonicalHash.Span),dmd.CanonicalBytes,dca.CanonicalBytes,B(32,88),U64(0),new byte[32],device,new byte[]{1},xpsList,new byte[]{1},descriptor,Array.Empty<byte>(),U32(3),U64(1),U64(2),B(64,89),adl,Join(U64(1),B(32,91)),B(32,92),B(32,93),dab.CanonicalBytes]);
-        }
-
-        private static ContactRecord DcrRecord()
-        {
-            var drs = ApplicationCoreFixture.Revocations(Dcb.Field(1).ToArray(), Dcb.Field(2).ToArray()).CanonicalBytes.ToArray();
-            var dpd = DpdRecord(Dcb.Field(1).Span, Dcb.Field(2).Span, Dcb.Field(10).Span);
-            var support = new byte[6+drs.Length+6+dpd.Length]; BinaryPrimitives.WriteUInt16BigEndian(support,1); BinaryPrimitives.WriteUInt32BigEndian(support.AsSpan(2),checked((uint)drs.Length)); drs.CopyTo(support,6); var offset=6+drs.Length; BinaryPrimitives.WriteUInt16BigEndian(support.AsSpan(offset),2); BinaryPrimitives.WriteUInt32BigEndian(support.AsSpan(offset+2),checked((uint)dpd.Length)); dpd.CopyTo(support,offset+6);
-            return ContactCodecValidation.AuthorRecord("DCR1", [Dcb.Field(1),Dcb.CanonicalBytes,U16(2),support]);
         }
         private static ContactRecord PmsRecord()
         {

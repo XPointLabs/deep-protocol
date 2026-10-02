@@ -62,7 +62,7 @@ public sealed class DeepIdV2DirectoryHeadMutationRequest
 /// <summary>
 /// Authors an ADH1 carrying only V2 directory roots. The signed ADH1 envelope
 /// remains version one, but reader floor two and complete private V2 replay are
-/// mandatory. No DID1 transition or ADC1 V1 capability enters this path.
+/// mandatory. No retired identity transition or ADC1 V1 capability enters this path.
 /// </summary>
 public static class DeepIdV2DirectoryHeadAuthor
 {

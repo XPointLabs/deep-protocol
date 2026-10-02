@@ -195,7 +195,7 @@ public sealed class VerifiedXPointNetworkForwardCheckpoint
             !CryptographicOperations.FixedTimeEquals(
                 NextProtectedLkg.AuthorityCoreReference.Span, authority.AuthorityCoreReference.Span) ||
             !CryptographicOperations.FixedTimeEquals(freshness.NetworkId.Span, authority.NetworkId.Span) ||
-            !CryptographicOperations.FixedTimeEquals(freshness.ExactDtt1CoreHash.Span, dttCoreHash))
+            !CryptographicOperations.FixedTimeEquals(((IVerifiedDirectoryNetworkTime)freshness).ExactDtt1CoreHash.Span, dttCoreHash))
             throw new XPointNetworkForwardCheckpointVerificationException(
                 "forward-capability-mismatch",
                 "The forward checkpoint capability is not bound to this exact authority and live DTT1.");
@@ -209,7 +209,7 @@ public static class XPointNetworkForwardCheckpointVerifier
 
     public static async ValueTask<VerifiedXPointNetworkForwardCheckpoint> VerifyAsync(
         VerifiedXPointNetworkAuthority authority,
-        VerifiedAccountDirectoryFreshness trustedFreshness,
+        VerifiedDeepIdV2DirectoryFreshness trustedFreshness,
         XPointNetworkProtectedLkg protectedLkg,
         IReadOnlyList<ReadOnlyMemory<byte>> exactXna1AuthorityChain,
         IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedXnf1Chain,
@@ -253,7 +253,7 @@ public static class XPointNetworkForwardCheckpointVerifier
             VerifyDtt(authority, trustedFreshness, nfp, targetView, dtt, dttBytes);
 
             var resolver = new ForwardResolver(authorities, checkpoints, targetView, targetHead, dtt,
-                trustedFreshness.ExactDtt1CoreHash.Span);
+                ((IVerifiedDirectoryNetworkTime)trustedFreshness).ExactDtt1CoreHash.Span);
             var context = new XPointVerificationContext(
                 resolver,
                 SodiumVerifier.Instance,
@@ -269,7 +269,7 @@ public static class XPointNetworkForwardCheckpointVerifier
             var hardUpper = new[]
             {
                 authority.ExpiresAt,
-                trustedFreshness.ExpiresAtUnixSeconds,
+                ((IVerifiedDirectoryNetworkTime)trustedFreshness).ExpiresAtUnixSeconds,
                 targetView.ExpiresAt,
                 targetHead.ValidUntil,
                 dtt.ExpiresAt,
@@ -290,7 +290,7 @@ public static class XPointNetworkForwardCheckpointVerifier
             return new VerifiedXPointNetworkForwardCheckpoint(
                 nfpBytes, checkpointBytes, targetView, targetHead, terminal,
                 protectedLkg, next, trustedTime,
-                trustedFreshness.ExactDtt1CoreHash.Span, hardUpper);
+                ((IVerifiedDirectoryNetworkTime)trustedFreshness).ExactDtt1CoreHash.Span, hardUpper);
         }
         catch (XPointNetworkForwardCheckpointVerificationException) { throw; }
         catch (OperationCanceledException) { throw; }
@@ -357,7 +357,7 @@ public static class XPointNetworkForwardCheckpointVerifier
 
     private static void VerifyDtt(
         VerifiedXPointNetworkAuthority authority,
-        VerifiedAccountDirectoryFreshness freshness,
+        VerifiedDeepIdV2DirectoryFreshness freshness,
         Nfp1Record nfp,
         Xnv1Record targetView,
         AccountDirectoryDtt1 dtt,
@@ -366,7 +366,7 @@ public static class XPointNetworkForwardCheckpointVerifier
         var dttHash = AccountDirectoryCrypto.ComputeDtt1CoreHash(dtt);
         var dttReference = XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.DTT1, dttHash);
         if (!CryptographicOperations.FixedTimeEquals(AccountDirectoryDtt1Codec.Encode(dtt), exactDtt) ||
-            !CryptographicOperations.FixedTimeEquals(dttHash, freshness.ExactDtt1CoreHash.Span) ||
+            !CryptographicOperations.FixedTimeEquals(dttHash, ((IVerifiedDirectoryNetworkTime)freshness).ExactDtt1CoreHash.Span) ||
             !CryptographicOperations.FixedTimeEquals(dttReference, nfp.FieldSpan(15)) ||
             !CryptographicOperations.FixedTimeEquals(dtt.NetworkId.Span, authority.NetworkId.Span) ||
             !CryptographicOperations.FixedTimeEquals(freshness.NetworkId.Span, authority.NetworkId.Span) ||

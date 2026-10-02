@@ -293,11 +293,13 @@ public sealed class OnionTrustedTimeAuthority
             reading.SampleSeconds < freshness.MonotonicSample ||
             reading.SampleSeconds >= freshness.FreshnessDeadlineMonotonicSeconds)
             throw new OnionBoundaryException("trusted-time-invalid", "The protected monotonic clock does not keep the verified DTT1 closure current.");
-        if (hardUpperUnixSeconds <= freshness.TrustedUpperUnixSeconds)
+        var elapsed = checked(reading.SampleSeconds - freshness.MonotonicSample);
+        var currentUpper = checked(freshness.TrustedUpperUnixSeconds + elapsed);
+        if (hardUpperUnixSeconds <= currentUpper)
             throw new OnionBoundaryException("trusted-time-invalid", "The verified network closure has no remaining admissible interval.");
         var remainingSeconds = Math.Min(
             freshness.FreshnessDeadlineMonotonicSeconds - reading.SampleSeconds,
-            hardUpperUnixSeconds - freshness.TrustedUpperUnixSeconds);
+            hardUpperUnixSeconds - currentUpper);
         var lifetime = TimeSpan.FromSeconds(Math.Min(remainingSeconds, (ulong)PrivacyRoutingLimits.ReplyContextLifetime.TotalSeconds));
         return new OnionTrustedTimeLease(TimeProvider.System, lifetime, ExpandBootId(reading.BootId.Span));
     }
@@ -594,46 +596,6 @@ public static class OnionNetworkContextVerifier
             exactOrderedXnh1Chain, exactActiveXnd1, exactOrderedPmt2Chain,
             protectedPrevious, trustedTimeAuthority, cancellationToken);
 
-    public static ValueTask<VerifiedOnionNetworkContext> VerifyAsync(
-        VerifiedXPointNetworkAuthority authority,
-        VerifiedAccountDirectoryFreshness trustedFreshness,
-        IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedXvp1Chain,
-        IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedXnv1Chain,
-        IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedXnh1Chain,
-        IReadOnlyList<ReadOnlyMemory<byte>> exactActiveXnd1,
-        IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedPmt2Chain,
-        VerifiedOnionNetworkContext? protectedPrevious,
-        OnionTrustedTimeAuthority trustedTimeAuthority,
-        CancellationToken cancellationToken)
-        => XPointOnionCapabilityProducer.VerifyAsync(
-            authority, trustedFreshness, exactOrderedXvp1Chain, exactOrderedXnv1Chain,
-            exactOrderedXnh1Chain, exactActiveXnd1, exactOrderedPmt2Chain,
-            protectedPrevious, trustedTimeAuthority,
-            cancellationToken);
-
-    /// <summary>
-    /// Rehydrates the non-serializable capability for an exact generation-zero
-    /// network head that is already present in caller-protected storage.
-    /// The supplied package is verified from the immutable genesis authority and
-    /// is accepted only when the resulting protected tuple exactly matches the
-    /// caller's current LKG. This method cannot advance, roll back, or replace it.
-    /// </summary>
-    public static async ValueTask<VerifiedOnionNetworkContext> VerifyRehydratedCurrentAsync(
-        VerifiedXPointNetworkAuthority authority,
-        VerifiedAccountDirectoryFreshness trustedFreshness,
-        IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedXvp1Chain,
-        IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedXnv1Chain,
-        IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedXnh1Chain,
-        IReadOnlyList<ReadOnlyMemory<byte>> exactActiveXnd1,
-        IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedPmt2Chain,
-        XPointNetworkProtectedLkg protectedCurrent,
-        OnionTrustedTimeAuthority trustedTimeAuthority,
-        CancellationToken cancellationToken)
-        => await VerifyRehydratedCoreAsync(authority, trustedFreshness,
-            exactOrderedXvp1Chain, exactOrderedXnv1Chain, exactOrderedXnh1Chain,
-            exactActiveXnd1, exactOrderedPmt2Chain, protectedCurrent,
-            trustedTimeAuthority, cancellationToken).ConfigureAwait(false);
-
     public static ValueTask<VerifiedOnionNetworkContext> VerifyRehydratedCurrentAsync(
         VerifiedXPointNetworkAuthority authority,
         VerifiedDeepIdV2DirectoryFreshness trustedFreshness,
@@ -680,7 +642,7 @@ public static class OnionNetworkContextVerifier
 
     public static ValueTask<VerifiedOnionNetworkContext> VerifyFromForwardCheckpointAsync(
         VerifiedXPointNetworkAuthority authority,
-        VerifiedAccountDirectoryFreshness trustedFreshness,
+        VerifiedDeepIdV2DirectoryFreshness trustedFreshness,
         VerifiedXPointNetworkForwardCheckpoint forwardCheckpoint,
         ReadOnlyMemory<byte> exactCurrentXvp1,
         IReadOnlyList<ReadOnlyMemory<byte>> exactActiveXnd1,
@@ -719,128 +681,10 @@ public static class OnionNetworkContextVerifier
         left.Length == right.Length && CryptographicOperations.FixedTimeEquals(left, right);
 }
 
-/// <summary>
-/// Exact two-replica group-control placement derived only from a current
-/// NETCODEC closure and a current identity-verified GSR1 capability.
-/// </summary>
-public sealed class VerifiedGroupControlPlacement
-{
-    private readonly byte[] _viewHash, _placementHash;
-    private readonly byte[][] _replicaNodeIds;
-
-    internal VerifiedGroupControlPlacement(
-        VerifiedOnionNetworkContext network,
-        VerifiedGroupControlRendezvous rendezvous,
-        ReadOnlySpan<byte> viewHash,
-        ReadOnlySpan<byte> placementHash,
-        IReadOnlyList<byte[]> replicaNodeIds)
-    {
-        Network = network;
-        Rendezvous = rendezvous;
-        _viewHash = viewHash.ToArray();
-        _placementHash = placementHash.ToArray();
-        _replicaNodeIds = replicaNodeIds.Select(static value => value.ToArray()).ToArray();
-    }
-
-    public VerifiedGroupControlRendezvous Rendezvous { get; }
-    public ReadOnlyMemory<byte> ViewHash => _viewHash.ToArray();
-    public ReadOnlyMemory<byte> PlacementHash => _placementHash.ToArray();
-    public IReadOnlyList<ReadOnlyMemory<byte>> ReplicaNodeIds =>
-        Array.AsReadOnly(_replicaNodeIds
-            .Select(static value => (ReadOnlyMemory<byte>)value.ToArray()).ToArray());
-    internal VerifiedOnionNetworkContext Network { get; }
-        internal bool ContainsReplica(ReadOnlySpan<byte> nodeId)
-    {
-        foreach (var value in _replicaNodeIds)
-            if (Fixed(value, nodeId))
-                return true;
-        return false;
-    }
-    internal VerifiedNetworkNode[] ResolveSelectedReplicas() =>
-        _replicaNodeIds.Select(nodeId => Network.ResolveNode(nodeId)).ToArray();
-
-    private static bool Fixed(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right) =>
-        left.Length == right.Length && CryptographicOperations.FixedTimeEquals(left, right);
-}
-
 public static class GroupControlPlacementVerifier
 {
     private static readonly byte[] RankDomain =
         "Deep/XPoint/V1/PMS2/rendezvous-sha256/v2"u8.ToArray();
-
-    public static VerifiedGroupControlPlacement Verify(
-        VerifiedOnionNetworkContext network,
-        VerifiedGroupControlRendezvous rendezvous)
-    {
-        ArgumentNullException.ThrowIfNull(network);
-        ArgumentNullException.ThrowIfNull(rendezvous);
-        network.EnsureCurrent();
-        var closure = network.Closure ?? throw new OnionBoundaryException(
-            "network-context-incomplete", "Group-control placement requires a complete verified network closure.");
-        var gsr1 = rendezvous.Record;
-        if (!Fixed(network.NetworkIdSpan, gsr1.Field(1).Span) ||
-            !Fixed(network.NetworkIdSpan, rendezvous.Owner.Freshness.NetworkId.Span))
-            throw new OnionBoundaryException(
-                "group-placement-network-mismatch", "GSR1 and its owner do not belong to the exact verified network context.");
-        if (!Fixed(gsr1.Field(6).Span, closure.PmtArtifactReference))
-            throw new OnionBoundaryException(
-                "group-placement-pmt-mismatch", "GSR1 does not name the exact current NETCODEC-verified PMT2.");
-        if (closure.PmtNodeIds.Length < 2)
-            throw new OnionBoundaryException(
-                "group-placement-insufficient-replicas", "The exact verified PMT2 has fewer than two group-control replicas.");
-
-        var ranked = new List<(byte[] NodeId, byte[] Score)>(closure.PmtNodeIds.Length);
-        foreach (var candidate in closure.PmtNodeIds)
-        {
-            _ = network.ResolveNode(candidate);
-            var input = new byte[checked(RankDomain.Length + 1 + 16 + 38 + 8 + 32 + 32)];
-            try
-            {
-                var offset = 0;
-                RankDomain.CopyTo(input, offset); offset += RankDomain.Length;
-                input[offset++] = 0;
-                network.NetworkIdSpan.CopyTo(input.AsSpan(offset)); offset += 16;
-                closure.PmtArtifactReference.CopyTo(input, offset); offset += 38;
-                System.Buffers.Binary.BinaryPrimitives.WriteUInt64BigEndian(
-                    input.AsSpan(offset, 8), closure.SelectionEpoch); offset += 8;
-                gsr1.Field(7).Span.CopyTo(input.AsSpan(offset)); offset += 32;
-                candidate.CopyTo(input, offset);
-                ranked.Add((candidate.ToArray(), SHA256.HashData(input)));
-            }
-            finally
-            {
-                CryptographicOperations.ZeroMemory(input);
-            }
-        }
-
-        try
-        {
-            ranked.Sort(static (left, right) =>
-            {
-                var score = left.Score.AsSpan().SequenceCompareTo(right.Score);
-                return score != 0 ? score : left.NodeId.AsSpan().SequenceCompareTo(right.NodeId);
-            });
-            var replicas = new[] { ranked[0].NodeId, ranked[1].NodeId };
-            var placementPayload = Join(
-                closure.NetworkId,
-                closure.ViewCoreReference,
-                closure.PmtArtifactReference,
-                U64(closure.SelectionEpoch),
-                gsr1.Field(2).ToArray(),
-                gsr1.Field(7).ToArray(),
-                [(byte)replicas.Length],
-                Join(replicas));
-            var placementHash = XPointNetworkCrypto.Sha256Domain(
-                "Deep/Group/V1/control-placement", placementPayload);
-            return new VerifiedGroupControlPlacement(network, rendezvous, closure.ViewCoreHash,
-                placementHash, replicas);
-        }
-        finally
-        {
-            foreach (var item in ranked)
-                CryptographicOperations.ZeroMemory(item.Score);
-        }
-    }
 
     private static bool Fixed(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right) =>
         left.Length == right.Length && CryptographicOperations.FixedTimeEquals(left, right);
@@ -975,43 +819,6 @@ public static class OnionPathContextFactory
             Hop(nodes[2], PrivacyRoutingKeyRole.Exit)
         };
         return new VerifiedOnionPathContext(network, trustedTime, OnionOperation.ContactResolve, route);
-    }
-
-    public static VerifiedOnionPathContext CreateGroupControl(
-        VerifiedOnionNetworkContext network,
-        VerifiedGroupControlPlacement placement,
-        ReadOnlyMemory<byte> ingressNodeId,
-        ReadOnlyMemory<byte> coreNodeId,
-        ReadOnlyMemory<byte> exitNodeId)
-    {
-        ArgumentNullException.ThrowIfNull(network);
-        var trustedTime = network.TrustedTime ?? throw new OnionBoundaryException(
-            "network-context-incomplete", "The network context was not minted from a complete production closure.");
-        trustedTime.EnsureLive();
-        ArgumentNullException.ThrowIfNull(placement);
-        if (!ReferenceEquals(network, placement.Network))
-            throw new OnionBoundaryException(
-                "placement-context-mismatch", "The group-control placement belongs to another verified network context.");
-        var nodes = new[]
-        {
-            network.ResolveNode(ingressNodeId.Span),
-            network.ResolveNode(coreNodeId.Span),
-            network.ResolveNode(exitNodeId.Span)
-        };
-        RequireRole(nodes[0], 0, "Ingress");
-        RequireRole(nodes[1], 1, "Core");
-        RequireRole(nodes[2], 2, "Exit");
-        if (!placement.ContainsReplica(nodes[2].NodeId))
-            throw new OnionBoundaryException(
-                "path-exit-placement-mismatch", "The GroupControl exit is not in the exact verified two-replica placement.");
-        RequireExactPathDiversity(nodes);
-        var route = new[]
-        {
-            Hop(nodes[0], PrivacyRoutingKeyRole.Relay),
-            Hop(nodes[1], PrivacyRoutingKeyRole.Relay),
-            Hop(nodes[2], PrivacyRoutingKeyRole.Exit)
-        };
-        return new VerifiedOnionPathContext(network, trustedTime, OnionOperation.GroupControl, route);
     }
 
     internal static PrivacyRoutingHop Hop(VerifiedNetworkNode node, PrivacyRoutingKeyRole role) =>

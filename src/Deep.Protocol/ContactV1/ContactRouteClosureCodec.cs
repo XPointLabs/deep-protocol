@@ -50,21 +50,6 @@ public static class ContactRouteClosureCodec
         ProtocolMagic.PMS2,
     ];
 
-    public static byte[] Encode(VerifiedContactRouteClosure closure)
-    {
-        ArgumentNullException.ThrowIfNull(closure);
-        var records = new[]
-        {
-            closure.Reachability,
-            closure.Authorization,
-            closure.Route,
-            closure.Successor,
-            closure.Projection,
-            closure.Selection,
-        };
-        return EncodeRecords(records);
-    }
-
     internal static byte[] EncodeRecords(IReadOnlyList<ContactRecord> records)
     {
         if (records.Count != 6 || records.Where((record, index) => record.Magic != Magics[index]).Any())

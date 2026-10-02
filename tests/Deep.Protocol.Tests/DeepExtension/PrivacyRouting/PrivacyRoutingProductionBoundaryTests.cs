@@ -115,13 +115,14 @@ public sealed class PrivacyRoutingProductionBoundaryTests
     public void Capabilities_AreNonForgeable_AndCodecHasOnlyFourAsyncRuntimeMethods()
     {
         Assert.False(PrivacyRoutingCodec.RuntimeActivation);
+        Assert.Null(typeof(PrivacyRoutingCodec).Assembly.GetType(
+            "Deep.Protocol.DeepExtension.PrivacyRouting.VerifiedGroupControlPlacement"));
         foreach (var type in new[]
                  {
                      typeof(VerifiedOnionNetworkContext), typeof(OnionTrustedTimeLease),
                      typeof(VerifiedOnionPathContext), typeof(VerifiedOnionLocalNodeKey),
                      typeof(VerifiedOnionReceiveContext), typeof(VerifiedOnionNextHopTransport),
                      typeof(VerifiedOnionEntryTransport),
-                     typeof(VerifiedGroupControlPlacement),
                      typeof(VerifiedCanonicalOnionRequest), typeof(VerifiedOnionTerminalResult),
                      typeof(OnionReplayOpenLease), typeof(OnionReplyContext), typeof(OnionExitReplyContext)
                  })
@@ -150,13 +151,13 @@ public sealed class PrivacyRoutingProductionBoundaryTests
         Assert.Equal("BeginOpenAsync", Assert.Single(typeof(OnionReplayAuthority).GetMethods(
             BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)).Name);
         Assert.Equal(
-            ["VerifyAsync", "VerifyAsync", "VerifyFromForwardCheckpointAsync",
+            ["VerifyAsync", "VerifyFromForwardCheckpointAsync",
                 "VerifyFromProtectedHistoryAsync",
-                "VerifyRehydratedCurrentAsync", "VerifyRehydratedCurrentAsync"],
+                "VerifyRehydratedCurrentAsync"],
             typeof(OnionNetworkContextVerifier).GetMethods(
                     BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly)
                 .Select(static method => method.Name).Order().ToArray());
-        Assert.Equal(["CreateContactResolver", "CreateGroupControl", "CreateMailbox"],
+        Assert.Equal(["CreateContactResolver", "CreateMailbox"],
             typeof(OnionPathContextFactory).GetMethods(
                     BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly)
                 .Select(static method => method.Name).Order(StringComparer.Ordinal).ToArray());
