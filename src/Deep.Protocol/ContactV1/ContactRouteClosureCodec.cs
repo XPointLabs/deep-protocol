@@ -62,6 +62,13 @@ public static class ContactRouteClosureCodec
             closure.Projection,
             closure.Selection,
         };
+        return EncodeRecords(records);
+    }
+
+    internal static byte[] EncodeRecords(IReadOnlyList<ContactRecord> records)
+    {
+        if (records.Count != 6 || records.Where((record, index) => record.Magic != Magics[index]).Any())
+            throw new ContactFormatException(ContactValidationStage.Bounds, "RouteClosureRecordOrder");
         var size = checked(1 + records.Sum(record => 4 + record.CanonicalBytes.Length));
         if (size is < MinimumEncodedBytes or > MaximumEncodedBytes)
             throw new ContactFormatException(ContactValidationStage.Length, "RouteClosureLengthOutOfRange");

@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using Deep.Protocol.ApplicationCore;
+using Deep.Protocol.ContactV2;
 
 namespace Deep.Protocol.ContactV1;
 
@@ -50,15 +51,16 @@ public sealed class ContactPublicationAuthorityWireRequest
             minimumAdh1CoreHash, 32, nameof(minimumAdh1CoreHash));
         if (exactDca1.Length != ContactRouteAuthorityWireCodec.ExactDca1Bytes)
             throw new ArgumentException("The exact DCA1 length is invalid.", nameof(exactDca1));
-        var dca = ApplicationCoreCodec.DecodeDca1(exactDca1);
+        var dca = DeepIdV2ContactAuthorizationCodec.Decode(exactDca1);
         if (!Fixed(dca.NetworkId.Span, this.networkId))
             throw new CryptographicException("The exact DCA1 belongs to another network.");
 
         if (exactDcr1.Length is < ContactPublicationAuthorityWireCodec.MinimumDcr1Bytes or
             > ContactPublicationAuthorityWireCodec.MaximumDcr1Bytes)
             throw new ArgumentOutOfRangeException(nameof(exactDcr1));
-        var dcr = ContactCodec.Decode(ProtocolMagic.DCR1, exactDcr1);
-        if (!Fixed(dcr.Field(1).Span, this.networkId))
+        var dcr = DeepIdV2ResolverClosureCodec.Decode(exactDcr1);
+        if (!Fixed(dcr.Bundle.Field(1).Span, this.networkId) ||
+            !Fixed(dcr.Bundle.Field(6).Span, exactDca1))
             throw new CryptographicException("The exact DCR1 belongs to another network.");
 
         var route = ContactRouteClosureCodec.Decode(exactRouteClosure);
@@ -80,10 +82,14 @@ public sealed class ContactPublicationAuthorityWireRequest
             throw new ArgumentException(
                 "The predecessor object hash must be zero exactly at generation zero.",
                 nameof(predecessorObjectHash));
-        if (objectCiphertext.Length is < 40 or > 65_575)
+        if (objectCiphertext.Length != exactDcr1.Length + 40 ||
+            objectCiphertext.Length > DeepIdV2ContactPublicationCodec.MaximumCiphertextLength)
             throw new ArgumentOutOfRangeException(nameof(objectCiphertext));
         if (issuedAtUnixSeconds == 0 || issuedAtUnixSeconds >= expiresAtUnixSeconds ||
-            effectiveExpiresAtUnixSeconds < expiresAtUnixSeconds)
+            effectiveExpiresAtUnixSeconds < expiresAtUnixSeconds ||
+            expiresAtUnixSeconds - issuedAtUnixSeconds > 120 ||
+            issuedAtUnixSeconds < BinaryPrimitives.ReadUInt64BigEndian(dcr.Bundle.Field(17).Span) ||
+            effectiveExpiresAtUnixSeconds != BinaryPrimitives.ReadUInt64BigEndian(dcr.Bundle.Field(18).Span))
             throw new ArgumentOutOfRangeException(nameof(expiresAtUnixSeconds));
         this.ownerRetrieveCapability = Required(
             ownerRetrieveCapability, 32, nameof(ownerRetrieveCapability));
@@ -158,8 +164,8 @@ public sealed class ContactPublicationAuthorityWireResponse
     {
         this.networkId = Required(networkId, 16, nameof(networkId));
         this.requestNonce = Required(requestNonce, 32, nameof(requestNonce));
-        var request = Xpu1Codec.Decode(exactXpu1);
-        if (!CryptographicOperations.FixedTimeEquals(request.NetworkId.Span, this.networkId))
+        var request = DeepIdV2ContactPublicationCodec.DecodeXpu1(exactXpu1);
+        if (!CryptographicOperations.FixedTimeEquals(request.Field(1).Span, this.networkId))
             throw new CryptographicException("The exact XPU1 belongs to another network.");
         this.exactXpu1 = exactXpu1.ToArray();
     }
@@ -178,17 +184,18 @@ public sealed class ContactPublicationAuthorityWireResponse
 
 public static class ContactPublicationAuthorityWireCodec
 {
-    public const ushort Version = 1;
-    public const int MinimumDcr1Bytes = 12;
+    public const ushort Version = 2;
+    public const int MinimumDcr1Bytes = 62 + DeepIdV2ContactBundleCodec.MinimumLength + 1;
     public const int MaximumDcr1Bytes = 65_535;
-    public const int MinimumRequestBytes = 5_000;
+    public const int MinimumRequestBytes = 805 + MinimumDcr1Bytes +
+        ContactRouteClosureCodec.MinimumEncodedBytes + DeepIdV2ContactPublicationCodec.MinimumCiphertextLength;
     public const int MaximumRequestBytes = 155_210;
-    public const int MinimumResponseBytes = 72;
+    public const int MinimumResponseBytes = 60 + DeepIdV2ContactPublicationCodec.MinimumXpuLength;
     public const int MaximumResponseBytes = 93_092;
     public const string RequestMediaType =
-        "application/vnd.deep.contact-publication-authority-request.v1+octet-stream";
+        "application/vnd.deep.contact-publication-authority-request.v2+octet-stream";
     public const string ResponseMediaType =
-        "application/vnd.deep.contact-publication-authority-response.v1+octet-stream";
+        "application/vnd.deep.contact-publication-authority-response.v2+octet-stream";
 
     public static byte[] EncodeRequest(ContactPublicationAuthorityWireRequest request)
     {
@@ -235,7 +242,9 @@ public static class ContactPublicationAuthorityWireCodec
         var operation = encoded.Slice(offset, 32); offset += 32;
         var generation = BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(offset, 8)); offset += 8;
         var predecessor = encoded.Slice(offset, 32); offset += 32;
-        var ciphertext = ReadArtifact(encoded, ref offset, 40, 65_575);
+        var ciphertext = ReadArtifact(encoded, ref offset,
+            DeepIdV2ContactPublicationCodec.MinimumCiphertextLength,
+            DeepIdV2ContactPublicationCodec.MaximumCiphertextLength);
         if (offset > encoded.Length - 120)
             throw new FormatException("The publication-authority request is truncated.");
         var issued = BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(offset, 8)); offset += 8;
@@ -260,9 +269,7 @@ public static class ContactPublicationAuthorityWireCodec
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(response);
         RequireBinding(request, response);
-        var xpu = Xpu1Codec.Decode(response.ExactXpu1.Span);
-        if (!CryptographicOperations.FixedTimeEquals(xpu.OperationId.Span, request.OperationId.Span))
-            throw new CryptographicException("The exact XPU1 does not bind the request operation.");
+        RequireExactBody(request, response.ExactXpu1.Span);
         var length = checked(60 + response.ExactXpu1.Length);
         if (length is < MinimumResponseBytes or > MaximumResponseBytes)
             throw new InvalidOperationException("The publication-authority response length is invalid.");
@@ -286,14 +293,71 @@ public static class ContactPublicationAuthorityWireCodec
             throw new CryptographicException(
                 "The publication-authority response does not bind the exact request.");
         var offset = 56;
-        var xpu = ReadArtifact(encoded, ref offset, 12, 93_032);
+        var xpu = ReadArtifact(encoded, ref offset,
+            DeepIdV2ContactPublicationCodec.MinimumXpuLength,
+            DeepIdV2ContactPublicationCodec.MaximumXpuLength);
         if (offset != encoded.Length)
             throw new FormatException("The publication-authority response has trailing bytes.");
         var response = new ContactPublicationAuthorityWireResponse(
             request.NetworkId.Span, request.RequestNonce.Span, xpu);
-        if (!Fixed(Xpu1Codec.Decode(xpu).OperationId.Span, request.OperationId.Span))
-            throw new CryptographicException("The exact XPU1 does not bind the request operation.");
+        RequireExactBody(request, xpu);
         return response;
+    }
+
+
+    /// <summary>Exact unsigned V2 envelope; never the retired publisher tuple.</summary>
+    public static byte[] CreatePublisherSigningInput(ContactPublicationAuthorityWireRequest request)
+    {
+        var encoded = EncodeRequest(request);
+        byte[]? unsigned = null;
+        try
+        {
+            unsigned = encoded.AsSpan(0, encoded.Length - 64).ToArray();
+            BinaryPrimitives.WriteUInt32BigEndian(unsigned.AsSpan(4), checked((uint)unsigned.Length));
+            return ApplicationCoreFormat.SignatureInput(
+                "Deep/ContactResolver/V2/publication-publisher", unsigned, DeepIdV2Codec.Suite);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(encoded);
+            if (unsigned is not null) CryptographicOperations.ZeroMemory(unsigned);
+        }
+    }
+
+    internal static void RequireExactBody(ContactPublicationAuthorityWireRequest request, ReadOnlySpan<byte> exactXpu1)
+    {
+        var xpu = DeepIdV2ContactPublicationCodec.DecodeXpu1(exactXpu1);
+        var closure = DeepIdV2ResolverClosureCodec.Decode(request.ExactDcr1.Span);
+        var bundle = closure.Bundle;
+        var xpa = xpu.Authorization;
+        var locatorInput = new byte[48];
+        request.NetworkId.Span.CopyTo(locatorInput);
+        bundle.Field(22).Span.CopyTo(locatorInput.AsSpan(16));
+        var locator = ApplicationCoreFormat.Sha256Domain(
+            "Deep/ContactResolver/V2/permanent-locator", locatorInput);
+        if (!Fixed(xpu.Field(1).Span, request.NetworkId.Span) ||
+            !Fixed(xpu.Field(2).Span, request.OperationId.Span) ||
+            !Fixed(xpu.Field(16).Span, locator) ||
+            !Fixed(xpu.Field(17).Span, SHA256.HashData(bundle.Field(14).Span[40..])) ||
+            BinaryPrimitives.ReadUInt64BigEndian(xpu.Field(18).Span) != request.Generation ||
+            !Fixed(xpu.Field(19).Span, request.PredecessorObjectHash.Span) ||
+            !Fixed(xpu.Field(21).Span, request.ObjectCiphertext.Span) ||
+            !Fixed(xpu.Field(25).Span, request.ExactRouteClosure.Span) ||
+            BinaryPrimitives.ReadUInt64BigEndian(xpu.Field(5).Span) != request.IssuedAtUnixSeconds ||
+            BinaryPrimitives.ReadUInt64BigEndian(xpu.Field(6).Span) != request.ExpiresAtUnixSeconds ||
+            BinaryPrimitives.ReadUInt64BigEndian(xpu.Field(23).Span) != request.EffectiveExpiresAtUnixSeconds ||
+            BinaryPrimitives.ReadUInt32BigEndian(xpu.Field(22).Span) != 0 ||
+            !Fixed(xpu.Field(27).Span, request.OwnerRetrieveCapability.Span) ||
+            xpa.Field(5).Span[0] != 1 ||
+            !Fixed(xpa.Field(6).Span, SHA256.HashData(closure.CanonicalBytes.Span)) ||
+            !Fixed(xpa.Field(7).Span, SHA256.HashData(bundle.CanonicalBytes.Span)) ||
+            !Fixed(xpa.Field(14).Span, ApplicationCoreFormat.Sha256Domain(
+                "Deep/ContactResolver/V2/publication-policy", request.ExactDca1.Span)) ||
+            !Fixed(xpa.Field(18).Span, request.MinimumAdh1CoreHash.Span) ||
+            BinaryPrimitives.ReadUInt64BigEndian(xpa.Field(15).Span) != request.IssuedAtUnixSeconds ||
+            BinaryPrimitives.ReadUInt64BigEndian(xpa.Field(16).Span) != request.IssuedAtUnixSeconds ||
+            BinaryPrimitives.ReadUInt64BigEndian(xpa.Field(17).Span) != request.ExpiresAtUnixSeconds)
+            throw new CryptographicException("The exact DID2 publication body differs from its publisher request.");
     }
 
     private static void WriteHeader(byte[] destination)

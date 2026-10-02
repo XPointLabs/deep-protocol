@@ -25,5 +25,6 @@ artifacts/dnp1-vector-fragments/*
 coverage/
 /normative-source/
 /integration-source/
+/src/**/artifacts/
 *.user
 *.suo

@@ -17,10 +17,16 @@ public abstract class ParsedApplicationCoreRecord
     }
 
     public string Magic { get; }
-    public ReadOnlyMemory<byte> CanonicalBytes => _canonical.ToArray();
-    public ReadOnlyMemory<byte> RecordHash => _recordHash.ToArray();
-    internal ReadOnlySpan<byte> CanonicalSpan => _canonical;
-    internal ReadOnlySpan<byte> RecordHashSpan => _recordHash;
+    public ReadOnlyMemory<byte> CanonicalBytes { get { RequireReadable(); return _canonical.ToArray(); } }
+    public ReadOnlyMemory<byte> RecordHash { get { RequireReadable(); return _recordHash.ToArray(); } }
+    internal ReadOnlySpan<byte> CanonicalSpan { get { RequireReadable(); return _canonical; } }
+    internal ReadOnlySpan<byte> RecordHashSpan { get { RequireReadable(); return _recordHash; } }
+    internal virtual void RequireReadable() { }
+    internal void EraseOwnedSecretRecord()
+    {
+        System.Security.Cryptography.CryptographicOperations.ZeroMemory(_canonical);
+        System.Security.Cryptography.CryptographicOperations.ZeroMemory(_recordHash);
+    }
 }
 
 public sealed class ApplicationArtifactReference

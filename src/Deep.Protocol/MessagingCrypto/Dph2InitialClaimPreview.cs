@@ -50,7 +50,7 @@ public sealed class Dph2InitialClaimPreview
         cancellationToken.ThrowIfCancellationRequested();
         _ = await VerifyCurrentInitiatorAsync(initiatorFreshness,
             trustedTimeAuthority, cancellationToken).ConfigureAwait(false);
-        var claim = await DeepIdV2PreKeyClaimReceiptVerifier.VerifyAsync(
+        var claim = await DeepIdV2PreKeyClaimReceiptVerifier.VerifyCommittedForRecipientAsync(
             _request, _result, placement, recipientAuthorization, recipientClosure,
             trustedTimeAuthority, cancellationToken).ConfigureAwait(false);
         var reading = await trustedTimeAuthority.ReadCurrentAsync(cancellationToken)

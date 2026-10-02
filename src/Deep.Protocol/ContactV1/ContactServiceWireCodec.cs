@@ -2,6 +2,8 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using Deep.Protocol.MessagingWire;
+using Deep.Protocol.ApplicationCore;
+using Deep.Protocol.ContactV2;
 
 namespace Deep.Protocol.ContactV1;
 
@@ -67,7 +69,7 @@ public abstract class ContactServiceRequestRecord : ContactServiceWireRecord
     public ReadOnlyMemory<byte> PlacementHash => Field(4);
     public ulong IssuedAtUnixSeconds { get; }
     public ulong ExpiresAtUnixSeconds { get; }
-    public ReadOnlyMemory<byte> RequestHash => ContactCodec.Sha256Domain("Deep/ContactResolver/V1/request", CanonicalBytes.Span);
+    public ReadOnlyMemory<byte> RequestHash => ContactCodec.Sha256Domain(Magic == ProtocolMagic.XPU1 ? "Deep/ContactResolver/V2/request" : "Deep/ContactResolver/V1/request", CanonicalBytes.Span);
 }
 
 public abstract class ContactServiceResultRecord : ContactServiceWireRecord
@@ -106,7 +108,7 @@ public sealed class Xpu1Request : ContactServiceRequestRecord
     public ReadOnlyMemory<byte> ExactRouteClosure => Field(25);
     public ReadOnlyMemory<byte> ExactXpa1 => Field(26);
     public ReadOnlyMemory<byte> OwnerRetrieveCapability => Field(27);
-    public ReadOnlyMemory<byte> AuthorizedBodyHash => ServiceWire.ProjectedHash(this, "Deep/ContactResolver/V1/XPU-authorized-body", [1,2,3,4,5,6,16,17,18,19,20,21,22,23,24,25,27]);
+    public ReadOnlyMemory<byte> AuthorizedBodyHash => DeepIdV2ContactPublicationCodec.ComputeAuthorizedBodyHash(CanonicalBytes.Span);
 }
 
 public sealed class Xiq1Request : ContactServiceRequestRecord
@@ -162,7 +164,6 @@ public sealed class Xus1Result : ContactServiceResultRecord { internal Xus1Resul
 
 public static class Xpu1Codec
 {
-    private static readonly ushort[] Tags = [1,2,3,4,5,6,16,17,18,19,20,21,22,23,24,25,26,27];
     public static byte[] ComputeAuthorizedBodyHash(
         ReadOnlySpan<byte> networkId16, ReadOnlySpan<byte> operationId32,
         ReadOnlySpan<byte> viewHash32, ReadOnlySpan<byte> placementHash32,
@@ -173,11 +174,13 @@ public static class Xpu1Codec
         ReadOnlySpan<byte> exactRouteClosure,
         ReadOnlySpan<byte> ownerRetrieveCapability32)
     {
+        RequireBounds(networkId16, operationId32, viewHash32, placementHash32, locatorHash32,
+            xir1Hash32, predecessorObjectHash32, objectCiphertext, exactRouteClosure, ownerRetrieveCapability32);
         var fields=ServiceWire.RequestFields(networkId16,operationId32,viewHash32,placementHash32,issuedAt,expiresAt,
             [(16,locatorHash32.ToArray()),(17,xir1Hash32.ToArray()),(18,ServiceWire.Be(generation)),(19,predecessorObjectHash32.ToArray()),
              (20,SHA256.HashData(objectCiphertext)),(21,objectCiphertext.ToArray()),(22,ServiceWire.Be(usageLimit)),(23,ServiceWire.Be(effectiveExpiresAt)),
              (24,SHA256.HashData(exactRouteClosure)),(25,exactRouteClosure.ToArray()),(27,ownerRetrieveCapability32.ToArray())]);
-        return ServiceWire.HashProjection(ProtocolMagic.XPU1,"Deep/ContactResolver/V1/XPU-authorized-body",fields);
+        return ApplicationCoreFormat.Sha256Domain("Deep/ContactResolver/V2/XPU-authorized-body", Project(fields));
     }
 
     public static byte[] Encode(
@@ -189,34 +192,54 @@ public static class Xpu1Codec
         uint usageLimit, ulong effectiveExpiresAt, ReadOnlySpan<byte> exactRouteClosure,
         ReadOnlySpan<byte> exactXpa1, ReadOnlySpan<byte> ownerRetrieveCapability32)
     {
-        var bytes=ServiceWire.EncodeRequest(ProtocolMagic.XPU1,networkId16,operationId32,viewHash32,placementHash32,issuedAt,expiresAt,
+        RequireBounds(networkId16, operationId32, viewHash32, placementHash32, locatorHash32,
+            xir1Hash32, predecessorObjectHash32, objectCiphertext, exactRouteClosure, ownerRetrieveCapability32);
+        if (exactXpa1.Length is < DeepIdV2ContactPublicationCodec.MinimumXpaLength or > DeepIdV2ContactPublicationCodec.MaximumXpaLength)
+            throw new ArgumentException("The DID2 publication authorization exceeds its exact bound.");
+        var bytes=Project(ServiceWire.RequestFields(networkId16,operationId32,viewHash32,placementHash32,issuedAt,expiresAt,
             [(16,locatorHash32.ToArray()),(17,xir1Hash32.ToArray()),(18,ServiceWire.Be(generation)),(19,predecessorObjectHash32.ToArray()),
              (20,SHA256.HashData(objectCiphertext)),(21,objectCiphertext.ToArray()),(22,ServiceWire.Be(usageLimit)),(23,ServiceWire.Be(effectiveExpiresAt)),
-             (24,SHA256.HashData(exactRouteClosure)),(25,exactRouteClosure.ToArray()),(26,exactXpa1.ToArray()),(27,ownerRetrieveCapability32.ToArray())]);
+             (24,SHA256.HashData(exactRouteClosure)),(25,exactRouteClosure.ToArray()),(26,exactXpa1.ToArray()),(27,ownerRetrieveCapability32.ToArray())]));
         _=Decode(bytes);return bytes;
     }
     public static Xpu1Request Decode(ReadOnlySpan<byte> encoded)
     {
-        var record = ServiceWire.ParseRequest(encoded, ProtocolMagic.XPU1, Tags);
-        ServiceWire.ValidateRequestCommon(record);
-        ServiceWire.ExactLengths(record, (16,32),(17,32),(18,8),(19,32),(20,32),(22,4),(23,8),(24,32),(27,32));
-        ServiceWire.LengthRange(record, 21, 40, 65_575);
-        ServiceWire.LengthRange(record, 25, ContactRouteClosureCodec.MinimumEncodedBytes, ContactRouteClosureCodec.MaximumEncodedBytes);
-        ServiceWire.LengthRange(record, 26, 12, 65_535);
-        ServiceWire.NonZero(record, 16,17,20,24,27);
-        ServiceWire.GenerationPredecessor(record, 18,19);
-        if (ServiceWire.U32(record[22]) > 1) ServiceWire.Reject(ContactValidationStage.Scalar, "UsageLimitOutOfRange");
-        if (ServiceWire.U64(record[23]) <= ServiceWire.U64(record[5])) ServiceWire.Reject(ContactValidationStage.Scalar, "InvalidEffectiveExpiry");
-        var cipherHash = SHA256.HashData(record[21]);
-        if (!CryptographicOperations.FixedTimeEquals(cipherHash, record[20])) ServiceWire.Reject(ContactValidationStage.Derived, "ObjectCiphertextHashMismatch");
-        var routeHash = SHA256.HashData(record[25]);
-        if (!CryptographicOperations.FixedTimeEquals(routeHash, record[24])) ServiceWire.Reject(ContactValidationStage.Derived, "RouteClosureHashMismatch");
-        var route = ContactRouteClosureCodec.Decode(record[25]);
-        if (CryptographicOperations.FixedTimeEquals(record[27], route.Reachability.Field(10).Span))
-            ServiceWire.Reject(ContactValidationStage.Derived, "MailboxGrantCapabilitiesMustBeDistinct");
-        var model = new Xpu1Request(record);
-        _ = ServiceWire.ParseValidatedXpa1(model);
-        return model;
+        var parsed = DeepIdV2ContactPublicationCodec.DecodeXpu1(encoded);
+        var route = ContactRouteClosureCodec.Decode(parsed.Field(25).Span);
+        foreach (var record in new[] { route.Reachability, route.Authorization, route.Route,
+            route.Successor, route.Projection, route.Selection })
+            if (!CryptographicOperations.FixedTimeEquals(record.Field(1).Span, parsed.Field(1).Span))
+                throw new CryptographicException("DID2 publication route belongs to another network.");
+        if (CryptographicOperations.FixedTimeEquals(parsed.Field(27).Span, route.Reachability.Field(10).Span))
+            throw new CryptographicException("Public Deposit cannot authorize private Retrieve.");
+        var bytes = parsed.CanonicalBytes.ToArray();
+        return new Xpu1Request(new ServiceRecord(ProtocolMagic.XPU1, bytes, bytes,
+            DeepIdV2ContactPublicationCodec.XpuTags.ToArray().ToDictionary(
+                tag => tag, tag => parsed.Field(tag).ToArray())));
+    }
+
+    private static void RequireBounds(ReadOnlySpan<byte> network, ReadOnlySpan<byte> operation,
+        ReadOnlySpan<byte> view, ReadOnlySpan<byte> placement, ReadOnlySpan<byte> locator,
+        ReadOnlySpan<byte> invite, ReadOnlySpan<byte> predecessor, ReadOnlySpan<byte> ciphertext,
+        ReadOnlySpan<byte> route, ReadOnlySpan<byte> owner)
+    {
+        if (network.Length != 16 || operation.Length != 32 || view.Length != 32 || placement.Length != 32 ||
+            locator.Length != 32 || invite.Length != 32 || predecessor.Length != 32 || owner.Length != 32 ||
+            ciphertext.Length is < DeepIdV2ContactPublicationCodec.MinimumCiphertextLength or > DeepIdV2ContactPublicationCodec.MaximumCiphertextLength ||
+            route.Length is < ContactRouteClosureCodec.MinimumEncodedBytes or > ContactRouteClosureCodec.MaximumEncodedBytes)
+            throw new ArgumentException("The DID2 publication input exceeds its exact bound.");
+    }
+
+    private static byte[] Project(IReadOnlyList<(ushort Tag, byte[] Value)> fields)
+    {
+        var length = checked(12 + fields.Sum(value => 8 + value.Value.Length));
+        if (length > DeepIdV2ContactPublicationCodec.MaximumXpuLength)
+            throw new ArgumentException("The exact DID2 publication exceeds its bound.");
+        var bytes = new byte[length];
+        var writer = new ApplicationRecordWriter(bytes, ProtocolMagicBytes.XPU1,
+            checked((ushort)fields.Count), 2, DeepIdV2Codec.Suite);
+        foreach (var field in fields) writer.Write(field.Tag, field.Value);
+        writer.Complete(); return bytes;
     }
 }
 
@@ -344,7 +367,7 @@ internal static class ServiceWire
     internal static byte[] EncodeResult(string magic,ReadOnlySpan<byte> exactRequest,ushort status,ContactServiceMutationOutcome outcome,ulong serverTime,uint retry,ContactServicePaddingClass padding,IReadOnlyList<ReadOnlyMemory<byte>> payload,bool class4)
     {
         ArgumentNullException.ThrowIfNull(payload);var requestMagic=magic switch{ProtocolMagic.XPO1=>ProtocolMagic.XPU1,ProtocolMagic.XIS1=>ProtocolMagic.XIQ1,ProtocolMagic.XPC1=>ProtocolMagic.XPK1,ProtocolMagic.XUS1=>ReadMagic(exactRequest),_=>throw new ArgumentOutOfRangeException(nameof(magic))};var request=ParseRequestEnvelope(exactRequest,requestMagic);
-        var fields=new List<(ushort,byte[])>{(1,request[1]),(2,request[2]),(3,ContactCodec.Sha256Domain("Deep/ContactResolver/V1/request",exactRequest)),(4,Be(status)),(5,new byte[]{(byte)outcome}),(6,Be(serverTime)),(7,Be(retry)),(8,Be((ushort)padding))};
+        var fields=new List<(ushort,byte[])>{(1,request[1]),(2,request[2]),(3,RequestHash(requestMagic, exactRequest)),(4,Be(status)),(5,new byte[]{(byte)outcome}),(6,Be(serverTime)),(7,Be(retry)),(8,Be((ushort)padding))};
         for(var i=0;i<payload.Count;i++)fields.Add(((ushort)(16+i),payload[i].ToArray()));var canonical=EncodeRecord(magic,fields);ValidatePadding((ushort)padding,class4,magic==ProtocolMagic.XIS1);var size=Buckets[(ushort)padding];if(canonical.Length>size)Reject(ContactValidationStage.Length,"ResultDoesNotFitPaddingClass");var wire=new byte[size];canonical.CopyTo(wire,0);return wire;
     }
 
@@ -411,7 +434,7 @@ internal static class ServiceWire
         var parsed=ParseRequestEnvelope(request,expectedMagic);
         switch(expectedMagic){case ProtocolMagic.XPU1:_=Xpu1Codec.Decode(request);break;case ProtocolMagic.XIQ1:_=Xiq1Codec.Decode(request);break;case ProtocolMagic.XPK1:_=Xpk1Codec.Decode(request);break;}
         if(!r[1].SequenceEqual(parsed[1])||!r[2].SequenceEqual(parsed[2])) Reject(ContactValidationStage.Scalar,"ResultRequestIdentityMismatch");
-        var hash=ContactCodec.Sha256Domain("Deep/ContactResolver/V1/request",request);
+        var hash=RequestHash(expectedMagic, request);
         if(!CryptographicOperations.FixedTimeEquals(hash,r[3])) Reject(ContactValidationStage.Derived,"RequestHashMismatch");
         if(r[5][0]>2) Reject(ContactValidationStage.Scalar,"UnknownMutationOutcome");
         ValidatePadding(U16(r[8]),r.Magic==ProtocolMagic.XUS1,r.Magic==ProtocolMagic.XIS1);
@@ -420,6 +443,11 @@ internal static class ServiceWire
 
     private static Dictionary<ushort,byte[]> ParseRequestEnvelope(ReadOnlySpan<byte> bytes,string magic)
     {
+        if (magic == ProtocolMagic.XPU1)
+        {
+            var parsed = Xpu1Codec.Decode(bytes);
+            return DeepIdV2ContactPublicationCodec.XpuTags.ToArray().ToDictionary(tag => tag, tag => parsed.Field(tag).ToArray());
+        }
         var record=Parse(bytes,magic,null,false,false);if(!record.Fields.ContainsKey(1)||!record.Fields.ContainsKey(2))Reject(ContactValidationStage.Bounds,"InvalidExactRequest");return record.Fields;
     }
 
@@ -537,15 +565,15 @@ internal static class ServiceWire
 
     internal static ServiceRecord ParseValidatedXpa1(Xpu1Request request)
     {
-        var r=ParseRequest(request.ExactXpa1.Span,ProtocolMagic.XPA1,Enumerable.Range(1,21).Select(i=>(ushort)i).ToArray());
-        ExactLengths(r,(1,16),(2,32),(3,32),(4,32),(5,1),(6,32),(7,32),(8,32),(9,8),(10,32),(11,32),(12,4),(13,8),(14,32),(15,8),(16,8),(17,8),(18,32),(19,32),(20,1));
-        LengthRange(r,21,192,3_072);NonZero(r,1,2,3,4,6,7,8,11,14,18,19);
-        var count=r[20][0];if(count is <2 or >32||r[21].Length!=count*96)Reject(ContactValidationStage.Bounds,"InvalidXpaWitnessList");SortedRows(r[21],96);
-        if(r[5][0] is not (1 or 2)||U32(r[12])!=(r[5][0]==1?0u:1u))Reject(ContactValidationStage.Scalar,"InvalidPublicationKindUsage");
-        GenerationPredecessor(r,9,10);if(U64(r[15])>U64(r[16])||U64(r[16])>=U64(r[17]))Reject(ContactValidationStage.Scalar,"InvalidXpaTimeWindow");
-        if(!r[1].SequenceEqual(request.FieldSpan(1))||!r[3].SequenceEqual(request.FieldSpan(2))||!r[4].SequenceEqual(request.FieldSpan(16))||!r[8].SequenceEqual(request.FieldSpan(17))||!r[9].SequenceEqual(request.FieldSpan(18))||!r[10].SequenceEqual(request.FieldSpan(19))||!r[11].SequenceEqual(request.FieldSpan(20))||!r[12].SequenceEqual(request.FieldSpan(22))||!r[13].SequenceEqual(request.FieldSpan(23))||!CryptographicOperations.FixedTimeEquals(r[19],request.AuthorizedBodyHash.Span))Reject(ContactValidationStage.Derived,"XpaAuthorizationMismatch");
-        return r;
+        var parsed = DeepIdV2ContactPublicationCodec.DecodeXpu1(request.CanonicalBytes.Span).Authorization;
+        var bytes = parsed.CanonicalBytes.ToArray();
+        return new ServiceRecord(ProtocolMagic.XPA1, bytes, bytes,
+            DeepIdV2ContactPublicationCodec.XpaTags.ToArray().ToDictionary(tag => tag, tag => parsed.Field(tag).ToArray()));
     }
+
+    private static byte[] RequestHash(string magic, ReadOnlySpan<byte> request) =>
+        ContactCodec.Sha256Domain(magic == ProtocolMagic.XPU1 ?
+            "Deep/ContactResolver/V2/request" : "Deep/ContactResolver/V1/request", request);
 
     internal static ReadOnlyMemory<byte> ProjectedHash(ContactServiceWireRecord record,string domain,ushort[] tags)=>ContactCodec.Sha256Domain(domain,Project(record.Magic,tags.Select(t=>(t,record.Field(t).ToArray())).ToArray()));
     internal static byte[] HashProjection(string magic,string domain,IReadOnlyList<(ushort Tag,byte[] Value)> fields)=>ContactCodec.Sha256Domain(domain,Project(magic,fields.ToArray()));

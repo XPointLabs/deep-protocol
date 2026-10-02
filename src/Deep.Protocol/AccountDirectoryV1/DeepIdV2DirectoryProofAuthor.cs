@@ -20,7 +20,8 @@ public sealed class AuthoredDeepIdV2DirectoryProofPackage
     internal AuthoredDeepIdV2DirectoryProofPackage(
         AccountDirectoryProofAuthoringRequest request,
         DeepIdV2DirectoryProofMaterial material,
-        ReadOnlySpan<byte> exactDtt1, ReadOnlySpan<byte> exactAdp1V2)
+        ReadOnlySpan<byte> exactDtt1, ReadOnlySpan<byte> exactAdp1V2,
+        VerifiedDeepIdV2DirectoryFreshness freshness)
     {
         nonce = request.Nonce.ToArray();
         bootId = request.BootId.ToArray();
@@ -29,6 +30,7 @@ public sealed class AuthoredDeepIdV2DirectoryProofPackage
         dtt = exactDtt1.ToArray();
         adp = exactAdp1V2.ToArray();
         ClientMonotonicSendSample = request.ClientMonotonicSendSample;
+        Freshness = freshness;
     }
 
     public ReadOnlyMemory<byte> Nonce => nonce.ToArray();
@@ -38,6 +40,7 @@ public sealed class AuthoredDeepIdV2DirectoryProofPackage
     public ReadOnlyMemory<byte> ExactDtt1 => dtt.ToArray();
     public ReadOnlyMemory<byte> ExactAdp1V2 => adp.ToArray();
     public ulong ClientMonotonicSendSample { get; }
+    public VerifiedDeepIdV2DirectoryFreshness Freshness { get; }
 }
 
 /// <summary>
@@ -217,7 +220,7 @@ public static class DeepIdV2DirectoryProofAuthor
                 : AuthorForwardTail(material, forward, dttHash);
             var exactAdp = proof.CanonicalBytes.ToArray();
 
-            _ = DeepIdV2DirectoryCurrentProofVerifier.VerifyExactLeafForAuthor(
+            var freshness = DeepIdV2DirectoryCurrentProofVerifier.VerifyExactLeafForAuthor(
                 authority, head.ExactAdh1, exactDtt, exactAdp,
                 request.Nonce.Span, material.QueriedDirectoryLeafKey.Span,
                 new AccountDirectoryMonotonicRequestWindow(
@@ -228,7 +231,7 @@ public static class DeepIdV2DirectoryProofAuthor
                 material.CallerProtectedLkg, deploymentProfileId,
                 request.SupportedReader, mlDsa65);
             return new AuthoredDeepIdV2DirectoryProofPackage(request, material,
-                exactDtt, exactAdp);
+                exactDtt, exactAdp, freshness);
         }
         catch (OperationCanceledException) { throw; }
         catch (AccountDirectoryProofAuthoringException) { throw; }

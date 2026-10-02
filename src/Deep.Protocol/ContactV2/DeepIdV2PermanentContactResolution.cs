@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
 using Deep.Protocol.ApplicationCore;
+using Deep.Protocol.Identity;
 
 namespace Deep.Protocol.ContactV2;
 
@@ -65,18 +66,32 @@ internal static class DeepIdV2PermanentContactResolutionDerivation
             throw new CryptographicException(
                 "The resolver capability does not match the exact DID2 commitment.");
 
-        var didHash = did2.RecordHash.ToArray();
-        var locatorInput = new byte[48];
+        return DeriveCore(networkId16, did2.RecordHash.Span, resolverReadCapability16);
+    }
+
+    internal static DeepIdV2PermanentContactResolution DeriveFromDescriptor(
+        ReadOnlySpan<byte> networkId16, DeepPermanentIdV2 descriptor)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+        if (networkId16.Length != 16 || IsZero(networkId16))
+            throw new ArgumentException("An exact nonzero network is required.", nameof(networkId16));
+        var capability = descriptor.ResolverReadCapability.ToArray();
+        try { return DeriveCore(networkId16, descriptor.ExactDid2Hash.Span, capability); }
+        finally { CryptographicOperations.ZeroMemory(capability); }
+    }
+
+    private static DeepIdV2PermanentContactResolution DeriveCore(
+        ReadOnlySpan<byte> networkId16, ReadOnlySpan<byte> did2Hash,
+        ReadOnlySpan<byte> resolverReadCapability16)
+    {
+        var didHash = did2Hash.ToArray();
         byte[]? salt = null;
         byte[]? prk = null;
         byte[]? info = null;
         byte[]? key = null;
         try
         {
-            networkId16.CopyTo(locatorInput);
-            didHash.CopyTo(locatorInput, 16);
-            var locator = ApplicationCoreFormat.Sha256Domain(
-                "Deep/ContactResolver/V2/permanent-locator", locatorInput);
+            var locator = ComputeLocator(networkId16, didHash);
             try
             {
                 salt = Sha512Domain(
@@ -104,12 +119,23 @@ internal static class DeepIdV2PermanentContactResolutionDerivation
         finally
         {
             CryptographicOperations.ZeroMemory(didHash);
-            CryptographicOperations.ZeroMemory(locatorInput);
             if (salt is not null) CryptographicOperations.ZeroMemory(salt);
             if (prk is not null) CryptographicOperations.ZeroMemory(prk);
             if (info is not null) CryptographicOperations.ZeroMemory(info);
             if (key is not null) CryptographicOperations.ZeroMemory(key);
         }
+    }
+
+    // Public reachability identifier only: this never derives a resolver key.
+    // Keep bootstrap resolution and private authenticated reply routes on the
+    // same existing domain rather than duplicating a second hash algorithm.
+    internal static byte[] ComputeLocator(ReadOnlySpan<byte> networkId16, ReadOnlySpan<byte> did2Hash32)
+    {
+        if (networkId16.Length != 16 || IsZero(networkId16) || did2Hash32.Length != 32 || IsZero(did2Hash32))
+            throw new ArgumentException("The permanent locator requires an exact nonzero network and DID2 hash.");
+        Span<byte> material = stackalloc byte[48];
+        networkId16.CopyTo(material); did2Hash32.CopyTo(material[16..]);
+        return ApplicationCoreFormat.Sha256Domain("Deep/ContactResolver/V2/permanent-locator", material);
     }
 
     private static byte[] Sha512Domain(string label, ReadOnlySpan<byte> value)

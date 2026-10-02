@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using Deep.Protocol.ContactV1;
+using Deep.Protocol.ContactV2;
 using Deep.Protocol.DeepNative;
 using Deep.Protocol.GroupV1;
 
@@ -8,6 +9,10 @@ namespace Deep.Protocol.ApplicationCore;
 
 public static partial class ApplicationCoreCodec
 {
+    public const int MinimumContactControlPayloadBytes = 682 + DeepIdV2ContactMailboxRouteCodec.MinimumBytes;
+    public const int MaximumContactControlPayloadBytes = 682 + DeepIdV2ContactMailboxRouteCodec.MaximumBytes;
+    public const int MinimumContactControlRecordBytes = 282 + MinimumContactControlPayloadBytes;
+    public const int MaximumContactControlRecordBytes = 282 + MaximumContactControlPayloadBytes;
     private static ReadOnlySpan<byte> DmcMagic => ProtocolMagicBytes.DMC2;
     private const uint CoreFlagMask = (uint)(Dmc2Flags.Silent | Dmc2Flags.Disappearing | Dmc2Flags.HighPriority);
     private const uint SessionCapabilityMask = (uint)(SessionInitCapabilities.TextCore |
@@ -184,147 +189,80 @@ public static partial class ApplicationCoreCodec
     }
 
     public static ContactHelloDmc2Payload CreateContactHelloPayload(
-        ReadOnlySpan<byte> relationshipId32, ReadOnlySpan<byte> initiatorDab1Reference38,
+        ReadOnlySpan<byte> relationshipId32, ReadOnlySpan<byte> initiatorDab2Reference38,
         ReadOnlySpan<byte> initiatorDmd1Hash32, ReadOnlySpan<byte> safetyNumberHash32,
-        ContactPolicy policy, ReadOnlySpan<byte> exactInitiatorInboundXur1)
+        ContactPolicy policy, ReadOnlySpan<byte> exactInitiatorInboundXur1, ReadOnlySpan<byte> exactPrivateMailboxPackage)
     {
         EnsureContactEmissionAllowed();
-        return CreateContactHelloPayloadCore(relationshipId32, initiatorDab1Reference38, initiatorDmd1Hash32,
-            safetyNumberHash32, policy, exactInitiatorInboundXur1);
-    }
-
-    /// <summary>
-    /// Capability-based production author for the first ContactHello.  The raw
-    /// CONTACT-CODEC emission gate remains closed; this method consumes a
-    /// device-signed XUR1 and two verified, non-forked DAB1 lineages.
-    /// </summary>
-    public static AuthoredVerifiedContactHello AuthorVerifiedContactHello(
-        VerifiedContactUpdateRendezvous inboundRendezvous,
-        Dab1LineageState recipientBinding,
-        ReadOnlySpan<byte> relationshipId32,
-        ReadOnlySpan<byte> logicalMessageId32,
-        ReadOnlySpan<byte> conversationId32,
-        ulong createdAtUnixMilliseconds,
-        ulong expiresAtUnixMilliseconds,
-        ContactPolicy policy = ContactPolicy.AllowRouteUpdates)
-    {
-        ArgumentNullException.ThrowIfNull(inboundRendezvous);
-        ArgumentNullException.ThrowIfNull(recipientBinding);
-        var initiatorBinding = inboundRendezvous.AddressBinding;
-        var directory = inboundRendezvous.Directory;
-        if (initiatorBinding.ForkLatched || directory.ForkLatched ||
-            recipientBinding.ForkLatched)
-            throw new CryptographicException(
-                "A forked authority cannot author ContactHello.");
-        var account = initiatorBinding.Head.Identity.Account;
-        var network = account.Certificate.NetworkId.Span;
-        var senderAccount = account.DeepAccountIdHash.Span;
-        var senderDevice = inboundRendezvous.Record.Field(13);
-        var activeDevice = directory.Head.Identity.ActiveDevices.SingleOrDefault(candidate =>
-            candidate.Certificate.DeviceId.Span.SequenceEqual(senderDevice.Span));
-        if (activeDevice is null ||
-            !directory.Head.Record.NetworkId.Span.SequenceEqual(network) ||
-            !directory.Head.Record.DeepAccountId.Span.SequenceEqual(senderAccount) ||
-            !directory.Head.Record.ActiveDevices.Any(candidate =>
-                candidate.DeviceId.Span.SequenceEqual(senderDevice.Span)) ||
-            !inboundRendezvous.Record.Field(1).Span.SequenceEqual(network))
-            throw new CryptographicException(
-                "The ContactHello XUR1 differs from its current sender directory.");
-
-        var safety = ApplicationCoreVerifier.ComputeContactSafetyNumber(
-            initiatorBinding, recipientBinding);
-        try
-        {
-            var dab1Reference = new ContactArtifactReference(
-                ProtocolMagic.DAB1,
-                1,
-                initiatorBinding.Head.Record.RecordHash.Span);
-            var payload = CreateContactHelloPayloadCore(
-                relationshipId32,
-                dab1Reference.CanonicalBytes.Span,
-                directory.Head.Record.RecordHash.Span,
-                safety,
-                policy,
-                inboundRendezvous.ExactXur1.Span);
-            var record = AuthorDmc2Core(
-                network,
-                logicalMessageId32,
-                conversationId32,
-                senderAccount,
-                senderDevice.Span,
-                senderClientSequence: 2,
-                createdAtUnixMilliseconds,
-                expiresAtUnixMilliseconds,
-                Dmc2Flags.None,
-                ReadOnlySpan<byte>.Empty,
-                payload);
-            return new AuthoredVerifiedContactHello(record);
-        }
-        finally
-        {
-            CryptographicOperations.ZeroMemory(safety);
-        }
+        return CreateContactHelloPayloadCore(relationshipId32, initiatorDab2Reference38, initiatorDmd1Hash32,
+            safetyNumberHash32, policy, exactInitiatorInboundXur1, exactPrivateMailboxPackage);
     }
 
 #if DEEP_PROTOCOL_RECOVERY_TEST_SEAM
     internal static ContactHelloDmc2Payload CreateContactHelloPayloadForValidation(
-        ReadOnlySpan<byte> relationshipId32, ReadOnlySpan<byte> initiatorDab1Reference38,
+        ReadOnlySpan<byte> relationshipId32, ReadOnlySpan<byte> initiatorDab2Reference38,
         ReadOnlySpan<byte> initiatorDmd1Hash32, ReadOnlySpan<byte> safetyNumberHash32,
-        ContactPolicy policy, ReadOnlySpan<byte> exactInitiatorInboundXur1) =>
-        CreateContactHelloPayloadCore(relationshipId32, initiatorDab1Reference38, initiatorDmd1Hash32,
-            safetyNumberHash32, policy, exactInitiatorInboundXur1);
+        ContactPolicy policy, ReadOnlySpan<byte> exactInitiatorInboundXur1, ReadOnlySpan<byte> exactPrivateMailboxPackage) =>
+        CreateContactHelloPayloadCore(relationshipId32, initiatorDab2Reference38, initiatorDmd1Hash32,
+            safetyNumberHash32, policy, exactInitiatorInboundXur1, exactPrivateMailboxPackage);
 #endif
 
     private static ContactHelloDmc2Payload CreateContactHelloPayloadCore(
-        ReadOnlySpan<byte> relationshipId32, ReadOnlySpan<byte> initiatorDab1Reference38,
+        ReadOnlySpan<byte> relationshipId32, ReadOnlySpan<byte> initiatorDab2Reference38,
         ReadOnlySpan<byte> initiatorDmd1Hash32, ReadOnlySpan<byte> safetyNumberHash32,
-        ContactPolicy policy, ReadOnlySpan<byte> exactInitiatorInboundXur1)
+        ContactPolicy policy, ReadOnlySpan<byte> exactInitiatorInboundXur1, ReadOnlySpan<byte> exactPrivateMailboxPackage)
     {
-        RequireLength(relationshipId32, 32, "relationship ID"); RequireLength(initiatorDab1Reference38, 38, "DAB1 reference");
+        RequireLength(relationshipId32, 32, "relationship ID"); RequireLength(initiatorDab2Reference38, 38, "DAB2 reference");
         RequireLength(initiatorDmd1Hash32, 32, "initiator DMD1 hash"); RequireLength(safetyNumberHash32, 32, "safety-number hash");
         RequireLength(exactInitiatorInboundXur1, 538, "inbound XUR1");
-        var payload = new byte[678];
-        relationshipId32.CopyTo(payload); initiatorDab1Reference38.CopyTo(payload.AsSpan(32));
+        _ = DeepIdV2ContactMailboxRouteCodec.Decode(exactPrivateMailboxPackage);
+        var payload = new byte[checked(682 + exactPrivateMailboxPackage.Length)];
+        relationshipId32.CopyTo(payload); initiatorDab2Reference38.CopyTo(payload.AsSpan(32));
         initiatorDmd1Hash32.CopyTo(payload.AsSpan(70)); safetyNumberHash32.CopyTo(payload.AsSpan(102));
         BinaryPrimitives.WriteUInt16BigEndian(payload.AsSpan(134), (ushort)policy);
         BinaryPrimitives.WriteUInt32BigEndian(payload.AsSpan(136), checked((uint)exactInitiatorInboundXur1.Length));
         exactInitiatorInboundXur1.CopyTo(payload.AsSpan(140));
+        BinaryPrimitives.WriteUInt32BigEndian(payload.AsSpan(678), checked((uint)exactPrivateMailboxPackage.Length));
+        exactPrivateMailboxPackage.CopyTo(payload.AsSpan(682));
         return DecodeContactHello(payload);
     }
 
     public static ContactAcceptDmc2Payload CreateContactAcceptPayload(
         ReadOnlySpan<byte> relationshipId32, ReadOnlySpan<byte> contactHelloHash32,
-        ReadOnlySpan<byte> responderDab1Reference38, ReadOnlySpan<byte> responderDmd1Hash32,
-        ContactPolicy policy, ReadOnlySpan<byte> exactResponderInboundXur1)
+        ReadOnlySpan<byte> responderDab2Reference38, ReadOnlySpan<byte> responderDmd1Hash32,
+        ContactPolicy policy, ReadOnlySpan<byte> exactResponderInboundXur1, ReadOnlySpan<byte> exactPrivateMailboxPackage)
     {
         EnsureContactEmissionAllowed();
-        return CreateContactAcceptPayloadCore(relationshipId32, contactHelloHash32, responderDab1Reference38,
-            responderDmd1Hash32, policy, exactResponderInboundXur1);
+        return CreateContactAcceptPayloadCore(relationshipId32, contactHelloHash32, responderDab2Reference38,
+            responderDmd1Hash32, policy, exactResponderInboundXur1, exactPrivateMailboxPackage);
     }
 
 #if DEEP_PROTOCOL_RECOVERY_TEST_SEAM
     internal static ContactAcceptDmc2Payload CreateContactAcceptPayloadForValidation(
         ReadOnlySpan<byte> relationshipId32, ReadOnlySpan<byte> contactHelloHash32,
-        ReadOnlySpan<byte> responderDab1Reference38, ReadOnlySpan<byte> responderDmd1Hash32,
-        ContactPolicy policy, ReadOnlySpan<byte> exactResponderInboundXur1) =>
-        CreateContactAcceptPayloadCore(relationshipId32, contactHelloHash32, responderDab1Reference38,
-            responderDmd1Hash32, policy, exactResponderInboundXur1);
+        ReadOnlySpan<byte> responderDab2Reference38, ReadOnlySpan<byte> responderDmd1Hash32,
+        ContactPolicy policy, ReadOnlySpan<byte> exactResponderInboundXur1, ReadOnlySpan<byte> exactPrivateMailboxPackage) =>
+        CreateContactAcceptPayloadCore(relationshipId32, contactHelloHash32, responderDab2Reference38,
+            responderDmd1Hash32, policy, exactResponderInboundXur1, exactPrivateMailboxPackage);
 #endif
 
     private static ContactAcceptDmc2Payload CreateContactAcceptPayloadCore(
         ReadOnlySpan<byte> relationshipId32, ReadOnlySpan<byte> contactHelloHash32,
-        ReadOnlySpan<byte> responderDab1Reference38, ReadOnlySpan<byte> responderDmd1Hash32,
-        ContactPolicy policy, ReadOnlySpan<byte> exactResponderInboundXur1)
+        ReadOnlySpan<byte> responderDab2Reference38, ReadOnlySpan<byte> responderDmd1Hash32,
+        ContactPolicy policy, ReadOnlySpan<byte> exactResponderInboundXur1, ReadOnlySpan<byte> exactPrivateMailboxPackage)
     {
         RequireLength(relationshipId32, 32, "relationship ID"); RequireLength(contactHelloHash32, 32, "ContactHello hash");
-        RequireLength(responderDab1Reference38, 38, "DAB1 reference"); RequireLength(responderDmd1Hash32, 32, "responder DMD1 hash");
+        RequireLength(responderDab2Reference38, 38, "DAB2 reference"); RequireLength(responderDmd1Hash32, 32, "responder DMD1 hash");
         RequireLength(exactResponderInboundXur1, 538, "inbound XUR1");
-        var payload = new byte[678];
+        _ = DeepIdV2ContactMailboxRouteCodec.Decode(exactPrivateMailboxPackage);
+        var payload = new byte[checked(682 + exactPrivateMailboxPackage.Length)];
         relationshipId32.CopyTo(payload); contactHelloHash32.CopyTo(payload.AsSpan(32));
-        responderDab1Reference38.CopyTo(payload.AsSpan(64)); responderDmd1Hash32.CopyTo(payload.AsSpan(102));
+        responderDab2Reference38.CopyTo(payload.AsSpan(64)); responderDmd1Hash32.CopyTo(payload.AsSpan(102));
         BinaryPrimitives.WriteUInt16BigEndian(payload.AsSpan(134), (ushort)policy);
         BinaryPrimitives.WriteUInt32BigEndian(payload.AsSpan(136), checked((uint)exactResponderInboundXur1.Length));
         exactResponderInboundXur1.CopyTo(payload.AsSpan(140));
+        BinaryPrimitives.WriteUInt32BigEndian(payload.AsSpan(678), checked((uint)exactPrivateMailboxPackage.Length));
+        exactPrivateMailboxPackage.CopyTo(payload.AsSpan(682));
         return DecodeContactAccept(payload);
     }
 
@@ -651,22 +589,34 @@ public static partial class ApplicationCoreCodec
 
     private static ContactHelloDmc2Payload DecodeContactHello(ReadOnlySpan<byte> payload)
     {
-        if (payload.Length != 678 || BinaryPrimitives.ReadUInt32BigEndian(payload.Slice(136, 4)) != 538)
+        if (payload.Length is < MinimumContactControlPayloadBytes or > MaximumContactControlPayloadBytes ||
+            BinaryPrimitives.ReadUInt32BigEndian(payload.Slice(136, 4)) != 538 ||
+            BinaryPrimitives.ReadUInt32BigEndian(payload.Slice(678, 4)) != payload.Length - 682)
             PayloadInvalid(ApplicationCoreRejection.InvalidFieldLength, "ContactHello has a noncanonical payload length.");
         return new ContactHelloDmc2Payload(payload.ToArray(), NonzeroContact(payload[..32], "relationship ID"),
             DecodeContactDabReference(payload.Slice(32, 38)), NonzeroContact(payload.Slice(70, 32), "initiator DMD1 hash"),
             NonzeroContact(payload.Slice(102, 32), "safety-number hash"), DecodeContactPolicy(payload.Slice(134, 2)),
-            DecodeContactInboundXur1(payload.Slice(140, 538)));
+            DecodeContactInboundXur1(payload.Slice(140, 538)), DecodePrivateMailboxPackage(payload[682..]));
     }
 
     private static ContactAcceptDmc2Payload DecodeContactAccept(ReadOnlySpan<byte> payload)
     {
-        if (payload.Length != 678 || BinaryPrimitives.ReadUInt32BigEndian(payload.Slice(136, 4)) != 538)
+        if (payload.Length is < MinimumContactControlPayloadBytes or > MaximumContactControlPayloadBytes ||
+            BinaryPrimitives.ReadUInt32BigEndian(payload.Slice(136, 4)) != 538 ||
+            BinaryPrimitives.ReadUInt32BigEndian(payload.Slice(678, 4)) != payload.Length - 682)
             PayloadInvalid(ApplicationCoreRejection.InvalidFieldLength, "ContactAccept has a noncanonical payload length.");
         return new ContactAcceptDmc2Payload(payload.ToArray(), NonzeroContact(payload[..32], "relationship ID"),
             NonzeroContact(payload.Slice(32, 32), "ContactHello hash"), DecodeContactDabReference(payload.Slice(64, 38)),
             NonzeroContact(payload.Slice(102, 32), "responder DMD1 hash"), DecodeContactPolicy(payload.Slice(134, 2)),
-            DecodeContactInboundXur1(payload.Slice(140, 538)));
+            DecodeContactInboundXur1(payload.Slice(140, 538)), DecodePrivateMailboxPackage(payload[682..]));
+    }
+
+    private static ParsedDeepIdV2ContactMailboxRoute DecodePrivateMailboxPackage(ReadOnlySpan<byte> exact)
+    {
+        try { return DeepIdV2ContactMailboxRouteCodec.Decode(exact); }
+        catch (Exception error) when (error is FormatException or CryptographicException)
+        { throw new ApplicationCoreFormatException(ApplicationCoreValidationStage.EmbeddedRecord,
+            ApplicationCoreRejection.EmbeddedRecordRejected, "Contact control contains a noncanonical private mailbox package.", error); }
     }
 
     private static ContactRejectDmc2Payload DecodeContactReject(ReadOnlySpan<byte> payload)
@@ -756,9 +706,13 @@ public static partial class ApplicationCoreCodec
 
     private static ReadOnlySpan<byte> DecodeContactDabReference(ReadOnlySpan<byte> reference)
     {
-        try { _ = ContactCodec.DecodeArtifactReference(reference, ProtocolMagic.DAB1); return reference; }
-        catch (ContactFormatException exception) { throw ApplicationCoreFormat.Error(ApplicationCoreValidationStage.TypedPayload,
-            ApplicationCoreRejection.InvalidReference, "Contact DAB1 reference is invalid.", exception); }
+        if (reference.Length != 38 ||
+            !reference[..4].SequenceEqual(ProtocolMagicBytes.DAB2) ||
+            BinaryPrimitives.ReadUInt16BigEndian(reference[4..6]) != 2 ||
+            reference[6..].IndexOfAnyExcept((byte)0) < 0)
+            throw ApplicationCoreFormat.Error(ApplicationCoreValidationStage.TypedPayload,
+                ApplicationCoreRejection.InvalidReference, "Contact DAB2 reference is invalid.");
+        return reference;
     }
 
     private static ReadOnlySpan<byte> DecodeContactInboundXur1(ReadOnlySpan<byte> canonical)

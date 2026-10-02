@@ -40,8 +40,8 @@ before scalar multiplication and rejects an all-zero X25519 shared secret.
 | router ID, key-owner ID, key ID, replay ID, operation ID, attempt ID | 32 bytes, nonzero |
 | exact `MAU2` mailbox request | 1..1,048,576 bytes |
 | complete `XPR1` | 20..1,048,576 bytes |
-| exact Contact Resolver request (`XPU1/XIQ1/XPK1/XUW1/XUQ1`) | 1..69,649 bytes |
-| exact Contact Resolver success (`XPO1/XIS1/XPC1/XUS1`) | 1..131,072 bytes |
+| exact Contact Resolver request (closed sub-operation codecs) | 1..155,222 bytes |
+| exact Contact Resolver success (closed request-paired codecs) | 1..131,072 bytes |
 | exact GroupControl request (`GSW1/GSQ1`) | 1..33,160 bytes |
 | exact GroupControl success (`GSS1`) | 1..65,535 bytes |
 | success body inside `XPR1` | 0..1,048,556 bytes |
@@ -51,6 +51,12 @@ before scalar multiplication and rejects an all-zero X25519 shared secret.
 | replay window | 1..65,536 entries per `(routerId,keyId,epoch)` |
 
 The route IDs and their exact selected traffic key IDs are pairwise distinct.
+The DID2 coordination sub-operation and its gateway placement are owned by
+[DR-0049](../../docs/survival-program/decisions/DR-0049-did2-three-hop-coordination-carrier.md)
+and [CONTACT-COORDINATION-02](../../docs/survival-program/releases/v3.0.0/specs/contact-coordination-v2.registry.json).
+It uses existing ContactResolve operation 4, not a sixth outer operation.
+Each other sub-operation retains its own closed codec bounds; the outer ceiling
+is not permission to increase a mailbox/contact record or bypass canonical checks.
 Ingress decrypts only a relay layer, core only a relay layer, and service exit
 only an exit layer. A relay plaintext contains no operation, terminal request,
 reply key, operation ID, or attempt ID.

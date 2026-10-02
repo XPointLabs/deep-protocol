@@ -36,16 +36,16 @@ internal static class ContactCodecValidation
     public static ContactHelloDmc2Payload CreateContactHelloPayload(
         ReadOnlySpan<byte> relationshipId32, ReadOnlySpan<byte> initiatorDab1Reference38,
         ReadOnlySpan<byte> initiatorDmd1Hash32, ReadOnlySpan<byte> safetyNumberHash32,
-        ContactPolicy policy, ReadOnlySpan<byte> exactInitiatorInboundXur1) =>
+        ContactPolicy policy, ReadOnlySpan<byte> exactInitiatorInboundXur1, ReadOnlySpan<byte> exactPrivateMailboxPackage) =>
         ApplicationCoreCodec.CreateContactHelloPayloadForValidation(relationshipId32, initiatorDab1Reference38,
-            initiatorDmd1Hash32, safetyNumberHash32, policy, exactInitiatorInboundXur1);
+            initiatorDmd1Hash32, safetyNumberHash32, policy, exactInitiatorInboundXur1, exactPrivateMailboxPackage);
 
     public static ContactAcceptDmc2Payload CreateContactAcceptPayload(
         ReadOnlySpan<byte> relationshipId32, ReadOnlySpan<byte> contactHelloHash32,
         ReadOnlySpan<byte> responderDab1Reference38, ReadOnlySpan<byte> responderDmd1Hash32,
-        ContactPolicy policy, ReadOnlySpan<byte> exactResponderInboundXur1) =>
+        ContactPolicy policy, ReadOnlySpan<byte> exactResponderInboundXur1, ReadOnlySpan<byte> exactPrivateMailboxPackage) =>
         ApplicationCoreCodec.CreateContactAcceptPayloadForValidation(relationshipId32, contactHelloHash32,
-            responderDab1Reference38, responderDmd1Hash32, policy, exactResponderInboundXur1);
+            responderDab1Reference38, responderDmd1Hash32, policy, exactResponderInboundXur1, exactPrivateMailboxPackage);
 
     public static ContactRejectDmc2Payload CreateContactRejectPayload(ReadOnlySpan<byte> relationshipId32,
         ReadOnlySpan<byte> contactHelloHash32, ContactRejectReason reason) =>

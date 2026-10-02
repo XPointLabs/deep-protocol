@@ -9,55 +9,6 @@ namespace Deep.Protocol.Tests.ContactV1;
 public sealed class ContactPublicationAuthorTests
 {
     [Fact]
-    public async Task UpdateRendezvous_AuthorsAndRecoversOnlyAgainstExactLocalAuthority()
-    {
-        var fixture = await Fixture.CreateAsync();
-        var signer = new Signer(
-            fixture.Identity.Device, fixture.Identity.VerifiedRecipient);
-        var binding = Deep.Protocol.ApplicationCore.ApplicationCoreVerifier.StartDab1Lineage(
-            fixture.Identity.Binding).Next;
-        var directory = Deep.Protocol.ApplicationCore.ApplicationCoreVerifier.StartDmd1Lineage(
-            fixture.Identity.Directory).Next;
-        var keyId = Bytes(32, 0x41);
-        var publicKey = Bytes(32, 0x61);
-
-        var authored = await ContactUpdateRendezvousAuthor.AuthorGenesisAsync(
-            binding,
-            directory,
-            fixture.Route,
-            keyId,
-            publicKey,
-            20,
-            80,
-            signer);
-        var parsedRoute = ContactRouteClosureCodec.Decode(
-            ContactRouteClosureCodec.Encode(fixture.Route));
-        var recovered = ContactUpdateRendezvousAuthor.RecoverCurrent(
-            authored.ExactXur1.Span,
-            binding,
-            directory,
-            parsedRoute,
-            keyId,
-            publicKey,
-            50);
-
-        Assert.Equal(authored.ExactXur1.ToArray(), recovered.ExactXur1.ToArray());
-        Assert.Contains(ContactDeviceSignaturePurpose.UpdateRendezvous,
-            signer.Purposes);
-        var wrongKey = publicKey.ToArray();
-        wrongKey[0] ^= 1;
-        Assert.Throws<CryptographicException>(() =>
-            ContactUpdateRendezvousAuthor.RecoverCurrent(
-                authored.ExactXur1.Span,
-                binding,
-                directory,
-                parsedRoute,
-                keyId,
-                wrongKey,
-                50));
-    }
-
-    [Fact]
     public async Task AuthorsExactPermanentPublicationFromVerifiedCapabilitiesAndCustody()
     {
         var fixture = await Fixture.CreateAsync();

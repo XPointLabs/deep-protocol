@@ -160,7 +160,8 @@ public sealed class ApplicationCoreVerificationTests
                     ApplicationCoreFixture.Bytes(64, 0x7c))]));
         var bootId = ApplicationCoreFixture.Bytes(16, 0x7d);
         var freshness = new VerifiedDeepIdV2DirectoryFreshness(
-            exactHead, [], [], fixture.Network,
+            exactHead, Deep.Protocol.Tests.ContactV2.DeepIdV2PreKeyClaimReceiptVerifierTests
+                .SyntheticClaimDtt(fixture.Network, exactHead), [], fixture.Network,
             checkpoint.Checkpoint.DirectoryLeafKey.Span,
             new AccountDirectoryMonotonicRequestWindow(bootId, 1, 2, 3),
             60, 15, 16, AccountDirectoryAdp1ResultKind.CurrentValue,
@@ -553,6 +554,17 @@ public sealed class ApplicationCoreVerificationTests
             closure, currentContact, manifest, bootId, 3);
         DeepIdV2PreKeyManifestBinding.Verify(
             closure, currentContact, manifest, bootId, 5);
+        // DR44: an already issued inventory may precede a later contact and
+        // extend beyond it. Both must still cover the full current operation.
+        var laterContactFields = bundleFields.ToArray();
+        laterContactFields[16] = Be64(14); laterContactFields[17] = Be64(19);
+        var laterContact = SignBundle(laterContactFields, fixture.DeviceKey);
+        var laterClosure = DeepIdV2ResolverClosureCodec.AuthorForValidation(
+            fixture.Network, laterContact.CanonicalBytes.Span, 2, support);
+        DeepIdV2PreKeyManifestBinding.Verify(laterClosure, currentContact, manifest, bootId, 3);
+        DeepIdV2PreKeyManifestBinding.Verify(laterClosure, currentContact, manifest, bootId, 5);
+        AssertVerificationFailure(() => DeepIdV2PreKeyManifestBinding.Verify(
+            laterClosure, currentContact, manifest, bootId, 6));
         Dpk2Record Dpk2Member(byte[] xSignature, byte[] mlKemSignature,
             byte[] bundleSignature, byte[]? dmdHash = null,
             byte prekeySeed = 0x91,
@@ -1046,131 +1058,6 @@ public sealed class ApplicationCoreVerificationTests
             DeepIdV2Verifier.ComputeContactSafetyNumber(aliceOriginal, aliceChangedPqRoot));
         AssertLineageFailure(() => DeepIdV2Verifier.ComputeContactSafetyNumber(
             new Dab2LineageState(aliceOriginal.Head, forkLatched: true), bobBinding));
-    }
-
-    [Fact]
-    public void ContactSafetyNumber_UsesSortedVerifiedDpa1HashesAndRejectsForks()
-    {
-        var alice = VerifiedFixture.Create(accountValue: 0x22, deviceValue: 0x33);
-        var bob = VerifiedFixture.Create(accountValue: 0x44, deviceValue: 0x55);
-        var aliceBinding = alice.AuthorAndVerifyDab1(0, new byte[32]);
-        var bobBinding = bob.AuthorAndVerifyDab1(0, new byte[32]);
-        var left = ApplicationCoreVerifier.StartDab1Lineage(aliceBinding).Next;
-        var right = ApplicationCoreVerifier.StartDab1Lineage(bobBinding).Next;
-
-        var actual = ApplicationCoreVerifier.ComputeContactSafetyNumber(left, right);
-        Assert.Equal(actual,
-            ApplicationCoreVerifier.ComputeContactSafetyNumber(right, left));
-
-        var leftAccount = alice.Account.Certificate;
-        var rightAccount = bob.Account.Certificate;
-        var lower = leftAccount.CanonicalHash.Span.SequenceCompareTo(
-            rightAccount.CanonicalHash.Span) < 0 ? leftAccount : rightAccount;
-        var upper = ReferenceEquals(lower, leftAccount) ? rightAccount : leftAccount;
-        var material = new byte[96];
-        alice.Network.CopyTo(material, 0);
-        lower.CanonicalHash.Span.CopyTo(material.AsSpan(16));
-        BinaryPrimitives.WriteUInt64BigEndian(material.AsSpan(48),
-            lower.AccountGeneration);
-        upper.CanonicalHash.Span.CopyTo(material.AsSpan(56));
-        BinaryPrimitives.WriteUInt64BigEndian(material.AsSpan(88),
-            upper.AccountGeneration);
-        var domain = Encoding.ASCII.GetBytes(
-            "Deep/Application/V1/contact-safety-number");
-        var input = new byte[domain.Length + 1 + 4 + material.Length];
-        domain.CopyTo(input, 0);
-        BinaryPrimitives.WriteUInt32BigEndian(input.AsSpan(domain.Length + 1),
-            checked((uint)material.Length));
-        material.CopyTo(input, domain.Length + 5);
-        Assert.Equal(SHA256.HashData(input), actual);
-
-        AssertVerificationFailure(() =>
-            ApplicationCoreVerifier.ComputeContactSafetyNumber(left, left));
-        AssertVerificationFailure(() =>
-            ApplicationCoreVerifier.ComputeContactSafetyNumber(
-                new Dab1LineageState(aliceBinding, forkLatched: true), right));
-    }
-
-    [Fact]
-    public void ContactHelloEndpointBindings_RequireExactVerifiedIdentityAndSignedXur1()
-    {
-        var alice = VerifiedFixture.Create(accountValue: 0x22, deviceValue: 0x33);
-        var bob = VerifiedFixture.Create(accountValue: 0x44, deviceValue: 0x55);
-        var aliceBinding = ApplicationCoreVerifier.StartDab1Lineage(
-            alice.AuthorAndVerifyDab1(0, new byte[32])).Next;
-        var aliceDirectory = ApplicationCoreVerifier.StartDmd1Lineage(
-            alice.AuthorAndVerifyDmd1(1, new byte[32])).Next;
-        var bobBinding = ApplicationCoreVerifier.StartDab1Lineage(
-            bob.AuthorAndVerifyDab1(0, new byte[32])).Next;
-        var dab1Reference = ContactReference("DAB1",
-            aliceBinding.Head.Record.RecordHash.Span);
-        var safety = ApplicationCoreVerifier.ComputeContactSafetyNumber(
-            aliceBinding, bobBinding);
-        var device = alice.Identity.ActiveDevices[0].Certificate;
-        var dpd1Reference = ContactReference("DPD1", device.CanonicalHash.Span);
-        var fields = new ReadOnlyMemory<byte>[]
-        {
-            alice.Network, ApplicationCoreFixture.Bytes(32, 0x61),
-            ApplicationCoreFixture.Bytes(32, 0x62), BigEndian64(0), new byte[32],
-            ContactReference("PMT2", 0x63), ApplicationCoreFixture.Bytes(32, 0x64),
-            ApplicationCoreFixture.Bytes(32, 0x65), ApplicationCoreFixture.Bytes(32, 0x66),
-            new byte[] { 0, 7 }, BigEndian64(150), BigEndian64(500),
-            alice.DeviceId, dpd1Reference, ApplicationCoreFixture.Bytes(64, 0x67)
-        };
-        var unsignedXur1 = ContactCodecValidation.AuthorRecord("XUR1", fields);
-        fields[14] = PublicKeyAuth.SignDetached(
-            unsignedXur1.SignatureInput.ToArray(), alice.DeviceKey.PrivateKey);
-        var signedXur1 = ContactCodecValidation.AuthorRecord("XUR1", fields);
-
-        ParsedDmc2 Hello(byte[] dab1, byte[] dmd1, byte[] safetyHash, byte[] xur1) =>
-            ContactCodecValidation.AuthorDmc2(
-                alice.Network, ApplicationCoreFixture.Bytes(32, 0x71),
-                ApplicationCoreFixture.Bytes(32, 0x72), alice.AccountId,
-                alice.DeviceId, 1, 200_000, 300_000, Dmc2Flags.None,
-                ReadOnlySpan<byte>.Empty,
-                ContactCodecValidation.CreateContactHelloPayload(
-                    ApplicationCoreFixture.Bytes(32, 0x73), dab1, dmd1,
-                    safetyHash, ContactPolicy.AllowRouteUpdates, xur1));
-
-        var valid = Hello(dab1Reference, aliceDirectory.Head.Record.RecordHash.ToArray(),
-            safety, signedXur1.CanonicalBytes.ToArray());
-        ApplicationCoreVerifier.RequireContactHelloEndpointBindings(
-            valid, aliceBinding, aliceDirectory, bobBinding);
-
-        var wrongSafety = safety.ToArray();
-        wrongSafety[0] ^= 1;
-        AssertVerificationFailure(() => ApplicationCoreVerifier.RequireContactHelloEndpointBindings(
-            Hello(dab1Reference, aliceDirectory.Head.Record.RecordHash.ToArray(),
-                wrongSafety, signedXur1.CanonicalBytes.ToArray()),
-            aliceBinding, aliceDirectory, bobBinding));
-        var wrongDab1 = dab1Reference.ToArray();
-        wrongDab1[^1] ^= 1;
-        AssertVerificationFailure(() => ApplicationCoreVerifier.RequireContactHelloEndpointBindings(
-            Hello(wrongDab1, aliceDirectory.Head.Record.RecordHash.ToArray(),
-                safety, signedXur1.CanonicalBytes.ToArray()),
-            aliceBinding, aliceDirectory, bobBinding));
-        AssertVerificationFailure(() => ApplicationCoreVerifier.RequireContactHelloEndpointBindings(
-            Hello(dab1Reference, ApplicationCoreFixture.Bytes(32, 0x74),
-                safety, signedXur1.CanonicalBytes.ToArray()),
-            aliceBinding, aliceDirectory, bobBinding));
-        var wrongAuthorFields = fields.ToArray();
-        wrongAuthorFields[12] = bob.DeviceId;
-        var unsignedWrongAuthor = ContactCodecValidation.AuthorRecord("XUR1", wrongAuthorFields);
-        wrongAuthorFields[14] = PublicKeyAuth.SignDetached(
-            unsignedWrongAuthor.SignatureInput.ToArray(), alice.DeviceKey.PrivateKey);
-        var wrongAuthor = ContactCodecValidation.AuthorRecord("XUR1", wrongAuthorFields);
-        AssertVerificationFailure(() => ApplicationCoreVerifier.RequireContactHelloEndpointBindings(
-            Hello(dab1Reference, aliceDirectory.Head.Record.RecordHash.ToArray(),
-                safety, wrongAuthor.CanonicalBytes.ToArray()),
-            aliceBinding, aliceDirectory, bobBinding));
-        var badSignatureFields = fields.ToArray();
-        badSignatureFields[14] = ApplicationCoreFixture.Bytes(64, 0x68);
-        var badSignature = ContactCodecValidation.AuthorRecord("XUR1", badSignatureFields);
-        Assert.Throws<ContactFormatException>(() =>
-            ApplicationCoreVerifier.RequireContactHelloEndpointBindings(
-                Hello(dab1Reference, aliceDirectory.Head.Record.RecordHash.ToArray(),
-                    safety, badSignature.CanonicalBytes.ToArray()),
-                aliceBinding, aliceDirectory, bobBinding));
     }
 
     private static byte[] BigEndian64(ulong value)

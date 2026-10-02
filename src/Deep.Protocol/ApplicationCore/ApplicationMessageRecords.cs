@@ -360,9 +360,10 @@ public sealed class ContactRouteUpdateDmc2Payload : Dmc2Payload
 
 public sealed class ContactHelloDmc2Payload : Dmc2Payload
 {
-    private readonly byte[] relationshipId; private readonly byte[] dab1Reference; private readonly byte[] dmd1Hash; private readonly byte[] safetyNumberHash; private readonly byte[] inboundXur1;
-    internal ContactHelloDmc2Payload(byte[] canonical, ReadOnlySpan<byte> relationshipId, ReadOnlySpan<byte> dab1Reference, ReadOnlySpan<byte> dmd1Hash, ReadOnlySpan<byte> safetyNumberHash, ContactPolicy policy, ReadOnlySpan<byte> inboundXur1) : base(Dmc2ContentKind.ContactHello, canonical) { this.relationshipId=relationshipId.ToArray(); this.dab1Reference=dab1Reference.ToArray(); this.dmd1Hash=dmd1Hash.ToArray(); this.safetyNumberHash=safetyNumberHash.ToArray(); Policy=policy; this.inboundXur1=inboundXur1.ToArray(); }
-    public ReadOnlyMemory<byte> RelationshipId => relationshipId.ToArray(); public ReadOnlyMemory<byte> InitiatorDab1Reference => dab1Reference.ToArray(); public ReadOnlyMemory<byte> InitiatorDmd1Hash => dmd1Hash.ToArray(); public ReadOnlyMemory<byte> SafetyNumberHash => safetyNumberHash.ToArray(); public ContactPolicy Policy { get; } public ReadOnlyMemory<byte> InboundXur1 => inboundXur1.ToArray();
+    private readonly byte[] relationshipId; private readonly byte[] dab2Reference; private readonly byte[] dmd1Hash; private readonly byte[] safetyNumberHash; private readonly byte[] inboundXur1;
+    internal ContactHelloDmc2Payload(byte[] canonical, ReadOnlySpan<byte> relationshipId, ReadOnlySpan<byte> dab2Reference, ReadOnlySpan<byte> dmd1Hash, ReadOnlySpan<byte> safetyNumberHash, ContactPolicy policy, ReadOnlySpan<byte> inboundXur1, Deep.Protocol.ContactV2.ParsedDeepIdV2ContactMailboxRoute mailboxRoute) : base(Dmc2ContentKind.ContactHello, canonical) { this.relationshipId=relationshipId.ToArray(); this.dab2Reference=dab2Reference.ToArray(); this.dmd1Hash=dmd1Hash.ToArray(); this.safetyNumberHash=safetyNumberHash.ToArray(); Policy=policy; this.inboundXur1=inboundXur1.ToArray(); MailboxRoute=mailboxRoute; }
+    public Deep.Protocol.ContactV2.ParsedDeepIdV2ContactMailboxRoute MailboxRoute { get; }
+    public ReadOnlyMemory<byte> RelationshipId => relationshipId.ToArray(); public ReadOnlyMemory<byte> InitiatorDab2Reference => dab2Reference.ToArray(); public ReadOnlyMemory<byte> InitiatorDmd1Hash => dmd1Hash.ToArray(); public ReadOnlyMemory<byte> SafetyNumberHash => safetyNumberHash.ToArray(); public ContactPolicy Policy { get; } public ReadOnlyMemory<byte> InboundXur1 => inboundXur1.ToArray();
 }
 
 /// <summary>
@@ -385,9 +386,25 @@ public sealed class AuthoredVerifiedContactHello
 
 public sealed class ContactAcceptDmc2Payload : Dmc2Payload
 {
-    private readonly byte[] relationshipId; private readonly byte[] helloHash; private readonly byte[] dab1Reference; private readonly byte[] dmd1Hash; private readonly byte[] inboundXur1;
-    internal ContactAcceptDmc2Payload(byte[] canonical, ReadOnlySpan<byte> relationshipId, ReadOnlySpan<byte> helloHash, ReadOnlySpan<byte> dab1Reference, ReadOnlySpan<byte> dmd1Hash, ContactPolicy policy, ReadOnlySpan<byte> inboundXur1) : base(Dmc2ContentKind.ContactAccept, canonical) { this.relationshipId=relationshipId.ToArray(); this.helloHash=helloHash.ToArray(); this.dab1Reference=dab1Reference.ToArray(); this.dmd1Hash=dmd1Hash.ToArray(); Policy=policy; this.inboundXur1=inboundXur1.ToArray(); }
-    public ReadOnlyMemory<byte> RelationshipId => relationshipId.ToArray(); public ReadOnlyMemory<byte> ContactHelloHash => helloHash.ToArray(); public ReadOnlyMemory<byte> ResponderDab1Reference => dab1Reference.ToArray(); public ReadOnlyMemory<byte> ResponderDmd1Hash => dmd1Hash.ToArray(); public ContactPolicy Policy { get; } public ReadOnlyMemory<byte> InboundXur1 => inboundXur1.ToArray();
+    private readonly byte[] relationshipId; private readonly byte[] helloHash; private readonly byte[] dab2Reference; private readonly byte[] dmd1Hash; private readonly byte[] inboundXur1;
+    internal ContactAcceptDmc2Payload(byte[] canonical, ReadOnlySpan<byte> relationshipId, ReadOnlySpan<byte> helloHash, ReadOnlySpan<byte> dab2Reference, ReadOnlySpan<byte> dmd1Hash, ContactPolicy policy, ReadOnlySpan<byte> inboundXur1, Deep.Protocol.ContactV2.ParsedDeepIdV2ContactMailboxRoute mailboxRoute) : base(Dmc2ContentKind.ContactAccept, canonical) { this.relationshipId=relationshipId.ToArray(); this.helloHash=helloHash.ToArray(); this.dab2Reference=dab2Reference.ToArray(); this.dmd1Hash=dmd1Hash.ToArray(); Policy=policy; this.inboundXur1=inboundXur1.ToArray(); MailboxRoute=mailboxRoute; }
+    public Deep.Protocol.ContactV2.ParsedDeepIdV2ContactMailboxRoute MailboxRoute { get; }
+    public ReadOnlyMemory<byte> RelationshipId => relationshipId.ToArray(); public ReadOnlyMemory<byte> ContactHelloHash => helloHash.ToArray(); public ReadOnlyMemory<byte> ResponderDab2Reference => dab2Reference.ToArray(); public ReadOnlyMemory<byte> ResponderDmd1Hash => dmd1Hash.ToArray(); public ContactPolicy Policy { get; } public ReadOnlyMemory<byte> InboundXur1 => inboundXur1.ToArray();
+}
+
+/// <summary>Current endpoint-bound author result; not authenticated pending
+/// custody, contact acceptance, durable state or ACK authority.</summary>
+public sealed class AuthoredVerifiedContactAccept
+{
+    internal AuthoredVerifiedContactAccept(ParsedDmc2 record)
+    {
+        Record = record ?? throw new ArgumentNullException(nameof(record));
+        if (record.ParsedPayload is not ContactAcceptDmc2Payload)
+            throw new CryptographicException("The authored contact event is not ContactAccept.");
+    }
+
+    public ParsedDmc2 Record { get; }
+    public ReadOnlyMemory<byte> CanonicalBytes => Record.CanonicalBytes;
 }
 
 public sealed class ContactRejectDmc2Payload : Dmc2Payload
@@ -448,5 +465,7 @@ public sealed class ParsedDmc2 : ParsedApplicationCoreRecord
     public Dmc2Flags Flags { get; }
     public ReadOnlyMemory<byte> ReplyToLogicalMessageId => replyToLogicalMessageId.ToArray();
     public ReadOnlyMemory<byte> PayloadBytes => payloadBytes.ToArray();
-    internal Dmc2Payload ParsedPayload { get; }
+    /// <summary>Immutable typed parsed plaintext only. Does not authenticate
+    /// origin, current endpoints, session custody, semantic application or ACK.</summary>
+    public Dmc2Payload ParsedPayload { get; }
 }

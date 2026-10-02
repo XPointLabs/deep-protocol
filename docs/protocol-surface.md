@@ -1,11 +1,73 @@
 # Protocol Surface - DNP1 Wave 1
 
-Updated: 2026-09-30.
+Updated: 2026-10-01.
 
 The production package closure is exactly `Deep.Protocol`,
 `Deep.Protocol.MembershipRoutes`, and `Deep.Protocol.ProfileCarrier`.
 
 ## Production surface
+
+### Opaque DID2 mailbox issuance candidate
+
+Superproject DR-0054 defines `ContactV2.DeepIdV2MailboxGrantIssuanceVerifier`,
+the closed `VerifiedDeepIdV2MailboxGrantIssuance`, bounded untrusted
+`DeepIdV2MailboxGrantReplicaEvidence` and narrow `IMailboxGrantIssuerSigner`.
+The result verifies current root/NET/PMA and both independently selected stores'
+exact durable-route signatures, authors a role-key-verified candidate and checks
+exact journal read-back. It exposes no public result constructor, caller clock,
+issuer key override or recipient-identity claim. Neutral wire/transcripts are
+unchanged. Registry owns the private signer/journal; client holder custody and
+credential use remain separate. Machine/API manifests and full release graph
+are final connected-batch activation gates, not satisfied by source builds.
+
+### Private coordination transport admission
+
+Superproject DR-0048 defines `ContactV2.ContactCoordinationTarget`,
+`ContactCoordinationPeerHeaders` and `ContactCoordinationPeerAuthentication`.
+These expose bounded transcript construction, canonical header/admission-window
+checks and actual Ed25519 verification. They return no trusted protocol authority
+or persistence capability. Registry owns its access list; XNode owns its existing
+node signer and fixed-origin transport.
+
+DR-0049 adds `ContactCoordinationOnionCodec` and the internally constructed
+`ParsedContactCoordinationOnionRequest`. Defensive parsed wrapper/body/network/
+nonce/PMT/shard values grant no current placement, witness or dispatch authority.
+Responses are decoded only against the exact parsed request. Gateway kind
+`CoordinateContact` uses existing ContactResolve, not a sixth ONION operation.
+Vectors/public API manifest and consumer package repin remain final business-batch
+gates; compiled source-cutover tests do not activate published package graphs.
+
+### DID2 permanent read candidate
+
+Superproject DR-0041 adds `DeepIdV2PermanentContactResolveRequestAuthor` and
+`DeepIdV2PermanentContactResolveVerifier`. Descriptor-bound `OpenCandidate`
+returns only `ParsedDeepIdV2PermanentContactCandidate`; independent current
+peer proof/NETCODEC/time verification releases the closed
+`VerifiedDeepIdV2PermanentContactResolveClosure`. Neither has a public result
+constructor or trust setter. The neutral node receipt transcript is unchanged;
+unsigned server time is not freshness. This is not consent, a claim/grant,
+account persistence or delivery. The old inactive DID1 consumer graph still
+requires retirement before activation; no fallback accepts its transcript.
+DR-0042 corrects retained-route issuance-anchor semantics without public API or
+wire changes. Current peer/network authority, minimum checkpoint binding,
+threshold signatures and time bounds remain mandatory; new issuance still
+requires the current anchor. Historical commits do not grant fresh dispatch.
+DR-0043 adds exact current claim recipient/placement authority pairing and
+private last-observed clock continuity; no public API/trust seam is added.
+DR-0044 corrects full inventory/service versus later contact lifetimes while
+preserving operation-time containment and current identity/support checks.
+
+### DID2 publication candidate
+
+The sole public XPU/XPA consumer is V2-only under superproject DR-0039.
+`ContactV2.DeepIdV2PublicationCommitVerifier` requires a current closed DID2
+route, owned contact object and exact publisher request to mint closed
+`VerifiedDeepIdV2PublicationCommit` from two selected-node receipt signatures
+(DR-0040). No public result constructor, caller key/clock/trust boolean exists.
+The result is historical evidence, not persisted account state, fresh dispatch
+permission, consent, mailbox authority or physical delivery. Shared owns
+protected phase-7 persistence. Private shipping transport, vectors/API manifests,
+consumer repins and device checks remain activation gates.
 
 `Deep.Protocol` contains the retained Deep mailbox, membership, authority and
 managed-ingress primitives. Its only direct NuGet dependency is
@@ -109,6 +171,14 @@ not activate message delivery, masked acquisition or a release claim.
   requires no authority repin/reset. Authenticated durable replica completion,
   protected initiator preparation and shipping consumers remain required
   before activation or device delivery can be claimed.
+- [DR-0061](../../docs/survival-program/decisions/DR-0061-did2-committed-claim-recipient-verification.md)
+  adds the same-input closed `VerifyCommittedForRecipientAsync` factory and
+  uses it for initial recipient promotion. Request mutation expiry no longer
+  expires a signed completed allocation; current endpoint, placement and
+  inventory validity still apply. Its verifier-selected purpose is retained
+  through final checks and cannot authorize initiator encryption. The existing
+  initiator factory still checks request expiry. No wire/key/SQL change;
+  actual public API snapshot and downstream rebuild closure remain batch gates.
 - [DR-0019](../../docs/survival-program/decisions/DR-0019-did2-preclaim-secret-persistence.md)
   adds exactly three opaque local pre-XPK1 persistence types. Seal consumes
   the started claim; restore authenticates the database/intent scope and
@@ -201,6 +271,35 @@ deployment authority. Recovery output has `NoAuthorityClaim`; ReleaseRoot
 genesis remains pinned by each consumer's immutable deployment source.
 Protocol never claims persistence, durability, publication, activation or a
 successful consumer CAS.
+
+DR-0052 freezes complete mailbox-authority distribution and direct DID2 grant
+result verification; see
+[the decision](../../docs/survival-program/decisions/DR-0052-did2-mailbox-authority-distribution.md).
+The returned immutable evidence has no public constructor, installation,
+holder-secret or dispatch surface. Actual package API/evidence bindings and
+consumer repins remain the whole-business batch gate; local checks do not
+activate production or prove physical delivery.
+
+[DR-0053](../../docs/survival-program/decisions/DR-0053-did2-mailbox-grant-restart-custody.md)
+adds direct DID2 exact pending-request restoration and independent retained
+winner verification. The former requires the original request to remain current;
+the latter checks the current issuer/topology/grant rather than treating an old
+acquisition TTL as grant lifetime. Neither restores protected holder custody or
+exposes a signer/dispatch capability. Consumer/API repins remain a batch gate.
+
+[DR-0062](../../docs/survival-program/decisions/DR-0062-did2-private-contact-mailbox-route.md)
+adds bounded private DID2 mailbox-route framing and independent current-peer
+route verification. The immutable parsed package is not authentication; its
+closed verifier result is not publication, consent, a grant or dispatch/ACK
+authority. It contains no resolver-read/retrieve/private-key material. Event
+embedding follows the separately frozen
+[DR-0063](../../docs/survival-program/decisions/DR-0063-did2-contact-reply-route-embedding.md):
+both endpoint-bound authors now require a private parsed package and the
+retired fixed control payload has no reader. Author/endpoint metadata checks
+do not authenticate route signatures; Shared independently verifies the full
+current route before handoff or use. Variable protected acceptance custody,
+connected reverse delivery, actual API review/repins and shipping/device
+consumers remain the activation gates.
 
 DR-0013 freezes the additive read-only
 `AccountDirectoryProofAuthor.RequireIssuanceReady` issuance-context verifier.

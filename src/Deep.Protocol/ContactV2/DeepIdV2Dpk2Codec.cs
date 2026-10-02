@@ -30,7 +30,10 @@ public sealed class ParsedDpk2V2
     public ReadOnlyMemory<byte> DeviceDirectoryHeadHash => record.DeviceDirectoryHeadHash;
     public ReadOnlyMemory<byte> DeviceAgreementPublicKey => record.DeviceAgreementPublicKey;
     public ReadOnlyMemory<byte> OneTimePrekeyId => record.OneTimeX25519PrekeyId;
+    public ReadOnlyMemory<byte> SignedX25519PrekeyId => record.SignedX25519PrekeyId;
+    public ReadOnlyMemory<byte> MlKemPrekeyId => record.MlKemPrekeyId;
     public Dpk2PrekeyKind Kind => record.MlKemKind;
+    public ushort ReuseLimit => record.ReuseLimit;
     public ulong ResponderDeviceGeneration => record.ResponderDeviceGeneration;
     public ulong DeviceDirectoryGeneration => record.DeviceDirectoryGeneration;
     public ulong PrekeyServiceGeneration => record.PrekeyServiceGeneration;

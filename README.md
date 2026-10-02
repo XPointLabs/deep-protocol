@@ -24,6 +24,24 @@ The former `Deep.Protocol.Native` dark identity path has been clean-break promot
 `Deep.Protocol.Identity` and removed. The pre-user Session compatibility corpus has
 also been removed; Git history is sufficient if an old implementation must be audited.
 
+The DID2 publication consumer and closed owned commit verifier follow the
+superproject's DR-0039/DR-0040 decisions. Two-replica signed commit evidence
+does not renew an expired publication request or establish mailbox authority,
+contact consent or physical delivery. Shipping/private transport, consumer
+API/evidence repins and device gates remain required.
+DR-0041 adds descriptor-bound parsed bootstrap and independently verified DID2
+permanent contact reads. A parsed candidate is not current identity authority;
+closed read evidence does not accept a contact or establish message delivery.
+DR-0042 distinguishes signed route issuance anchors from independently current
+identity: unrelated directory admission does not invalidate retained contacts.
+New issuance and publication dispatch still require current authority.
+Private node-to-coordinator transport admission follows
+[DR-0048](../docs/survival-program/decisions/DR-0048-private-contact-coordination-peer-authentication.md).
+`ContactV2.ContactCoordinationPeerAuthentication` binds the existing node key
+to the exact target/network/body and transport time. It grants no DID2, network,
+witness, placement or ACK capability. Verified carrier composition and package
+API/vector repins remain activation gates.
+
 ## Verify
 
 ```powershell

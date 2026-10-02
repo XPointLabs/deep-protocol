@@ -173,7 +173,7 @@ public sealed class OwnedPersistedDeviceIdentitySecrets : IDisposable
 }
 
 /// <summary>Owns one independently generated Ed25519/X25519 device key pair.</summary>
-public sealed class OwnedGenesisDeviceSecrets : IDisposable
+public sealed partial class OwnedGenesisDeviceSecrets : IDisposable
 {
     private readonly object sync = new();
     private readonly byte[] signingSeed;

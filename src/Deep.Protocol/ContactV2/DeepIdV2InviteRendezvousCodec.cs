@@ -31,8 +31,8 @@ public sealed class ParsedXir1V2
 }
 
 /// <summary>
-/// Isolated DID2 XIR1 candidate. It deliberately cannot author or activate a
-/// contact publication; the V1 ContactCodec is not a fallback reader.
+/// DID2 XIR1 codec. Parsing never activates a contact publication; the V1
+/// ContactCodec is not a fallback reader. Current route authoring is separate.
 /// </summary>
 public static class DeepIdV2InviteRendezvousCodec
 {
@@ -126,14 +126,13 @@ public static class DeepIdV2InviteRendezvousCodec
             Reject("XIR1 V2 issuer signature is invalid.");
     }
 
-#if DEEP_PROTOCOL_RECOVERY_TEST_SEAM
-    internal static ParsedXir1V2 AuthorForValidation(
+    internal static ParsedXir1V2 AuthorForOperationalAuthority(
         IReadOnlyList<ReadOnlyMemory<byte>> fields)
     {
         ArgumentNullException.ThrowIfNull(fields);
         if (fields.Count != 18 ||
             fields.Where((field, index) => field.Length != FieldLengths[index]).Any())
-            throw new ArgumentException("XIR1 V2 validation fields are not exact.",
+            throw new ArgumentException("XIR1 V2 fields are not exact.",
                 nameof(fields));
         var bytes = new byte[CanonicalLength];
         var writer = new ApplicationRecordWriter(bytes, ProtocolMagicBytes.XIR1,
@@ -143,6 +142,9 @@ public static class DeepIdV2InviteRendezvousCodec
         writer.Complete();
         return Decode(bytes);
     }
+#if DEEP_PROTOCOL_RECOVERY_TEST_SEAM
+    internal static ParsedXir1V2 AuthorForValidation(IReadOnlyList<ReadOnlyMemory<byte>> fields) =>
+        AuthorForOperationalAuthority(fields);
 #endif
 
     private static void Reference(ReadOnlySpan<byte> value,

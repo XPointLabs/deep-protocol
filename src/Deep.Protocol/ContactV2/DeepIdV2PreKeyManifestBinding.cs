@@ -74,8 +74,6 @@ public static class DeepIdV2PreKeyManifestBinding
             !manifest.FieldSpan(13).SequenceEqual(expectedDrs) ||
             U64(manifest.FieldSpan(14)) < U64(service.Field(10).Span) ||
             U64(manifest.FieldSpan(15)) > U64(service.Field(11).Span) ||
-            U64(manifest.FieldSpan(14)) < U64(bundle.FieldSpan(17)) ||
-            U64(manifest.FieldSpan(15)) > U64(bundle.FieldSpan(18)) ||
             lower < U64(manifest.FieldSpan(14)) ||
             upper >= U64(manifest.FieldSpan(15)))
             Reject("XPI1 does not bind the exact current DID2 recipient XPS1/DMD1/DRS1 closure.");

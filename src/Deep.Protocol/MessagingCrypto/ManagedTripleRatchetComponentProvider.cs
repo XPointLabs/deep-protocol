@@ -268,7 +268,6 @@ internal sealed class ManagedTripleRatchetComponentProvider :
         try
         {
             freshOutput = state.Braid.Receive(header.BraidEpoch, header.BraidMessage);
-            var hasFreshContribution = freshOutput is not null;
             if (freshOutput is not null)
                 freshOutput.Use(value => state.AddSpqrEpoch(header.BraidEpoch, value));
 
@@ -280,8 +279,7 @@ internal sealed class ManagedTripleRatchetComponentProvider :
                 target.SckaEpoch,
                 target.SckaN,
                 header.SckaPreviousSendingChainLength,
-                ec.Count,
-                hasFreshContribution);
+                ec.Count);
             if (ec.Count != pq.Count)
                 throw Transition("The EC and SPQR receive sequences have different lengths.");
 
@@ -763,15 +761,17 @@ internal sealed class ManagedTripleRatchetComponentProvider :
             var key = link.NextSendKey(direction);
             var fresh = link.TakeSendFresh();
             var prior = _sendEvidence.ToArray();
-            var next = AdvanceEvidence(prior, key, epoch, link.SendNext - 1, fresh, true);
-            ReplaceRequired(ref _sendEvidence, next);
+            byte[]? next = AdvanceEvidence(prior, key, epoch, link.SendNext - 1, fresh, true);
             try
             {
+                // ReplaceRequired transfers ownership; do not clear the live
+                // successor through the temporary alias in finally.
+                ReplaceRequired(ref _sendEvidence, next); next = null;
                 return new PqDerivedKey(
                     epoch,
                     link.SendNext - 1,
                     key,
-                    new PqStepEvidence(prior, next, fresh));
+                    new PqStepEvidence(prior, _sendEvidence, fresh));
             }
             finally
             {
@@ -784,8 +784,7 @@ internal sealed class ManagedTripleRatchetComponentProvider :
             ulong targetEpoch,
             ulong targetN,
             ulong previousSendingChainLength,
-            int expectedCount,
-            bool hasFreshContribution)
+            int expectedCount)
         {
             if (targetN == 0) throw Transition("SPQR message numbers start at one.");
             if (targetEpoch < ReceiveSpqrEpoch || targetEpoch > CurrentSpqrEpoch)
@@ -825,17 +824,20 @@ internal sealed class ManagedTripleRatchetComponentProvider :
                         ? TripleRatchetDirection.BobToAlice
                         : TripleRatchetDirection.AliceToBob;
                     var key = link.NextReceiveKey(n, direction);
-                    var fresh = hasFreshContribution && index == coordinates.Count - 1;
+                    // Braid completion may arrive under the old SPQR key.
+                    // Reset freshness only when deriving the first key from
+                    // the installed new link, including an out-of-order gap.
+                    var fresh = link.Epoch > 0 && n == 1;
                     var prior = _receiveEvidence.ToArray();
-                    var next = AdvanceEvidence(prior, key, link.Epoch, n, fresh, false);
-                    ReplaceRequired(ref _receiveEvidence, next);
+                    byte[]? next = AdvanceEvidence(prior, key, link.Epoch, n, fresh, false);
                     try
                     {
+                        ReplaceRequired(ref _receiveEvidence, next); next = null;
                         result.Add(new PqDerivedKey(
                             link.Epoch,
                             n,
                             key,
-                            new PqStepEvidence(prior, next, fresh)));
+                            new PqStepEvidence(prior, _receiveEvidence, fresh)));
                     }
                     finally
                     {
@@ -982,7 +984,11 @@ internal sealed class ManagedTripleRatchetComponentProvider :
                 _links.All(link => link.Epoch != SendSpqrEpoch) ||
                 _links.All(link => link.Epoch != ReceiveSpqrEpoch) ||
                 _links.Zip(_links.Skip(1)).Any(pair => pair.Second.Epoch != pair.First.Epoch + 1) ||
-                Braid.Epoch != CurrentSpqrEpoch + 1)
+                // The encapsulating party has installed its fresh output but
+                // still sends Ct2 in the old Braid epoch until peer progress.
+                // Only this exact state may trail the usual epoch relation.
+                (Braid.Epoch != CurrentSpqrEpoch + 1 &&
+                    !(Braid.State == ManagedMlKemBraidState.Ct2Sampled && Braid.Epoch == CurrentSpqrEpoch)))
                 throw InvalidStateEncoding();
             ValidateKeyPair(_localPrivate, _localPublic);
             MessagingCryptoValidation.NonZeroExact(_remotePublic, 32, nameof(_remotePublic));

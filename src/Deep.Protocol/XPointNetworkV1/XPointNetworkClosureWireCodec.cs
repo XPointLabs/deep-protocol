@@ -22,6 +22,7 @@ public sealed class XPointNetworkClosureWireArtifacts
     public IReadOnlyList<ReadOnlyMemory<byte>> ExactHeadChain => Copy(4);
     public IReadOnlyList<ReadOnlyMemory<byte>> ExactActiveNodeDescriptors => Copy(5);
     public IReadOnlyList<ReadOnlyMemory<byte>> ExactPlacementTopologyChain => Copy(6);
+    public IReadOnlyList<ReadOnlyMemory<byte>> ExactMailboxAuthorityChain => Copy(7);
 
     private IReadOnlyList<ReadOnlyMemory<byte>> Copy(int index) =>
         Array.AsReadOnly(chains[index].Select(static value =>
@@ -42,7 +43,7 @@ public static class XPointNetworkClosureWireCodec
     public const int MaximumChainCount = 4096;
     public const string RequestMediaType = "application/vnd.deep.network-closure-request.v2+octet-stream";
     public const string ResponseMediaType = "application/vnd.deep.network-closure.v2+octet-stream";
-    private const int ChainCount = 7;
+    private const int ChainCount = 8;
     private const ushort Suite = 0x0201;
 
     public static byte[] EncodeRequest(ReadOnlySpan<byte> networkId)
@@ -70,12 +71,14 @@ public static class XPointNetworkClosureWireCodec
         IReadOnlyList<ReadOnlyMemory<byte>> exactViewChain,
         IReadOnlyList<ReadOnlyMemory<byte>> exactHeadChain,
         IReadOnlyList<ReadOnlyMemory<byte>> exactActiveNodeDescriptors,
-        IReadOnlyList<ReadOnlyMemory<byte>> exactPlacementTopologyChain)
+        IReadOnlyList<ReadOnlyMemory<byte>> exactPlacementTopologyChain,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactMailboxAuthorityChain)
     {
         RequireNetwork(networkId);
         IReadOnlyList<ReadOnlyMemory<byte>>[] chains =
         [exactAuthorityChain, exactTimePolicyChain, exactNetworkPolicyChain,
-            exactViewChain, exactHeadChain, exactActiveNodeDescriptors, exactPlacementTopologyChain];
+            exactViewChain, exactHeadChain, exactActiveNodeDescriptors, exactPlacementTopologyChain,
+            exactMailboxAuthorityChain];
         var length = RequestLength + ChainCount * 4;
         for (var index = 0; index < ChainCount; index++)
         {
@@ -185,7 +188,7 @@ public static class XPointNetworkClosureWireCodec
             0 => ProtocolMagicBytes.XNA1, 1 => ProtocolMagicBytes.DTS1,
             2 => ProtocolMagicBytes.XVP1, 3 => ProtocolMagicBytes.XNV1,
             4 => ProtocolMagicBytes.XNH1, 5 => ProtocolMagicBytes.XND1,
-            6 => ProtocolMagicBytes.PMT2,
+            6 => ProtocolMagicBytes.PMT2, 7 => ProtocolMagicBytes.PMA2,
             _ => throw new InvalidOperationException("Unknown network closure chain.")
         };
         if (value.Length is < 12 or > MaximumRecordLength || !value[..4].SequenceEqual(magic))

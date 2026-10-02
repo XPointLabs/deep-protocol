@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using Deep.Protocol.ApplicationCore;
+using Deep.Protocol.Identity;
 using Sodium;
 
 namespace Deep.Protocol.ContactV2;
@@ -74,16 +75,43 @@ internal static class DeepIdV2ResolverObjectProtection
         ReadOnlySpan<byte> networkId16, ParsedDid2 did2,
         DeepIdV2PermanentContactResolution resolution)
     {
+        ArgumentNullException.ThrowIfNull(did2);
+        RequireNetwork(networkId16);
+        var network = networkId16.ToArray();
+        return OpenCore(protectedBytes, network, did2.RecordHash.Span, resolution, closure =>
+            RequireExactBundle(closure, network, did2));
+    }
+
+    internal static ParsedDcr1V2 OpenForDescriptor(ReadOnlySpan<byte> protectedBytes,
+        ReadOnlySpan<byte> networkId16, DeepPermanentIdV2 descriptor,
+        DeepIdV2PermanentContactResolution resolution)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+        RequireNetwork(networkId16);
+        var network = networkId16.ToArray();
+        return OpenCore(protectedBytes, network, descriptor.ExactDid2Hash.Span, resolution, closure =>
+        {
+            var did = DeepIdV2Codec.DecodeDid2(closure.Bundle.Field(23).Span);
+            if (!descriptor.MatchesExactCredential(did))
+                throw new CryptographicException("Resolved DID2 does not match the exact descriptor and read commitment.");
+            RequireExactBundle(closure, network, did);
+        });
+    }
+
+    private static ParsedDcr1V2 OpenCore(ReadOnlySpan<byte> protectedBytes,
+        ReadOnlySpan<byte> networkId16, ReadOnlySpan<byte> did2Hash,
+        DeepIdV2PermanentContactResolution resolution, Action<ParsedDcr1V2> requireBundle)
+    {
         ArgumentNullException.ThrowIfNull(resolution);
         if (protectedBytes.Length is < MinimumProtectedLength or > MaximumProtectedLength)
             throw new CryptographicException("Protected DCR1 V2 size is invalid.");
-        var aad = CreateAad(networkId16, did2);
+        var aad = CreateAad(networkId16, did2Hash);
         var nonce = protectedBytes[..NonceLength].ToArray();
         var ciphertext = protectedBytes[NonceLength..].ToArray();
         byte[]? plaintext = null;
         try
         {
-            RequireResolutionContext(resolution, networkId16, did2);
+            RequireResolutionContext(resolution, networkId16, did2Hash);
             try
             {
                 plaintext = resolution.UseResolverKey(key =>
@@ -104,7 +132,7 @@ internal static class DeepIdV2ResolverObjectProtection
                     "DCR1 V2 object authentication failed.", exception);
             }
             var closure = DeepIdV2ResolverClosureCodec.Decode(plaintext);
-            RequireExactBundle(closure, networkId16, did2);
+            requireBundle(closure);
             return closure;
         }
         finally
@@ -118,16 +146,21 @@ internal static class DeepIdV2ResolverObjectProtection
     }
 
     private static byte[] CreateAad(ReadOnlySpan<byte> networkId16, ParsedDid2 did2)
+        => CreateAad(networkId16, did2.RecordHash.Span);
+
+    private static byte[] CreateAad(ReadOnlySpan<byte> networkId16, ReadOnlySpan<byte> did2Hash)
     {
-        ArgumentNullException.ThrowIfNull(did2);
-        if (networkId16.Length != 16 ||
-            networkId16.IndexOfAnyExcept((byte)0) < 0)
-            throw new ArgumentException("Network ID must be 16 nonzero bytes.",
-                nameof(networkId16));
+        RequireNetwork(networkId16);
         var aad = new byte[48];
         networkId16.CopyTo(aad);
-        did2.RecordHash.Span.CopyTo(aad.AsSpan(16));
+        did2Hash.CopyTo(aad.AsSpan(16));
         return aad;
+    }
+
+    private static void RequireNetwork(ReadOnlySpan<byte> networkId16)
+    {
+        if (networkId16.Length != 16 || networkId16.IndexOfAnyExcept((byte)0) < 0)
+            throw new ArgumentException("Network ID must be 16 nonzero bytes.", nameof(networkId16));
     }
 
     private static void RequireExactBundle(ParsedDcr1V2 closure,
@@ -143,10 +176,14 @@ internal static class DeepIdV2ResolverObjectProtection
     private static void RequireResolutionContext(
         DeepIdV2PermanentContactResolution resolution,
         ReadOnlySpan<byte> networkId16, ParsedDid2 did2)
+        => RequireResolutionContext(resolution, networkId16, did2.RecordHash.Span);
+
+    private static void RequireResolutionContext(DeepIdV2PermanentContactResolution resolution,
+        ReadOnlySpan<byte> networkId16, ReadOnlySpan<byte> did2Hash)
     {
         Span<byte> input = stackalloc byte[48];
         networkId16.CopyTo(input);
-        did2.RecordHash.Span.CopyTo(input[16..]);
+        did2Hash.CopyTo(input[16..]);
         var expected = ApplicationCoreFormat.Sha256Domain(
             "Deep/ContactResolver/V2/permanent-locator", input);
         try

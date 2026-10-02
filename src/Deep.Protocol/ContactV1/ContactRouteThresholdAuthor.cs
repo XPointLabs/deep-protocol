@@ -443,7 +443,7 @@ public static class ContactRouteThresholdAuthor
         return result;
     }
 
-    private static byte[] RankReplicas(
+    internal static byte[] RankReplicas(
         ReadOnlySpan<byte> network,
         ReadOnlySpan<byte> pmtReference,
         ReadOnlySpan<byte> selectionEpoch,
@@ -506,7 +506,7 @@ public static class ContactRouteThresholdAuthor
         return rows;
     }
 
-    private static byte[] EncodeProjection(
+    internal static byte[] EncodeProjection(
         string magic,
         IReadOnlyList<ReadOnlyMemory<byte>> fields,
         int count)

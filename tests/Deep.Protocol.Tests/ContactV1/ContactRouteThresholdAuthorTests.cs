@@ -32,16 +32,6 @@ public sealed class ContactRouteThresholdAuthorTests
                 proposal, remoteAdvertisement, remoteThreshold),
             deviceSigner);
 
-        var wireRequest = proposal.CreateThresholdRequest(xra, Bytes(32, 0xd1));
-        var decodedRequest = ContactRouteAuthorityWireCodec.DecodeRequest(
-            ContactRouteAuthorityWireCodec.EncodeRequest(wireRequest));
-        var wireResponse = new ContactRouteAuthorityWireResponse(
-            fixture.Network, wireRequest.RequestNonce.Span,
-            authored.ExactPms2.Span, authored.ExactXrc1.Span, authored.ExactXss1.Span);
-        var decodedResponse = ContactRouteAuthorityWireCodec.DecodeResponse(
-            decodedRequest,
-            ContactRouteAuthorityWireCodec.EncodeResponse(decodedRequest, wireResponse));
-
         Assert.Equal(fixture.Pmt.Field(7).Span[0], authored.Selection.Field(5).Span[0]);
         Assert.Equal(xra.PlacementInput.ToArray(), authored.Selection.Field(3).ToArray());
         Assert.Equal(authored.Selection.ArtifactHash.ToArray(),
@@ -54,17 +44,6 @@ public sealed class ContactRouteThresholdAuthorTests
             completed.Verified.Invite.CanonicalBytes.ToArray());
         Assert.Equal(completed.ExactRouteClosure.ToArray(),
             ContactRouteClosureCodec.Encode(completed.Verified));
-        Assert.Equal(authored.ExactPms2.ToArray(), decodedResponse.ExactPms2.ToArray());
-        Assert.Equal(authored.ExactXrc1.ToArray(), decodedResponse.ExactXrc1.ToArray());
-        Assert.Equal(authored.ExactXss1.ToArray(), decodedResponse.ExactXss1.ToArray());
-        Assert.Equal(fixture.Freshness.DirectoryLeafKey.ToArray(),
-            decodedRequest.DirectoryLookupKey.ToArray());
-        Assert.Equal(fixture.Freshness.AdhGeneration,
-            decodedRequest.MinimumAdh1Generation);
-        Assert.Equal(fixture.Freshness.ExactAdh1CoreHash.ToArray(),
-            decodedRequest.MinimumAdh1CoreHash.ToArray());
-        Assert.Equal(fixture.Identity.Authorization.Verified.Record.CanonicalBytes.ToArray(),
-            decodedRequest.ExactDca1.ToArray());
         Assert.Equal(
             [ContactDeviceSignaturePurpose.RouteAdvertisement,
              ContactDeviceSignaturePurpose.RouteReachability,

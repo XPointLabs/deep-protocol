@@ -9,7 +9,7 @@ namespace Deep.Protocol.Tests.XPointNetworkV1;
 public sealed class XPointNetworkClosureWireCodecTests
 {
     private static byte[] Network => Enumerable.Repeat((byte)7, 16).ToArray();
-    private static readonly string[] Magics = ["XNA1", "DTS1", "XVP1", "XNV1", "XNH1", "XND1", "PMT2"];
+    private static readonly string[] Magics = ["XNA1", "DTS1", "XVP1", "XNV1", "XNH1", "XND1", "PMT2", "PMA2"];
 
     [Fact]
     public void RequestIsClosedIdentityNeutralAndOwned()
@@ -37,6 +37,11 @@ public sealed class XPointNetworkClosureWireCodecTests
         var response = XPointNetworkClosureWireCodec.DecodeResponse(bytes);
         Assert.Equal("NCP2", Encoding.ASCII.GetString(bytes, 0, 4));
         Assert.Equal(2, response.ExactViewChain.Count);
+        Assert.Equal(chains[7][0].ToArray(), response.ExactMailboxAuthorityChain[0].ToArray());
+        var mailboxAuthority = response.ExactMailboxAuthorityChain[0];
+        Assert.True(MemoryMarshal.TryGetArray(mailboxAuthority, out var mailboxSegment));
+        mailboxSegment.Array![mailboxSegment.Offset] ^= 1;
+        Assert.Equal(chains[7][0].ToArray(), response.ExactMailboxAuthorityChain[0].ToArray());
         var exported = response.ExactAuthorityChain[0];
         Assert.True(MemoryMarshal.TryGetArray(exported, out var segment));
         segment.Array![segment.Offset] ^= 1;
@@ -125,7 +130,7 @@ public sealed class XPointNetworkClosureWireCodecTests
     }
 
     private static IReadOnlyList<ReadOnlyMemory<byte>>[] Chains() =>
-        Enumerable.Range(0, 7).Select(index =>
+        Enumerable.Range(0, 8).Select(index =>
             (IReadOnlyList<ReadOnlyMemory<byte>>)new ReadOnlyMemory<byte>[] { Record(index) }).ToArray();
 
     private static byte[] Record(int chain, int size = 12)
@@ -137,5 +142,19 @@ public sealed class XPointNetworkClosureWireCodecTests
 
     private static byte[] Encode(IReadOnlyList<ReadOnlyMemory<byte>>[] chains) =>
         XPointNetworkClosureWireCodec.EncodeResponse(Network,
-            chains[0], chains[1], chains[2], chains[3], chains[4], chains[5], chains[6]);
+            chains[0], chains[1], chains[2], chains[3], chains[4], chains[5], chains[6], chains[7]);
+
+    [Fact]
+    public void RetiredSevenChainAndMissingOrWrongMailboxAuthorityReject()
+    {
+        var bytes = Encode(Chains());
+        var retired = bytes[..^20]; // shape-only final chain: count + length + 12 bytes
+        BinaryPrimitives.WriteUInt16BigEndian(retired.AsSpan(8), 7);
+        Assert.Throws<FormatException>(() => XPointNetworkClosureWireCodec.DecodeResponse(retired));
+        var chains = Chains();
+        chains[7] = [];
+        Assert.Throws<FormatException>(() => Encode(chains));
+        chains[7] = [Record(6)];
+        Assert.Throws<FormatException>(() => Encode(chains));
+    }
 }

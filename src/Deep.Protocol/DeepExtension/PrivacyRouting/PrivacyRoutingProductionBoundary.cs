@@ -16,7 +16,7 @@ public static class OnionLimits
     public const int MinimumFrameBytes = 176;
     public const int MaximumFrameBytes = 1_572_864;
     public const int MaximumCanonicalRequestBytes = 1_048_576;
-    public const int MaximumContactResolverRequestBytes = 69_649;
+    public const int MaximumContactResolverRequestBytes = 155_222;
     public const int MaximumContactResolverResponseBytes = 131_072;
     public const int MaximumGroupControlRequestBytes = 33_160;
     public const int MaximumGroupControlResponseBytes = 65_535;
@@ -343,6 +343,13 @@ public sealed class VerifiedOnionNetworkContext
     public ReadOnlyMemory<byte> NetworkId => _networkId.ToArray();
     public XPointNetworkProtectedLkg? ProtectedLkg { get; }
     public XPointNetworkProtectedLkg? PriorProtectedLkg { get; }
+
+    /// <summary>Conservative signed closure bound for newly authored records.
+    /// This exposes no raw records and grants no placement or route authority.</summary>
+    public ulong MaximumRecordExpiryUnixSeconds
+    {
+        get { EnsureCurrent(); return Closure!.HardUpperUnixSeconds; }
+    }
 
     public void EnsureCurrent()
     {

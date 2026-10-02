@@ -17,6 +17,7 @@ public enum ContactServiceRequestKind : byte
     QueryContactUpdate = 5,
     PublishPreKeyInventory = 6,
     AcquireMailboxGrant = 7,
+    CoordinateContact = 8,
 }
 
 public enum ContactServiceClass : byte
@@ -101,7 +102,7 @@ public static class ContactServicePlacementFactory
         {
             ContactServiceRequestKind.PublishInvite or
                 ContactServiceRequestKind.ResolveInvite or
-                ContactServiceRequestKind.AcquireMailboxGrant =>
+                ContactServiceRequestKind.AcquireMailboxGrant or ContactServiceRequestKind.CoordinateContact =>
                 ContactServiceClass.InviteResolver,
             ContactServiceRequestKind.ClaimPreKey or ContactServiceRequestKind.PublishPreKeyInventory => ContactServiceClass.PreKeyClaim,
             ContactServiceRequestKind.PublishContactUpdate or ContactServiceRequestKind.QueryContactUpdate => ContactServiceClass.ContactUpdate,

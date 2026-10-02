@@ -6,6 +6,7 @@ using Deep.Protocol.ApplicationCore;
 using Deep.Protocol.ContactV1;
 using Deep.Protocol.Tests.ApplicationCore;
 using Deep.Protocol.DeepNative;
+using Deep.Protocol.Tests.ContactV2;
 using Sodium;
 
 namespace Deep.Protocol.Tests.ContactV1;
@@ -18,9 +19,9 @@ public sealed class ContactCodecTests
         var manifest = File.ReadAllBytes(FindSpec("contact-codec-v1.vectors.json"));
         var canonicalManifest = System.Text.Encoding.UTF8.GetBytes(
             System.Text.Encoding.UTF8.GetString(manifest).Replace("\r\n", "\n", StringComparison.Ordinal));
-        Assert.Equal("18073a01239730c4d809478e62bd5097a320e5439a25a6dcf94f3a6f8de7721a", Convert.ToHexString(SHA256.HashData(canonicalManifest)).ToLowerInvariant());
+        Assert.Equal("0e7d9d6c772c845cd23b87e9eefe3c59ac3348599d12899fff5c1392560c15b4", Convert.ToHexString(SHA256.HashData(canonicalManifest)).ToLowerInvariant());
         using var anchor = JsonDocument.Parse(File.ReadAllBytes(FindSpec("contact-codec-v1.vectors.anchor.json")));
-        Assert.Equal("18073a01239730c4d809478e62bd5097a320e5439a25a6dcf94f3a6f8de7721a", anchor.RootElement.GetProperty("sha256").GetString());
+        Assert.Equal("0e7d9d6c772c845cd23b87e9eefe3c59ac3348599d12899fff5c1392560c15b4", anchor.RootElement.GetProperty("sha256").GetString());
         using var document = JsonDocument.Parse(manifest);
         Assert.Equal("FROZEN_TARGET_NOT_ACTIVE", document.RootElement.GetProperty("status").GetString());
         Assert.False(ContactCodec.RuntimeActivation);
@@ -142,17 +143,80 @@ public sealed class ContactCodecTests
     [Fact]
     public void ContactHelloAcceptAndRejectAreTypedAndExact()
     {
-        var hello = ContactCodecValidation.CreateContactHelloPayload(B(32, 1), Ref("DAB1", 2), B(32, 3), B(32, 4),
-            ContactPolicy.ManualApproval | ContactPolicy.AllowRouteUpdates, Records.Xur.CanonicalBytes.Span);
-        var accept = ContactCodecValidation.CreateContactAcceptPayload(B(32, 5), B(32, 6), Ref("DAB1", 7), B(32, 8),
-            ContactPolicy.None, Records.Xur.CanonicalBytes.Span);
+        var hello = ContactCodecValidation.CreateContactHelloPayload(B(32, 1), Ref("DAB2", 2), B(32, 3), B(32, 4),
+            ContactPolicy.ManualApproval | ContactPolicy.AllowRouteUpdates, Records.Xur.CanonicalBytes.Span, DeepIdV2ContactMailboxRouteTests.Package(false));
+        var accept = ContactCodecValidation.CreateContactAcceptPayload(B(32, 5), B(32, 6), Ref("DAB2", 7), B(32, 8),
+            ContactPolicy.None, Records.Xur.CanonicalBytes.Span, DeepIdV2ContactMailboxRouteTests.Package(false));
         var reject = ContactCodecValidation.CreateContactRejectPayload(B(32, 9), B(32, 10), ContactRejectReason.Policy);
-        Assert.Equal(678, hello.CanonicalBytes.Length); Assert.Equal(678, accept.CanonicalBytes.Length); Assert.Equal(66, reject.CanonicalBytes.Length);
+        Assert.Equal(5917, hello.CanonicalBytes.Length); Assert.Equal(5917, accept.CanonicalBytes.Length); Assert.Equal(66, reject.CanonicalBytes.Length);
         foreach (var payload in new Dmc2Payload[] { hello, accept, reject })
         {
             var dmc = ContactCodecValidation.AuthorDmc2(B(16, 11), B(32, 12), B(32, 13), B(32, 14), B(32, 15), 1, 1_000, 2_000,
                 Dmc2Flags.None, [], payload);
             Assert.Equal(payload.Kind, ApplicationCoreCodec.DecodeDmc2(dmc.CanonicalBytes.Span).ContentKind);
+        }
+    }
+
+    [Fact]
+    public void ContactControlMandatoryPrivateRouteRejectsOldAndHostilePackages()
+    {
+        foreach (var payload in new Dmc2Payload[] { ContactFixtures.Hello, ContactFixtures.Accept })
+        {
+            var record = ContactCodecValidation.AuthorDmc2(B(16, 11), B(32, 12), B(32, 13), B(32, 14), B(32, 15),
+                1, 1_000, 2_000, Dmc2Flags.None, [], payload).CanonicalBytes.ToArray();
+            var start = FieldOffset(record, 12);
+            var retired = record[..(start + 678)];
+            BinaryPrimitives.WriteUInt32BigEndian(retired.AsSpan(start - 4), 678);
+            Assert.Throws<ApplicationCoreFormatException>(() => ApplicationCoreCodec.DecodeDmc2(retired));
+            foreach (var fault in Enumerable.Range(0, 5))
+            {
+                var changed = record.ToArray();
+                if (fault == 0) BinaryPrimitives.WriteUInt32BigEndian(changed.AsSpan(start + 678), uint.MaxValue);
+                if (fault == 1) changed[start + 682 + 1] = 1;
+                if (fault == 2) changed[start + 682 + 2] = 1;
+                if (fault == 3) changed[start + 682 + 4 + 5] = 1;
+                if (fault == 4) changed = changed[..^1];
+                Assert.Throws<ApplicationCoreFormatException>(() => ApplicationCoreCodec.DecodeDmc2(changed));
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(false, 5917, 6199)]
+    [InlineData(true, 25069, 25351)]
+    public void ContactControlPrivateRouteHasExactMinimumAndMaximumBounds(bool maximum, int payloadBytes, int recordBytes)
+    {
+        var package = DeepIdV2ContactMailboxRouteTests.Package(maximum);
+        var hello = ContactCodecValidation.CreateContactHelloPayload(B(32, 1), Ref("DAB2", 2), B(32, 3), B(32, 4),
+            ContactPolicy.None, Records.Xur.CanonicalBytes.Span, package);
+        var accept = ContactCodecValidation.CreateContactAcceptPayload(B(32, 5), B(32, 6), Ref("DAB2", 7), B(32, 8),
+            ContactPolicy.None, Records.Xur.CanonicalBytes.Span, package);
+        foreach (var payload in new Dmc2Payload[] { hello, accept })
+        {
+            Assert.Equal(payloadBytes, payload.CanonicalBytes.Length);
+            var authored = ContactCodecValidation.AuthorDmc2(B(16, 11), B(32, 12), B(32, 13), B(32, 14), B(32, 15),
+                1, 1_000, 2_000, Dmc2Flags.None, [], payload);
+            Assert.Equal(recordBytes, authored.CanonicalBytes.Length);
+            var parsed = ApplicationCoreCodec.DecodeDmc2(authored.CanonicalBytes.Span).ParsedPayload;
+            var route = parsed is ContactHelloDmc2Payload h ? h.MailboxRoute : ((ContactAcceptDmc2Payload)parsed).MailboxRoute;
+            Assert.Equal(package, route.ExactBytes.ToArray());
+        }
+    }
+
+    [Fact]
+    public void ContactControlRejectsRetiredDab1WrongVersionAndWrongReferenceNamespace()
+    {
+        foreach (var reference in new[] { Ref("DAB1", 2), Ref("DAB2", 2), Ref("DPD1", 2), Ref("DAB2", 3) })
+        {
+            if (reference.AsSpan(0, 4).SequenceEqual("DAB2"u8))
+            {
+                if (reference[6] == 2) BinaryPrimitives.WriteUInt16BigEndian(reference.AsSpan(4), 1);
+                else Array.Clear(reference, 6, 32);
+            }
+            Assert.Throws<ApplicationCoreFormatException>(() => ContactCodecValidation.CreateContactHelloPayload(
+                B(32, 1), reference, B(32, 3), B(32, 4), ContactPolicy.None, Records.Xur.CanonicalBytes.Span, DeepIdV2ContactMailboxRouteTests.Package(false)));
+            Assert.Throws<ApplicationCoreFormatException>(() => ContactCodecValidation.CreateContactAcceptPayload(
+                B(32, 1), B(32, 4), reference, B(32, 3), ContactPolicy.None, Records.Xur.CanonicalBytes.Span, DeepIdV2ContactMailboxRouteTests.Package(false)));
         }
     }
 
@@ -310,15 +374,15 @@ public sealed class ContactCodecTests
     private static byte[] U64(ulong value) { var bytes = new byte[8]; BinaryPrimitives.WriteUInt64BigEndian(bytes, value); return bytes; }
     private static byte[] U32(uint value) { var bytes = new byte[4]; BinaryPrimitives.WriteUInt32BigEndian(bytes, value); return bytes; }
     private static byte[] U16(ushort value) { var bytes = new byte[2]; BinaryPrimitives.WriteUInt16BigEndian(bytes, value); return bytes; }
-    private static byte[] Ref(string magic, byte seed) { var bytes = new byte[38]; System.Text.Encoding.ASCII.GetBytes(magic).CopyTo(bytes, 0); BinaryPrimitives.WriteUInt16BigEndian(bytes.AsSpan(4), 1); B(32, seed).CopyTo(bytes, 6); return bytes; }
-    private static byte[] Ref(string magic, ReadOnlySpan<byte> hash) { var bytes = new byte[38]; System.Text.Encoding.ASCII.GetBytes(magic).CopyTo(bytes, 0); BinaryPrimitives.WriteUInt16BigEndian(bytes.AsSpan(4), 1); hash.CopyTo(bytes.AsSpan(6)); return bytes; }
+    private static byte[] Ref(string magic, byte seed) { var bytes = new byte[38]; System.Text.Encoding.ASCII.GetBytes(magic).CopyTo(bytes, 0); BinaryPrimitives.WriteUInt16BigEndian(bytes.AsSpan(4), magic == "DAB2" ? (ushort)2 : (ushort)1); B(32, seed).CopyTo(bytes, 6); return bytes; }
+    private static byte[] Ref(string magic, ReadOnlySpan<byte> hash) { var bytes = new byte[38]; System.Text.Encoding.ASCII.GetBytes(magic).CopyTo(bytes, 0); BinaryPrimitives.WriteUInt16BigEndian(bytes.AsSpan(4), magic == "DAB2" ? (ushort)2 : (ushort)1); hash.CopyTo(bytes.AsSpan(6)); return bytes; }
     private static string FindSpec(string name) { var path = Directory.GetCurrentDirectory(); while (path is not null) { var candidate = Path.Combine(path, "..", "docs", "survival-program", "releases", "v3.0.0", "specs", name); if (File.Exists(candidate)) return candidate; path = Directory.GetParent(path)?.FullName; } throw new FileNotFoundException(name); }
 
     private static class ContactFixtures
     {
         internal static readonly ContactRouteUpdateDmc2Payload Route = CreateRoute();
-        internal static readonly ContactHelloDmc2Payload Hello = ContactCodecValidation.CreateContactHelloPayload(B(32, 1), Ref("DAB1", 2), B(32, 3), B(32, 4), ContactPolicy.AllowRouteUpdates, Records.Xur.CanonicalBytes.Span);
-        internal static readonly ContactAcceptDmc2Payload Accept = ContactCodecValidation.CreateContactAcceptPayload(B(32, 5), B(32, 6), Ref("DAB1", 7), B(32, 8), ContactPolicy.None, Records.Xur.CanonicalBytes.Span);
+        internal static readonly ContactHelloDmc2Payload Hello = ContactCodecValidation.CreateContactHelloPayload(B(32, 1), Ref("DAB2", 2), B(32, 3), B(32, 4), ContactPolicy.AllowRouteUpdates, Records.Xur.CanonicalBytes.Span, DeepIdV2ContactMailboxRouteTests.Package(false));
+        internal static readonly ContactAcceptDmc2Payload Accept = ContactCodecValidation.CreateContactAcceptPayload(B(32, 5), B(32, 6), Ref("DAB2", 7), B(32, 8), ContactPolicy.None, Records.Xur.CanonicalBytes.Span, DeepIdV2ContactMailboxRouteTests.Package(false));
         internal static readonly ContactRejectDmc2Payload Reject = ContactCodecValidation.CreateContactRejectPayload(B(32, 9), B(32, 10), ContactRejectReason.Policy);
         internal static readonly ParsedDmc2 HelloDmc = Author(Hello, 11);
         internal static readonly ParsedDmc2 AcceptDmc = Author(Accept, 12);
@@ -351,17 +415,20 @@ public sealed class ContactCodecTests
         internal static readonly (ContactRecord Xrr, ContactRecord Xra, ContactRecord Xrc, ContactRecord Xss, ContactRecord Pmt, ContactRecord Pms) MaximumRouteClosure = CreateRouteClosure(true);
         internal static IEnumerable<ContactRecord> All() => [Dcb,Dcr,Dia,Xir,Xur,Xra,Pmt,Pms,Xrc,Xss,Xrr];
 
-        private static (ContactRecord Xrr, ContactRecord Xra, ContactRecord Xrc, ContactRecord Xss, ContactRecord Pmt, ContactRecord Pms) CreateRouteClosure(bool maximum)
+        internal static (ContactRecord Xrr, ContactRecord Xra, ContactRecord Xrc, ContactRecord Xss, ContactRecord Pmt, ContactRecord Pms) CreateRouteClosure(bool maximum, ReadOnlyMemory<byte> network = default, ReadOnlyMemory<byte> device = default, ReadOnlyMemory<byte> deviceReference = default)
         {
+            if (network.IsEmpty) network = B(16,1);
+            if (device.IsEmpty) device = B(32,7);
+            if (deviceReference.IsEmpty) deviceReference = Ref("DPD1",8);
             var pmt = maximum
-                ? ContactCodecValidation.AuthorRecord("PMT2", [B(16,1),U64(0),new byte[32],Ref("PMA2",2),Ref("XNV1",3),U64(1),new byte[] { 5 },U16(56),Rows(136,56,4),U64(1),U64(1),U64(2),new byte[32],Ref("ADH1",5),new byte[] { 32 },Rows(96,32,6)])
-                : Pmt;
-            var xra = ContactCodecValidation.AuthorRecord("XRA1", [B(16,1),B(32,2),U64(0),new byte[32],ContactCodec.ArtifactReference("PMT2", pmt).CanonicalBytes,B(32,3),U16(1),U32(1),B(32,4),B(32,5),B(32,6),U64(1),U64(2),B(32,7),Ref("DPD1",8),B(64,9)]);
+                ? ContactCodecValidation.AuthorRecord("PMT2", [network,U64(0),new byte[32],Ref("PMA2",2),Ref("XNV1",3),U64(1),new byte[] { 5 },U16(56),Rows(136,56,4),U64(1),U64(1),U64(2),new byte[32],Ref("ADH1",5),new byte[] { 32 },Rows(96,32,6)])
+                : ContactCodecValidation.AuthorRecord("PMT2", [network,U64(0),new byte[32],Ref("PMA2",2),Ref("XNV1",3),U64(1),new byte[] { 2 },U16(2),Rows(136,2,4),U64(1),U64(1),U64(2),new byte[32],Ref("ADH1",5),new byte[] { 2 },Rows(96,2,6)]);
+            var xra = ContactCodecValidation.AuthorRecord("XRA1", [network,B(32,2),U64(0),new byte[32],ContactCodec.ArtifactReference("PMT2", pmt).CanonicalBytes,B(32,3),U16(1),U32(1),B(32,4),B(32,5),B(32,6),U64(1),U64(2),device,deviceReference,B(64,9)]);
             var pms = PmsFor(pmt, xra, maximum);
             var replicas = ReplicaEntries(pms);
-            var xrc = ContactCodecValidation.AuthorRecord("XRC1", [B(16,1),B(32,10),U64(0),new byte[32],ContactCodec.ArtifactReference("XRA1", xra).CanonicalBytes,ContactCodec.ArtifactReference("PMT2", pmt).CanonicalBytes,pms.ArtifactHash,pmt.Field(5),Ref("XNH1",12),B(32,13),xra.Field(10),xra.Field(11),U64(1),new byte[] { maximum ? (byte)5 : (byte)2 },replicas,U64(1),U64(1),U64(2),pmt.Field(14),new byte[] { maximum ? (byte)32 : (byte)2 },Rows(96,maximum ? 32 : 2,18)]);
-            var xss = ContactCodecValidation.AuthorRecord("XSS1", [B(16,1),xrc.Field(2),U64(1),xrc.CoreHash,ContactCodec.ArtifactReference("XRC1", xrc).CanonicalBytes,ContactCodec.ArtifactReference("XRC1", xrc).CanonicalBytes,ContactCodec.ArtifactReference("PMT2", pmt).CanonicalBytes,xrc.Field(8),pms.ArtifactHash,U64(1),U64(2),Ref("ADH1",23),new byte[] { maximum ? (byte)32 : (byte)2 },Rows(96,maximum ? 32 : 2,24)]);
-            var xrr = ContactCodecValidation.AuthorRecord("XRR1", [B(16,1),B(32,25),U64(0),new byte[32],ContactCodec.ArtifactReference("XRA1", xra).CanonicalBytes,ContactCodec.ArtifactReference("XRC1", xrc).CanonicalBytes,ContactCodec.ArtifactReference("XSS1", xss).CanonicalBytes,ContactCodec.ArtifactReference("PMT2", pmt).CanonicalBytes,pms.ArtifactHash,B(32,26),B(32,27),new byte[] { 1 },U32(1),U16(1),U64(1),U64(1),U64(2),xra.Field(15),B(64,29),new byte[2]]);
+            var xrc = ContactCodecValidation.AuthorRecord("XRC1", [network,B(32,10),U64(0),new byte[32],ContactCodec.ArtifactReference("XRA1", xra).CanonicalBytes,ContactCodec.ArtifactReference("PMT2", pmt).CanonicalBytes,pms.ArtifactHash,pmt.Field(5),Ref("XNH1",12),B(32,13),xra.Field(10),xra.Field(11),U64(1),new byte[] { maximum ? (byte)5 : (byte)2 },replicas,U64(1),U64(1),U64(2),pmt.Field(14),new byte[] { maximum ? (byte)32 : (byte)2 },Rows(96,maximum ? 32 : 2,18)]);
+            var xss = ContactCodecValidation.AuthorRecord("XSS1", [network,xrc.Field(2),U64(1),xrc.CoreHash,ContactCodec.ArtifactReference("XRC1", xrc).CanonicalBytes,ContactCodec.ArtifactReference("XRC1", xrc).CanonicalBytes,ContactCodec.ArtifactReference("PMT2", pmt).CanonicalBytes,xrc.Field(8),pms.ArtifactHash,U64(1),U64(2),Ref("ADH1",23),new byte[] { maximum ? (byte)32 : (byte)2 },Rows(96,maximum ? 32 : 2,24)]);
+            var xrr = ContactCodecValidation.AuthorRecord("XRR1", [network,B(32,25),U64(0),new byte[32],ContactCodec.ArtifactReference("XRA1", xra).CanonicalBytes,ContactCodec.ArtifactReference("XRC1", xrc).CanonicalBytes,ContactCodec.ArtifactReference("XSS1", xss).CanonicalBytes,ContactCodec.ArtifactReference("PMT2", pmt).CanonicalBytes,pms.ArtifactHash,B(32,26),B(32,27),new byte[] { 1 },U32(1),U16(1),U64(1),U64(1),U64(2),xra.Field(15),B(64,29),new byte[2]]);
             return (xrr, xra, xrc, xss, pmt, pms);
         }
 
@@ -406,7 +473,7 @@ public sealed class ContactCodecTests
             var replicaCount = maximum ? 5 : 2;
             var witnessCount = maximum ? 32 : 2;
             var ranked = RankedNodes(pmt, xra.Field(6));
-            var fields = new ReadOnlyMemory<byte>[] { B(16,1),ContactCodec.ArtifactReference("PMT2", pmt).CanonicalBytes,xra.Field(6),pmt.Field(6),new byte[] { (byte)replicaCount },ranked.AsMemory(0, replicaCount * 32),new byte[32],U64(1),U64(2),new byte[] { (byte)witnessCount },Rows(96,witnessCount,4) };
+            var fields = new ReadOnlyMemory<byte>[] { pmt.Field(1),ContactCodec.ArtifactReference("PMT2", pmt).CanonicalBytes,xra.Field(6),pmt.Field(6),new byte[] { (byte)replicaCount },ranked.AsMemory(0, replicaCount * 32),new byte[32],U64(1),U64(2),new byte[] { (byte)witnessCount },Rows(96,witnessCount,4) };
             var provisional = Write("PMS2", fields); fields[6] = Sha256Selection(provisional); return ContactCodecValidation.AuthorRecord("PMS2", fields);
         }
         private static byte[] Sha256Selection(byte[] encoded) { var projected=Project(encoded,[1,2,3,4,5,6]); var label=System.Text.Encoding.ASCII.GetBytes("Deep/XPoint/V1/PMS2/selection"); var input=new byte[label.Length+5+projected.Length]; label.CopyTo(input,0); BinaryPrimitives.WriteUInt32BigEndian(input.AsSpan(label.Length+1),checked((uint)projected.Length)); projected.CopyTo(input,label.Length+5); return SHA256.HashData(input); }

@@ -452,6 +452,13 @@ internal static class PrivacyRoutingPayloadVerifier
 
         try
         {
+            if (request[..4].SequenceEqual("XCA2"u8))
+            {
+                var coordination = Deep.Protocol.ContactV2.ContactCoordinationOnionCodec.DecodeRequest(request);
+                if (!CryptographicOperations.FixedTimeEquals(coordination.NetworkId.Span, networkId))
+                    throw PrivacyRoutingWire.Error(PrivacyRoutingProtocolError.InvalidKeyBinding, "Coordination wrapper belongs to another network.");
+                return;
+            }
             if (ReadMagic(request) == ProtocolMagic.XMG1)
             {
                 var grantRequest = ContactCodec.Decode(ProtocolMagic.XMG1, request);
@@ -599,6 +606,12 @@ internal static class PrivacyRoutingPayloadVerifier
 
         try
         {
+            if (exactRequest[..4].SequenceEqual("XCA2"u8))
+            {
+                _ = Deep.Protocol.ContactV2.ContactCoordinationOnionCodec.DecodeResponse(
+                    Deep.Protocol.ContactV2.ContactCoordinationOnionCodec.DecodeRequest(exactRequest), body);
+                return;
+            }
             if (ReadMagic(exactRequest) == ProtocolMagic.XMG1)
             {
                 var request = ContactCodec.Decode(ProtocolMagic.XMG1, exactRequest);

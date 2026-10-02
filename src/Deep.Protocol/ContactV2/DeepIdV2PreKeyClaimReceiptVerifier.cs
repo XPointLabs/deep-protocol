@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using Deep.Protocol.ApplicationCore;
+using Deep.Protocol.AccountDirectoryV1;
 using Deep.Protocol.DeepExtension.PrivacyRouting;
 using Deep.Protocol.MessagingWire;
 using Deep.Protocol.XPointNetworkV1;
@@ -18,16 +19,22 @@ public sealed class VerifiedXpc1V2PreKeyClaimReceipt
     private readonly byte[] exactReplayHash;
     private readonly byte[][] replicas;
     private readonly VerifiedContactServicePlacement placement;
+    private readonly byte[] verifiedBoot;
+    private readonly ulong verifiedSample;
+    private readonly bool committedRecipient;
     private int initiatorConsumed;
 
     internal VerifiedXpc1V2PreKeyClaimReceipt(ParsedXpk1V2 request,
         ParsedXpc1V2 result, VerifiedDpk2Offering offering,
         DeepIdV2CurrentContactAuthorization recipientAuthorization,
-        ParsedDcr1V2 recipientClosure, VerifiedContactServicePlacement placement)
+        ParsedDcr1V2 recipientClosure, VerifiedContactServicePlacement placement,
+        OnionMonotonicReading verifiedReading, bool committedRecipient)
     {
         this.request = request;
         this.result = result;
         this.placement = placement;
+        this.committedRecipient = committedRecipient;
+        verifiedBoot = verifiedReading.BootId.ToArray(); verifiedSample = verifiedReading.SampleSeconds;
         Offering = offering;
         RecipientAuthorization = recipientAuthorization;
         RecipientClosure = recipientClosure;
@@ -92,6 +99,8 @@ public sealed class VerifiedXpc1V2PreKeyClaimReceipt
     // internal transfer is not a public session/ACK capability.
     internal void ConsumeForInitiator(Dph2Record dph2)
     {
+        if (committedRecipient)
+            throw new CryptographicException("Committed recipient evidence cannot authorize initiator encryption.");
         RequireMatchesDph2Header(dph2);
         if (Interlocked.CompareExchange(ref initiatorConsumed, 1, 0) != 0)
             throw new InvalidOperationException("The DID2 initiator receipt is single-use.");
@@ -102,12 +111,15 @@ public sealed class VerifiedXpc1V2PreKeyClaimReceipt
     // may freeze time at the earlier receipt-verification sample.
     internal void RequireCurrentAt(OnionMonotonicReading reading)
     {
+        if (!Fixed(reading.BootId.Span, verifiedBoot) || reading.SampleSeconds < verifiedSample)
+            throw new CryptographicException("DID2 claim use crossed its protected verification sample.");
         placement.Network.EnsureCurrent();
         var current = DeepIdV2CurrentContactAuthorizationVerifier.Verify(
             RecipientAuthorization.Freshness, RecipientAuthorization.Authorization,
             reading.BootId.Span, reading.SampleSeconds);
-        var interval = DeepIdV2PreKeyClaimReceiptVerifier.VerifyTime(
-            request, placement, current, reading);
+        var interval = committedRecipient
+            ? DeepIdV2PreKeyClaimReceiptVerifier.VerifyCommittedRecipientTime(request, placement, current, reading)
+            : DeepIdV2PreKeyClaimReceiptVerifier.VerifyTime(request, placement, current, reading);
         DeepIdV2ResolverClosureCodec.VerifyIdentityAndSupport(RecipientClosure,
             current.Authorization, interval.Lower);
         DeepIdV2ResolverClosureCodec.VerifyIdentityAndSupport(RecipientClosure,
@@ -145,13 +157,32 @@ public static class DeepIdV2PreKeyClaimReceiptVerifier
 {
     public static bool RuntimeActivation => false;
 
-    public static async ValueTask<VerifiedXpc1V2PreKeyClaimReceipt> VerifyAsync(
+    public static ValueTask<VerifiedXpc1V2PreKeyClaimReceipt> VerifyAsync(
         ParsedXpk1V2 request, ParsedXpc1V2 result,
         VerifiedContactServicePlacement placement,
         DeepIdV2CurrentContactAuthorization recipientAuthorization,
         ParsedDcr1V2 recipientClosure,
         OnionTrustedTimeAuthority trustedTimeAuthority,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) => VerifyCoreAsync(request, result,
+            placement, recipientAuthorization, recipientClosure, trustedTimeAuthority, false, cancellationToken);
+
+    /// <summary>Verifies an already committed allocation on initial recipient
+    /// receipt. Request expiry is a mutation deadline, not a delivery deadline.
+    /// All current placement, endpoint and inventory conditions remain required;
+    /// this evidence cannot authorize initiator encryption.</summary>
+    public static ValueTask<VerifiedXpc1V2PreKeyClaimReceipt> VerifyCommittedForRecipientAsync(
+        ParsedXpk1V2 request, ParsedXpc1V2 result,
+        VerifiedContactServicePlacement placement,
+        DeepIdV2CurrentContactAuthorization recipientAuthorization,
+        ParsedDcr1V2 recipientClosure,
+        OnionTrustedTimeAuthority trustedTimeAuthority,
+        CancellationToken cancellationToken = default) => VerifyCoreAsync(request, result,
+            placement, recipientAuthorization, recipientClosure, trustedTimeAuthority, true, cancellationToken);
+
+    private static async ValueTask<VerifiedXpc1V2PreKeyClaimReceipt> VerifyCoreAsync(
+        ParsedXpk1V2 request, ParsedXpc1V2 result, VerifiedContactServicePlacement placement,
+        DeepIdV2CurrentContactAuthorization recipientAuthorization, ParsedDcr1V2 recipientClosure,
+        OnionTrustedTimeAuthority trustedTimeAuthority, bool committedRecipient, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(result);
@@ -163,11 +194,12 @@ public static class DeepIdV2PreKeyClaimReceiptVerifier
         placement.Network.EnsureCurrent();
         var reading = await trustedTimeAuthority.ReadCurrentAsync(cancellationToken)
             .ConfigureAwait(false);
+        var first = reading;
         cancellationToken.ThrowIfCancellationRequested();
         var current = DeepIdV2CurrentContactAuthorizationVerifier.Verify(
             recipientAuthorization.Freshness, recipientAuthorization.Authorization,
             reading.BootId.Span, reading.SampleSeconds);
-        _ = VerifyTime(request, placement, current, reading);
+        _ = VerifyTimeCore(request, placement, current, reading, committedRecipient);
         _ = DeepIdV2PreKeyClaimReplicaSignatureVerifier.Verify(request, result, placement);
         var manifest = DeepIdV2PreKeyManifestCodec.Decode(result.Field(26).Span);
         var member = DeepIdV2Dpk2Codec.Decode(result.Field(16).Span);
@@ -189,10 +221,12 @@ public static class DeepIdV2PreKeyClaimReceiptVerifier
         reading = await trustedTimeAuthority.ReadCurrentAsync(cancellationToken)
             .ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
+        if (!Fixed(first.BootId.Span, reading.BootId.Span) || reading.SampleSeconds < first.SampleSeconds)
+            Reject("DID2 claim verification crossed protected clock continuity.");
         current = DeepIdV2CurrentContactAuthorizationVerifier.Verify(
             current.Freshness, current.Authorization, reading.BootId.Span,
             reading.SampleSeconds);
-        var interval = VerifyTime(request, placement, current, reading);
+        var interval = VerifyTimeCore(request, placement, current, reading, committedRecipient);
         DeepIdV2ResolverClosureCodec.VerifyIdentityAndSupport(recipientClosure,
             current.Authorization, interval.Lower);
         DeepIdV2ResolverClosureCodec.VerifyIdentityAndSupport(recipientClosure,
@@ -204,15 +238,36 @@ public static class DeepIdV2PreKeyClaimReceiptVerifier
             Reject("The complete DID2 claim interval is outside the selected inventory.");
         placement.Network.EnsureCurrent();
         cancellationToken.ThrowIfCancellationRequested();
-        return new(request, result, offering, current, recipientClosure, placement);
+        return new(request, result, offering, current, recipientClosure, placement, reading, committedRecipient);
     }
 
     internal static (ulong Lower, ulong Upper) VerifyTime(ParsedXpk1V2 request,
         VerifiedContactServicePlacement placement,
-        DeepIdV2CurrentContactAuthorization current, OnionMonotonicReading reading)
+        DeepIdV2CurrentContactAuthorization current, OnionMonotonicReading reading) =>
+        VerifyTimeCore(request, placement, current, reading, false);
+
+    internal static (ulong Lower, ulong Upper) VerifyCommittedRecipientTime(ParsedXpk1V2 request,
+        VerifiedContactServicePlacement placement,
+        DeepIdV2CurrentContactAuthorization current, OnionMonotonicReading reading) =>
+        VerifyTimeCore(request, placement, current, reading, true);
+
+    private static (ulong Lower, ulong Upper) VerifyTimeCore(ParsedXpk1V2 request,
+        VerifiedContactServicePlacement placement,
+        DeepIdV2CurrentContactAuthorization current, OnionMonotonicReading reading, bool committedRecipient)
     {
         var network = placement.Network.Closure ??
             throw new CryptographicException("The DID2 claim has no network time closure.");
+        var freshness = current.Freshness;
+        var head = AccountDirectoryAdh1Codec.Decode(freshness.ExactAdh1.Span);
+        var dtt = AccountDirectoryDtt1Codec.Decode(freshness.ExactDtt1.Span);
+        if (!Fixed(((IVerifiedDirectoryNetworkTime)freshness).ExactAdh1CoreReference.Span, network.Adh1CoreReference) ||
+            !Fixed(head.ExactXnaAuthorityCoreReference.Span, network.View.FieldSpan(7)) ||
+            !Fixed(head.ExactXnaAuthorityCoreReference.Span, network.Head.FieldSpan(8)) ||
+            !Fixed(dtt.AuthorizingXna1CoreReference.Span, head.ExactXnaAuthorityCoreReference.Span) ||
+            !Fixed(dtt.WitnessPolicyHash.Span, head.WitnessPolicyHash.Span) ||
+            !Fixed(dtt.CurrentXnv1CoreHash.Span, network.View.CoreHash.Span) ||
+            dtt.CurrentXnv1Generation != network.View.ViewGeneration)
+            Reject("DID2 claim recipient and placement do not share exact current directory/network authority.");
         if (!Fixed(network.FreshnessBootId, reading.BootId.Span) ||
             reading.SampleSeconds < network.FreshnessMonotonicSample ||
             reading.SampleSeconds >= network.FreshnessDeadlineMonotonicSeconds)
@@ -232,7 +287,7 @@ public static class DeepIdV2PreKeyClaimReceiptVerifier
         }
         var authorization = current.Authorization.Record;
         if (U64(request.Field(5).Span) > lower ||
-            U64(request.Field(6).Span) <= upper ||
+            !committedRecipient && U64(request.Field(6).Span) <= upper ||
             placement.ValidUntilUnixSeconds <= upper ||
             authorization.NotBeforeUnixSeconds > lower ||
             authorization.ExpiresAtUnixSeconds <= upper || lower > upper)

@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
+using System.Security.Cryptography;
 
 namespace Deep.Protocol.ApplicationCore;
 
@@ -22,7 +23,7 @@ public sealed class Dam1ChunkEntry
     internal ReadOnlySpan<byte> CiphertextHashSpan => ciphertextHash;
 }
 
-public sealed class ParsedDam1 : ParsedApplicationCoreRecord
+public sealed class ParsedDam1 : ParsedApplicationCoreRecord, IDisposable
 {
     private readonly byte[] networkId;
     private readonly byte[] objectId;
@@ -30,6 +31,7 @@ public sealed class ParsedDam1 : ParsedApplicationCoreRecord
     private readonly byte[] objectKey;
     private readonly byte[] manifestHash;
     private readonly Dam1ChunkEntry[] chunks;
+    private int disposed;
 
     internal ParsedDam1(
         byte[] canonical,
@@ -60,20 +62,32 @@ public sealed class ParsedDam1 : ParsedApplicationCoreRecord
         manifestHash = ApplicationCoreFormat.Sha256Domain("Deep/Attachment/V1/manifest", canonical);
     }
 
-    public ReadOnlyMemory<byte> NetworkId => networkId.ToArray();
-    public ReadOnlyMemory<byte> ObjectId => objectId.ToArray();
-    public ReadOnlyMemory<byte> BlobCapability => blobCapability.ToArray();
-    public ReadOnlyMemory<byte> ObjectKey => objectKey.ToArray();
+    public ReadOnlyMemory<byte> NetworkId { get { RequireReadable(); return networkId.ToArray(); } }
+    public ReadOnlyMemory<byte> ObjectId { get { RequireReadable(); return objectId.ToArray(); } }
+    public ReadOnlyMemory<byte> BlobCapability { get { RequireReadable(); return blobCapability.ToArray(); } }
+    public ReadOnlyMemory<byte> ObjectKey { get { RequireReadable(); return objectKey.ToArray(); } }
+    internal ReadOnlySpan<byte> NetworkIdSpan { get { RequireReadable(); return networkId; } }
+    internal ReadOnlySpan<byte> ObjectIdSpan { get { RequireReadable(); return objectId; } }
+    internal ReadOnlySpan<byte> ObjectKeySpan { get { RequireReadable(); return objectKey; } }
     public ulong TotalPlaintextBytes { get; }
     public const uint NonFinalChunkPlaintextBytes = 262_144;
     public uint ChunkCount => checked((uint)chunks.Length);
     public uint FinalChunkPlaintextBytes { get; }
-    public IReadOnlyList<Dam1ChunkEntry> Chunks => Array.AsReadOnly(chunks);
+    public IReadOnlyList<Dam1ChunkEntry> Chunks { get { RequireReadable(); return Array.AsReadOnly(chunks); } }
     public ushort CiphertextCapacityBucketId { get; }
     public ulong ExpiresAtUnixSeconds { get; }
     public string Filename { get; }
     public string MediaType { get; }
-    public ReadOnlyMemory<byte> ManifestHash => manifestHash.ToArray();
+    public ReadOnlyMemory<byte> ManifestHash { get { RequireReadable(); return manifestHash.ToArray(); } }
+    internal override void RequireReadable() => ObjectDisposedException.ThrowIf(Volatile.Read(ref disposed) != 0, this);
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref disposed, 1) != 0) return;
+        EraseOwnedSecretRecord();
+        CryptographicOperations.ZeroMemory(objectKey); CryptographicOperations.ZeroMemory(blobCapability);
+        GC.SuppressFinalize(this);
+    }
+    ~ParsedDam1() => Dispose();
 }
 
 public static partial class ApplicationCoreCodec

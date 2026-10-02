@@ -3,7 +3,7 @@ using System.Security.Cryptography;
 using Deep.Protocol.AccountDirectoryV1;
 using Deep.Protocol.DeepExtension.PrivacyRouting;
 using Deep.Protocol.XPointNetworkV1;
-using Sodium;
+using Deep.Protocol.ContactV2;
 
 namespace Deep.Protocol.ContactV1;
 
@@ -47,13 +47,23 @@ public sealed class VerifiedXpa1PublicationAuthorization
     private readonly byte[] _authorityCoreReference;
     private readonly byte[] _witnessPolicyHash;
     private readonly byte[] _bootId;
+    private readonly Xpu1Request _request;
+    private readonly VerifiedXPointNetworkAuthority _authority;
+    private readonly VerifiedDeepIdV2DirectoryFreshness _freshness;
+    private readonly VerifiedContactServicePlacement _placement;
+    private readonly OnionTrustedTimeAuthority _time;
 
     internal VerifiedXpa1PublicationAuthorization(
         Xpu1Request request,
         ServiceRecord xpa1,
         VerifiedXPointNetworkAuthority authority,
+        VerifiedDeepIdV2DirectoryFreshness freshness,
+        VerifiedContactServicePlacement placement,
+        OnionTrustedTimeAuthority time,
         OnionMonotonicReading currentMonotonic)
     {
+        _request = request; _authority = authority; _freshness = freshness;
+        _placement = placement; _time = time;
         _exactXpa1 = xpa1.Canonical.ToArray();
         _networkId = xpa1[1].ToArray();
         _authorizationId = xpa1[2].ToArray();
@@ -112,214 +122,101 @@ public sealed class VerifiedXpa1PublicationAuthorization
     public ReadOnlyMemory<byte> WitnessPolicyHash => _witnessPolicyHash.ToArray();
     public ReadOnlyMemory<byte> BootId => _bootId.ToArray();
     public ulong VerifiedAtMonotonicSeconds { get; }
+
+    public async ValueTask EnsureCurrentAsync(CancellationToken cancellationToken = default)
+    {
+        var current = await Xpa1PublicationAuthorizationVerifier.VerifyAsync(_request,
+            _authority, _freshness, _placement, _time, cancellationToken).ConfigureAwait(false);
+        if (current.VerifiedAtMonotonicSeconds < VerifiedAtMonotonicSeconds ||
+            !CryptographicOperations.FixedTimeEquals(current.BootId.Span, _bootId))
+            throw new Xpa1PublicationAuthorizationException("TrustedTimeInvalid",
+                "Publication release crossed its original protected clock sample.");
+        cancellationToken.ThrowIfCancellationRequested();
+    }
 }
 
 public static class Xpa1PublicationAuthorizationVerifier
 {
-    private const string SignatureDomain = "Deep/ContactResolver/V1/publication-authorization";
-    private const ulong MaximumAuthorizationLifetimeSeconds = 86_400;
-
     public static async ValueTask<VerifiedXpa1PublicationAuthorization> VerifyAsync(
-        Xpu1Request request,
-        VerifiedXPointNetworkAuthority authority,
-        VerifiedAccountDirectoryFreshness freshness,
-        VerifiedContactServicePlacement placement,
-        OnionTrustedTimeAuthority trustedTimeAuthority,
-        CancellationToken cancellationToken)
+        Xpu1Request request, VerifiedXPointNetworkAuthority authority,
+        VerifiedDeepIdV2DirectoryFreshness freshness, VerifiedContactServicePlacement placement,
+        OnionTrustedTimeAuthority trustedTimeAuthority, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(request);
-        ArgumentNullException.ThrowIfNull(authority);
-        ArgumentNullException.ThrowIfNull(freshness);
-        ArgumentNullException.ThrowIfNull(placement);
-        ArgumentNullException.ThrowIfNull(trustedTimeAuthority);
-        cancellationToken.ThrowIfCancellationRequested();
-
+        ArgumentNullException.ThrowIfNull(request); ArgumentNullException.ThrowIfNull(authority);
+        ArgumentNullException.ThrowIfNull(freshness); ArgumentNullException.ThrowIfNull(placement);
+        ArgumentNullException.ThrowIfNull(trustedTimeAuthority); cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            var currentMonotonic = await trustedTimeAuthority.ReadCurrentAsync(cancellationToken).ConfigureAwait(false);
-            var xpa1 = ServiceWire.ParseValidatedXpa1(request);
-            VerifyAuthorityAndFreshness(request, authority, freshness, placement, xpa1);
-            VerifyMonotonicAndTime(request, authority, freshness, placement, currentMonotonic, xpa1);
-            VerifyPlacement(request, placement);
-            VerifyWitnessThreshold(authority, xpa1);
-            return new VerifiedXpa1PublicationAuthorization(request, xpa1, authority, currentMonotonic);
+            // Reparse exact V2 bytes before any clock/source callback.
+            request = Xpu1Codec.Decode(request.CanonicalBytes.Span);
+            var parsed = DeepIdV2ContactPublicationCodec.DecodeXpu1(request.CanonicalBytes.Span);
+            if (request.Generation != 0 || request.UsageLimit != 0 ||
+                parsed.Authorization.Field(5).Span[0] != (byte)Xpa1PublicationKind.PermanentAddress)
+                Fail("UnsupportedPublicationKind", "Only current DID2 reusable genesis publication is admitted.");
+            if (request.ExpiresAtUnixSeconds <= request.IssuedAtUnixSeconds ||
+                request.ExpiresAtUnixSeconds - request.IssuedAtUnixSeconds > 120 ||
+                ServiceWire.U64(parsed.Authorization.Field(15).Span) != request.IssuedAtUnixSeconds ||
+                ServiceWire.U64(parsed.Authorization.Field(16).Span) != request.IssuedAtUnixSeconds ||
+                ServiceWire.U64(parsed.Authorization.Field(17).Span) != request.ExpiresAtUnixSeconds)
+                Fail("AuthorizationTimeInvalid", "DID2 genesis authorization must bind the exact bounded request lifetime.");
+            var first = await trustedTimeAuthority.ReadCurrentAsync(cancellationToken).ConfigureAwait(false);
+            RequireCurrent(request, parsed, authority, freshness, placement, first);
+            var final = await trustedTimeAuthority.ReadCurrentAsync(cancellationToken).ConfigureAwait(false);
+            if (!Fixed(first.BootId.Span, final.BootId.Span) || final.SampleSeconds < first.SampleSeconds)
+                Fail("TrustedTimeInvalid", "Publication verification crossed a protected clock discontinuity.");
+            RequireCurrent(request, parsed, authority, freshness, placement, final);
+            cancellationToken.ThrowIfCancellationRequested();
+            return new(request, ServiceWire.ParseValidatedXpa1(request), authority,
+                freshness, placement, trustedTimeAuthority, final);
         }
-        catch (Xpa1PublicationAuthorizationException)
+        catch (Xpa1PublicationAuthorizationException) { throw; }
+        catch (Exception error) when (error is ArgumentException or FormatException or
+            CryptographicException or OverflowException or OnionBoundaryException)
         {
-            throw;
-        }
-        catch (OnionBoundaryException exception)
-        {
-            throw new Xpa1PublicationAuthorizationException(
-                "TrustedTimeInvalid", "The protected monotonic clock is unavailable or invalid.", exception);
-        }
-        catch (Exception exception) when (exception is ContactFormatException or FormatException or ArgumentException or CryptographicException)
-        {
-            throw new Xpa1PublicationAuthorizationException(
-                "InvalidPublicationAuthorization",
-                "The exact XPA1 publication authorization closure is invalid.",
-                exception);
+            throw new Xpa1PublicationAuthorizationException("InvalidPublicationAuthorization",
+                "The exact DID2 publication authorization failed closed.", error);
         }
     }
 
-    private static void VerifyAuthorityAndFreshness(
-        Xpu1Request request,
-        VerifiedXPointNetworkAuthority authority,
-        VerifiedAccountDirectoryFreshness freshness,
-        VerifiedContactServicePlacement placement,
-        ServiceRecord xpa1)
+    private static void RequireCurrent(Xpu1Request request, ParsedXpu1V2 parsed,
+        VerifiedXPointNetworkAuthority authority, VerifiedDeepIdV2DirectoryFreshness freshness,
+        VerifiedContactServicePlacement placement, OnionMonotonicReading reading)
     {
-        if (!Fixed(request.NetworkId.Span, authority.NetworkId.Span) ||
-            !Fixed(request.NetworkId.Span, freshness.NetworkId.Span) ||
-            !Fixed(request.NetworkId.Span, placement.Network.NetworkId.Span))
-            Fail("NetworkMismatch", "XPU1, XPA1, authority, freshness and placement must name one exact network.");
-
-        var head = AccountDirectoryAdh1Codec.Decode(freshness.ExactAdh1.Span);
-        var dtt = AccountDirectoryDtt1Codec.Decode(freshness.ExactDtt1.Span);
-        if (!Fixed(head.ExactXnaAuthorityCoreReference.Span, authority.AuthorityCoreReference.Span) ||
-            !Fixed(dtt.AuthorizingXna1CoreReference.Span, authority.AuthorityCoreReference.Span) ||
-            !Fixed(head.WitnessPolicyHash.Span, authority.DirectoryWitnessPolicyHash.Span) ||
-            !Fixed(dtt.WitnessPolicyHash.Span, authority.DirectoryWitnessPolicyHash.Span))
-            Fail("AuthorityBindingMismatch", "The current ADH1/DTT1 does not bind the exact current XNA1 authority and witness policy.");
-        if (!Fixed(dtt.CurrentAdh1CoreHash.Span, freshness.ExactAdh1CoreHash.Span) ||
-            dtt.CurrentAdh1Generation != freshness.AdhGeneration ||
-            !Fixed(xpa1[18], freshness.ExactAdh1CoreHash.Span) ||
-            !Fixed(dtt.CurrentXnv1CoreHash.Span, placement.ViewHash.Span) ||
-            !Fixed(request.ViewHash.Span, placement.ViewHash.Span))
-            Fail("FreshnessBindingMismatch", "The current ADH1/DTT1 does not bind the exact verified resolver view.");
-    }
-
-    private static void VerifyMonotonicAndTime(
-        Xpu1Request request,
-        VerifiedXPointNetworkAuthority authority,
-        VerifiedAccountDirectoryFreshness freshness,
-        VerifiedContactServicePlacement placement,
-        OnionMonotonicReading currentMonotonic,
-        ServiceRecord xpa1)
-    {
-        var lease = placement.Network.TrustedTime ??
-            throw new Xpa1PublicationAuthorizationException(
-                "PlacementTimeMissing", "The verified resolver placement has no production trusted-time lease.");
-        try
-        {
-            lease.EnsureLive();
-        }
-        catch (OnionBoundaryException exception)
-        {
-            throw new Xpa1PublicationAuthorizationException(
-                "PlacementTimeExpired", "The verified resolver placement trusted-time lease has expired.", exception);
-        }
-        var expectedLeaseBoot = PrivacyRoutingWire.Sha256Domain(
-            "Deep/XPoint/V1/monotonic-boot-id", freshness.BootId.ToArray());
-        try
-        {
-            if (!Fixed(currentMonotonic.BootId.Span, freshness.BootId.Span) ||
-                !Fixed(expectedLeaseBoot, lease.BootIdSpan))
-                Fail("MonotonicBootMismatch", "Freshness, current monotonic reading and placement lease belong to different boots.");
-        }
-        finally
-        {
-            CryptographicOperations.ZeroMemory(expectedLeaseBoot);
-        }
-
-        if (!freshness.IsCurrentAtMonotonic(currentMonotonic.BootId.Span, currentMonotonic.SampleSeconds))
-            Fail("FreshnessExpired", "The account-directory freshness capability is no longer current.");
-
-        var elapsed = currentMonotonic.SampleSeconds - freshness.MonotonicSample;
-        ulong lower;
-        ulong upper;
-        try
-        {
-            lower = checked(freshness.TrustedLowerUnixSeconds + elapsed);
-            upper = checked(freshness.TrustedUpperUnixSeconds + elapsed);
-        }
-        catch (OverflowException exception)
-        {
-            throw new Xpa1PublicationAuthorizationException(
-                "TrustedTimeOverflow", "The monotonic-to-trusted-time projection overflowed.", exception);
-        }
-
-        var issuedAt = ServiceWire.U64(xpa1[15]);
-        var notBefore = ServiceWire.U64(xpa1[16]);
-        var authorizationExpiresAt = ServiceWire.U64(xpa1[17]);
-        if (authorizationExpiresAt - issuedAt > MaximumAuthorizationLifetimeSeconds ||
-            notBefore > lower || upper >= authorizationExpiresAt ||
-            authority.NotBefore > lower || upper >= authority.ExpiresAt ||
-            freshness.ValidFromUnixSeconds > lower || upper >= freshness.ExpiresAtUnixSeconds ||
-            upper >= placement.ValidUntilUnixSeconds ||
-            request.IssuedAtUnixSeconds < issuedAt || request.IssuedAtUnixSeconds > lower ||
-            request.ExpiresAtUnixSeconds > authorizationExpiresAt || upper >= request.ExpiresAtUnixSeconds ||
-            authorizationExpiresAt > placement.ValidUntilUnixSeconds ||
-            authorizationExpiresAt > freshness.ExpiresAtUnixSeconds ||
-            authorizationExpiresAt > authority.ExpiresAt ||
-            authorizationExpiresAt > ServiceWire.U64(xpa1[13]))
-            Fail("AuthorizationTimeInvalid", "The complete trusted interval or XPA1/XPU1 lifetime lies outside its verified closure.");
-    }
-
-    private static void VerifyPlacement(Xpu1Request request, VerifiedContactServicePlacement placement)
-    {
+        placement.Network.EnsureCurrent();
+        var closure = placement.Network.Closure ??
+            throw new Xpa1PublicationAuthorizationException("PlacementMissing", "Complete NETCODEC placement is required.");
         if (!placement.Binds(ContactServiceRequestKind.PublishInvite, request.LocatorHash) ||
             placement.RequestKind != ContactServiceRequestKind.PublishInvite ||
             placement.ServiceClass != ContactServiceClass.InviteResolver ||
+            !Fixed(request.NetworkId.Span, placement.Network.NetworkId.Span) ||
             !Fixed(request.ViewHash.Span, placement.ViewHash.Span) ||
-            !Fixed(request.PlacementHash.Span, placement.PlacementHash.Span))
-            Fail("PlacementMismatch", "XPU1 is not bound to the exact verified PublishInvite placement and shard.");
+            !Fixed(request.PlacementHash.Span, placement.PlacementHash.Span) ||
+            !Fixed(closure.View.CoreHash.Span, request.ViewHash.Span) ||
+            !Fixed(closure.Adh1CoreReference, ((IVerifiedDirectoryNetworkTime)freshness).ExactAdh1CoreReference.Span) ||
+            !Fixed(closure.FreshnessBootId, reading.BootId.Span) ||
+            !Fixed(closure.View.FieldSpan(7), authority.AuthorityCoreReference.Span) ||
+            reading.SampleSeconds < closure.FreshnessMonotonicSample ||
+            reading.SampleSeconds >= closure.FreshnessDeadlineMonotonicSeconds ||
+            request.ExpiresAtUnixSeconds > placement.ValidUntilUnixSeconds)
+            Fail("PlacementMismatch", "Publication is not bound to the exact current DID2 network/head/placement.");
+        // The account-independent observer proof and independently obtained
+        // network context may use different nonce-bound DTT1 intervals.
+        var elapsed = checked(reading.SampleSeconds - closure.FreshnessMonotonicSample);
+        var networkLower = checked(closure.TrustedLowerUnixSeconds + elapsed);
+        var networkUpper = checked(closure.TrustedUpperUnixSeconds + elapsed);
+        if (request.IssuedAtUnixSeconds > networkLower || networkUpper >= request.ExpiresAtUnixSeconds ||
+            networkUpper >= placement.ValidUntilUnixSeconds)
+            Fail("AuthorizationTimeInvalid", "The full network trusted interval is not covered.");
+        _ = DeepIdV2Xpa1CurrentDirectoryWitnessVerifier.Verify(parsed, authority, freshness,
+            reading.BootId.Span, reading.SampleSeconds);
+        if (!Fixed(parsed.Field(25).Span, request.ExactRouteClosure.Span) ||
+            !Fixed(ContactRouteClosureCodec.Decode(request.ExactRouteClosure.Span).Projection.CanonicalBytes.Span,
+                closure.Pmt.CanonicalBytes.Span))
+            Fail("RouteProjectionMismatch", "Publication uses another exact verified PMT2 projection.");
     }
 
-    private static void VerifyWitnessThreshold(
-        VerifiedXPointNetworkAuthority authority,
-        ServiceRecord xpa1)
-    {
-        var count = xpa1[20][0];
-        if (count < authority.WitnessThreshold)
-            Fail("WitnessThresholdNotMet", "XPA1 contains fewer witness receipts than the exact XNA1 threshold.");
-
-        var keys = authority.WitnessKeys.ToDictionary(
-            static key => Convert.ToHexString(key.Id.Span), StringComparer.Ordinal);
-        var projection = ServiceWire.Project(ProtocolMagic.XPA1, Enumerable.Range(1, 20)
-            .Select(tag => (checked((ushort)tag), xpa1[(ushort)tag].ToArray())).ToArray());
-        var signingInput = ContactCodec.SignatureInput(SignatureDomain, projection);
-        var failureDomains = new HashSet<string>(StringComparer.Ordinal);
-        var valid = 0;
-        try
-        {
-            for (var index = 0; index < count; index++)
-            {
-                var row = xpa1[21].Slice(index * 96, 96);
-                if (!keys.TryGetValue(Convert.ToHexString(row[..32]), out var key) || key is null)
-                    Fail("UnknownWitness", "XPA1 contains a signer absent from the exact current XNA1 witness set.");
-
-                bool verified;
-                try
-                {
-                    verified = PublicKeyAuth.VerifyDetached(
-                        row[32..].ToArray(), signingInput, key.Ed25519PublicKey.ToArray());
-                }
-                catch (Exception exception) when (exception is CryptographicException or ArgumentException)
-                {
-                    throw new Xpa1PublicationAuthorizationException(
-                        "InvalidWitnessSignature", "An XPA1 Ed25519 witness signature is invalid.", exception);
-                }
-                if (!verified)
-                    Fail("InvalidWitnessSignature", "An XPA1 Ed25519 witness signature is invalid.");
-                failureDomains.Add(Convert.ToHexString(key.FailureDomainHash.Span));
-                valid++;
-            }
-        }
-        finally
-        {
-            CryptographicOperations.ZeroMemory(projection);
-            CryptographicOperations.ZeroMemory(signingInput);
-        }
-
-        if (valid < authority.WitnessThreshold || failureDomains.Count < authority.WitnessThreshold)
-            Fail("WitnessThresholdNotMet", "XPA1 does not meet the exact XNA1 witness and failure-domain threshold.");
-    }
-
-    private static bool Fixed(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right) =>
-        left.Length == right.Length && CryptographicOperations.FixedTimeEquals(left, right);
-
+    private static bool Fixed(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b) =>
+        a.Length == b.Length && CryptographicOperations.FixedTimeEquals(a, b);
     [DoesNotReturn]
-    private static void Fail(string code, string message) =>
-        throw new Xpa1PublicationAuthorizationException(code, message);
+    private static void Fail(string code, string message) => throw new Xpa1PublicationAuthorizationException(code, message);
 }

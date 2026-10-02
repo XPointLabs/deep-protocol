@@ -179,27 +179,6 @@ public sealed class VerifiedContactRouteProposalAuthority
     public ulong NotBeforeUnixSeconds { get; }
     public ulong ExpiresAtUnixSeconds { get; }
 
-    /// <summary>
-    /// Creates the only route-authority wire request that may be derived from
-    /// this verified current proposal. The directory lookup rollback floor and
-    /// exact DCA1 are copied from the same nonce-fresh authority; callers
-    /// cannot cross-source them from another account or directory head.
-    /// </summary>
-    public ContactRouteAuthorityWireRequest CreateThresholdRequest(
-        AuthoredContactRouteAdvertisement advertisement,
-        ReadOnlySpan<byte> requestNonce)
-    {
-        ArgumentNullException.ThrowIfNull(advertisement);
-        ContactRouteAdvertisementVerifier.Validate(this, advertisement.Record);
-        return new ContactRouteAuthorityWireRequest(
-            networkId,
-            requestNonce,
-            freshness.DirectoryLeafKey.Span,
-            freshness.AdhGeneration,
-            freshness.ExactAdh1CoreHash.Span,
-            recipientAuthorization.Verified.Record.CanonicalBytes.Span,
-            advertisement.ExactXra1.Span);
-    }
 
     /// <summary>
     /// Authors a device-owned XPS1 only for the exact device and directory

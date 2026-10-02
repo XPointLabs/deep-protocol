@@ -36,7 +36,7 @@ public sealed class ContactRouteAuthorityWireRequest
             throw new ArgumentException("The exact DCA1 length is invalid.", nameof(exactDca1));
         if (exactXra1.Length != ContactRouteAuthorityWireCodec.ExactXra1Bytes)
             throw new ArgumentException("The exact XRA1 length is invalid.", nameof(exactXra1));
-        var dca = ApplicationCoreCodec.DecodeDca1(exactDca1);
+        var dca = DeepIdV2ContactAuthorizationCodec.Decode(exactDca1);
         var xra = ContactCodec.Decode(ProtocolMagic.XRA1, exactXra1);
         if (!Fixed(dca.NetworkId.Span, this.networkId) ||
             !Fixed(xra.Field(1).Span, this.networkId))
@@ -123,16 +123,16 @@ public sealed class ContactRouteAuthorityWireResponse
 
 public static class ContactRouteAuthorityWireCodec
 {
-    public const ushort Version = 1;
+    public const ushort Version = 2;
     public const int ExactDca1Bytes = 473;
     public const int ExactXra1Bytes = 550;
     public const int RequestBytes = 1_151;
     public const int MinimumResponseBytes = 2_151;
     public const int MaximumResponseBytes = 11_079;
     public const string RequestMediaType =
-        "application/vnd.deep.contact-route-authority-request.v1+octet-stream";
+        "application/vnd.deep.contact-route-authority-request.v2+octet-stream";
     public const string ResponseMediaType =
-        "application/vnd.deep.contact-route-authority-response.v1+octet-stream";
+        "application/vnd.deep.contact-route-authority-response.v2+octet-stream";
 
     public static byte[] EncodeRequest(ContactRouteAuthorityWireRequest request)
     {

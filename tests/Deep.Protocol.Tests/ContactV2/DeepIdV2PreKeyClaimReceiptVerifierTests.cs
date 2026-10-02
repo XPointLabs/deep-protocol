@@ -26,6 +26,10 @@ public sealed partial class DeepIdV2PreKeyClaimReceiptVerifierTests
             typeof(VerifiedContactServicePlacement), typeof(DeepIdV2CurrentContactAuthorization),
             typeof(ParsedDcr1V2), typeof(OnionTrustedTimeAuthority), typeof(CancellationToken) },
             method.GetParameters().Select(parameter => parameter.ParameterType));
+        var recipient = Assert.Single(typeof(DeepIdV2PreKeyClaimReceiptVerifier).GetMethods(),
+            candidate => candidate.Name == "VerifyCommittedForRecipientAsync");
+        Assert.Equal(method.GetParameters().Select(parameter => parameter.ParameterType),
+            recipient.GetParameters().Select(parameter => parameter.ParameterType));
         Assert.DoesNotContain(typeof(VerifiedXpc1V2PreKeyClaimReceipt).GetMethods(),
             candidate => candidate.Name is "BindForInitialSession" or "ConsumeForHandshake");
     }
@@ -291,8 +295,36 @@ public sealed partial class DeepIdV2PreKeyClaimReceiptVerifierTests
         await Assert.ThrowsAsync<CryptographicException>(async () =>
             await Verify(request, Result(request, higherReuseMember, higherReuseManifest, 2)));
         var shortRequest = Request(expiry: 17);
+        await Assert.ThrowsAsync<CryptographicException>(async () =>
+            await Verify(request, oneTimeResult, new Clock(boot, [4, 3])));
+        var observedLater = await Verify(request, oneTimeResult, new Clock(boot, [4, 4]));
+        Assert.Throws<CryptographicException>(() => observedLater.RequireCurrentAt(new(boot, 3)));
+        Assert.Throws<CryptographicException>(() => observedLater.RequireCurrentAt(new(Bytes(16, 0x74), 4)));
+        observedLater.RequireCurrentAt(new(boot, 4));
+        var mixedHead = Placement(contact, boot, manifest.Field(2).ToArray(), keys, mismatchedDirectory: true);
+        await Assert.ThrowsAsync<CryptographicException>(async () =>
+            await Verify(request, oneTimeResult, operationPlacement: mixedHead));
         await Assert.ThrowsAsync<CryptographicException>(async () => await Verify(shortRequest,
             Result(shortRequest, oneTime[0], manifest), new Clock(boot, [3, 4])));
+        ValueTask<VerifiedXpc1V2PreKeyClaimReceipt> VerifyRecipient(ParsedXpk1V2 pending,
+            ParsedXpc1V2 committed, Clock? clock = null, VerifiedContactServicePlacement? currentPlacement = null) =>
+            DeepIdV2PreKeyClaimReceiptVerifier.VerifyCommittedForRecipientAsync(pending, committed,
+                currentPlacement ?? placement, contact, closure, new(clock ?? new Clock(boot, [3, 4])));
+        var committedShort = Result(shortRequest, oneTime[0], manifest);
+        var delayedRecipient = await VerifyRecipient(shortRequest, committedShort);
+        Assert.Equal(committedShort.Field(18).ToArray(), delayedRecipient.ClaimReceiptHash.ToArray());
+        delayedRecipient.RequireCurrentAt(new(boot, 4));
+        Assert.Throws<CryptographicException>(() => delayedRecipient.ConsumeForInitiator(
+            Header(oneTime[0], delayedRecipient.ClaimReceiptHash.ToArray())));
+        Assert.Throws<CryptographicException>(() => delayedRecipient.RequireCurrentAt(new(boot, 3)));
+        await Assert.ThrowsAsync<CryptographicException>(async () => await VerifyRecipient(shortRequest,
+            committedShort, currentPlacement: Placement(contact, boot, manifest.Field(2).ToArray(), keys, 9, 16)));
+        await Assert.ThrowsAsync<CryptographicException>(async () => await VerifyRecipient(shortRequest,
+            committedShort, currentPlacement: Placement(contact, boot, manifest.Field(2).ToArray(), keys, 15, 20)));
+        await Assert.ThrowsAsync<ApplicationCoreFormatException>(async () => await VerifyRecipient(shortRequest,
+            Result(shortRequest, oneTime[0], manifest, damageSignature: true)));
+        await Assert.ThrowsAsync<CryptographicException>(async () => await VerifyRecipient(shortRequest,
+            committedShort, new Clock(boot, [4, 3])));
         await Assert.ThrowsAsync<Deep.Protocol.AccountDirectoryV1.AccountDirectoryFreshnessVerificationException>(
             async () => await Verify(request, oneTimeResult, new Clock(boot, [3, 7])));
         await Assert.ThrowsAsync<Deep.Protocol.AccountDirectoryV1.AccountDirectoryFreshnessVerificationException>(
@@ -326,17 +358,16 @@ public sealed partial class DeepIdV2PreKeyClaimReceiptVerifierTests
 
     private static VerifiedContactServicePlacement Placement(
         DeepIdV2CurrentContactAuthorization contact, byte[] boot, byte[] capability, KeyPair[] keys,
-        ulong lower = 15, ulong upper = 16, ulong deadline = 60)
+        ulong lower = 15, ulong upper = 16, ulong deadline = 60, bool mismatchedDirectory = false)
     {
         var network = contact.Freshness.NetworkId.ToArray();
-        var viewWire = XPointNetworkTestRecords.Create(XPointNetworkRegistry.Xnv1);
-        viewWire = XPointNetworkTestRecords.MutateField(viewWire, 1, field => network.CopyTo(field));
-        foreach (var tag in new[] { 19, 20 })
-            viewWire = XPointNetworkTestRecords.MutateField(viewWire, tag, field => U64(10).CopyTo(field));
-        viewWire = XPointNetworkTestRecords.MutateField(viewWire, 21, field => U64(80).CopyTo(field));
-        var view = XPointNetworkCodec.Parse<Xnv1Record>(viewWire);
+        var directoryHead = AccountDirectoryAdh1Codec.Decode(contact.Freshness.ExactAdh1.Span);
+        var authorityReference = directoryHead.ExactXnaAuthorityCoreReference.ToArray();
+        var view = SyntheticView(network, authorityReference);
         var policy = XPointNetworkCodec.Parse<Xvp1Record>(XPointNetworkTestRecords.Create(XPointNetworkRegistry.Xvp1));
-        var head = XPointNetworkCodec.Parse<Xnh1Record>(XPointNetworkTestRecords.Create(XPointNetworkRegistry.Xnh1));
+        var headWire = XPointNetworkTestRecords.MutateField(XPointNetworkTestRecords.Create(XPointNetworkRegistry.Xnh1),
+            8, field => authorityReference.CopyTo(field));
+        var head = XPointNetworkCodec.Parse<Xnh1Record>(headWire);
         var viewRef = XPointNetworkCodec.EncodeCoreReference("XNV1", view.CoreHash.Span);
         var nodeIds = new[] { Bytes(32, 0x31), Bytes(32, 0x32) };
         var rows = new byte[272];
@@ -363,7 +394,8 @@ public sealed partial class DeepIdV2PreKeyClaimReceiptVerifierTests
             ViewCoreHash = view.CoreHash.ToArray(), ViewCoreReference = viewRef,
             PmtArtifactReference = ContactCodec.ArtifactReference("PMT2", pmt).CanonicalBytes.ToArray(),
             PmtNodeIds = nodeIds, SelectionEpoch = 1, ReplicaCount = 2, HardUpperUnixSeconds = 20,
-            Adh1CoreReference = pmtFields[13].ToArray(), Dtt1CoreHash = Bytes(32, 0x36),
+            Adh1CoreReference = mismatchedDirectory ? Ref("ADH1", Bytes(32, 0x70)) : pmtFields[13].ToArray(),
+            Dtt1CoreHash = Bytes(32, 0x36),
             FreshnessBootId = boot, TrustedLowerUnixSeconds = lower, TrustedUpperUnixSeconds = upper,
             FreshnessMonotonicSample = 3, FreshnessDeadlineMonotonicSeconds = deadline
         };
@@ -377,6 +409,29 @@ public sealed partial class DeepIdV2PreKeyClaimReceiptVerifierTests
             nodes, closure, new XPointNetworkProtectedLkg(network, headRef, head.TreeSize,
                 head.Root.ToArray(), viewRef, view.ViewGeneration, Ref("XNA1", Bytes(32, 0x50))), null);
         return ContactServicePlacementFactory.Create(context, ContactServiceRequestKind.ClaimPreKey, capability);
+    }
+
+    // Explicit internal verifier-output seam for binding/time unit coverage,
+    // NOT a signed directory/network producer or native/physical evidence.
+    internal static byte[] SyntheticClaimDtt(byte[] network, byte[] exactHead)
+    {
+        var head = AccountDirectoryAdh1Codec.Decode(exactHead);
+        var view = SyntheticView(network, head.ExactXnaAuthorityCoreReference.ToArray());
+        return AccountDirectoryDtt1Codec.Encode(new AccountDirectoryDtt1(network, Bytes(32, 0x51), 15, 1,
+            AccountDirectoryCrypto.ComputeAdh1CoreHash(head), head.LogGeneration, view.CoreHash.Span,
+            view.ViewGeneration, head.ExactXnaAuthorityCoreReference.Span, head.WitnessPolicyHash.Span,
+            15, 20, Bytes(32, 0x52), [new AccountDirectoryDtt1WitnessReceipt(Bytes(32, 0x53), Bytes(64, 0x54))]));
+    }
+
+    private static Xnv1Record SyntheticView(byte[] network, byte[] authorityReference)
+    {
+        var wire = XPointNetworkTestRecords.Create(XPointNetworkRegistry.Xnv1);
+        wire = XPointNetworkTestRecords.MutateField(wire, 1, field => network.CopyTo(field));
+        wire = XPointNetworkTestRecords.MutateField(wire, 7, field => authorityReference.CopyTo(field));
+        foreach (var tag in new[] { 19, 20 })
+            wire = XPointNetworkTestRecords.MutateField(wire, tag, field => U64(10).CopyTo(field));
+        wire = XPointNetworkTestRecords.MutateField(wire, 21, field => U64(80).CopyTo(field));
+        return XPointNetworkCodec.Parse<Xnv1Record>(wire);
     }
 
     private static byte[] IndexZeroProof(IReadOnlyList<ParsedDpk2V2> members)
