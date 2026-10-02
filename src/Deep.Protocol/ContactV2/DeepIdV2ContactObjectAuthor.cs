@@ -20,10 +20,26 @@ public sealed class AuthoredDeepIdV2ContactObject
 /// <summary>Owned reusable genesis only. No caller clock or generic signing surface.</summary>
 public static class DeepIdV2ContactObjectAuthor
 {
-    public static async ValueTask<AuthoredDeepIdV2ContactObject> AuthorGenesisAsync(
+    public static ValueTask<AuthoredDeepIdV2ContactObject> AuthorGenesisAsync(
         VerifiedDeepIdV2ContactRouteClosure route, OwnedGenesisDeviceSecrets device,
         IReadOnlyList<ParsedXps1V2> preKeyServices, string profileName,
+        ReadOnlyMemory<byte> resolverReadCapability16, CancellationToken cancellationToken = default) =>
+        AuthorGenesisCoreAsync(route, device, preKeyServices, profileName, resolverReadCapability16, null, cancellationToken);
+
+    public static ValueTask<AuthoredDeepIdV2ContactObject> AuthorRetainedGenesisAsync(
+        VerifiedDeepIdV2ContactRouteClosure route, VerifiedDeepIdV2ContactRouteIssuance issuance,
+        OwnedGenesisDeviceSecrets device, IReadOnlyList<ParsedXps1V2> preKeyServices, string profileName,
         ReadOnlyMemory<byte> resolverReadCapability16, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(issuance);
+        return AuthorGenesisCoreAsync(route, device, preKeyServices, profileName, resolverReadCapability16, issuance, cancellationToken);
+    }
+
+    private static async ValueTask<AuthoredDeepIdV2ContactObject> AuthorGenesisCoreAsync(
+        VerifiedDeepIdV2ContactRouteClosure route, OwnedGenesisDeviceSecrets device,
+        IReadOnlyList<ParsedXps1V2> preKeyServices, string profileName,
+        ReadOnlyMemory<byte> resolverReadCapability16, VerifiedDeepIdV2ContactRouteIssuance? issuance,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(route); ArgumentNullException.ThrowIfNull(device);
         ArgumentNullException.ThrowIfNull(preKeyServices); ArgumentNullException.ThrowIfNull(profileName);
@@ -49,7 +65,8 @@ public static class DeepIdV2ContactObjectAuthor
             using var resolution = DeepIdV2PermanentContactResolutionDerivation.Derive(
                 route.Network.NetworkId.Span, binding.DeepId, capability);
             var window = await route.ReadCurrentTimeAsync(cancellationToken).ConfigureAwait(false);
-            if (!Fixed(route.Route.Route.Field(19).Span[6..], route.Recipient.Freshness.NextProtectedLkg.CoreHash.Span))
+            issuance?.RequireExactRoute(route);
+            if (issuance is null && !Fixed(route.Route.Route.Field(19).Span[6..], route.Recipient.Freshness.NextProtectedLkg.CoreHash.Span))
                 throw new CryptographicException("New contact issuance requires a route anchored at the current verified directory head.");
             var dca = route.Recipient.Authorization;
             var directory = dca.Directory.Record;
@@ -74,7 +91,7 @@ public static class DeepIdV2ContactObjectAuthor
             }
             if (issued >= expiry || window.UpperUnixSeconds >= expiry)
                 throw new CryptographicException("Contact validity cannot cover the complete trusted time interval.");
-            var head = route.Recipient.Freshness.NextProtectedLkg;
+            var head = issuance?.IssuanceHead ?? route.Recipient.Freshness.NextProtectedLkg;
             var lookup = DeepIdV2AccountDirectoryLookupCodec.Author(binding.DeepId, dca.Record.NetworkId.Span,
                 head.LogGeneration, head.CoreHash.Span, 1, new byte[38], new byte[32]);
             var minimumHead = new byte[40]; U64Bytes(head.LogGeneration).CopyTo(minimumHead, 0);
@@ -107,6 +124,7 @@ public static class DeepIdV2ContactObjectAuthor
             var closure = CloseSupport(bundle, dca);
             var final = await route.ReadCurrentTimeAsync(cancellationToken).ConfigureAwait(false);
             RequireContinuous(window, final);
+            issuance?.RequireExactRoute(route);
             RequireObject(route, closure, final);
             protectedBytes = DeepIdV2ResolverObjectProtection.Seal(closure, route.Network.NetworkId.Span, binding.DeepId, resolution);
             cancellationToken.ThrowIfCancellationRequested();

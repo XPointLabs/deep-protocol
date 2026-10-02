@@ -163,7 +163,7 @@ public static partial class DeepIdV2ContactRouteAuthor
         VerifiedXPointNetworkAuthority networkAuthority, OwnedGenesisDeviceSecrets deviceSecrets,
         ReadOnlyMemory<byte> exactXra1, ParsedDeepIdV2RouteThreshold threshold, ushort minimumReader,
         OnionTrustedTimeAuthority trustedTime, VerifiedDeepIdV2ContactRoutePredecessor? predecessor,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, VerifiedDeepIdV2ContactRouteIssuance? issuance = null)
     {
         ArgumentNullException.ThrowIfNull(deviceSecrets); ArgumentNullException.ThrowIfNull(threshold);
         cancellationToken.ThrowIfCancellationRequested();
@@ -190,7 +190,8 @@ public static partial class DeepIdV2ContactRouteAuthor
                  DeepIdV2RouteContext.U64(predecessor.Invite.Field(3).Span) == ulong.MaxValue ||
                  minimumReader != BinaryPrimitives.ReadUInt16BigEndian(predecessor.Invite.Field(11).Span))
             throw new CryptographicException("Invite successor cannot advance or changes the retained reader policy.");
-        current.RequireThreshold(xra, pms, xrc, xss);
+        if (issuance is null) current.RequireThreshold(xra, pms, xrc, xss);
+        else issuance.RequireAtCurrentContext(current);
         ReadOnlyMemory<byte>[] reachability = []; ReadOnlyMemory<byte>[] invitation = [];
         byte[]? xrrSignature = null; byte[]? xirSignature = null; byte[]? closure = null;
         try
@@ -218,6 +219,7 @@ public static partial class DeepIdV2ContactRouteAuthor
             var invite = DeepIdV2InviteRendezvousCodec.AuthorForOperationalAuthority(invitation);
             var final = await current.RecheckAsync(cancellationToken).ConfigureAwait(false);
             predecessor?.RequireAtCurrentContext(final);
+            issuance?.RequireAtCurrentContext(final);
             closure = ContactRouteClosureCodec.EncodeRecords([xrr, xra, xrc, xss, current.Pmt, pms]);
             return await DeepIdV2ContactRouteVerifier.VerifyAsync(currentAuthorization, network, networkAuthority,
                 invite.CanonicalBytes, closure, trustedTime, cancellationToken).ConfigureAwait(false);

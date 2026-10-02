@@ -353,7 +353,8 @@ public static class ContactPublicationAuthorityWireCodec
             !Fixed(xpa.Field(7).Span, SHA256.HashData(bundle.CanonicalBytes.Span)) ||
             !Fixed(xpa.Field(14).Span, ApplicationCoreFormat.Sha256Domain(
                 "Deep/ContactResolver/V2/publication-policy", request.ExactDca1.Span)) ||
-            !Fixed(xpa.Field(18).Span, request.MinimumAdh1CoreHash.Span) ||
+            request.MinimumAdh1Generation != BinaryPrimitives.ReadUInt64BigEndian(bundle.Field(21).Span) ||
+            !Fixed(request.MinimumAdh1CoreHash.Span, bundle.Field(21).Span[8..]) ||
             BinaryPrimitives.ReadUInt64BigEndian(xpa.Field(15).Span) != request.IssuedAtUnixSeconds ||
             BinaryPrimitives.ReadUInt64BigEndian(xpa.Field(16).Span) != request.IssuedAtUnixSeconds ||
             BinaryPrimitives.ReadUInt64BigEndian(xpa.Field(17).Span) != request.ExpiresAtUnixSeconds)

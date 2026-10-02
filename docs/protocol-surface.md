@@ -1,6 +1,6 @@
 # Protocol Surface - DNP1 Wave 1
 
-Updated: 2026-10-02.
+Updated: 2026-10-03.
 
 The production package closure is exactly `Deep.Protocol`,
 `Deep.Protocol.MembershipRoutes`, and `Deep.Protocol.ProfileCarrier`.
@@ -50,6 +50,19 @@ graph handling follows its actual prior XRC reference. Current-only six-record
 parsing is not a persisted route floor. Private durable per-generation issuance,
 protected pending/publication lineage and device recovery remain unimplemented
 activation gates. Existing bytes/domains and the reviewed D--G graph are unchanged.
+
+### Closed retained threshold issuance candidate
+
+[DR-0074](../../docs/survival-program/decisions/DR-0074-did2-retained-threshold-issuance-evidence.md)
+adds `VerifiedDeepIdV2ContactRouteIssuance`, `VerifyRetainedThresholdAsync`,
+`CompleteRetainedGenesisAsync`, `CompleteRetainedSuccessorAsync` and the object
+author's `AuthorRetainedGenesisAsync`. The actual signed ADH authenticates
+issuance metadata only; every current DID2/network/time/signature check remains.
+The closed value is neither current route nor signing/dispatch authority.
+Default current-head APIs remain strict. Publication publisher minima follow
+the signed bundle, independently of current XPA witness head verification.
+Exact server response and protected signed-head custody are not yet connected;
+these candidates alone do not recover an owned lost response or activate devices.
 
 ### Opaque DID2 mailbox issuance candidate
 

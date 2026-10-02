@@ -48,9 +48,10 @@ public static class DeepIdV2PublicationAuthorityAuthor
             var expiry = RequestExpiry(route, first.LowerUnixSeconds);
             var placeholder = new byte[64]; placeholder[^1] = 1;
             var freshness = route.Recipient.Freshness;
+            var minimum = contact.Closure.Bundle.Field(21);
             var wire = new ContactPublicationAuthorityWireRequest(route.Network.NetworkId.Span, nonce,
-                freshness.QueriedDirectoryLeafKey.Span, freshness.NextProtectedLkg.LogGeneration,
-                freshness.NextProtectedLkg.CoreHash.Span, route.Recipient.Authorization.Record.CanonicalBytes.Span,
+                freshness.QueriedDirectoryLeafKey.Span, U64(minimum.Span),
+                minimum.Span[8..], route.Recipient.Authorization.Record.CanonicalBytes.Span,
                 contact.Closure.CanonicalBytes.Span, route.ExactRouteClosure.Span, operation,
                 0, new byte[32], contact.ProtectedDcr1.Span, first.LowerUnixSeconds, expiry,
                 U64(contact.Closure.Bundle.Field(18).Span), owner, placeholder);
@@ -123,14 +124,15 @@ public static class DeepIdV2PublicationAuthorityAuthor
         var hash = DeepIdV2ContactPublicationCodec.ComputeAuthorizedBodyHash(Encode(ProtocolMagicBytes.XPU1,
             DeepIdV2ContactPublicationCodec.XpuTags.ToArray(), body));
         var identity = new byte[96]; request.OperationId.Span.CopyTo(identity);
-        hash.CopyTo(identity, 32); request.MinimumAdh1CoreHash.Span.CopyTo(identity.AsSpan(64));
+        var issuanceHead = route.Recipient.Freshness.NextProtectedLkg.CoreHash;
+        hash.CopyTo(identity, 32); issuanceHead.Span.CopyTo(identity.AsSpan(64));
         byte[][] xpa = [request.NetworkId.ToArray(), ApplicationCoreFormat.Sha256Domain(
             "Deep/ContactResolver/V2/publication-authorization-id", identity), request.OperationId.ToArray(), locator,
             [1], SHA256.HashData(closure.CanonicalBytes.Span), SHA256.HashData(bundle.CanonicalBytes.Span),
             body[7].ToArray(), U64Bytes(0), new byte[32], body[10].ToArray(), new byte[4],
             U64Bytes(request.EffectiveExpiresAtUnixSeconds), PolicyHash(request.ExactDca1.Span),
             U64Bytes(request.IssuedAtUnixSeconds), U64Bytes(request.IssuedAtUnixSeconds), U64Bytes(request.ExpiresAtUnixSeconds),
-            request.MinimumAdh1CoreHash.ToArray(), hash, [checked((byte)count)], new byte[count * 96]];
+            issuanceHead.ToArray(), hash, [checked((byte)count)], new byte[count * 96]];
         var input = DeepIdV2ContactPublicationCodec.CreateWitnessSigningInput(xpa);
         try
         {
@@ -188,11 +190,12 @@ public static class DeepIdV2PublicationAuthorityAuthor
     {
         var dca = route.Recipient.Authorization; var freshness = route.Recipient.Freshness;
         var closure = DeepIdV2ResolverClosureCodec.Decode(request.ExactDcr1.Span); var bundle = closure.Bundle;
+        DeepIdV2ContactRouteVerifier.RequireBundleIssuanceAnchor(route, bundle);
         if (!Fixed(request.ExactDca1.Span, dca.Record.CanonicalBytes.Span) ||
             !Fixed(request.NetworkId.Span, route.Network.NetworkId.Span) ||
             !Fixed(request.DirectoryLookupKey.Span, freshness.QueriedDirectoryLeafKey.Span) ||
-            request.MinimumAdh1Generation != freshness.NextProtectedLkg.LogGeneration ||
-            !Fixed(request.MinimumAdh1CoreHash.Span, freshness.NextProtectedLkg.CoreHash.Span) ||
+            request.MinimumAdh1Generation != U64(bundle.Field(21).Span) ||
+            !Fixed(request.MinimumAdh1CoreHash.Span, bundle.Field(21).Span[8..]) ||
             !Fixed(request.ExactRouteClosure.Span, route.ExactRouteClosure.Span) ||
             !Fixed(bundle.Field(14).Span[40..], route.ExactXir1V2.Span) ||
             request.Generation != 0 || U64(bundle.Field(8).Span) != 0 || U64(route.Invite.Field(3).Span) != 0 ||
