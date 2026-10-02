@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
+using Deep.Protocol.AccountDirectoryV1;
 using Deep.Protocol.ApplicationCore;
 
 namespace Deep.Protocol.ContactV1;
@@ -77,19 +78,27 @@ public sealed class ContactRouteAuthorityWireResponse
     private readonly byte[] exactPms2;
     private readonly byte[] exactXrc1;
     private readonly byte[] exactXss1;
+    private readonly byte[] exactIssuanceAdh1;
 
     public ContactRouteAuthorityWireResponse(
         ReadOnlySpan<byte> networkId,
         ReadOnlySpan<byte> requestNonce,
         ReadOnlySpan<byte> exactPms2,
         ReadOnlySpan<byte> exactXrc1,
-        ReadOnlySpan<byte> exactXss1)
+        ReadOnlySpan<byte> exactXss1,
+        ReadOnlySpan<byte> exactIssuanceAdh1)
     {
         this.networkId = Required(networkId, 16, nameof(networkId));
         this.requestNonce = Required(requestNonce, 32, nameof(requestNonce));
         this.exactPms2 = Exact(exactPms2, ProtocolMagic.PMS2, 500, 3_476, this.networkId);
         this.exactXrc1 = Exact(exactXrc1, ProtocolMagic.XRC1, 940, 4_012, this.networkId);
         this.exactXss1 = Exact(exactXss1, ProtocolMagic.XSS1, 643, 3_523, this.networkId);
+        if (exactIssuanceAdh1.Length is < ContactRouteAuthorityWireCodec.MinimumIssuanceAdh1Bytes or > ContactRouteAuthorityWireCodec.MaximumIssuanceAdh1Bytes)
+            throw new ArgumentException("The exact issuance ADH1 length is invalid.", nameof(exactIssuanceAdh1));
+        var head = AccountDirectoryAdh1Codec.Decode(exactIssuanceAdh1);
+        if (!CryptographicOperations.FixedTimeEquals(head.NetworkId.Span, this.networkId))
+            throw new CryptographicException("The exact issuance ADH1 belongs to another network.");
+        this.exactIssuanceAdh1 = exactIssuanceAdh1.ToArray();
     }
 
     public ReadOnlyMemory<byte> NetworkId => networkId.ToArray();
@@ -97,6 +106,7 @@ public sealed class ContactRouteAuthorityWireResponse
     public ReadOnlyMemory<byte> ExactPms2 => exactPms2.ToArray();
     public ReadOnlyMemory<byte> ExactXrc1 => exactXrc1.ToArray();
     public ReadOnlyMemory<byte> ExactXss1 => exactXss1.ToArray();
+    public ReadOnlyMemory<byte> ExactIssuanceAdh1 => exactIssuanceAdh1.ToArray();
 
     private static byte[] Exact(
         ReadOnlySpan<byte> value,
@@ -123,22 +133,25 @@ public sealed class ContactRouteAuthorityWireResponse
 
 public static class ContactRouteAuthorityWireCodec
 {
-    public const ushort Version = 2;
+    public const ushort RequestVersion = 2, ResponseVersion = 3;
     public const int ExactDca1Bytes = 473;
     public const int ExactXra1Bytes = 550;
     public const int RequestBytes = 1_151;
-    public const int MinimumResponseBytes = 2_151;
-    public const int MaximumResponseBytes = 11_079;
+    // ADH1 header 12 + thirteen field headers 104 + fixed fields 217
+    // + one 96-byte witness receipt. The independent custody cap is 4096.
+    public const int MinimumIssuanceAdh1Bytes = 429, MaximumIssuanceAdh1Bytes = 4096;
+    public const int MinimumResponseBytes = 2_584;
+    public const int MaximumResponseBytes = 15_179;
     public const string RequestMediaType =
         "application/vnd.deep.contact-route-authority-request.v2+octet-stream";
     public const string ResponseMediaType =
-        "application/vnd.deep.contact-route-authority-response.v2+octet-stream";
+        "application/vnd.deep.contact-route-authority-response.v3+octet-stream";
 
     public static byte[] EncodeRequest(ContactRouteAuthorityWireRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
         var result = new byte[RequestBytes];
-        BinaryPrimitives.WriteUInt16BigEndian(result, Version);
+        BinaryPrimitives.WriteUInt16BigEndian(result, RequestVersion);
         BinaryPrimitives.WriteUInt32BigEndian(result.AsSpan(4), RequestBytes);
         request.NetworkId.Span.CopyTo(result.AsSpan(8));
         request.RequestNonce.Span.CopyTo(result.AsSpan(24));
@@ -153,7 +166,7 @@ public static class ContactRouteAuthorityWireCodec
 
     public static ContactRouteAuthorityWireRequest DecodeRequest(ReadOnlySpan<byte> encoded)
     {
-        ValidateHeader(encoded, RequestBytes, RequestBytes);
+        ValidateHeader(encoded, RequestBytes, RequestBytes, RequestVersion);
         return new ContactRouteAuthorityWireRequest(
             encoded.Slice(8, 16),
             encoded.Slice(24, 32),
@@ -171,12 +184,12 @@ public static class ContactRouteAuthorityWireCodec
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(response);
         RequireBinding(request, response);
-        var length = checked(56 + 12 + response.ExactPms2.Length +
-            response.ExactXrc1.Length + response.ExactXss1.Length);
+        var length = checked(56 + 16 + response.ExactPms2.Length +
+            response.ExactXrc1.Length + response.ExactXss1.Length + response.ExactIssuanceAdh1.Length);
         if (length is < MinimumResponseBytes or > MaximumResponseBytes)
             throw new InvalidOperationException("The route-authority response length is invalid.");
         var result = new byte[length];
-        BinaryPrimitives.WriteUInt16BigEndian(result, Version);
+        BinaryPrimitives.WriteUInt16BigEndian(result, ResponseVersion);
         BinaryPrimitives.WriteUInt32BigEndian(result.AsSpan(4), checked((uint)length));
         request.NetworkId.Span.CopyTo(result.AsSpan(8));
         request.RequestNonce.Span.CopyTo(result.AsSpan(24));
@@ -184,6 +197,7 @@ public static class ContactRouteAuthorityWireCodec
         WriteArtifact(result, ref offset, response.ExactPms2.Span);
         WriteArtifact(result, ref offset, response.ExactXrc1.Span);
         WriteArtifact(result, ref offset, response.ExactXss1.Span);
+        WriteArtifact(result, ref offset, response.ExactIssuanceAdh1.Span);
         if (offset != result.Length)
             throw new InvalidOperationException("The route-authority response was not exact.");
         return result;
@@ -194,7 +208,7 @@ public static class ContactRouteAuthorityWireCodec
         ReadOnlySpan<byte> encoded)
     {
         ArgumentNullException.ThrowIfNull(request);
-        ValidateHeader(encoded, MinimumResponseBytes, MaximumResponseBytes);
+        ValidateHeader(encoded, MinimumResponseBytes, MaximumResponseBytes, ResponseVersion);
         if (!Fixed(encoded.Slice(8, 16), request.NetworkId.Span) ||
             !Fixed(encoded.Slice(24, 32), request.RequestNonce.Span))
             throw new CryptographicException(
@@ -203,19 +217,20 @@ public static class ContactRouteAuthorityWireCodec
         var pms = ReadArtifact(encoded, ref offset, 500, 3_476);
         var xrc = ReadArtifact(encoded, ref offset, 940, 4_012);
         var xss = ReadArtifact(encoded, ref offset, 643, 3_523);
+        var adh = ReadArtifact(encoded, ref offset, MinimumIssuanceAdh1Bytes, MaximumIssuanceAdh1Bytes);
         if (offset != encoded.Length)
             throw new FormatException("The route-authority response has trailing bytes.");
         return new ContactRouteAuthorityWireResponse(
-            request.NetworkId.Span, request.RequestNonce.Span, pms, xrc, xss);
+            request.NetworkId.Span, request.RequestNonce.Span, pms, xrc, xss, adh);
     }
 
     private static void ValidateHeader(
         ReadOnlySpan<byte> encoded,
         int minimum,
-        int maximum)
+        int maximum, ushort version)
     {
         if (encoded.Length < minimum || encoded.Length > maximum ||
-            BinaryPrimitives.ReadUInt16BigEndian(encoded) != Version ||
+            BinaryPrimitives.ReadUInt16BigEndian(encoded) != version ||
             BinaryPrimitives.ReadUInt16BigEndian(encoded.Slice(2)) != 0 ||
             BinaryPrimitives.ReadUInt32BigEndian(encoded.Slice(4)) != encoded.Length)
             throw new FormatException("The route-authority wire envelope is not canonical.");
@@ -238,7 +253,10 @@ public static class ContactRouteAuthorityWireCodec
     {
         if (offset > encoded.Length - 4)
             throw new FormatException("The route-authority response is truncated.");
-        var length = checked((int)BinaryPrimitives.ReadUInt32BigEndian(encoded.Slice(offset, 4)));
+        var declared = BinaryPrimitives.ReadUInt32BigEndian(encoded.Slice(offset, 4));
+        if (declared < (uint)minimum || declared > (uint)maximum)
+            throw new FormatException("A route-authority response artifact is outside its bound.");
+        var length = (int)declared;
         offset += 4;
         if (length < minimum || length > maximum || offset > encoded.Length - length)
             throw new FormatException("A route-authority response artifact is outside its bound.");

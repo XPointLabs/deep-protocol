@@ -35,6 +35,11 @@ closed read evidence does not accept a contact or establish message delivery.
 DR-0042 distinguishes signed route issuance anchors from independently current
 identity: unrelated directory admission does not invalidate retained contacts.
 New issuance and publication dispatch still require current authority.
+Exact issued-head coordination follows
+[DR75](../docs/survival-program/decisions/DR-0075-did2-issued-head-response-custody.md).
+Request and response generations are independently closed; every Registry,
+XNode and client consumer must rebuild/repin together. No retired response reader
+or historical-currentness flag is supported. Matched deployment is still gated.
 Route-time rejection diagnostics use only closed artifact and boundary labels,
 never interval values, identities or bytes. This changes no wire, public API,
 protected format or complete-interval predicate, and requires no account reset.
