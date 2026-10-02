@@ -35,8 +35,10 @@ public sealed class PublicationStoreAuthoritySurfaceTests
     public void OwnedPublicationCommitRequiresClosedDid2InputsAndCannotBeManufactured()
     {
         Assert.Empty(typeof(VerifiedDeepIdV2PublicationCommit).GetConstructors());
-        var method = Assert.Single(typeof(DeepIdV2PublicationCommitVerifier).GetMethods(
-            BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly));
+        var methods = typeof(DeepIdV2PublicationCommitVerifier).GetMethods(
+            BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
+        Assert.Equal(["VerifyCommittedAsync", "VerifyPredecessorAsync"], methods.Select(value => value.Name).Order().ToArray());
+        var method = Assert.Single(methods, value => value.Name == "VerifyCommittedAsync");
         Assert.Equal("VerifyCommittedAsync", method.Name);
         Assert.Equal([typeof(VerifiedDeepIdV2ContactRouteClosure), typeof(AuthoredDeepIdV2ContactObject),
             typeof(ContactPublicationAuthorityWireRequest), typeof(ReadOnlyMemory<byte>),
@@ -44,6 +46,34 @@ public sealed class PublicationStoreAuthoritySurfaceTests
             method.GetParameters().Select(parameter => parameter.ParameterType).ToArray());
         Assert.All(typeof(VerifiedDeepIdV2PublicationCommit).GetProperties(), property => Assert.False(property.CanWrite));
         Assert.Equal(16_384, DeepIdV2PublicationCommitVerifier.MaximumResultBytes);
+    }
+
+    [Fact]
+    public void SuccessorsRequireClosedHistoryAndCannotMintDispatchFromParsedHashes()
+    {
+        foreach (var type in new[] { typeof(VerifiedDeepIdV2ContactObjectPredecessor), typeof(VerifiedDeepIdV2PublicationPredecessor) })
+        {
+            Assert.Empty(type.GetConstructors());
+            Assert.All(type.GetProperties(), property => Assert.False(property.CanWrite));
+            Assert.DoesNotContain(type.GetMethods(), method => method.Name is "EnsureCurrentAsync" or "SignAsync" or "DispatchAsync");
+        }
+        var verify = Assert.Single(typeof(DeepIdV2PublicationCommitVerifier).GetMethods(), method => method.Name == "VerifyPredecessorAsync");
+        Assert.Equal([typeof(DeepIdV2CurrentContactAuthorization), typeof(VerifiedOnionNetworkContext), typeof(VerifiedXPointNetworkAuthority),
+            typeof(VerifiedDeepIdV2ContactObjectPredecessor), typeof(ContactPublicationAuthorityWireRequest),
+            typeof(ReadOnlyMemory<byte>), typeof(ReadOnlyMemory<byte>), typeof(OnionTrustedTimeAuthority), typeof(CancellationToken)],
+            verify.GetParameters().Select(parameter => parameter.ParameterType).ToArray());
+        var objectAuthor = Assert.Single(typeof(DeepIdV2ContactObjectAuthor).GetMethods(), method => method.Name == "AuthorRetainedSuccessorAsync");
+        Assert.Equal([typeof(VerifiedDeepIdV2ContactRouteClosure), typeof(VerifiedDeepIdV2ContactRouteIssuance),
+            typeof(VerifiedDeepIdV2ContactObjectPredecessor), typeof(OwnedGenesisDeviceSecrets), typeof(IReadOnlyList<ParsedXps1V2>),
+            typeof(string), typeof(ReadOnlyMemory<byte>), typeof(CancellationToken)],
+            objectAuthor.GetParameters().Select(parameter => parameter.ParameterType).ToArray());
+        foreach (var name in new[] { "AuthorSuccessorRequestAsync", "VerifySuccessorRequestAsync", "AuthorThresholdSuccessorAsync", "VerifySuccessorResponseAsync" })
+        {
+            var method = Assert.Single(typeof(DeepIdV2PublicationAuthorityAuthor).GetMethods(), value => value.Name == name);
+            var predecessor = Assert.Single(method.GetParameters(), value => value.ParameterType == typeof(VerifiedDeepIdV2PublicationPredecessor));
+            Assert.False(predecessor.IsOptional);
+            Assert.DoesNotContain(method.GetParameters(), parameter => typeof(Delegate).IsAssignableFrom(parameter.ParameterType));
+        }
     }
 
     [Fact]

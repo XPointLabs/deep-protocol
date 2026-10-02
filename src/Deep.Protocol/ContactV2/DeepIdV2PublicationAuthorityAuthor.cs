@@ -12,12 +12,14 @@ namespace Deep.Protocol.ContactV2;
 public sealed class AuthoredDeepIdV2PublicationRequest
 {
     internal AuthoredDeepIdV2PublicationRequest(ContactPublicationAuthorityWireRequest wire,
-        VerifiedDeepIdV2ContactRouteClosure route) { WireRequest = wire; Route = route; }
+        VerifiedDeepIdV2ContactRouteClosure route, VerifiedDeepIdV2PublicationPredecessor? predecessor = null)
+    { WireRequest = wire; Route = route; Predecessor = predecessor; }
     public ContactPublicationAuthorityWireRequest WireRequest { get; }
     internal VerifiedDeepIdV2ContactRouteClosure Route { get; }
+    internal VerifiedDeepIdV2PublicationPredecessor? Predecessor { get; }
     public ValueTask<VerifiedDeepIdV2PublicationAuthorization> VerifyResponseAsync(
         ReadOnlyMemory<byte> exactXpu1, CancellationToken ct = default) =>
-        DeepIdV2PublicationAuthorityAuthor.VerifyResponseAsync(Route, WireRequest, exactXpu1, ct);
+        DeepIdV2PublicationAuthorityAuthor.VerifyResponseCoreAsync(Route, WireRequest, exactXpu1, Predecessor, ct);
 }
 
 /// <summary>Exact current threshold authorization; not a replica commit, grant or delivery.</summary>
@@ -29,13 +31,20 @@ public sealed class VerifiedDeepIdV2PublicationAuthorization
 }
 
 /// <summary>DID2-only owned request and threshold authoring. No caller-selected clock.</summary>
-public static class DeepIdV2PublicationAuthorityAuthor
+public static partial class DeepIdV2PublicationAuthorityAuthor
 {
-    public static async ValueTask<AuthoredDeepIdV2PublicationRequest> AuthorGenesisRequestAsync(
+    public static ValueTask<AuthoredDeepIdV2PublicationRequest> AuthorGenesisRequestAsync(
         VerifiedDeepIdV2ContactRouteClosure route, AuthoredDeepIdV2ContactObject contact,
         OwnedGenesisDeviceSecrets device, ReadOnlyMemory<byte> requestNonce32,
         ReadOnlyMemory<byte> operationId32, ReadOnlyMemory<byte> ownerRetrieveCapability32,
-        CancellationToken ct = default)
+        CancellationToken ct = default) =>
+        AuthorRequestCoreAsync(route, contact, device, requestNonce32, operationId32, ownerRetrieveCapability32, null, ct);
+
+    private static async ValueTask<AuthoredDeepIdV2PublicationRequest> AuthorRequestCoreAsync(
+        VerifiedDeepIdV2ContactRouteClosure route, AuthoredDeepIdV2ContactObject contact,
+        OwnedGenesisDeviceSecrets device, ReadOnlyMemory<byte> requestNonce32,
+        ReadOnlyMemory<byte> operationId32, ReadOnlyMemory<byte> ownerRetrieveCapability32,
+        VerifiedDeepIdV2PublicationPredecessor? predecessor, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(route); ArgumentNullException.ThrowIfNull(contact);
         ArgumentNullException.ThrowIfNull(device); ct.ThrowIfCancellationRequested();
@@ -45,6 +54,8 @@ public static class DeepIdV2PublicationAuthorityAuthor
         try
         {
             var first = await route.ReadCurrentTimeAsync(ct).ConfigureAwait(false);
+            if (predecessor is null && U64(contact.Closure.Bundle.Field(8).Span) != 0)
+                throw new CryptographicException("Genesis publication cannot replace a nonzero contact generation.");
             var expiry = RequestExpiry(route, first.LowerUnixSeconds);
             var placeholder = new byte[64]; placeholder[^1] = 1;
             var freshness = route.Recipient.Freshness;
@@ -53,16 +64,18 @@ public static class DeepIdV2PublicationAuthorityAuthor
                 freshness.QueriedDirectoryLeafKey.Span, U64(minimum.Span),
                 minimum.Span[8..], route.Recipient.Authorization.Record.CanonicalBytes.Span,
                 contact.Closure.CanonicalBytes.Span, route.ExactRouteClosure.Span, operation,
-                0, new byte[32], contact.ProtectedDcr1.Span, first.LowerUnixSeconds, expiry,
+                U64(contact.Closure.Bundle.Field(8).Span),
+                predecessor is null ? new byte[32] : predecessor.Object.CiphertextHash.ToArray(),
+                contact.ProtectedDcr1.Span, first.LowerUnixSeconds, expiry,
                 U64(contact.Closure.Bundle.Field(18).Span), owner, placeholder);
-            RequirePlaintext(route, wire, first);
+            RequirePlaintext(route, wire, first, predecessor, ct);
             var signature = device.SignCurrentContactPublicationRequest(wire, route.Recipient.Authorization);
             try
             {
                 var signed = CopyWithSignature(wire, signature);
                 var final = await route.ReadCurrentTimeAsync(ct).ConfigureAwait(false);
-                Continuous(first, final); RequirePlaintext(route, signed, final); VerifyPublisher(route, signed);
-                ct.ThrowIfCancellationRequested(); return new(signed, route);
+                Continuous(first, final); RequirePlaintext(route, signed, final, predecessor, ct); VerifyPublisher(route, signed);
+                ct.ThrowIfCancellationRequested(); return new(signed, route, predecessor);
             }
             finally { CryptographicOperations.ZeroMemory(signature); }
         }
@@ -74,21 +87,31 @@ public static class DeepIdV2PublicationAuthorityAuthor
     }
 
     /// <summary>Reverify untrusted exact request before custody/journal callbacks.</summary>
-    public static async ValueTask VerifyRequestAsync(VerifiedDeepIdV2ContactRouteClosure route,
-        ContactPublicationAuthorityWireRequest request, CancellationToken ct = default)
+    public static ValueTask VerifyRequestAsync(VerifiedDeepIdV2ContactRouteClosure route,
+        ContactPublicationAuthorityWireRequest request, CancellationToken ct = default) =>
+        VerifyRequestCoreAsync(route, request, null, ct);
+
+    private static async ValueTask VerifyRequestCoreAsync(VerifiedDeepIdV2ContactRouteClosure route,
+        ContactPublicationAuthorityWireRequest request, VerifiedDeepIdV2PublicationPredecessor? predecessor, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(route); ArgumentNullException.ThrowIfNull(request);
         ct.ThrowIfCancellationRequested();
         var first = await route.ReadCurrentTimeAsync(ct).ConfigureAwait(false);
-        RequirePlaintext(route, request, first); VerifyPublisher(route, request);
+        RequirePlaintext(route, request, first, predecessor, ct); VerifyPublisher(route, request);
         var final = await route.ReadCurrentTimeAsync(ct).ConfigureAwait(false);
-        Continuous(first, final); RequirePlaintext(route, request, final);
+        Continuous(first, final); RequirePlaintext(route, request, final, predecessor, ct);
         ct.ThrowIfCancellationRequested();
     }
 
-    public static async ValueTask<VerifiedDeepIdV2PublicationAuthorization> AuthorThresholdAsync(
+    public static ValueTask<VerifiedDeepIdV2PublicationAuthorization> AuthorThresholdAsync(
         VerifiedDeepIdV2ContactRouteClosure route, ContactPublicationAuthorityWireRequest request,
-        IReadOnlyList<IXpa1PublicationAuthorizationWitnessSigner> witnesses, CancellationToken ct = default)
+        IReadOnlyList<IXpa1PublicationAuthorizationWitnessSigner> witnesses, CancellationToken ct = default) =>
+        AuthorThresholdCoreAsync(route, request, witnesses, null, ct);
+
+    private static async ValueTask<VerifiedDeepIdV2PublicationAuthorization> AuthorThresholdCoreAsync(
+        VerifiedDeepIdV2ContactRouteClosure route, ContactPublicationAuthorityWireRequest request,
+        IReadOnlyList<IXpa1PublicationAuthorizationWitnessSigner> witnesses,
+        VerifiedDeepIdV2PublicationPredecessor? predecessor, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(route); ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(witnesses); ct.ThrowIfCancellationRequested();
@@ -111,7 +134,7 @@ public static class DeepIdV2PublicationAuthorityAuthor
             throw new CryptographicException("Publication witness failure-domain threshold is not met.");
         Array.Sort(signers, (a, b) => a.Id.AsSpan().SequenceCompareTo(b.Id));
         var prior = await route.ReadCurrentTimeAsync(ct).ConfigureAwait(false);
-        await VerifyRequestAsync(route, request, ct).ConfigureAwait(false);
+        await VerifyRequestCoreAsync(route, request, predecessor, ct).ConfigureAwait(false);
         var closure = DeepIdV2ResolverClosureCodec.Decode(request.ExactDcr1.Span); var bundle = closure.Bundle;
         var locator = Locator(request.NetworkId.Span, bundle.Field(22).Span);
         var placement = ContactServicePlacementFactory.Create(route.Network, ContactServiceRequestKind.PublishInvite, locator);
@@ -129,7 +152,7 @@ public static class DeepIdV2PublicationAuthorityAuthor
         byte[][] xpa = [request.NetworkId.ToArray(), ApplicationCoreFormat.Sha256Domain(
             "Deep/ContactResolver/V2/publication-authorization-id", identity), request.OperationId.ToArray(), locator,
             [1], SHA256.HashData(closure.CanonicalBytes.Span), SHA256.HashData(bundle.CanonicalBytes.Span),
-            body[7].ToArray(), U64Bytes(0), new byte[32], body[10].ToArray(), new byte[4],
+            body[7].ToArray(), U64Bytes(request.Generation), request.PredecessorObjectHash.ToArray(), body[10].ToArray(), new byte[4],
             U64Bytes(request.EffectiveExpiresAtUnixSeconds), PolicyHash(request.ExactDca1.Span),
             U64Bytes(request.IssuedAtUnixSeconds), U64Bytes(request.IssuedAtUnixSeconds), U64Bytes(request.ExpiresAtUnixSeconds),
             issuanceHead.ToArray(), hash, [checked((byte)count)], new byte[count * 96]];
@@ -140,7 +163,7 @@ public static class DeepIdV2PublicationAuthorityAuthor
             {
                 var before = await route.ReadCurrentTimeAsync(ct).ConfigureAwait(false);
                 Continuous(prior, before); prior = before;
-                RequirePlaintext(route, request, prior);
+                RequirePlaintext(route, request, prior, predecessor, ct);
                 var signer = signers[i];
                 if (!Fixed(signer.Signer.WitnessId.Span, signer.Id)) throw new CryptographicException("Witness identity changed.");
                 var returned = await signer.Signer.SignXpa1Async(input.ToArray(), ct).ConfigureAwait(false);
@@ -149,7 +172,7 @@ public static class DeepIdV2PublicationAuthorityAuthor
                 {
                     ct.ThrowIfCancellationRequested();
                     var current = await route.ReadCurrentTimeAsync(ct).ConfigureAwait(false);
-                    Continuous(prior, current); RequirePlaintext(route, request, current); prior = current;
+                    Continuous(prior, current); RequirePlaintext(route, request, current, predecessor, ct); prior = current;
                     if (!Fixed(signer.Signer.WitnessId.Span, signer.Id) || signature.Length != 64 ||
                         !PublicKeyAuth.VerifyDetached(signature, input, signer.Key))
                         throw new CryptographicException("Publication witness returned an invalid signature or substituted identity.");
@@ -159,19 +182,24 @@ public static class DeepIdV2PublicationAuthorityAuthor
             }
             body[16] = Encode(ProtocolMagicBytes.XPA1, DeepIdV2ContactPublicationCodec.XpaTags.ToArray(),
                 xpa.Select(value => (ReadOnlyMemory<byte>)value).ToArray());
-            return await VerifyResponseAsync(route, request, Encode(ProtocolMagicBytes.XPU1,
-                DeepIdV2ContactPublicationCodec.XpuTags.ToArray(), body), ct).ConfigureAwait(false);
+            return await VerifyResponseCoreAsync(route, request, Encode(ProtocolMagicBytes.XPU1,
+                DeepIdV2ContactPublicationCodec.XpuTags.ToArray(), body), predecessor, ct).ConfigureAwait(false);
         }
         finally { CryptographicOperations.ZeroMemory(input); }
     }
 
-    public static async ValueTask<VerifiedDeepIdV2PublicationAuthorization> VerifyResponseAsync(
+    public static ValueTask<VerifiedDeepIdV2PublicationAuthorization> VerifyResponseAsync(
         VerifiedDeepIdV2ContactRouteClosure route, ContactPublicationAuthorityWireRequest request,
-        ReadOnlyMemory<byte> exactXpu1, CancellationToken ct = default)
+        ReadOnlyMemory<byte> exactXpu1, CancellationToken ct = default) =>
+        VerifyResponseCoreAsync(route, request, exactXpu1, null, ct);
+
+    internal static async ValueTask<VerifiedDeepIdV2PublicationAuthorization> VerifyResponseCoreAsync(
+        VerifiedDeepIdV2ContactRouteClosure route, ContactPublicationAuthorityWireRequest request,
+        ReadOnlyMemory<byte> exactXpu1, VerifiedDeepIdV2PublicationPredecessor? predecessor, CancellationToken ct)
     {
         // Parse/copy before clock awaits. A parsed response is not a capability.
         var parsed = DeepIdV2ContactPublicationCodec.DecodeXpu1(exactXpu1.Span);
-        await VerifyRequestAsync(route, request, ct).ConfigureAwait(false);
+        await VerifyRequestCoreAsync(route, request, predecessor, ct).ConfigureAwait(false);
         ContactPublicationAuthorityWireCodec.RequireExactBody(request, parsed.CanonicalBytes.Span);
         var locator = parsed.Field(16);
         var placement = ContactServicePlacementFactory.Create(route.Network, ContactServiceRequestKind.PublishInvite, locator);
@@ -181,12 +209,13 @@ public static class DeepIdV2PublicationAuthorityAuthor
         var reading = await route.ReadPublicationClockAsync(ct).ConfigureAwait(false);
         _ = DeepIdV2Xpa1CurrentDirectoryWitnessVerifier.Verify(parsed, route.NetworkAuthority,
             route.Recipient.Freshness, reading.BootId.Span, reading.SampleSeconds);
-        await VerifyRequestAsync(route, request, ct).ConfigureAwait(false);
+        await VerifyRequestCoreAsync(route, request, predecessor, ct).ConfigureAwait(false);
         ct.ThrowIfCancellationRequested(); return new(parsed.CanonicalBytes.ToArray());
     }
 
     private static void RequirePlaintext(VerifiedDeepIdV2ContactRouteClosure route,
-        ContactPublicationAuthorityWireRequest request, DeepIdV2ContactRouteTimeWindow current)
+        ContactPublicationAuthorityWireRequest request, DeepIdV2ContactRouteTimeWindow current,
+        VerifiedDeepIdV2PublicationPredecessor? predecessor, CancellationToken ct)
     {
         var dca = route.Recipient.Authorization; var freshness = route.Recipient.Freshness;
         var closure = DeepIdV2ResolverClosureCodec.Decode(request.ExactDcr1.Span); var bundle = closure.Bundle;
@@ -198,12 +227,13 @@ public static class DeepIdV2PublicationAuthorityAuthor
             !Fixed(request.MinimumAdh1CoreHash.Span, bundle.Field(21).Span[8..]) ||
             !Fixed(request.ExactRouteClosure.Span, route.ExactRouteClosure.Span) ||
             !Fixed(bundle.Field(14).Span[40..], route.ExactXir1V2.Span) ||
-            request.Generation != 0 || U64(bundle.Field(8).Span) != 0 || U64(route.Invite.Field(3).Span) != 0 ||
-            request.PredecessorObjectHash.Span.IndexOfAnyExcept((byte)0) >= 0 ||
+            request.Generation != U64(bundle.Field(8).Span) || request.Generation != U64(route.Invite.Field(3).Span) ||
+            (predecessor is null && (request.Generation != 0 || request.PredecessorObjectHash.Span.IndexOfAnyExcept((byte)0) >= 0)) ||
             BinaryPrimitives.ReadUInt32BigEndian(bundle.Field(16).Span) != 9 ||
             request.IssuedAtUnixSeconds > current.LowerUnixSeconds || current.UpperUnixSeconds >= request.ExpiresAtUnixSeconds ||
             request.ExpiresAtUnixSeconds > RequestExpiry(route, request.IssuedAtUnixSeconds))
-            throw new CryptographicException("Publication request is not exact current owned reusable DID2 genesis.");
+            throw new CryptographicException("Publication request is not exact current owned reusable DID2 lineage.");
+        predecessor?.RequireSuccessor(route, request, current, ct);
         DeepIdV2ResolverClosureCodec.VerifyIdentityAndSupport(closure, dca, current.UpperUnixSeconds);
     }
 

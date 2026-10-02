@@ -17,14 +17,14 @@ public sealed class AuthoredDeepIdV2ContactObject
     public ReadOnlyMemory<byte> LocatorHash => locator.ToArray();
 }
 
-/// <summary>Owned reusable genesis only. No caller clock or generic signing surface.</summary>
-public static class DeepIdV2ContactObjectAuthor
+/// <summary>Owned reusable genesis and closed successors. No caller clock or generic signing surface.</summary>
+public static partial class DeepIdV2ContactObjectAuthor
 {
     public static ValueTask<AuthoredDeepIdV2ContactObject> AuthorGenesisAsync(
         VerifiedDeepIdV2ContactRouteClosure route, OwnedGenesisDeviceSecrets device,
         IReadOnlyList<ParsedXps1V2> preKeyServices, string profileName,
         ReadOnlyMemory<byte> resolverReadCapability16, CancellationToken cancellationToken = default) =>
-        AuthorGenesisCoreAsync(route, device, preKeyServices, profileName, resolverReadCapability16, null, cancellationToken);
+        AuthorGenesisCoreAsync(route, device, preKeyServices, profileName, resolverReadCapability16, null, null, cancellationToken);
 
     public static ValueTask<AuthoredDeepIdV2ContactObject> AuthorRetainedGenesisAsync(
         VerifiedDeepIdV2ContactRouteClosure route, VerifiedDeepIdV2ContactRouteIssuance issuance,
@@ -32,13 +32,14 @@ public static class DeepIdV2ContactObjectAuthor
         ReadOnlyMemory<byte> resolverReadCapability16, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(issuance);
-        return AuthorGenesisCoreAsync(route, device, preKeyServices, profileName, resolverReadCapability16, issuance, cancellationToken);
+        return AuthorGenesisCoreAsync(route, device, preKeyServices, profileName, resolverReadCapability16, issuance, null, cancellationToken);
     }
 
     private static async ValueTask<AuthoredDeepIdV2ContactObject> AuthorGenesisCoreAsync(
         VerifiedDeepIdV2ContactRouteClosure route, OwnedGenesisDeviceSecrets device,
         IReadOnlyList<ParsedXps1V2> preKeyServices, string profileName,
         ReadOnlyMemory<byte> resolverReadCapability16, VerifiedDeepIdV2ContactRouteIssuance? issuance,
+        VerifiedDeepIdV2ContactObjectPredecessor? predecessor,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(route); ArgumentNullException.ThrowIfNull(device);
@@ -66,14 +67,15 @@ public static class DeepIdV2ContactObjectAuthor
                 route.Network.NetworkId.Span, binding.DeepId, capability);
             var window = await route.ReadCurrentTimeAsync(cancellationToken).ConfigureAwait(false);
             issuance?.RequireExactRoute(route);
+            predecessor?.RequireSuccessorRoute(route, window, cancellationToken);
             if (issuance is null && !Fixed(route.Route.Route.Field(19).Span[6..], route.Recipient.Freshness.NextProtectedLkg.CoreHash.Span))
                 throw new CryptographicException("New contact issuance requires a route anchored at the current verified directory head.");
             var dca = route.Recipient.Authorization;
             var directory = dca.Directory.Record;
             if (route.Invite.Field(9).Span[0] != 1 || directory.ActiveDevices.Count != services.Length ||
-                U64(route.Invite.Field(3).Span) != 0 ||
-                BinaryPrimitives.ReadUInt64BigEndian(route.Route.Authorization.Field(3).Span) != 0)
-                throw new CryptographicException("Only the exact reusable genesis route is supported.");
+                U64(route.Invite.Field(3).Span) != (predecessor is null ? 0 : checked(U64(predecessor.Closure.Bundle.Field(8).Span) + 1)) ||
+                U64(route.Route.Authorization.Field(3).Span) != U64(route.Invite.Field(3).Span))
+                throw new CryptographicException("Only the exact reusable genesis or closed successor route is supported.");
             var issued = window.LowerUnixSeconds;
             var expiry = Math.Min(dca.Record.ExpiresAtUnixSeconds, U64(route.Invite.Field(14).Span));
             var ordered = new List<ParsedXps1V2>(services.Length);
@@ -111,12 +113,15 @@ public static class DeepIdV2ContactObjectAuthor
             ReadOnlyMemory<byte>[] fields = [dca.Record.NetworkId, dca.Record.DeepAccountId,
                 binding.Identity.Account.Certificate.CanonicalBytes,
                 Reference(ProtocolMagicBytes.DRS1, binding.Identity.Revocations.Snapshot.CanonicalHash.Span),
-                directory.CanonicalBytes, dca.Record.CanonicalBytes, RandomNonzero32(), U64Bytes(0), new byte[32],
+                directory.CanonicalBytes, dca.Record.CanonicalBytes, predecessor?.Closure.Bundle.Field(7) ?? RandomNonzero32(),
+                U64Bytes(predecessor is null ? 0 : checked(U64(predecessor.Closure.Bundle.Field(8).Span) + 1)),
+                predecessor?.Closure.Bundle.ObjectHash ?? new byte[32],
                 dca.Record.PublisherDeviceId, new byte[] { checked((byte)services.Length) }, list, new byte[] { 1 },
                 descriptor, name, new byte[] { 0, 0, 0, 9 }, U64Bytes(issued), U64Bytes(expiry), placeholder,
                 lookup.CanonicalBytes, minimumHead, binding.DeepId.RecordHash, binding.DeepId.CanonicalBytes,
                 binding.Record.CanonicalBytes];
             var unsigned = EncodeBundle(fields);
+            predecessor?.RequireSuccessorBundle(route, unsigned, window, cancellationToken);
             var signature = device.SignCurrentContactBundle(unsigned, dca);
             ParsedDcb1V2 bundle;
             try { fields[18] = signature; bundle = EncodeBundle(fields); }
@@ -125,6 +130,7 @@ public static class DeepIdV2ContactObjectAuthor
             var final = await route.ReadCurrentTimeAsync(cancellationToken).ConfigureAwait(false);
             RequireContinuous(window, final);
             issuance?.RequireExactRoute(route);
+            predecessor?.RequireSuccessorObject(route, closure, final, cancellationToken);
             RequireObject(route, closure, final);
             protectedBytes = DeepIdV2ResolverObjectProtection.Seal(closure, route.Network.NetworkId.Span, binding.DeepId, resolution);
             cancellationToken.ThrowIfCancellationRequested();
@@ -171,11 +177,11 @@ public static class DeepIdV2ContactObjectAuthor
     {
         var bundle = closure.Bundle;
         DeepIdV2ContactRouteVerifier.RequireBundleIssuanceAnchor(route, bundle);
-        if (!Fixed(bundle.Field(14).Span[40..], route.ExactXir1V2.Span) || U64(bundle.Field(8).Span) != 0 ||
-            U64(route.Invite.Field(3).Span) != 0 ||
+        if (!Fixed(bundle.Field(14).Span[40..], route.ExactXir1V2.Span) ||
+            U64(bundle.Field(8).Span) != U64(route.Invite.Field(3).Span) ||
             BinaryPrimitives.ReadUInt32BigEndian(bundle.Field(16).Span) != 9 ||
             U64(bundle.Field(17).Span) > window.LowerUnixSeconds)
-            throw new CryptographicException("The contact object is not the exact reusable genesis route.");
+            throw new CryptographicException("The contact object is not the exact current reusable route.");
         DeepIdV2ResolverClosureCodec.VerifyIdentityAndSupport(closure, route.Recipient.Authorization, window.UpperUnixSeconds);
     }
 

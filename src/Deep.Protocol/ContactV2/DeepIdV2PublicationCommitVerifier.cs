@@ -23,7 +23,7 @@ public sealed class VerifiedDeepIdV2PublicationCommit
     public ulong Generation { get; }
 }
 
-public static class DeepIdV2PublicationCommitVerifier
+public static partial class DeepIdV2PublicationCommitVerifier
 {
     public const int MaximumResultBytes = 16_384;
 
@@ -96,8 +96,9 @@ public static class DeepIdV2PublicationCommitVerifier
             !Fixed(owned.ExactRouteClosure.Span, route.ExactRouteClosure.Span) ||
             !Fixed(contact.Closure.Bundle.Field(14).Span[40..], route.ExactXir1V2.Span) ||
             !Fixed(request.LocatorHash.Span, contact.LocatorHash.Span) ||
-            owned.Generation != 0 || request.Generation != 0 || request.UsageLimit != 0 ||
-            owned.PredecessorObjectHash.Span.IndexOfAnyExcept((byte)0) >= 0 ||
+            owned.Generation != BinaryPrimitives.ReadUInt64BigEndian(contact.Closure.Bundle.Field(8).Span) ||
+            request.Generation != owned.Generation || request.Generation != BinaryPrimitives.ReadUInt64BigEndian(route.Invite.Field(3).Span) ||
+            request.UsageLimit != 0 ||
             owned.ExpiresAtUnixSeconds <= owned.IssuedAtUnixSeconds ||
             owned.ExpiresAtUnixSeconds - owned.IssuedAtUnixSeconds > 120 ||
             owned.MinimumAdh1Generation != BinaryPrimitives.ReadUInt64BigEndian(minimum) ||

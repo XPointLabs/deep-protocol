@@ -60,6 +60,14 @@ public sealed class VerifiedDeepIdV2ContactRouteClosure
     internal ValueTask<OnionMonotonicReading> ReadPublicationClockAsync(CancellationToken ct) =>
         time.ReadCurrentAsync(ct);
 
+    internal DeepIdV2RouteContext VerifyContextAtWindow(DeepIdV2ContactRouteTimeWindow window, CancellationToken ct)
+    {
+        var context = DeepIdV2RouteContext.VerifyAtReading(Recipient, Network, NetworkAuthority, time,
+            new(window.BootId.Span, window.MonotonicSample), ct);
+        DeepIdV2ContactRouteVerifier.RequireBindings(Invite, Route, context);
+        return context;
+    }
+
     internal DeepIdV2ContactRouteTimeWindow VerifyAtReading(OnionMonotonicReading reading, CancellationToken ct)
     {
         var current = DeepIdV2RouteContext.VerifyAtReading(Recipient, Network, NetworkAuthority, time, reading, ct);

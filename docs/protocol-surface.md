@@ -366,3 +366,10 @@ snapshots are replaced, not accepted as an alternate production surface.
 The package candidate is not a clean-break production activation until the
 reviewed exact-three closure is atomically repinned by each authorized
 consumer and its protected state is reset under the separate cutover plan.
+
+[DR-0076](../../docs/survival-program/decisions/DR-0076-did2-contact-publication-successors.md)
+adds closed historical object/publication facts and successor-specific authors.
+Normal current restore/commit verifies matching nonzero generations; genesis
+authors remain strict. No historical fact exposes signing, dispatch, currentness
+or a server reservation. Shared protected CAS, Registry per-generation issuance,
+consumer API/package repins and physical recovery remain activation gates.
