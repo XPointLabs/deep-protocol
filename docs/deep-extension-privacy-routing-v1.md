@@ -13,7 +13,7 @@ Contract identifier: `Deep.Protocol/Deep-extension-privacy-routing-v1`.
 This Deep-only extension carries one exact canonical terminal request through
 exactly three independently keyed XNodes: ingress relay, core relay, service
 exit. Terminal operations are authenticated mailbox Store/Retrieve/Acknowledge,
-Contact Resolver, and GroupControl. It does not change DNP1, ContactV1, ApplicationCore, MSG, DEVICE, MAU2,
+Contact Resolver, and GroupControl. It does not change DNP1, current contact codecs, ApplicationCore, MSG, DEVICE, MAU3,
 MQR3/MRP1/MAR1, PRQ2, or mailbox placement bytes. All integers are unsigned
 big-endian. Every reserved byte and every padding byte is zero. Unknown magic,
 version, suite, purpose, layer kind, operation, result kind, failure code or
@@ -38,7 +38,7 @@ before scalar multiplication and rejects an all-zero X25519 shared secret.
 | request route hops | exactly 3 |
 | `networkId` | 16 bytes |
 | router ID, key-owner ID, key ID, replay ID, operation ID, attempt ID | 32 bytes, nonzero |
-| exact `MAU2` mailbox request | 1..1,048,576 bytes |
+| exact `MAU3` mailbox request | closed typed bounds; Store max 82,376, Retrieve max 824, Acknowledge max 4,824 bytes |
 | complete `XPR1` | 20..1,048,576 bytes |
 | exact Contact Resolver request (closed sub-operation codecs; DR79 publication envelope) | 1..171,610 bytes |
 | exact Contact Resolver success (closed request-paired codecs) | 1..131,072 bytes |
@@ -194,9 +194,9 @@ Acknowledge, 4 ContactResolve, or 5 GroupControl.
 | 144 | variable | exact canonical request, then exactly `z` zero bytes |
 
 Before replay mutation, the exit dispatches through a closed Protocol-owned
-canonical verifier. Operations 1..3 accept only exact `MAU2`; its authenticated
+canonical verifier. Operations 1..3 accept only exact `MAU3`; its authenticated
 operation must match XRE1 and its grant `NetworkId` must equal the XRF1 network.
-Operation 4 accepts only exact current ContactV1 `XPU1/XIQ1/XPK1/XUW1/XUQ1`;
+Operation 4 accepts only exact current `XPU1/XIQ1/XPK1/XUW1/XUQ1/XMG1/XPP1/XCA2`;
 its `NetworkId` must equal the XRF1 network. Operation 5 accepts only exact
 GroupV1 `GSW1` or `GSQ1`; its `NetworkId` must equal the XRF1 network and no
 other operation may carry those records. Unknown, empty, cross-operation,
@@ -294,6 +294,18 @@ non-minimal `z`, bad inner length, or fourth nested XRF1 reject. Seal exit,
 then core relay, then ingress relay: exactly two XRL1 and one XRE1 plaintext.
 
 Machine inputs live in `docs/survival-program/releases/v3.0.0/specs/onion-01.vectors.json`.
+Terminal metadata schema **1.3.0** synchronizes the accepted
+[DR-0049](../../docs/survival-program/decisions/DR-0049-did2-three-hop-coordination-carrier.md),
+[DR-0079](../../docs/survival-program/decisions/DR-0079-did2-publication-issuer-successor.md) and
+[DR-0081](../../docs/survival-program/decisions/DR-0081-did2-mailbox-selection-grant-clean-break.md).
+MAU3 is header16 + MCP3[440] + unchanged typed body; ContactResolve's maximum
+is XCA2 header12 + V3 publisher envelope171598. Its closed request-paired
+result set is `XPO1/XIS1/XPC1/XUS1/XMC2/XIC1/XCS2`; XPP1 staging phases return
+only their exact unmagicked acknowledgment, not XIC1 commit authority. No old
+MAU2/XMC1 positive table remains. The deterministic frame bytes/hashes and all
+18 hostile classes are unchanged. `OnionTerminalMachineParityTests` checks
+the metadata against actual endpoint/codec bounds and executes selected
+framing max/max+1 checks; it is neither signed node authority nor device evidence.
 Positive vectors use explicit fixed private scalars/nonces only through injectable
 **test-only entropy**. The internal nondeterministic seam has no entropy injection
 and obtains fresh platform-CSPRNG material, but it is not a production constructor
@@ -330,7 +342,7 @@ subclassing are unsupported. Only Protocol-owned verifiers/factories can mint:
   XND1 traffic-key handle, receive position (`Ingress`, `Core` or `Exit`), XTT and
   key-use deadline;
 - `VerifiedCanonicalOnionRequest` and `VerifiedOnionTerminalResult`: exact
-  operation-specific MAU2, ContactV1, or GroupV1 bytes and their Protocol-derived semantic,
+  operation-specific MAU3, current contact, or GroupV1 bytes and their Protocol-derived semantic,
   operation, network and request/result-pairing bindings.
 
 `OnionNetworkContextVerifier.Verify(...)` accepts only Protocol-produced verified
@@ -426,7 +438,7 @@ different frame, scope, boot, position or expired XTT rejects before decryption.
 1. bounded header/version/purpose/length and receive-context checks;
 2. XTT/key lease validation and AEAD authentication;
 3. complete plaintext, zero-padding, same-network, next-hop, exact-position and
-   operation-specific MAU2, ContactV1, or GroupV1 canonical payload verification with no external side effect;
+   operation-specific MAU3, current contact, or GroupV1 canonical payload verification with no external side effect;
 4. durable `TryCommitReplayIdAsync` on the lease;
 5. release of a sealed `OpenedOnionRelay` forward capability or
    `OpenedOnionExit` dispatch/reply capability.
@@ -460,10 +472,11 @@ ambiguous key-vault operation returns no result capability.
 `OnionTerminalPayloadVerifierV1` is one closed Protocol-owned dispatch table, not a
 publicly implementable interface or `Func<bool>`. Its pure bounded methods mint
 distinct Store/Retrieve/Acknowledge/ContactResolve/GroupControl request capabilities. Mailbox
-requests are exact MAU2 with operation and grant-network binding; successful XPR1
+requests are exact MAU3 with operation and grant-network binding; successful XPR1
 bodies are exact request-bound MQR3/MRP1/MAR1. Contact requests are exact bounded
-XPU1/XIQ1/XPK1/XUW1/XUQ1 and successful bodies are exact request-paired
-XPO1/XIS1/XPC1/XUS1. GroupControl requests are exact bounded `GSW1` or `GSQ1`, and successful bodies
+XPU1/XIQ1/XPK1/XUW1/XUQ1/XMG1/XPP1/XCA2 and successful bodies are exact request-paired
+XPO1/XIS1/XPC1/XUS1/XMC2/XIC1/XCS2 (or the closed XPP1 staging acknowledgment).
+GroupControl requests are exact bounded `GSW1` or `GSQ1`, and successful bodies
 are exact request-paired `GSS1`; `GSW1`/`GSQ1` are never accepted under another
 operation. Unknown operations, cross-operation/network records,
 non-canonical bytes and max+1 inputs reject before replay mutation on the exit and
