@@ -26,12 +26,12 @@ public sealed class MailboxPeerReplicationContractTests
         var mip1 = MailboxPeerReplicationCodec.EncodeMembershipProof(proof);
         Assert.Equal(184, mip1.Length);
         Assert.Equal(
-            GoldenVectorLoader.Load("authenticated-mailbox-v2-identities.json")
+            GoldenVectorLoader.Load("mailbox-peer-frame-identities.json")
                 .GetRequired("deep-extension/mailbox-peer/v1/MIP1-length-184").Hex,
             Convert.ToHexString(SHA256.HashData(mip1)).ToLowerInvariant());
         Assert.Equal(904, encoded.Length);
         Assert.Equal(
-            GoldenVectorLoader.Load("authenticated-mailbox-v2-identities.json")
+            GoldenVectorLoader.Load("mailbox-peer-frame-identities.json")
                 .GetRequired("deep-extension/mailbox-peer/v1/PRQ1-store-length-904").Hex,
             Convert.ToHexString(SHA256.HashData(encoded)).ToLowerInvariant());
         var verifier = new ExactProofVerifier();
@@ -117,7 +117,7 @@ public sealed class MailboxPeerReplicationContractTests
         var encodedTombstone = MailboxPeerReplicationCodec.Encode(tombstone);
         Assert.Equal(720, encodedTombstone.Length);
         Assert.Equal(
-            GoldenVectorLoader.Load("authenticated-mailbox-v2-identities.json")
+            GoldenVectorLoader.Load("mailbox-peer-frame-identities.json")
                 .GetRequired("deep-extension/mailbox-peer/v1/PRQ1-tombstone-length-720").Hex,
             Convert.ToHexString(SHA256.HashData(encodedTombstone)).ToLowerInvariant());
         Assert.Equal(
@@ -203,7 +203,7 @@ public sealed class MailboxPeerReplicationContractTests
         var encoded = MailboxAggregateAckCodec.Encode(response);
         Assert.Equal(1596, encoded.Length);
         Assert.Equal(
-            GoldenVectorLoader.Load("authenticated-mailbox-v2-identities.json")
+            GoldenVectorLoader.Load("mailbox-peer-frame-identities.json")
                 .GetRequired("deep-extension/mailbox-peer/v1/MAR1-two-length-1596").Hex,
             Convert.ToHexString(SHA256.HashData(encoded)).ToLowerInvariant());
         var verified = MailboxAggregateAckCodec.Verify(

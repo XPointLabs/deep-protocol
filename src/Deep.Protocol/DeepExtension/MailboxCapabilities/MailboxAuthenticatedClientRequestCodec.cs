@@ -17,9 +17,9 @@ public sealed record VerifiedMailboxAuthenticatedClientRequest
 
 public static class MailboxAuthenticatedClientRequestCodec
 {
-    private const byte Version = 2;
+    private const byte Version = 3;
     public const int HeaderLength = 16;
-    private static ReadOnlySpan<byte> Magic => ProtocolMagicBytes.MAU2;
+    private static ReadOnlySpan<byte> Magic => ProtocolMagicBytes.MAU3;
 
     public static byte[] Encode(MailboxAuthenticatedClientRequest request)
     {
@@ -30,11 +30,11 @@ public static class MailboxAuthenticatedClientRequestCodec
             request.Binding.Operation != request.Presentation.Operation ||
             !FixedEquals(request.Binding.OperationId.Span, request.Presentation.OperationId.Span) ||
             !FixedEquals(request.Binding.RequestDigest.Span, request.Presentation.RequestDigest.Span))
-            throw Error("MAU2 binding and MCP2 presentation disagree.");
+            throw Error("MAU3 binding and MCP3 presentation disagree.");
         var presentation = MailboxAuthenticatedCapabilityCodec.EncodePresentation(request.Presentation);
         var body = request.Binding.CanonicalRequest;
         if (body.Length > MailboxClientLimits.MaximumPageBytes)
-            throw Error("MAU2 body exceeds its strict bound.");
+            throw Error("MAU3 body exceeds its strict bound.");
         var output = new byte[HeaderLength + presentation.Length + body.Length];
         Magic.CopyTo(output);
         output[4] = Version;
@@ -59,27 +59,27 @@ public static class MailboxAuthenticatedClientRequestCodec
                 HeaderLength +
                 MailboxAuthenticatedCapabilityLimits.PresentationLength +
                 MailboxClientLimits.MaximumPageBytes)
-            throw Error("MAU2 length is outside strict bounds.");
+            throw Error("MAU3 length is outside strict bounds.");
         if (!encoded[..4].SequenceEqual(Magic))
             throw new MailboxAuthenticatedCapabilityException(
                 MailboxAuthenticatedCapabilityError.InvalidMagic,
-                "MAU2 magic is invalid.");
+                "MAU3 magic is invalid.");
         if (encoded[4] != Version)
             throw new MailboxAuthenticatedCapabilityException(
                 MailboxAuthenticatedCapabilityError.UnsupportedVersion,
-                "MAU2 version is unsupported.");
+                "MAU3 version is unsupported.");
         if (encoded.Slice(6, 2).IndexOfAnyExcept((byte)0) >= 0 ||
             encoded.Slice(14, 2).IndexOfAnyExcept((byte)0) >= 0)
             throw new MailboxAuthenticatedCapabilityException(
                 MailboxAuthenticatedCapabilityError.ReservedFieldNotZero,
-                "MAU2 reserved bytes must be zero.");
+                "MAU3 reserved bytes must be zero.");
         var operation = (MailboxAuthenticatedOperation)encoded[5];
         var presentationLength = BinaryPrimitives.ReadUInt16BigEndian(encoded.Slice(8, 2));
         var bodyLength = BinaryPrimitives.ReadUInt32BigEndian(encoded.Slice(10, 4));
         if (presentationLength != MailboxAuthenticatedCapabilityLimits.PresentationLength ||
             bodyLength > MailboxClientLimits.MaximumPageBytes ||
             encoded.Length != HeaderLength + presentationLength + bodyLength)
-            throw Error("MAU2 nested lengths are invalid.");
+            throw Error("MAU3 nested lengths are invalid.");
         var presentation = MailboxAuthenticatedCapabilityCodec.DecodePresentation(
             encoded.Slice(HeaderLength, presentationLength));
         var binding = MailboxAuthenticatedRequestTranscript.ParseCanonical(
@@ -88,7 +88,7 @@ public static class MailboxAuthenticatedClientRequestCodec
         if (presentation.Operation != operation ||
             !FixedEquals(presentation.OperationId.Span, binding.OperationId.Span) ||
             !FixedEquals(presentation.RequestDigest.Span, binding.RequestDigest.Span))
-            throw Error("MAU2 MCP2 does not authenticate its canonical body.");
+            throw Error("MAU3 MCP3 does not authenticate its canonical body.");
         return new MailboxAuthenticatedClientRequest
         {
             Binding = binding,
@@ -123,7 +123,7 @@ public static class MailboxAuthenticatedClientRequestCodec
                 MailboxPlacementCommitment.Compute(placementId)))
             throw new MailboxAuthenticatedCapabilityException(
                 MailboxAuthenticatedCapabilityError.BindingMismatch,
-                "MAU2 body does not match MCP2 epoch/placement authority.");
+                "MAU3 body does not match MCP3 epoch/placement authority.");
         return new VerifiedMailboxAuthenticatedClientRequest
         {
             Binding = decoded.Binding,

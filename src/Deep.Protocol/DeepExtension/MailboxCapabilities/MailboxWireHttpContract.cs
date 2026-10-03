@@ -11,7 +11,7 @@ public enum MailboxWireFrame
     Mar1 = 7,
     Prq2 = 8,
     Mqr3 = 9,
-    Mau2 = 10
+    Mau3 = 10
 }
 
 public sealed record MailboxHttpEndpointContract
@@ -72,7 +72,7 @@ public static class MailboxWireHttpContract
     public const string Mqr3ContentType = "application/vnd.deep.mailbox.mqr3";
     public const string Mar1ContentType = "application/vnd.deep.mailbox.mar1";
     public const string Prq2ContentType = "application/vnd.deep.mailbox.prq2";
-    public const string Mau2ContentType = "application/vnd.deep.mailbox.mau2";
+    public const string Mau3ContentType = "application/vnd.deep.mailbox.mau3";
 
     public const string StoreRoute = "/api/client/mailbox/v2/store";
     public const string RetrieveRoute = "/api/client/mailbox/v2/retrieve";
@@ -84,8 +84,8 @@ public static class MailboxWireHttpContract
     {
         Route = StoreRoute,
         Method = Method,
-        RequestContentType = Mau2ContentType,
-        RequestFrame = MailboxWireFrame.Mau2,
+        RequestContentType = Mau3ContentType,
+        RequestFrame = MailboxWireFrame.Mau3,
         AuthenticatedOperation = MailboxAuthenticatedOperation.Store,
         MinimumRequestBytes =
             MailboxAuthenticatedClientRequestCodec.HeaderLength +
@@ -111,8 +111,8 @@ public static class MailboxWireHttpContract
     {
         Route = RetrieveRoute,
         Method = Method,
-        RequestContentType = Mau2ContentType,
-        RequestFrame = MailboxWireFrame.Mau2,
+        RequestContentType = Mau3ContentType,
+        RequestFrame = MailboxWireFrame.Mau3,
         AuthenticatedOperation = MailboxAuthenticatedOperation.Retrieve,
         MinimumRequestBytes =
             MailboxAuthenticatedClientRequestCodec.HeaderLength +
@@ -138,8 +138,8 @@ public static class MailboxWireHttpContract
     {
         Route = AcknowledgeRoute,
         Method = Method,
-        RequestContentType = Mau2ContentType,
-        RequestFrame = MailboxWireFrame.Mau2,
+        RequestContentType = Mau3ContentType,
+        RequestFrame = MailboxWireFrame.Mau3,
         AuthenticatedOperation = MailboxAuthenticatedOperation.Ack,
         MinimumRequestBytes =
             MailboxAuthenticatedClientRequestCodec.HeaderLength +

@@ -1,0 +1,27 @@
+{
+  "name": "Selector-bound mailbox V3 Ed25519 golden vectors",
+  "sourceRepository": "XPointLabs/deep-protocol",
+  "sourceCommit": "DR-0081 deterministic public test seeds; no production key",
+  "vectors": [
+    {
+      "id": "deep-extension/mailbox-capability/v3/deposit-store",
+      "kind": "MCG3 issuer plus MCP3 holder Ed25519 signatures",
+      "hex": "4d43503303010000d0d1d2d3d4d5d6d7d8d9dadbdcdddedf0000000000000009019eadb5789f5d481220577cdbca48da2b245885fdfd6820a2e0c0f1a48a08e401300000000000004d43473303010100707172737475767778797a7b7c7d7e7f000000000000000b0000000000000007808182838485868788898a8b8c8d8e8f00000000000003e8000000000000044c0000000000000000432187e2f0980d4d184d0eceed0e40151c4eb23a0098a092736bff8f3c715e2bb0b1b2b3b4b5b6b7b8b9babbbcbdbebfc0c1c2c3c4c5c6c7c8c9cacbcccdcecf7776e870b93354f2a0b24c23f2a36cc4e80e223218c1b97926fdd018396a2b9b2543b92ff1095511476adc8369db6ddc933665a11978dda1404ee1066ca9559da0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf1da3f12c0bead92cc00eee64e8bc430bad4c7cbac6a94c3d647843affc5e5a696209920e261cb12df705bf3d4e96df34f7361e5dcd7ff8a214643b4b3c0ca40d43bbb8712b5834bbacc9e99e4c70446bdee10406b4dcbe0935719ce00424d67a5abed19f8d754e8b1ebfa8742cb50f12be60131594404e8fbed4dbd45f98c206"
+    },
+    {
+      "id": "deep-extension/mailbox-authenticated/v3/MAU3-store-length-672",
+      "kind": "sha256-complete-canonical-frame",
+      "hex": "75183f6591813bf7df1ccaa6156b49f3fa353e1ead3fd5aff333a6d78812f307"
+    },
+    {
+      "id": "deep-extension/mailbox-authenticated/v3/MAU3-retrieve-length-576",
+      "kind": "sha256-complete-canonical-frame",
+      "hex": "0c1630c3ff384b44b0055fa1d726bc090c9d3fa3a2fa77e0e27d8692a5523c15"
+    },
+    {
+      "id": "deep-extension/mailbox-authenticated/v3/MAU3-ack-length-608",
+      "kind": "sha256-complete-canonical-frame",
+      "hex": "c638ca6d2084ea3a2fbaf1237b89177b8477032935740e06d4744c2e11988c13"
+    }
+  ]
+}

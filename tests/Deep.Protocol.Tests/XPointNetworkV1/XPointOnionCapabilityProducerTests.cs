@@ -1229,7 +1229,7 @@ public sealed class XPointOnionCapabilityProducerTests
                 _authority.NetworkId, U64(0), new byte[32], Bytes(32, 0xe0),
                 PublicKeyAuth.GenerateKeyPair(Bytes(32, 0xe1)).PublicKey,
                 PublicKeyAuth.GenerateKeyPair(Bytes(32, 0xe2)).PublicKey,
-                U64(5), U32(60), U16(1), U64(100), U64(100), U64(300),
+                U64(5), U32(60), U16(2), U64(100), U64(100), U64(300),
                 _authority.AuthorityCoreReference, _authority.DirectoryWitnessPolicyHash,
                 new byte[] { 1 }, SignatureRows([(_root.Id, Bytes(64, 0xe3))]),
             ];

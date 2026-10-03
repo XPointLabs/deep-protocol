@@ -8,8 +8,8 @@ public static class MailboxAuthenticatedCapabilityLimits
     public const int DigestLength = 32;
     public const int PublicKeyLength = 32;
     public const int SignatureLength = 64;
-    public const int GrantLength = 272;
-    public const int PresentationLength = 408;
+    public const int GrantLength = 304;
+    public const int PresentationLength = 440;
     public const int MaximumCachedOutcomeLength = 64 * 1024;
 }
 
@@ -56,6 +56,7 @@ public sealed record MailboxAuthenticatedGrant
     public required ReadOnlyMemory<byte> MembershipCommitment { get; init; }
     public required ReadOnlyMemory<byte> IssuerPublicKey { get; init; }
     public required ReadOnlyMemory<byte> HolderPublicKey { get; init; }
+    public required ReadOnlyMemory<byte> SelectionInput { get; init; }
     public required ReadOnlyMemory<byte> IssuerSignature { get; init; }
 }
 

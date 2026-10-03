@@ -158,7 +158,7 @@ production public API remains inactive. The only authorized successor surface is
 the sealed section-7 capability boundary: verified XNA1/XVP1/XNV1/XND1 plus non-wire
 DTT1-backed XTT, exact-three path/receive-position capabilities, mandatory durable
 replay transaction/key lease, separate exit/client reply contexts, closed
-operation-specific exact MAU2/MQR3/MRP1/MAR1 and ContactV1 request/result-pairing
+operation-specific exact MAU3/MQR3/MRP1/MAR1 and ContactV1 request/result-pairing
 verifiers, and a protected CSPRNG uniqueness
 authority. Internal vector helpers and process-local replay memory are not a
 release API or durability claim.
@@ -336,12 +336,20 @@ activate production or prove physical delivery.
 
 [DR-0080](../../docs/survival-program/decisions/DR-0080-did2-current-mailbox-host-authority.md)
 adds the closed current mailbox host policy, exact PMT2 ranking/node facts and
-independent full-interval MCG2 issuer verification. No caller topology or UTC can
+independent full-interval MCG3 issuer verification. No caller topology or UTC can
 mint it. It does not authorize a holder request, replay reservation, local exit,
 peer quorum or delivery. The independent PMS2 selector versus blinded placement
 must still be cryptographically closed in the connected consumer; ranking the
-request's placement commitment is not a substitute. Actual API/evidence snapshots,
-consumer repins and physical activation remain final business-batch gates.
+request's placement commitment is not a substitute.
+[DR-0081](../../docs/survival-program/decisions/DR-0081-did2-mailbox-selection-grant-clean-break.md)
+supersedes neutral V2 authorization: one MCG3/MCP3/MAU3/XMC2 generation binds the
+exact PMS2 selector under the issuer and holder signatures. Current PMA2 verifier
+requires profile2; profile1 is historical parsing only. `ResolveGrantReplicasAsync`
+captures exact grant bytes before clock callbacks and returns copied selected node
+IDs and actual descriptor receipt keys only after two full-interval checks.
+It does not authorize holder use, revocation, durable replay, local exit or peer
+mutation. Actual API/evidence snapshots, matched issuer/client/node/peer consumers,
+signed successors, consumer repins and physical activation remain business gates.
 
 [DR-0053](../../docs/survival-program/decisions/DR-0053-did2-mailbox-grant-restart-custody.md)
 adds direct DID2 exact pending-request restoration and independent retained

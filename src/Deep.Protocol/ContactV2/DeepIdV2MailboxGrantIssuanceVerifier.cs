@@ -58,11 +58,11 @@ public sealed class VerifiedDeepIdV2MailboxGrantIssuance
     public async ValueTask EnsureCurrentAsync(CancellationToken cancellationToken = default)
     { _ = await ReadAsync(cancellationToken).ConfigureAwait(false); }
 
-    public async ValueTask VerifySuccessAsync(ReadOnlyMemory<byte> exactXmc1, CancellationToken cancellationToken = default)
+    public async ValueTask VerifySuccessAsync(ReadOnlyMemory<byte> exactXmc2, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (exactXmc1.Length != 478) throw new CryptographicException("Mailbox winner must be an exact success.");
-        var response = ContactCodec.Decode(ProtocolMagic.XMC1, exactXmc1.Span);
+        if (exactXmc2.Length != 510) throw new CryptographicException("Mailbox winner must be an exact success.");
+        var response = ContactCodec.Decode(ProtocolMagic.XMC2, exactXmc2.Span);
         ContactCodec.ValidateMailboxGrantResultBinding(request, response);
         ContactCodec.ValidateMailboxGrantResultRouteBinding(response, route);
         var first = await ReadAsync(cancellationToken).ConfigureAwait(false);
@@ -135,6 +135,7 @@ public sealed class VerifiedDeepIdV2MailboxGrantIssuance
             PlacementCommitment = MailboxPlacementCommitment.Compute(new BlindedPlacementId(route.Reachability.Field(10).Span)),
             MembershipCommitment = route.Projection.ArtifactHash.ToArray(), IssuerPublicKey = publicKey,
             HolderPublicKey = request.Field(5).ToArray(), IssuerSignature = new byte[64],
+            SelectionInput = route.Selection.Field(3).ToArray(),
         };
         _ = await ReadAsync(cancellationToken).ConfigureAwait(false);
         var signingBytes = MailboxAuthenticatedCapabilityCodec.GetGrantSigningBytes(unsigned);

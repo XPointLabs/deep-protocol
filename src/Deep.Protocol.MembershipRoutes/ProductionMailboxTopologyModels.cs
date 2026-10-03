@@ -129,7 +129,7 @@ public sealed record ProductionMailboxSelectionProof
     public required ulong Generation { get; init; }
     public required ReadOnlyMemory<byte> MembershipCommitment { get; init; }
     public required ReadOnlyMemory<byte> TopologyPlacementCommitment { get; init; }
-    /// <summary>Per-mailbox MCG2 placement commitment for the caller's blinded placement ID.</summary>
+    /// <summary>Per-mailbox MCG3 placement commitment for the caller's blinded placement ID.</summary>
     public required ReadOnlyMemory<byte> MailboxPlacementCommitment { get; init; }
     public required ReadOnlyMemory<byte> SelectionInputCommitment { get; init; }
     public required ulong IssuedAtUnixSeconds { get; init; }

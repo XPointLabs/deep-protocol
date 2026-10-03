@@ -61,7 +61,7 @@ public sealed record MailboxEpochWindow
     public required ulong NextExpiresAtUnixSeconds { get; init; }
 
     /// <summary>
-    /// Clean XMG1/XMC1 grants intentionally authorize only the current epoch.
+    /// Clean XMG1/XMC2 grants intentionally authorize only the current epoch.
     /// A zeroed next tuple means the client must reacquire before rollover.
     /// </summary>
     public bool IsCurrentOnly => NextEpoch == 0;

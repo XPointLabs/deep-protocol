@@ -153,7 +153,7 @@ public static class MailboxGrantResultAuthor
         if (serverTimeUnixSeconds == 0 || expiresAtUnixSeconds <= serverTimeUnixSeconds ||
             expiresAtUnixSeconds - serverTimeUnixSeconds > 300)
             throw new ArgumentOutOfRangeException(nameof(expiresAtUnixSeconds));
-        var result = ContactCodec.AuthorForOperationalAuthority(ProtocolMagic.XMC1,
+        var result = ContactCodec.AuthorForOperationalAuthority(ProtocolMagic.XMC2,
         [
             request.Field(1),
             request.Field(2),

@@ -37,6 +37,37 @@ public sealed class MailboxHostAuthorityV2VerifierTests
         Assert.Empty(typeof(VerifiedMailboxReplicaV2).GetConstructors());
     }
 
+    [Fact]
+    public async Task SelectedGrant_UsesSignedSelectorAndActualDescriptorKeys()
+    {
+        var fixture = Fixture.Create(); var inputs = await fixture.VerifyMailboxAsync();
+        var clock = new Clock(); var authority = await Verify(fixture, inputs, clock);
+        var grant = Grant(inputs.Network);
+        var exact = MailboxAuthenticatedCapabilityCodec.EncodeGrant(grant);
+        var expected = await authority.RankReplicasAsync(grant.SelectionInput);
+        clock.OnRead = () => Array.Fill(exact, (byte)0); // Decoder owns bytes before callbacks.
+        var selected = await authority.ResolveGrantReplicasAsync(exact);
+        Assert.Equal(2, selected.Count);
+        Assert.Equal(expected.SelectMany(id => id.ToArray()), selected.SelectMany(replica => replica.NodeId.ToArray()));
+        foreach (var replica in selected)
+            Assert.Equal(inputs.Network.ResolveNodeIdentityPublicKey(replica.NodeId).ToArray(), replica.SigningPublicKey.ToArray());
+        clock.OnRead = null;
+        var changed = grant with { SelectionInput = Bytes(32, 0xf1) };
+        await Assert.ThrowsAsync<CryptographicException>(() => authority.ResolveGrantReplicasAsync(
+            MailboxAuthenticatedCapabilityCodec.EncodeGrant(changed)).AsTask());
+    }
+
+    [Fact]
+    public async Task SelectedGrant_RechecksFullIntervalBeforeReleasingReplicas()
+    {
+        var fixture = Fixture.Create(); var inputs = await fixture.VerifyMailboxAsync();
+        var clock = new Clock(); var authority = await Verify(fixture, inputs, clock);
+        var before = clock.Reads;
+        clock.OnRead = () => { if (clock.Reads == before + 2) clock.Sample = 1_025; };
+        await Assert.ThrowsAsync<CryptographicException>(() => authority.ResolveGrantReplicasAsync(
+            MailboxAuthenticatedCapabilityCodec.EncodeGrant(Grant(inputs.Network))).AsTask());
+    }
+
     [Theory]
     [InlineData("signature")]
     [InlineData("foreign-root")]
@@ -209,6 +240,7 @@ public sealed class MailboxHostAuthorityV2VerifierTests
             MembershipCommitment = network.Closure.Pmt.ArtifactHash,
             IssuerPublicKey = PublicKeyAuth.GenerateKeyPair(seed).PublicKey,
             HolderPublicKey = PublicKeyAuth.GenerateKeyPair(Bytes(32, 0x53)).PublicKey,
+            SelectionInput = Bytes(32, 0x54),
             IssuerSignature = new byte[64],
         };
         return new SodiumMailboxCapabilityCrypto().SignGrant(grant, seed);

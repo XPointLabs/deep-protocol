@@ -356,12 +356,12 @@ public sealed class MailboxPeerWireV2ContractTests
             {
                 Assert.Equal("/api/client/mailbox/v2/store", endpoint.Route);
                 Assert.Equal("POST", endpoint.Method);
-                Assert.Equal(MailboxWireFrame.Mau2, endpoint.RequestFrame);
+                Assert.Equal(MailboxWireFrame.Mau3, endpoint.RequestFrame);
                 Assert.Equal(
                     MailboxAuthenticatedOperation.Store,
                     endpoint.AuthenticatedOperation);
                 Assert.Equal(
-                    "application/vnd.deep.mailbox.mau2",
+                    "application/vnd.deep.mailbox.mau3",
                     endpoint.RequestContentType);
                 Assert.Equal(
                     MailboxAuthenticatedClientRequestCodec.HeaderLength +
@@ -373,19 +373,19 @@ public sealed class MailboxPeerWireV2ContractTests
                 Assert.Equal(
                     "application/vnd.deep.mailbox.mqr3",
                     endpoint.ResponseContentType);
-                Assert.Equal(608, endpoint.MinimumRequestBytes);
-                Assert.Equal(82_344, endpoint.MaximumRequestBytes);
+                Assert.Equal(640, endpoint.MinimumRequestBytes);
+                Assert.Equal(82_376, endpoint.MaximumRequestBytes);
                 Assert.Equal(776, endpoint.MaximumResponseBytes);
             },
             endpoint =>
             {
                 Assert.Equal("/api/client/mailbox/v2/retrieve", endpoint.Route);
-                Assert.Equal(MailboxWireFrame.Mau2, endpoint.RequestFrame);
+                Assert.Equal(MailboxWireFrame.Mau3, endpoint.RequestFrame);
                 Assert.Equal(
                     MailboxAuthenticatedOperation.Retrieve,
                     endpoint.AuthenticatedOperation);
                 Assert.Equal(
-                    "application/vnd.deep.mailbox.mau2",
+                    "application/vnd.deep.mailbox.mau3",
                     endpoint.RequestContentType);
                 Assert.Equal(
                     MailboxAuthenticatedClientRequestCodec.HeaderLength +
@@ -394,8 +394,8 @@ public sealed class MailboxPeerWireV2ContractTests
                     MailboxClientLimits.MaximumContinuationTokenLength,
                     endpoint.MaximumRequestBytes);
                 Assert.Equal(MailboxWireFrame.Mrp1, endpoint.ResponseFrame);
-                Assert.Equal(536, endpoint.MinimumRequestBytes);
-                Assert.Equal(792, endpoint.MaximumRequestBytes);
+                Assert.Equal(568, endpoint.MinimumRequestBytes);
+                Assert.Equal(824, endpoint.MaximumRequestBytes);
                 Assert.Equal(1_048_576, endpoint.MaximumResponseBytes);
             },
             endpoint =>
@@ -403,12 +403,12 @@ public sealed class MailboxPeerWireV2ContractTests
                 Assert.Equal(
                     "/api/client/mailbox/v2/acknowledge",
                     endpoint.Route);
-                Assert.Equal(MailboxWireFrame.Mau2, endpoint.RequestFrame);
+                Assert.Equal(MailboxWireFrame.Mau3, endpoint.RequestFrame);
                 Assert.Equal(
                     MailboxAuthenticatedOperation.Ack,
                     endpoint.AuthenticatedOperation);
                 Assert.Equal(
-                    "application/vnd.deep.mailbox.mau2",
+                    "application/vnd.deep.mailbox.mau3",
                     endpoint.RequestContentType);
                 Assert.Equal(
                     MailboxAuthenticatedClientRequestCodec.HeaderLength +
@@ -419,8 +419,8 @@ public sealed class MailboxPeerWireV2ContractTests
                      MailboxAuthenticatedRequestTranscript.AckEntryLength),
                     endpoint.MaximumRequestBytes);
                 Assert.Equal(MailboxWireFrame.Mar1, endpoint.ResponseFrame);
-                Assert.Equal(576, endpoint.MinimumRequestBytes);
-                Assert.Equal(4_792, endpoint.MaximumRequestBytes);
+                Assert.Equal(608, endpoint.MinimumRequestBytes);
+                Assert.Equal(4_824, endpoint.MaximumRequestBytes);
                 Assert.Equal(77_840, endpoint.MaximumResponseBytes);
             });
         Assert.DoesNotContain(

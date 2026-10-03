@@ -23,8 +23,8 @@ public sealed class AuthenticatedMailboxCapabilityContractTests
             replayCounter: 9,
             holderSeed);
         var encoded = MailboxAuthenticatedCapabilityCodec.EncodePresentation(presentation);
-        var vector = GoldenVectorLoader.Load("authenticated-mailbox-v2.json")
-            .GetRequired("deep-extension/mailbox-capability/v2/deposit-store");
+        var vector = GoldenVectorLoader.Load("mailbox-authorization-v3.json")
+            .GetRequired("deep-extension/mailbox-capability/v3/deposit-store");
         Assert.Equal(vector.Hex, Convert.ToHexString(encoded).ToLowerInvariant());
 
         var replay = new MemoryReplayJournal();
@@ -269,7 +269,7 @@ public sealed class AuthenticatedMailboxCapabilityContractTests
     }
 
     [Fact]
-    public void Mau2CarriesExactMcp2AndCanonicalBody_ForAllOperations()
+    public void Mau3CarriesExactMcp3AndCanonicalBody_ForAllOperations()
     {
         var crypto = new SodiumMailboxCapabilityCrypto();
         var issuerSeed = Range(0x10, 32);
@@ -307,15 +307,15 @@ public sealed class AuthenticatedMailboxCapabilityContractTests
             Assert.Equal(binding.CanonicalRequest.ToArray(), decoded.Binding.CanonicalRequest.ToArray());
             Assert.Equal(binding.RequestDigest.ToArray(), decoded.Presentation.RequestDigest.ToArray());
         }
-        var vectors = GoldenVectorLoader.Load("authenticated-mailbox-v2-identities.json");
+        var vectors = GoldenVectorLoader.Load("mailbox-authorization-v3.json");
         Assert.Equal(
-            $"Store:640:{vectors.GetRequired("deep-extension/mailbox-authenticated/v2/MAU2-store-length-640").Hex}",
+            $"Store:672:{vectors.GetRequired("deep-extension/mailbox-authenticated/v3/MAU3-store-length-672").Hex}",
             identities[0]);
         Assert.Equal(
-            $"Retrieve:544:{vectors.GetRequired("deep-extension/mailbox-authenticated/v2/MAU2-retrieve-length-544").Hex}",
+            $"Retrieve:576:{vectors.GetRequired("deep-extension/mailbox-authenticated/v3/MAU3-retrieve-length-576").Hex}",
             identities[1]);
         Assert.Equal(
-            $"Ack:576:{vectors.GetRequired("deep-extension/mailbox-authenticated/v2/MAU2-ack-length-576").Hex}",
+            $"Ack:608:{vectors.GetRequired("deep-extension/mailbox-authenticated/v3/MAU3-ack-length-608").Hex}",
             identities[2]);
 
         var legacy = MailboxClientCodec.EncodeEncryptedEnvelope(StoreEnvelope());
@@ -394,7 +394,7 @@ public sealed class AuthenticatedMailboxCapabilityContractTests
         var signedGrant = crypto.SignGrant(canonicalGrant, issuerSeed);
         var encoded = MailboxAuthenticatedCapabilityCodec.EncodePresentation(
             crypto.SignPresentation(signedGrant, binding, 9, holderSeed));
-        foreach (var offset in new[] { 72 + 208, encoded.Length - 1 })
+        foreach (var offset in new[] { 72 + 208, 72 + 240, encoded.Length - 1 })
         {
             var tampered = encoded.ToArray();
             tampered[offset] ^= 1;
@@ -411,6 +411,42 @@ public sealed class AuthenticatedMailboxCapabilityContractTests
             Assert.Equal(0, replay.Calls);
             Assert.Equal(0, revocations.Calls);
         }
+    }
+
+    [Fact]
+    public void V3LayoutAndSigningTagsBindSelectorBeforeBothSignatures()
+    {
+        var crypto = new SodiumMailboxCapabilityCrypto();
+        var issuer = Range(0x10, 32); var holder = Range(0x40, 32);
+        var grant = crypto.SignGrant(Grant(crypto.GetPublicKey(issuer), crypto.GetPublicKey(holder),
+            MailboxCapabilityDomain.Deposit), issuer);
+        var exact = MailboxAuthenticatedCapabilityCodec.EncodeGrant(grant);
+        Assert.Equal(304, exact.Length); Assert.Equal(3, exact[4]);
+        Assert.Equal("MCG3", System.Text.Encoding.ASCII.GetString(exact, 0, 4));
+        Assert.Equal(grant.SelectionInput.ToArray(), exact.AsSpan(208, 32).ToArray());
+        Assert.Equal(grant.IssuerSignature.ToArray(), exact.AsSpan(240, 64).ToArray());
+        Assert.Equal((byte[])[.. "DEEP-MCG3-DEP\0\0\0"u8, .. exact.AsSpan(0, 240)],
+            MailboxAuthenticatedCapabilityCodec.GetGrantSigningBytes(grant));
+        var presentation = crypto.SignPresentation(grant, Binding(MailboxAuthenticatedOperation.Store), 9, holder);
+        var encoded = MailboxAuthenticatedCapabilityCodec.EncodePresentation(presentation);
+        Assert.Equal(440, encoded.Length); Assert.Equal(3, encoded[4]);
+        Assert.Equal(exact, encoded.AsSpan(72, 304).ToArray());
+        Assert.Equal(presentation.HolderSignature.ToArray(), encoded.AsSpan(376, 64).ToArray());
+        Assert.Equal((byte[])[.. "DEEP-MCP3-STR\0\0\0"u8, .. encoded.AsSpan(0, 376)],
+            MailboxAuthenticatedCapabilityCodec.GetPresentationSigningBytes(presentation));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(31)]
+    [InlineData(33)]
+    public void SelectorRejectsMissingZeroAndWrongWidths(int length)
+    {
+        var grant = Grant(Range(0x10, 32), Range(0x40, 32), MailboxCapabilityDomain.Deposit);
+        Assert.Throws<MailboxAuthenticatedCapabilityException>(() =>
+            MailboxAuthenticatedCapabilityCodec.GetGrantSigningBytes(grant with { SelectionInput = new byte[length] }));
+        Assert.Throws<MailboxAuthenticatedCapabilityException>(() =>
+            MailboxAuthenticatedCapabilityCodec.GetGrantSigningBytes(grant with { SelectionInput = new byte[32] }));
     }
 
     [Fact]
@@ -477,6 +513,7 @@ public sealed class AuthenticatedMailboxCapabilityContractTests
             MembershipCommitment = Range(0xb0, 32),
             IssuerPublicKey = issuer,
             HolderPublicKey = holder,
+            SelectionInput = Range(0xa0, 32),
             IssuerSignature = ReadOnlyMemory<byte>.Empty
         };
 

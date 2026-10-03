@@ -68,15 +68,40 @@ public sealed class VerifiedMailboxHostAuthorityV2
 
     /// <summary>Checks issuer/grant currentness only. Holder, revocation, replay,
     /// placement-to-selection proof and durable mutation remain mandatory.</summary>
-    public async ValueTask EnsureGrantCurrentAsync(ReadOnlyMemory<byte> exactMcg2,
+    public async ValueTask EnsureGrantCurrentAsync(ReadOnlyMemory<byte> exactMcg3,
         CancellationToken cancellationToken = default)
     {
         // Decoder bounds and captures bytes before the first callback.
-        var grant = MailboxAuthenticatedCapabilityCodec.DecodeGrant(exactMcg2.Span);
+        var grant = MailboxAuthenticatedCapabilityCodec.DecodeGrant(exactMcg3.Span);
         var before = await ReadAsync(cancellationToken).ConfigureAwait(false);
         RequireGrant(grant, before);
         var after = await ReadAsync(cancellationToken).ConfigureAwait(false);
         RequireGrant(grant, after);
+    }
+
+    /// <summary>Issuer-authenticated selected replica facts for one captured grant.
+    /// This is not holder, revocation, replay, dispatch or receipt authority.</summary>
+    public async ValueTask<IReadOnlyList<VerifiedMailboxReplicaV2>> ResolveGrantReplicasAsync(
+        ReadOnlyMemory<byte> exactMcg3, CancellationToken cancellationToken = default)
+    {
+        var grant = MailboxAuthenticatedCapabilityCodec.DecodeGrant(exactMcg3.Span);
+        var before = await ReadAsync(cancellationToken).ConfigureAwait(false);
+        RequireGrant(grant, before);
+        var closure = network.Closure!;
+        if (closure.ReplicaCount != 2)
+            throw new CryptographicException("The current mailbox quorum profile requires exactly two replicas.");
+        var ranked = ContactRouteThresholdAuthor.RankReplicas(network.NetworkId.Span,
+            closure.PmtArtifactReference, closure.Pmt.FieldSpan(6), grant.SelectionInput.Span,
+            closure.Pmt.FieldSpan(9), closure.ReplicaCount);
+        var replicas = Enumerable.Range(0, closure.ReplicaCount).Select(index =>
+        {
+            var id = ranked.AsSpan(index * 32, 32).ToArray();
+            return new VerifiedMailboxReplicaV2(id, network.ResolveNodeIdentityPublicKey(id).Span);
+        }).ToArray();
+        var after = await ReadAsync(cancellationToken).ConfigureAwait(false);
+        RequireGrant(grant, after);
+        cancellationToken.ThrowIfCancellationRequested();
+        return Array.AsReadOnly(replicas);
     }
 
     internal async ValueTask<(VerifiedMailboxAuthorityV2 Policy, ulong Lower, ulong Upper)> ReadAsync(

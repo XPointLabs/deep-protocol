@@ -8,7 +8,7 @@ namespace Deep.Protocol.XPointNetworkV1;
 
 /// <summary>
 /// Root-authorized clean-break PMA2 capability. It authorizes only the two
-/// role-separated MCG2 issuer keys and the mailbox-directory policy; it carries
+/// role-separated MCG3 issuer keys and the mailbox-directory policy; it carries
 /// no endpoint, release certificate, account, device, holder, or route.
 /// </summary>
 public sealed class VerifiedMailboxAuthorityV2
@@ -91,6 +91,8 @@ public static class MailboxAuthorityV2Verifier
         if (trustedLowerUnixSeconds > trustedUpperUnixSeconds)
             throw new CryptographicException("The PMA2 trusted-time interval is invalid.");
         var record = ContactCodec.Decode(ProtocolMagic.PMA2, exactPma2);
+        if (BinaryPrimitives.ReadUInt16BigEndian(record.Field(9).Span) != 2)
+            throw new CryptographicException("PMA2 does not authorize the current selection-bound mailbox algorithm.");
         if (!Fixed(record.Field(1).Span, networkAuthority.NetworkId.Span) ||
             !Fixed(record.Field(13).Span, networkAuthority.AuthorityCoreReference.Span) ||
             !Fixed(record.Field(14).Span, networkAuthority.DirectoryWitnessPolicyHash.Span) ||

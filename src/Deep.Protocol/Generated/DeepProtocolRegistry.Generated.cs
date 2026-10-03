@@ -130,16 +130,16 @@ public static class DeepProtocolIdentifiers
         public const string KRT1 = "KRT1";
         public const string MAK1 = "MAK1";
         public const string MAR1 = "MAR1";
-        public const string MAU2 = "MAU2";
+        public const string MAU3 = "MAU3";
         public const string MBA1 = "MBA1";
         public const string MBA2 = "MBA2";
         public const string MBE1 = "MBE1";
         public const string MBM1 = "MBM1";
         public const string MBR2 = "MBR2";
         public const string MBS1 = "MBS1";
-        public const string MCG2 = "MCG2";
+        public const string MCG3 = "MCG3";
         public const string MCP1 = "MCP1";
-        public const string MCP2 = "MCP2";
+        public const string MCP3 = "MCP3";
         public const string MDG1 = "MDG1";
         public const string MEO1 = "MEO1";
         public const string MFA1 = "MFA1";
@@ -227,7 +227,7 @@ public static class DeepProtocolIdentifiers
         public const string XIQ1 = "XIQ1";
         public const string XIR1 = "XIR1";
         public const string XIS1 = "XIS1";
-        public const string XMC1 = "XMC1";
+        public const string XMC2 = "XMC2";
         public const string XMG1 = "XMG1";
         public const string XNA1 = "XNA1";
         public const string XND1 = "XND1";
@@ -362,16 +362,16 @@ public static class DeepProtocolIdentifiers
         public static System.ReadOnlySpan<byte> KRT1 => "KRT1"u8;
         public static System.ReadOnlySpan<byte> MAK1 => "MAK1"u8;
         public static System.ReadOnlySpan<byte> MAR1 => "MAR1"u8;
-        public static System.ReadOnlySpan<byte> MAU2 => "MAU2"u8;
+        public static System.ReadOnlySpan<byte> MAU3 => "MAU3"u8;
         public static System.ReadOnlySpan<byte> MBA1 => "MBA1"u8;
         public static System.ReadOnlySpan<byte> MBA2 => "MBA2"u8;
         public static System.ReadOnlySpan<byte> MBE1 => "MBE1"u8;
         public static System.ReadOnlySpan<byte> MBM1 => "MBM1"u8;
         public static System.ReadOnlySpan<byte> MBR2 => "MBR2"u8;
         public static System.ReadOnlySpan<byte> MBS1 => "MBS1"u8;
-        public static System.ReadOnlySpan<byte> MCG2 => "MCG2"u8;
+        public static System.ReadOnlySpan<byte> MCG3 => "MCG3"u8;
         public static System.ReadOnlySpan<byte> MCP1 => "MCP1"u8;
-        public static System.ReadOnlySpan<byte> MCP2 => "MCP2"u8;
+        public static System.ReadOnlySpan<byte> MCP3 => "MCP3"u8;
         public static System.ReadOnlySpan<byte> MDG1 => "MDG1"u8;
         public static System.ReadOnlySpan<byte> MEO1 => "MEO1"u8;
         public static System.ReadOnlySpan<byte> MFA1 => "MFA1"u8;
@@ -459,7 +459,7 @@ public static class DeepProtocolIdentifiers
         public static System.ReadOnlySpan<byte> XIQ1 => "XIQ1"u8;
         public static System.ReadOnlySpan<byte> XIR1 => "XIR1"u8;
         public static System.ReadOnlySpan<byte> XIS1 => "XIS1"u8;
-        public static System.ReadOnlySpan<byte> XMC1 => "XMC1"u8;
+        public static System.ReadOnlySpan<byte> XMC2 => "XMC2"u8;
         public static System.ReadOnlySpan<byte> XMG1 => "XMG1"u8;
         public static System.ReadOnlySpan<byte> XNA1 => "XNA1"u8;
         public static System.ReadOnlySpan<byte> XND1 => "XND1"u8;
@@ -548,7 +548,7 @@ internal readonly record struct GeneratedRegistryIdentifier(
 
 internal static class DeepProtocolRegistryGenerated
 {
-    internal const string RegistrySha256 = "653c8c9e98f8fa0a5db85e71bb8fc80bab8d56dcebbc2abe261dddb74ea95c2c";
+    internal const string RegistrySha256 = "69572764d40a822aeb47dd626bd5431924cc7cb9b3f9d0642b588459d2bd0fc3";
     internal const string Dnp1RegistrySha256 = "e036a0b6acb260e05e18ac536a723b0b8561d2ba1d813429304505b0e7a7da7b";
     internal const string Dnp1ApprovedCommit = "a8456987efe031388ca2eb9006886fb78f31e06c";
 
@@ -660,16 +660,16 @@ internal static class DeepProtocolRegistryGenerated
         new("magic", "KRT1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "MAK1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "MAR1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
-        new("magic", "MAU2", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
+        new("magic", "MAU3", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "MBA1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "MBA2", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "MBE1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "MBM1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "MBR2", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "MBS1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
-        new("magic", "MCG2", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
+        new("magic", "MCG3", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "MCP1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
-        new("magic", "MCP2", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
+        new("magic", "MCP3", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "MDG1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "MEO1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "MFA1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
@@ -757,7 +757,7 @@ internal static class DeepProtocolRegistryGenerated
         new("magic", "XIQ1", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "XIR1", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "XIS1", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
-        new("magic", "XMC1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
+        new("magic", "XMC2", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "XMG1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "XNA1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "XND1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),

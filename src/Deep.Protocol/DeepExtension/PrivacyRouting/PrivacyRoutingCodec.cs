@@ -74,7 +74,7 @@ internal static class PrivacyRoutingValidationBuilder
         finally { CryptographicOperations.ZeroMemory(operationId); }
     }
 
-    // The frozen framing KAT predates MAU2 and intentionally carries an empty Store payload.
+    // The frozen framing KAT predates MAU3 and intentionally carries an empty Store payload.
     // This seam is internal and cannot be reached by the production builder/open entrypoints.
     internal static PrivacyRoutingBuiltRequestCore BuildFrozenKatVector(ReadOnlySpan<byte> network, IReadOnlyList<PrivacyRoutingHop> route, PrivacyRoutingOperation operation, ReadOnlySpan<byte> request, PrivacyRoutingTestEntropy entropy, int block = PrivacyRoutingLimits.DefaultPaddingBlockBytes)
     {
@@ -557,14 +557,14 @@ internal static class PrivacyRoutingPayloadVerifier
             };
             if (decoded.Binding.Operation != expectedOperation ||
                 decoded.Presentation.Operation != expectedOperation)
-                throw PrivacyRoutingWire.Error(PrivacyRoutingProtocolError.InvalidOperation, "MAU2 operation does not match the ONION terminal operation.");
+                throw PrivacyRoutingWire.Error(PrivacyRoutingProtocolError.InvalidOperation, "MAU3 operation does not match the ONION terminal operation.");
             if (!CryptographicOperations.FixedTimeEquals(decoded.Presentation.Grant.NetworkId.Span, networkId))
-                throw PrivacyRoutingWire.Error(PrivacyRoutingProtocolError.InvalidKeyBinding, "MAU2 grant network does not match the ONION network.");
+                throw PrivacyRoutingWire.Error(PrivacyRoutingProtocolError.InvalidKeyBinding, "MAU3 grant network does not match the ONION network.");
             var exact = MailboxAuthenticatedClientRequestCodec.Encode(decoded);
             try
             {
                 if (!exact.AsSpan().SequenceEqual(request))
-                    throw PrivacyRoutingWire.Error(PrivacyRoutingProtocolError.InvalidOperation, "MAU2 request bytes are not exact canonical bytes.");
+                    throw PrivacyRoutingWire.Error(PrivacyRoutingProtocolError.InvalidOperation, "MAU3 request bytes are not exact canonical bytes.");
             }
             finally
             {
@@ -577,7 +577,7 @@ internal static class PrivacyRoutingPayloadVerifier
         }
         catch (Exception exception)
         {
-            throw PrivacyRoutingWire.Error(PrivacyRoutingProtocolError.InvalidOperation, "Mailbox ONION operations accept only exact canonical MAU2 requests.", exception);
+            throw PrivacyRoutingWire.Error(PrivacyRoutingProtocolError.InvalidOperation, "Mailbox ONION operations accept only exact canonical MAU3 requests.", exception);
         }
     }
 
@@ -615,12 +615,12 @@ internal static class PrivacyRoutingPayloadVerifier
             if (ReadMagic(exactRequest) == ProtocolMagic.XMG1)
             {
                 var request = ContactCodec.Decode(ProtocolMagic.XMG1, exactRequest);
-                var grantResult = ContactCodec.Decode(ProtocolMagic.XMC1, body);
+                var grantResult = ContactCodec.Decode(ProtocolMagic.XMC2, body);
                 ContactCodec.ValidateMailboxGrantResultBinding(request, grantResult);
                 if (!grantResult.CanonicalBytes.Span.SequenceEqual(body))
                     throw PrivacyRoutingWire.Error(
                         PrivacyRoutingProtocolError.InvalidOperation,
-                        "XMC1 response has non-canonical trailing bytes.");
+                        "XMC2 response has non-canonical trailing bytes.");
                 return;
             }
 
@@ -792,10 +792,10 @@ internal static class PrivacyRoutingPayloadVerifier
                 {
                     var value = MailboxAggregateAckCodec.DecodeMqr3(body);
                     if (value.Epoch != epoch || !CryptographicOperations.FixedTimeEquals(value.OperationId.Span, operationId))
-                        throw PrivacyRoutingWire.Error(PrivacyRoutingProtocolError.ReplyContextMismatch, "MAR1 is not bound to the exact MAU2 operation.");
+                        throw PrivacyRoutingWire.Error(PrivacyRoutingProtocolError.ReplyContextMismatch, "MAR1 is not bound to the exact MAU3 operation.");
                     var ackRequest = MailboxAuthenticatedRequestTranscript.DecodeAckBody(request.Binding.CanonicalRequest.Span);
                     if (value.TombstoneQuorums.Count != ackRequest.Acknowledgements.Count)
-                        throw PrivacyRoutingWire.Error(PrivacyRoutingProtocolError.ReplyContextMismatch, "MAR1 quorum count does not match the exact MAU2 acknowledgement.");
+                        throw PrivacyRoutingWire.Error(PrivacyRoutingProtocolError.ReplyContextMismatch, "MAR1 quorum count does not match the exact MAU3 acknowledgement.");
                     for (var index = 0; index < value.TombstoneQuorums.Count; index++)
                     {
                         var quorum = MailboxReceiptV3Codec.DecodeDurableQuorum(value.TombstoneQuorums[index].Span);
@@ -855,7 +855,7 @@ internal static class PrivacyRoutingPayloadVerifier
             !CryptographicOperations.FixedTimeEquals(receipt.EnvelopeDigest.Span, envelopeDigest) ||
             expectedCursor is not null && receipt.Cursor != expectedCursor.Value ||
             !allowedDispositions.Contains(receipt.Disposition))
-            throw PrivacyRoutingWire.Error(PrivacyRoutingProtocolError.ReplyContextMismatch, "Mailbox receipt is not bound to the exact MAU2 request.");
+            throw PrivacyRoutingWire.Error(PrivacyRoutingProtocolError.ReplyContextMismatch, "Mailbox receipt is not bound to the exact MAU3 request.");
     }
 
     private static void ValidateRetrievePage(ReadOnlySpan<byte> body, MailboxAuthenticatedClientRequest request)
@@ -875,7 +875,7 @@ internal static class PrivacyRoutingPayloadVerifier
         var hasMore = body[5] == 1;
         var retrieveRequest = MailboxAuthenticatedRequestTranscript.DecodeRetrieveBody(request.Binding.CanonicalRequest.Span);
         if (epoch != request.Presentation.Grant.Epoch || !CryptographicOperations.FixedTimeEquals(operationId, request.Binding.OperationId.Span))
-            throw PrivacyRoutingWire.Error(PrivacyRoutingProtocolError.ReplyContextMismatch, "MRP1 is not bound to the exact MAU2 operation.");
+            throw PrivacyRoutingWire.Error(PrivacyRoutingProtocolError.ReplyContextMismatch, "MRP1 is not bound to the exact MAU3 operation.");
         if (operationId.IndexOfAnyExcept((byte)0) < 0 ||
             count > MailboxClientLimits.MaximumPageItems ||
             tokenLength > MailboxClientLimits.MaximumContinuationTokenLength ||
@@ -901,7 +901,7 @@ internal static class PrivacyRoutingPayloadVerifier
             if (envelope.Epoch != epoch ||
                 !CryptographicOperations.FixedTimeEquals(envelope.MailboxId.Bytes.Span, retrieveRequest.MailboxId.Bytes.Span) ||
                 !CryptographicOperations.FixedTimeEquals(envelope.PlacementId.Bytes.Span, retrieveRequest.PlacementId.Bytes.Span))
-                throw PrivacyRoutingWire.Error(PrivacyRoutingProtocolError.ReplyContextMismatch, "MRP1 item is not bound to the exact MAU2 retrieve request.");
+                throw PrivacyRoutingWire.Error(PrivacyRoutingProtocolError.ReplyContextMismatch, "MRP1 item is not bound to the exact MAU3 retrieve request.");
             previousCursor = cursor;
             offset += checked((int)length);
         }

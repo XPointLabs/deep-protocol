@@ -43,7 +43,17 @@ public sealed class MailboxAuthorityV2VerifierTests
                 900, 901));
     }
 
-    private static byte[] AuthorPma2(Fixture fixture, bool tamperSignature)
+    [Fact]
+    public void HistoricalAlgorithmCannotMintCurrentMailboxAuthority()
+    {
+        var fixture = CreateAuthority();
+        var historical = AuthorPma2(fixture, false, algorithm: 1);
+        Assert.Equal(1, BinaryPrimitives.ReadUInt16BigEndian(ContactCodec.Decode("PMA2", historical).Field(9).Span));
+        Assert.Throws<CryptographicException>(() =>
+            MailboxAuthorityV2Verifier.Verify(fixture.Authority, historical, 100, 101));
+    }
+
+    private static byte[] AuthorPma2(Fixture fixture, bool tamperSignature, ushort algorithm = 2)
     {
         var fields = new ReadOnlyMemory<byte>[]
         {
@@ -55,7 +65,7 @@ public sealed class MailboxAuthorityV2VerifierTests
             fixture.RetrieveKey,
             U64(1),
             U32(3_600),
-            U16(1),
+            U16(algorithm),
             U64(90),
             U64(95),
             U64(800),

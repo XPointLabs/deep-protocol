@@ -106,7 +106,7 @@ public sealed class SelfHostedRuntimeEnvelope
         ushort minimumProtocol,
         ushort maximumProtocol,
         SelfHostedRuntimeEndpoint coordinator,
-        SelfHostedRuntimeEndpoint mau2Ingress,
+        SelfHostedRuntimeEndpoint mau3Ingress,
         ulong topologyGeneration,
         ReadOnlySpan<byte> topologySha256,
         ulong revocationGeneration,
@@ -128,7 +128,7 @@ public sealed class SelfHostedRuntimeEnvelope
         RequireFixed(previousRevocationHeadSha256, SelfHostedRuntimeEnvelopeContract.HashLength, nameof(previousRevocationHeadSha256));
         RequireFixed(revocationHeadSha256, SelfHostedRuntimeEnvelopeContract.HashLength, nameof(revocationHeadSha256));
         ArgumentNullException.ThrowIfNull(coordinator);
-        ArgumentNullException.ThrowIfNull(mau2Ingress);
+        ArgumentNullException.ThrowIfNull(mau3Ingress);
         ArgumentNullException.ThrowIfNull(currentEpoch);
         ArgumentNullException.ThrowIfNull(nextEpoch);
         var frozenCapabilities = FreezeCapabilities(capabilities);
@@ -146,7 +146,7 @@ public sealed class SelfHostedRuntimeEnvelope
         MinimumProtocol = minimumProtocol;
         MaximumProtocol = maximumProtocol;
         Coordinator = Copy(coordinator);
-        Mau2Ingress = Copy(mau2Ingress);
+        Mau3Ingress = Copy(mau3Ingress);
         TopologyGeneration = topologyGeneration;
         this.topologySha256 = topologySha256.ToArray();
         RevocationGeneration = revocationGeneration;
@@ -173,7 +173,7 @@ public sealed class SelfHostedRuntimeEnvelope
     public ushort MinimumProtocol { get; }
     public ushort MaximumProtocol { get; }
     public SelfHostedRuntimeEndpoint Coordinator { get; }
-    public SelfHostedRuntimeEndpoint Mau2Ingress { get; }
+    public SelfHostedRuntimeEndpoint Mau3Ingress { get; }
     public ulong TopologyGeneration { get; }
     public ReadOnlyMemory<byte> TopologySha256 => topologySha256.ToArray();
     public ulong RevocationGeneration { get; }
@@ -207,7 +207,7 @@ public sealed class SelfHostedRuntimeEnvelope
         MinimumProtocol,
         MaximumProtocol,
         Coordinator,
-        Mau2Ingress,
+        Mau3Ingress,
         TopologyGeneration,
         topologySha256,
         RevocationGeneration,
@@ -298,7 +298,7 @@ public sealed class SelfHostedRuntimeLastKnownGood
     private readonly byte[] previousRevocationHeadSha256;
     private readonly byte[] revocationHeadSha256;
     private readonly SelfHostedRuntimeEndpoint coordinator;
-    private readonly SelfHostedRuntimeEndpoint mau2Ingress;
+    private readonly SelfHostedRuntimeEndpoint mau3Ingress;
 
     public SelfHostedRuntimeLastKnownGood(
         ReadOnlySpan<byte> networkId,
@@ -313,7 +313,7 @@ public sealed class SelfHostedRuntimeLastKnownGood
         ulong revocationIssuedAtUnixSeconds,
         ulong revocationExpiresAtUnixSeconds,
         SelfHostedRuntimeEndpoint coordinator,
-        SelfHostedRuntimeEndpoint mau2Ingress,
+        SelfHostedRuntimeEndpoint mau3Ingress,
         SelfHostedRuntimeEpoch currentEpoch,
         SelfHostedRuntimeEpoch nextEpoch)
     {
@@ -351,7 +351,7 @@ public sealed class SelfHostedRuntimeLastKnownGood
         RevocationIssuedAtUnixSeconds = revocationIssuedAtUnixSeconds;
         RevocationExpiresAtUnixSeconds = revocationExpiresAtUnixSeconds;
         this.coordinator = CopyEndpoint(coordinator);
-        this.mau2Ingress = CopyEndpoint(mau2Ingress);
+        this.mau3Ingress = CopyEndpoint(mau3Ingress);
         CurrentEpoch = currentEpoch ?? throw new ArgumentNullException(nameof(currentEpoch));
         NextEpoch = nextEpoch ?? throw new ArgumentNullException(nameof(nextEpoch));
         SelfHostedRuntimeEnvelopeValidator.ValidatePersistedClosure(this);
@@ -370,7 +370,7 @@ public sealed class SelfHostedRuntimeLastKnownGood
     public ulong RevocationIssuedAtUnixSeconds { get; }
     public ulong RevocationExpiresAtUnixSeconds { get; }
     public SelfHostedRuntimeEndpoint Coordinator => CopyEndpoint(coordinator);
-    public SelfHostedRuntimeEndpoint Mau2Ingress => CopyEndpoint(mau2Ingress);
+    public SelfHostedRuntimeEndpoint Mau3Ingress => CopyEndpoint(mau3Ingress);
     public SelfHostedRuntimeEpoch CurrentEpoch { get; }
     public SelfHostedRuntimeEpoch NextEpoch { get; }
 
@@ -411,7 +411,7 @@ public sealed class VerifiedSelfHostedRuntimeEnvelope
         Envelope.RevocationIssuedAtUnixSeconds,
         Envelope.RevocationExpiresAtUnixSeconds,
         Envelope.Coordinator,
-        Envelope.Mau2Ingress,
+        Envelope.Mau3Ingress,
         Envelope.CurrentEpoch,
         Envelope.NextEpoch);
     public override string ToString() => "[verified-user-managed-runtime]";
@@ -595,7 +595,7 @@ public static class SelfHostedRuntimeEnvelopeCodec
         WriteUInt16(writer, value.MinimumProtocol);
         WriteUInt16(writer, value.MaximumProtocol);
         WriteEndpoint(writer, value.Coordinator);
-        WriteEndpoint(writer, value.Mau2Ingress);
+        WriteEndpoint(writer, value.Mau3Ingress);
         WriteUInt64(writer, value.TopologyGeneration);
         WriteFixed(writer, value.TopologySha256.Span, 32);
         WriteUInt64(writer, value.RevocationGeneration);
@@ -834,7 +834,7 @@ public static class SelfHostedRuntimeEnvelopeVerifier
             envelope.RevocationIssuedAtUnixSeconds != lkg.RevocationIssuedAtUnixSeconds ||
             envelope.RevocationExpiresAtUnixSeconds != lkg.RevocationExpiresAtUnixSeconds ||
             !EndpointEqual(envelope.Coordinator, lkg.Coordinator) ||
-            !EndpointEqual(envelope.Mau2Ingress, lkg.Mau2Ingress) ||
+            !EndpointEqual(envelope.Mau3Ingress, lkg.Mau3Ingress) ||
             envelope.CurrentEpoch != lkg.CurrentEpoch ||
             envelope.NextEpoch != lkg.NextEpoch)
         {
@@ -875,7 +875,7 @@ public static class SelfHostedRuntimeEnvelopeVerifier
             (!revocationExact && !revocationForward) ||
             (!epochsExact && !epochsForward) ||
             !EndpointIsSafeSuccessor(envelope.Coordinator, lkg.Coordinator) ||
-            !EndpointIsSafeSuccessor(envelope.Mau2Ingress, lkg.Mau2Ingress))
+            !EndpointIsSafeSuccessor(envelope.Mau3Ingress, lkg.Mau3Ingress))
         {
             throw new InvalidDataException("Self-hosted runtime security state regressed or forked.");
         }
@@ -914,8 +914,8 @@ internal static class SelfHostedRuntimeEnvelopeValidator
     public static void ValidatePersistedClosure(SelfHostedRuntimeLastKnownGood value)
     {
         ValidateEndpoint(value.Coordinator);
-        ValidateEndpoint(value.Mau2Ingress);
-        if (Origin(value.Coordinator.Origin) == Origin(value.Mau2Ingress.Origin))
+        ValidateEndpoint(value.Mau3Ingress);
+        if (Origin(value.Coordinator.Origin) == Origin(value.Mau3Ingress.Origin))
         {
             throw new ArgumentException("Persisted runtime origins must differ.");
         }
@@ -958,10 +958,10 @@ internal static class SelfHostedRuntimeEnvelopeValidator
             ExactNonzero(value.PreviousEnvelopeSha256.Span, 32, "previous envelope hash");
         }
         ValidateEndpoint(value.Coordinator);
-        ValidateEndpoint(value.Mau2Ingress);
-        if (Origin(value.Coordinator.Origin) == Origin(value.Mau2Ingress.Origin))
+        ValidateEndpoint(value.Mau3Ingress);
+        if (Origin(value.Coordinator.Origin) == Origin(value.Mau3Ingress.Origin))
         {
-            throw new InvalidDataException("Coordinator and MAU2 ingress origins must differ.");
+            throw new InvalidDataException("Coordinator and MAU3 ingress origins must differ.");
         }
         if (value.TopologyGeneration is 0 or ulong.MaxValue ||
             value.RevocationGeneration is 0 or ulong.MaxValue)

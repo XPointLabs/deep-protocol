@@ -160,7 +160,7 @@ public sealed class DeepProtocolRegistryTests
     {
         Assert.Contains(
             DeepProtocolRegistryGenerated.Identifiers,
-            static value => value.Namespace == "magic" && value.CanonicalName == "MAU2" &&
+            static value => value.Namespace == "magic" && value.CanonicalName == "MAU3" &&
                             value.Lifecycle == ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE);
         Assert.Contains(
             DeepProtocolRegistryGenerated.Identifiers,

@@ -6,7 +6,7 @@ namespace Deep.Protocol.Tests.DeepExtension;
 public sealed class AuthenticatedMailboxMalformedAndFuzzTests
 {
     [Fact]
-    public void Mcp2RejectsEveryTruncationAndCriticalMutation()
+    public void Mcp3RejectsEveryTruncationAndCriticalMutation()
     {
         var encoded = ValidPresentation();
         for (var length = 0; length < encoded.Length; length++)
@@ -22,6 +22,54 @@ public sealed class AuthenticatedMailboxMalformedAndFuzzTests
         }
         Assert.Throws<MailboxAuthenticatedCapabilityException>(() =>
             MailboxAuthenticatedCapabilityCodec.DecodePresentation([.. encoded, (byte)0]));
+    }
+
+    [Theory]
+    [InlineData("MCG2", false)]
+    [InlineData("MCP2", false)]
+    [InlineData("MAU2", false)]
+    [InlineData("MCG2", true)]
+    [InlineData("MCP2", true)]
+    [InlineData("MAU2", true)]
+    public void RetiredAuthorizationHasNoReaderEvenWithCurrentWidth(string retired, bool retiredVersion)
+    {
+        var presentation = ValidPresentation();
+        var parsed = MailboxAuthenticatedCapabilityCodec.DecodePresentation(presentation);
+        var bytes = retired switch
+        {
+            "MCG2" => MailboxAuthenticatedCapabilityCodec.EncodeGrant(parsed.Grant),
+            "MCP2" => presentation,
+            _ => MailboxAuthenticatedClientRequestCodec.Encode(new()
+            {
+                Binding = MailboxAuthenticatedRequestTranscript.ForStore(new MailboxEncryptedEnvelope
+                {
+                    Epoch = 7, MailboxId = new BlindedMailboxId(Range(0x20, 32)),
+                    PlacementId = new BlindedPlacementId(Range(0x90, 32)), OperationId = Range(0xd0, 16),
+                    DeduplicationDigest = Range(0xe0, 32), CreatedAtUnixSeconds = 1000,
+                    ExpiresAtUnixSeconds = 1060, Ciphertext = Range(1, 64),
+                }), Presentation = parsed,
+            }),
+        };
+        if (retiredVersion) bytes[4] = 2;
+        else System.Text.Encoding.ASCII.GetBytes(retired).CopyTo(bytes, 0);
+        var error = Assert.Throws<MailboxAuthenticatedCapabilityException>(() =>
+        {
+            if (retired == "MCG2") _ = MailboxAuthenticatedCapabilityCodec.DecodeGrant(bytes);
+            else if (retired == "MCP2") _ = MailboxAuthenticatedCapabilityCodec.DecodePresentation(bytes);
+            else _ = MailboxAuthenticatedClientRequestCodec.Decode(bytes);
+        });
+        Assert.Equal(retiredVersion ? MailboxAuthenticatedCapabilityError.UnsupportedVersion :
+            MailboxAuthenticatedCapabilityError.InvalidMagic, error.Error);
+    }
+
+    [Fact]
+    public void ZeroSelectorRejectsBeforeAnySignatureOrAllocationDependentConsumer()
+    {
+        var encoded = ValidPresentation();
+        encoded.AsSpan(72 + 208, 32).Clear();
+        var error = Assert.Throws<MailboxAuthenticatedCapabilityException>(() =>
+            MailboxAuthenticatedCapabilityCodec.DecodePresentation(encoded));
+        Assert.Equal(MailboxAuthenticatedCapabilityError.InvalidField, error.Error);
     }
 
     [Fact]
@@ -87,7 +135,7 @@ public sealed class AuthenticatedMailboxMalformedAndFuzzTests
     }
 
     [Fact]
-    public void Mau2RejectsEveryTruncationVersionReservedAndBodyTamper()
+    public void Mau3RejectsEveryTruncationVersionReservedAndBodyTamper()
     {
         var presentationBytes = ValidPresentation();
         var presentation = MailboxAuthenticatedCapabilityCodec.DecodePresentation(presentationBytes);
@@ -156,6 +204,7 @@ public sealed class AuthenticatedMailboxMalformedAndFuzzTests
             MembershipCommitment = Range(0xb0, 32),
             IssuerPublicKey = crypto.GetPublicKey(issuer),
             HolderPublicKey = crypto.GetPublicKey(holder),
+            SelectionInput = Range(0xa0, 32),
             IssuerSignature = ReadOnlyMemory<byte>.Empty
         }, issuer);
         return MailboxAuthenticatedCapabilityCodec.EncodePresentation(

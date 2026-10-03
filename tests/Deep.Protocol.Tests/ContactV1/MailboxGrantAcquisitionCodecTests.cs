@@ -9,7 +9,7 @@ namespace Deep.Protocol.Tests.ContactV1;
 public sealed class MailboxGrantAcquisitionCodecTests
 {
     [Fact]
-    public void Xmg1AndSuccessfulXmc1BindExactRequestAndReachabilityScopedHolder()
+    public void Xmg1AndSuccessfulXmc2BindExactRequestAndReachabilityScopedHolder()
     {
         var holder = PublicKeyAuth.GenerateKeyPair(Bytes(32, 0x31));
         var issuer = PublicKeyAuth.GenerateKeyPair(Bytes(32, 0x51));
@@ -20,24 +20,24 @@ public sealed class MailboxGrantAcquisitionCodecTests
         var crypto = new SodiumMailboxCapabilityCrypto();
         var placement = MailboxPlacementCommitment.Compute(new BlindedPlacementId(capability));
         var current = SignedGrant(crypto, issuer, holder.PublicKey, network, placement, pmsHash, 7, 0x61);
-        var result = ContactCodecValidation.AuthorRecord("XMC1",
+        var result = ContactCodecValidation.AuthorRecord("XMC2",
         [
             network, request.Field(2), U16(1), U64(110), SHA256.HashData(request.CanonicalBytes.Span),
             U64(120), Bytes(32, 0x81), MailboxAuthenticatedCapabilityCodec.EncodeGrant(current)
         ]);
 
         Assert.Equal(435, request.CanonicalBytes.Length);
-        Assert.Equal(478, result.CanonicalBytes.Length);
+        Assert.Equal(510, result.CanonicalBytes.Length);
         ContactCodec.VerifyMailboxGrantHolderSignature(request);
         ContactCodec.ValidateMailboxGrantResultBinding(request, result);
     }
 
     [Fact]
-    public void Xmc1FailureCarriesNoRouteOrGrantAuthority()
+    public void Xmc2FailureCarriesNoRouteOrGrantAuthority()
     {
         var holder = PublicKeyAuth.GenerateKeyPair(Bytes(32, 0x32));
         var request = SignedRequest(holder, Bytes(16, 0x12), Bytes(32, 0x22), Bytes(32, 0x42));
-        var failure = ContactCodecValidation.AuthorRecord("XMC1",
+        var failure = ContactCodecValidation.AuthorRecord("XMC2",
         [
             request.Field(1), request.Field(2), U16(2), U64(110),
             SHA256.HashData(request.CanonicalBytes.Span), U64(120), new byte[32],
@@ -49,7 +49,7 @@ public sealed class MailboxGrantAcquisitionCodecTests
     }
 
     [Fact]
-    public void Xmg1RejectsInvalidProofAndXmc1RejectsChangedRequestBinding()
+    public void Xmg1RejectsInvalidProofAndXmc2RejectsChangedRequestBinding()
     {
         var holder = PublicKeyAuth.GenerateKeyPair(Bytes(32, 0x33));
         var request = SignedRequest(holder, Bytes(16, 0x13), Bytes(32, 0x23), Bytes(32, 0x43));
@@ -63,7 +63,7 @@ public sealed class MailboxGrantAcquisitionCodecTests
         Assert.Equal(ContactValidationStage.Signature, proofError.Stage);
 
         var changedHash = Bytes(32, 0x91);
-        var result = ContactCodecValidation.AuthorRecord("XMC1",
+        var result = ContactCodecValidation.AuthorRecord("XMC2",
         [
             request.Field(1), request.Field(2), U16(4), U64(110), changedHash,
             U64(120), new byte[32], ReadOnlyMemory<byte>.Empty
@@ -71,6 +71,42 @@ public sealed class MailboxGrantAcquisitionCodecTests
         var bindingError = Assert.Throws<ContactFormatException>(
             () => ContactCodec.ValidateMailboxGrantResultBinding(request, result));
         Assert.Equal(ContactValidationStage.Closure, bindingError.Stage);
+    }
+
+    [Fact]
+    public void Xmc2RejectsIssuerSignedSelectionSubstitutionAgainstExactRoute()
+    {
+        var records = ContactCodecTests.Records.RouteClosure;
+        var routeBytes = ContactRouteClosureCodec.EncodeRecords(
+            [records.Xrr, records.Xra, records.Xrc, records.Xss, records.Pmt, records.Pms]);
+        var route = ContactRouteClosureCodec.Decode(routeBytes);
+        var holder = PublicKeyAuth.GenerateKeyPair(Bytes(32, 0x31));
+        var issuer = PublicKeyAuth.GenerateKeyPair(Bytes(32, 0x51));
+        var crypto = new SodiumMailboxCapabilityCrypto();
+        var request = SignedRequest(holder, route.Reachability.Field(1).ToArray(),
+            route.Reachability.Field(10).ToArray(), route.Selection.ArtifactHash.ToArray());
+        var grant = SignedGrant(crypto, issuer, holder.PublicKey, request.Field(1).ToArray(),
+            MailboxPlacementCommitment.Compute(new BlindedPlacementId(route.Reachability.Field(10).Span)),
+            route.Projection.ArtifactHash.ToArray(),
+            BinaryPrimitives.ReadUInt64BigEndian(route.Selection.Field(4).Span), 0x61);
+        grant = crypto.SignGrant(grant with { SelectionInput = route.Selection.Field(3).ToArray() }, issuer.PrivateKey);
+        _ = MailboxGrantResultAuthor.AuthorSuccess(request, routeBytes, grant, 110, 120);
+        var substituted = crypto.SignGrant(grant with { SelectionInput = Bytes(32, 0xb1) }, issuer.PrivateKey);
+        var failure = Assert.Throws<ContactFormatException>(() =>
+            MailboxGrantResultAuthor.AuthorSuccess(request, routeBytes, substituted, 110, 120));
+        Assert.Equal(ContactValidationStage.Closure, failure.Stage);
+    }
+
+    [Fact]
+    public void RetiredXmc1HasNoReaderEvenWithCurrentNonSuccessWidth()
+    {
+        var holder = PublicKeyAuth.GenerateKeyPair(Bytes(32, 0x31));
+        var request = SignedRequest(holder, Bytes(16, 0x11), Bytes(32, 0x21), Bytes(32, 0x41));
+        var result = MailboxGrantResultAuthor.AuthorFailure(request,
+            MailboxGrantAcquisitionResultCode.Unavailable, 110, 120).CanonicalBytes.ToArray();
+        "XMC1"u8.CopyTo(result);
+        var error = Assert.Throws<ContactFormatException>(() => ContactCodec.Decode(result));
+        Assert.Equal(ContactValidationStage.Header, error.Stage);
     }
 
     private static ContactRecord SignedRequest(
@@ -113,6 +149,7 @@ public sealed class MailboxGrantAcquisitionCodecTests
             MembershipCommitment = membership,
             IssuerPublicKey = issuer.PublicKey,
             HolderPublicKey = holderPublic,
+            SelectionInput = Bytes(32, 0xa1),
             IssuerSignature = ReadOnlyMemory<byte>.Empty
         }, issuer.PrivateKey);
 

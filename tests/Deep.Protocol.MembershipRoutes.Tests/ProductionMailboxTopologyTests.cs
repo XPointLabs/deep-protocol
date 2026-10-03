@@ -654,6 +654,7 @@ public sealed class ProductionMailboxTopologyTests
             MembershipCommitment = epoch.MembershipCommitment,
             IssuerPublicKey = f.Authority.Authority.MailboxIssuerEd25519PublicKey,
             HolderPublicKey = holderPublicKey,
+            SelectionInput = Bytes(serialSeed, 32),
             IssuerSignature = new byte[MailboxAuthenticatedCapabilityLimits.SignatureLength]
         }, f.IssuerPrivateKey);
     }

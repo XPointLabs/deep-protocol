@@ -160,7 +160,7 @@ public sealed class SelfHostedActivationProtocolTests
 
         var runtimeVerifier = new SyntheticRuntimeSignatureVerifier();
         var encoded = SelfHostedRuntimeEnvelopeCodec.Encode(
-            SignedEnvelope(descriptor, runtimeVerifier, 1, new byte[32], ["mau2"]));
+            SignedEnvelope(descriptor, runtimeVerifier, 1, new byte[32], ["mau3"]));
         var originalRuntime = encoded.ToArray();
         var verified = SelfHostedRuntimeEnvelopeVerifier.VerifyExact(
             encoded, descriptor, 1_100, 2,
@@ -211,7 +211,7 @@ public sealed class SelfHostedActivationProtocolTests
             Bytes(0x10, MembershipLimits.SignerIdLength),
             new byte[SelfHostedRuntimeEnvelopeContract.MaximumSignatureBytes + 1]));
         var valid = SignedEnvelope(
-            descriptor, new SyntheticRuntimeSignatureVerifier(), 1, new byte[32], ["mau2"]);
+            descriptor, new SyntheticRuntimeSignatureVerifier(), 1, new byte[32], ["mau3"]);
         Assert.Throws<ArgumentException>(() => CopyEnvelope(
             valid, capabilities: HostileCapabilities()));
     }
@@ -270,7 +270,7 @@ public sealed class SelfHostedActivationProtocolTests
     {
         var descriptor = VerifyDescriptor(Compose(SyntheticProfileFixture.Parts()));
         var signatureVerifier = new SyntheticRuntimeSignatureVerifier();
-        var envelope = SignedEnvelope(descriptor, signatureVerifier, 1, new byte[32], ["mau2"]);
+        var envelope = SignedEnvelope(descriptor, signatureVerifier, 1, new byte[32], ["mau3"]);
         var encoded = SelfHostedRuntimeEnvelopeCodec.Encode(envelope);
 
         var decoded = SelfHostedRuntimeEnvelopeCodec.Decode(encoded);
@@ -292,9 +292,9 @@ public sealed class SelfHostedActivationProtocolTests
     {
         var descriptor = VerifyDescriptor(Compose(SyntheticProfileFixture.Parts()));
         var signatureVerifier = new SyntheticRuntimeSignatureVerifier();
-        var signed = SignedEnvelope(descriptor, signatureVerifier, 1, new byte[32], ["mau2"]);
+        var signed = SignedEnvelope(descriptor, signatureVerifier, 1, new byte[32], ["mau3"]);
 
-        var capabilityTamper = CopyEnvelope(signed, capabilities: ["mau2", "storage"]);
+        var capabilityTamper = CopyEnvelope(signed, capabilities: ["mau3", "storage"]);
         Assert.Throws<InvalidDataException>(() => SelfHostedRuntimeEnvelopeVerifier.VerifyExact(
             SelfHostedRuntimeEnvelopeCodec.Encode(capabilityTamper), descriptor,
             SyntheticProfileFixture.VerificationTime, SyntheticProfileFixture.Protocol,
@@ -314,13 +314,13 @@ public sealed class SelfHostedActivationProtocolTests
     {
         var descriptor = VerifyDescriptor(Compose(SyntheticProfileFixture.Parts()));
         var signatureVerifier = new SyntheticRuntimeSignatureVerifier();
-        var first = SignedEnvelope(descriptor, signatureVerifier, 1, new byte[32], ["mau2"]);
+        var first = SignedEnvelope(descriptor, signatureVerifier, 1, new byte[32], ["mau3"]);
         var firstEncoded = SelfHostedRuntimeEnvelopeCodec.Encode(first);
         var firstVerified = SelfHostedRuntimeEnvelopeVerifier.VerifyExact(
             firstEncoded, descriptor, 1_100, 2, signatureVerifier);
         var lkg = firstVerified.ToLastKnownGood();
         var second = SignedEnvelope(
-            descriptor, signatureVerifier, 2, firstVerified.EnvelopeSha256.Span, ["mau2"]);
+            descriptor, signatureVerifier, 2, firstVerified.EnvelopeSha256.Span, ["mau3"]);
         var secondVerified = SelfHostedRuntimeEnvelopeVerifier.VerifyExact(
             SelfHostedRuntimeEnvelopeCodec.Encode(second), descriptor, 1_100, 2,
             signatureVerifier, lkg);
@@ -330,7 +330,7 @@ public sealed class SelfHostedActivationProtocolTests
         Assert.Throws<InvalidDataException>(() => SelfHostedRuntimeEnvelopeVerifier.VerifyExact(
             firstEncoded, descriptor, 1_100, 2, signatureVerifier, generationTwoLkg));
 
-        var fork = SignedEnvelope(descriptor, signatureVerifier, 2, Bytes(0xe0, 32), ["mau2"]);
+        var fork = SignedEnvelope(descriptor, signatureVerifier, 2, Bytes(0xe0, 32), ["mau3"]);
         Assert.Throws<InvalidDataException>(() => SelfHostedRuntimeEnvelopeVerifier.VerifyExact(
             SelfHostedRuntimeEnvelopeCodec.Encode(fork), descriptor, 1_100, 2,
             signatureVerifier, lkg));
@@ -347,18 +347,18 @@ public sealed class SelfHostedActivationProtocolTests
         var verifier = new SyntheticRuntimeSignatureVerifier();
         var first = SelfHostedRuntimeEnvelopeVerifier.VerifyExact(
             SelfHostedRuntimeEnvelopeCodec.Encode(
-                SignedEnvelope(descriptor, verifier, 1, new byte[32], ["mau2"])),
+                SignedEnvelope(descriptor, verifier, 1, new byte[32], ["mau3"])),
             descriptor, 1_100, 2, verifier);
         var lkg = first.ToLastKnownGood();
 
         var topologyReset = SignedEnvelope(
-            descriptor, verifier, 2, first.EnvelopeSha256.Span, ["mau2"],
+            descriptor, verifier, 2, first.EnvelopeSha256.Span, ["mau3"],
             static value => CopyEnvelope(
                 value, topologyGeneration: 1, topologySha256: Bytes(0xe1, 32)));
         Assert.Throws<InvalidDataException>(() => VerifyRuntime(topologyReset, descriptor, verifier, lkg));
 
         var revocationFork = SignedEnvelope(
-            descriptor, verifier, 2, first.EnvelopeSha256.Span, ["mau2"],
+            descriptor, verifier, 2, first.EnvelopeSha256.Span, ["mau3"],
             static value => CopyEnvelope(
                 value,
                 revocationGeneration: 1,
@@ -367,7 +367,7 @@ public sealed class SelfHostedActivationProtocolTests
         Assert.Throws<InvalidDataException>(() => VerifyRuntime(revocationFork, descriptor, verifier, lkg));
 
         var revocationWindowFork = SignedEnvelope(
-            descriptor, verifier, 2, first.EnvelopeSha256.Span, ["mau2"],
+            descriptor, verifier, 2, first.EnvelopeSha256.Span, ["mau3"],
             value => CopyEnvelope(
                 value,
                 revocationGeneration: first.Envelope.RevocationGeneration,
@@ -382,14 +382,14 @@ public sealed class SelfHostedActivationProtocolTests
             VerifyRuntime(revocationWindowFork, descriptor, verifier, lkg));
 
         var epochFork = SignedEnvelope(
-            descriptor, verifier, 2, first.EnvelopeSha256.Span, ["mau2"],
+            descriptor, verifier, 2, first.EnvelopeSha256.Span, ["mau3"],
             static value => CopyEnvelope(
                 value,
                 currentEpoch: new SelfHostedRuntimeEpoch(1, 1, 1_000, 1_299)));
         Assert.Throws<InvalidDataException>(() => VerifyRuntime(epochFork, descriptor, verifier, lkg));
 
         var abba = SignedEnvelope(
-            descriptor, verifier, 2, first.EnvelopeSha256.Span, ["mau2"],
+            descriptor, verifier, 2, first.EnvelopeSha256.Span, ["mau3"],
             static value => CopyEnvelope(
                 value,
                 coordinator: new SelfHostedRuntimeEndpoint(
@@ -404,7 +404,7 @@ public sealed class SelfHostedActivationProtocolTests
     {
         var descriptor = VerifyDescriptor(Compose(SyntheticProfileFixture.Parts()));
         var valid = SignedEnvelope(
-            descriptor, new SyntheticRuntimeSignatureVerifier(), 1, new byte[32], ["mau2"]);
+            descriptor, new SyntheticRuntimeSignatureVerifier(), 1, new byte[32], ["mau3"]);
 
         Assert.Throws<InvalidDataException>(() => SelfHostedRuntimeEnvelopeCodec.Encode(
             CopyEnvelope(
@@ -430,7 +430,7 @@ public sealed class SelfHostedActivationProtocolTests
         var descriptor = VerifyDescriptor(Compose(SyntheticProfileFixture.Parts()));
         var signatureVerifier = new SyntheticRuntimeSignatureVerifier();
         var encoded = SelfHostedRuntimeEnvelopeCodec.Encode(
-            SignedEnvelope(descriptor, signatureVerifier, 1, new byte[32], ["mau2"]));
+            SignedEnvelope(descriptor, signatureVerifier, 1, new byte[32], ["mau3"]));
 
         for (var length = 0; length < encoded.Length; length += Math.Max(1, encoded.Length / 19))
         {
@@ -538,7 +538,7 @@ public sealed class SelfHostedActivationProtocolTests
             new SelfHostedRuntimeEndpoint(
                 "https://192.168.50.10:8443/", Bytes(0x10, 32), Bytes(0x30, 32)),
             new SelfHostedRuntimeEndpoint(
-                "https://mau2.home.arpa:9443/", Bytes(0x50, 32), Bytes(0x70, 32)),
+                "https://mau3.home.arpa:9443/", Bytes(0x50, 32), Bytes(0x70, 32)),
             generation,
             Bytes(0x90 + checked((int)generation), 32),
             generation,
@@ -568,7 +568,7 @@ public sealed class SelfHostedActivationProtocolTests
         ulong? revocationIssuedAtUnixSeconds = null,
         ulong? revocationExpiresAtUnixSeconds = null,
         SelfHostedRuntimeEndpoint? coordinator = null,
-        SelfHostedRuntimeEndpoint? mau2Ingress = null,
+        SelfHostedRuntimeEndpoint? mau3Ingress = null,
         SelfHostedRuntimeEpoch? currentEpoch = null,
         SelfHostedRuntimeEpoch? nextEpoch = null) => new(
             networkId ?? value.NetworkId.ToArray(),
@@ -584,7 +584,7 @@ public sealed class SelfHostedActivationProtocolTests
             value.MinimumProtocol,
             value.MaximumProtocol,
             coordinator ?? value.Coordinator,
-            mau2Ingress ?? value.Mau2Ingress,
+            mau3Ingress ?? value.Mau3Ingress,
             topologyGeneration ?? value.TopologyGeneration,
             topologySha256 ?? value.TopologySha256.ToArray(),
             revocationGeneration ?? value.RevocationGeneration,

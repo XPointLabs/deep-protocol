@@ -69,9 +69,9 @@ public sealed class PrivacyRoutingContractTests
     {
         using var fixture = new OnionFixture();
         Assert.False(PrivacyRoutingCodec.RuntimeActivation);
-        var mau2 = MailboxRequest(MailboxAuthenticatedOperation.Retrieve, fixture.Network);
-        using var firstBuilt = PrivacyRoutingRequestBuilder.BuildForCanonicalRequest(fixture.Network, fixture.Route, PrivacyRoutingOperation.Retrieve, mau2, 256);
-        using var secondBuilt = PrivacyRoutingRequestBuilder.BuildForCanonicalRequest(fixture.Network, fixture.Route, PrivacyRoutingOperation.Retrieve, mau2, 256);
+        var mau3 = MailboxRequest(MailboxAuthenticatedOperation.Retrieve, fixture.Network);
+        using var firstBuilt = PrivacyRoutingRequestBuilder.BuildForCanonicalRequest(fixture.Network, fixture.Route, PrivacyRoutingOperation.Retrieve, mau3, 256);
+        using var secondBuilt = PrivacyRoutingRequestBuilder.BuildForCanonicalRequest(fixture.Network, fixture.Route, PrivacyRoutingOperation.Retrieve, mau3, 256);
         Assert.NotEqual(Convert.ToHexString(firstBuilt.Frame.Span), Convert.ToHexString(secondBuilt.Frame.Span));
 
         var replay = new CountingReplayStore();
@@ -104,7 +104,7 @@ public sealed class PrivacyRoutingContractTests
     [InlineData(1)]
     [InlineData(2)]
     [InlineData(3)]
-    public void InternalBuilder_RejectsNonMau2MailboxPayload(int operationValue)
+    public void InternalBuilder_RejectsNonMau3MailboxPayload(int operationValue)
     {
         using var fixture = new OnionFixture();
         var operation = (PrivacyRoutingOperation)operationValue;
@@ -114,7 +114,7 @@ public sealed class PrivacyRoutingContractTests
     }
 
     [Fact]
-    public void InternalBuilder_RejectsMau2OperationAndNetworkSubstitution()
+    public void InternalBuilder_RejectsMau3OperationAndNetworkSubstitution()
     {
         using var fixture = new OnionFixture();
         var store = MailboxRequest(MailboxAuthenticatedOperation.Store, fixture.Network);
@@ -142,8 +142,8 @@ public sealed class PrivacyRoutingContractTests
     {
         using var fixture = new OnionFixture();
         var onionOperation = (PrivacyRoutingOperation)onionOperationValue;
-        var mau2 = MailboxRequest(mailboxOperation, fixture.Network);
-        using var built = PrivacyRoutingRequestBuilder.BuildForCanonicalRequest(fixture.Network, fixture.Route, onionOperation, mau2, 256);
+        var mau3 = MailboxRequest(mailboxOperation, fixture.Network);
+        using var built = PrivacyRoutingRequestBuilder.BuildForCanonicalRequest(fixture.Network, fixture.Route, onionOperation, mau3, 256);
         var replay = new CountingReplayStore();
         using var exit = OpenPublicExit(built.Frame.Span, fixture.ReceiveKeys, replay);
 
@@ -156,9 +156,9 @@ public sealed class PrivacyRoutingContractTests
     public void RetrieveResponse_IsExactBoundMrp1_AndInvalidAttemptDoesNotConsumeExitState()
     {
         using var fixture = new OnionFixture();
-        var mau2 = MailboxRequest(MailboxAuthenticatedOperation.Retrieve, fixture.Network);
-        var decoded = MailboxAuthenticatedClientRequestCodec.Decode(mau2);
-        using var built = PrivacyRoutingRequestBuilder.BuildForCanonicalRequest(fixture.Network, fixture.Route, PrivacyRoutingOperation.Retrieve, mau2, 256);
+        var mau3 = MailboxRequest(MailboxAuthenticatedOperation.Retrieve, fixture.Network);
+        var decoded = MailboxAuthenticatedClientRequestCodec.Decode(mau3);
+        using var built = PrivacyRoutingRequestBuilder.BuildForCanonicalRequest(fixture.Network, fixture.Route, PrivacyRoutingOperation.Retrieve, mau3, 256);
         using var exit = OpenPublicExit(built.Frame.Span, fixture.ReceiveKeys, new CountingReplayStore());
 
         Assert.Throws<PrivacyRoutingProtocolException>(() =>
@@ -197,14 +197,14 @@ public sealed class PrivacyRoutingContractTests
     {
         using var fixture = new OnionFixture();
         var onionOperation = (PrivacyRoutingOperation)onionOperationValue;
-        var mau2 = MailboxRequest(mailboxOperation, fixture.Network);
-        using var built = PrivacyRoutingRequestBuilder.BuildForCanonicalRequest(fixture.Network, fixture.Route, onionOperation, mau2, 256);
+        var mau3 = MailboxRequest(mailboxOperation, fixture.Network);
+        using var built = PrivacyRoutingRequestBuilder.BuildForCanonicalRequest(fixture.Network, fixture.Route, onionOperation, mau3, 256);
         using var exit = OpenPublicExit(built.Frame.Span, fixture.ReceiveKeys, new CountingReplayStore());
 
-        var wrong = MailboxQuorumResult(mau2, mailboxOperation, wrongOperationId: true);
+        var wrong = MailboxQuorumResult(mau3, mailboxOperation, wrongOperationId: true);
         Assert.Equal(PrivacyRoutingProtocolError.ReplyContextMismatch, Assert.Throws<PrivacyRoutingProtocolException>(() =>
             PrivacyRoutingResponseCodec.Seal(exit, PrivacyRoutingTerminalResult.Success(onionOperation, wrong), 256)).Error);
-        var exact = MailboxQuorumResult(mau2, mailboxOperation, wrongOperationId: false);
+        var exact = MailboxQuorumResult(mau3, mailboxOperation, wrongOperationId: false);
         var response = PrivacyRoutingResponseCodec.Seal(exit, PrivacyRoutingTerminalResult.Success(onionOperation, exact), 256);
         Assert.Equal(exact, PrivacyRoutingResponseCodec.Open(response, built.ReplyContext).Payload.ToArray());
     }
@@ -479,6 +479,7 @@ public sealed class PrivacyRoutingContractTests
             MembershipCommitment = Range(0xb0, 32),
             IssuerPublicKey = crypto.GetPublicKey(issuerSeed),
             HolderPublicKey = crypto.GetPublicKey(holderSeed),
+            SelectionInput = Range(0xa0, 32),
             IssuerSignature = ReadOnlyMemory<byte>.Empty
         }, issuerSeed);
         var binding = operation switch
@@ -509,11 +510,11 @@ public sealed class PrivacyRoutingContractTests
     }
 
     private static byte[] MailboxQuorumResult(
-        ReadOnlySpan<byte> exactMau2,
+        ReadOnlySpan<byte> exactMau3,
         MailboxAuthenticatedOperation operation,
         bool wrongOperationId)
     {
-        var request = MailboxAuthenticatedClientRequestCodec.Decode(exactMau2);
+        var request = MailboxAuthenticatedClientRequestCodec.Decode(exactMau3);
         var operationId = wrongOperationId ? Range(0x31, 16) : request.Binding.OperationId.ToArray();
         ReadOnlyMemory<byte> mailboxId;
         ReadOnlyMemory<byte> envelopeDigest;
