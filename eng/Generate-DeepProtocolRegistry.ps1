@@ -351,6 +351,27 @@ $normalMagic = @(
     $normalLocalMagic
 ) | Sort-Object value
 
+# DR-0083 is the only additional exact local contract in this change. Its four
+# checked/hash-bound inputs must exist; no inference from implementation constants.
+$mgrInputs = @{
+    'mailbox-grant-revocation-v1' = 'mailbox-grant-revocation-v1.registry.json'
+    'mailbox-grant-revocation-v1-schema' = 'mailbox-grant-revocation-v1.registry.schema.json'
+    'mailbox-grant-revocation-v1-vectors' = 'mailbox-grant-revocation-v1.vectors.json'
+    'mailbox-grant-revocation-v1-vectors-schema' = 'mailbox-grant-revocation-v1.vectors.schema.json'
+}
+foreach ($inputId in $mgrInputs.Keys) {
+    $expectedPath = "docs/survival-program/releases/v3.0.0/specs/$($mgrInputs[$inputId])"
+    if (-not $sources.ContainsKey($inputId) -or $sources[$inputId].kind -cne 'normative-document' -or
+        $sources[$inputId].path -cne $expectedPath) { throw "DR-0083 frozen source binding is missing/changed: $inputId" }
+}
+$mgrRaw = [IO.File]::ReadAllText((Join-Path $normativeRoot $mgrInputs['mailbox-grant-revocation-v1']))
+$mgrVectorsRaw = [IO.File]::ReadAllText((Join-Path $normativeRoot $mgrInputs['mailbox-grant-revocation-v1-vectors']))
+if (-not (Test-Json -Json $mgrRaw -SchemaFile (Join-Path $normativeRoot $mgrInputs['mailbox-grant-revocation-v1-schema'])) -or
+    -not (Test-Json -Json $mgrVectorsRaw -SchemaFile (Join-Path $normativeRoot $mgrInputs['mailbox-grant-revocation-v1-vectors-schema']))) {
+    throw 'DR-0083 frozen registry/vectors violate their closed schemas.'
+}
+$mgr = $mgrRaw | ConvertFrom-Json
+
 $resolvedRecords = [Collections.Generic.List[object]]::new()
 foreach ($record in $dnp.records | Sort-Object magic) {
     $className = $null
@@ -440,6 +461,24 @@ foreach ($entry in $registry.magic | Where-Object { $dnpRecordMagic -cnotcontain
     [object[]]$paths = @()
     if ($productionInventory.Map.Contains($entry.value)) {
         $paths = [object[]]@($productionInventory.Map[$entry.value])
+    }
+    if ($entry.value -ceq 'MGR1') {
+        if ($entry.lifecycle -cne $mgr.status -or $entry.sourceId -cne 'contact-resolver-v1') {
+            throw 'MGR1 allocation differs from its reviewed DR-0083 owner/lifecycle.'
+        }
+        $resolvedRecords.Add([ordered]@{
+            magic = [string]$mgr.magic; version = [int]$mgr.version
+            grammar = 'application-canonical:12-tag-signed-serial-set'
+            suiteNamespace = 'contact-header-u16'; allowedSuites = @([int]0x0201)
+            minBytes = [int]$mgr.minimumBytes; maxBytes = [int]$mgr.maximumBytes
+            visibility = 'public'; normativeSource = 'mailbox-grant-revocation-v1'
+            ownerPackage = 'Deep.Protocol'
+            vectorOwner = $mgrInputs['mailbox-grant-revocation-v1-vectors']
+            schemaOwner = $mgrInputs['mailbox-grant-revocation-v1-schema']
+            lifecycle = [string]$mgr.status; contractState = 'frozen-exact'
+            implementationPaths = [object[]]$paths; contractBlocker = $null
+        })
+        continue
     }
     $ownerPackage = 'Deep.Protocol'
     if ($paths | Where-Object { $_ -like 'src/Deep.Protocol.MembershipRoutes/*' }) {

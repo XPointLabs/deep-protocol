@@ -157,7 +157,7 @@ public sealed class VerifiedMailboxHostAuthorityV2
         return (policy, lower, upper);
     }
 
-    private void RequireGrant(MailboxAuthenticatedGrant grant,
+    internal void RequireGrant(MailboxAuthenticatedGrant grant,
         (VerifiedMailboxAuthorityV2 Policy, ulong Lower, ulong Upper) current)
     {
         var issuer = current.Policy.ResolveIssuer(grant.Domain);

@@ -144,6 +144,7 @@ public static class DeepProtocolIdentifiers
         public const string MEO1 = "MEO1";
         public const string MFA1 = "MFA1";
         public const string MFW1 = "MFW1";
+        public const string MGR1 = "MGR1";
         public const string MIP1 = "MIP1";
         public const string MMC1 = "MMC1";
         public const string MNG1 = "MNG1";
@@ -376,6 +377,7 @@ public static class DeepProtocolIdentifiers
         public static System.ReadOnlySpan<byte> MEO1 => "MEO1"u8;
         public static System.ReadOnlySpan<byte> MFA1 => "MFA1"u8;
         public static System.ReadOnlySpan<byte> MFW1 => "MFW1"u8;
+        public static System.ReadOnlySpan<byte> MGR1 => "MGR1"u8;
         public static System.ReadOnlySpan<byte> MIP1 => "MIP1"u8;
         public static System.ReadOnlySpan<byte> MMC1 => "MMC1"u8;
         public static System.ReadOnlySpan<byte> MNG1 => "MNG1"u8;
@@ -548,7 +550,7 @@ internal readonly record struct GeneratedRegistryIdentifier(
 
 internal static class DeepProtocolRegistryGenerated
 {
-    internal const string RegistrySha256 = "05db2a5e5f3e01efee9adf3f8388a7eaf75d76aac76ae44222a22c82c17c2cb5";
+    internal const string RegistrySha256 = "379ff1067acf9c0189893b454bba37945f85512cf2faa725b8ba491d01385e54";
     internal const string Dnp1RegistrySha256 = "e036a0b6acb260e05e18ac536a723b0b8561d2ba1d813429304505b0e7a7da7b";
     internal const string Dnp1ApprovedCommit = "a8456987efe031388ca2eb9006886fb78f31e06c";
 
@@ -674,6 +676,7 @@ internal static class DeepProtocolRegistryGenerated
         new("magic", "MEO1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "MFA1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "MFW1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
+        new("magic", "MGR1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "MIP1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "MMC1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "MNG1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),

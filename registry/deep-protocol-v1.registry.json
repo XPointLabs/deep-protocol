@@ -50,7 +50,7 @@
       "id": "protocol-registry-v1",
       "kind": "normative-document",
       "path": "docs/architecture/PROTOCOL-REGISTRY-V1.md",
-      "normalizedSha256": "964531cec845d9d552417b31d4405091af10af6bd90d197ec09561dda4a0a24b"
+      "normalizedSha256": "e95c9ef50b90cb70d6c63ec0294b054bc1f7936608c26531f2c3aa3f38f6e98e"
     },
     {
       "id": "dnp1-frozen",
@@ -86,13 +86,37 @@
       "id": "xpoint-network-v1",
       "kind": "normative-document",
       "path": "docs/architecture/XPOINT-NETWORK-V1.md",
-      "normalizedSha256": "466b136c361f93439413ec461f2eef0dde0a88409793408d409f60b7cbb4dcc9"
+      "normalizedSha256": "d527502c44f4af603d367c276035607511dd7b6873b3abcadf09b7101e498e20"
     },
     {
       "id": "contact-resolver-v1",
       "kind": "normative-document",
       "path": "docs/architecture/CONTACT-RESOLVER-V1.md",
-      "normalizedSha256": "3fcb8a3f5803b2bfa2e847abbddab250117742049fe31bb092d188902eedcd19"
+      "normalizedSha256": "e362bd7cd2dd4cc37a5eb9360a623517e27df289d4741b1ecd0e70deb21cc7f4"
+    },
+    {
+      "id": "mailbox-grant-revocation-v1",
+      "kind": "normative-document",
+      "path": "docs/survival-program/releases/v3.0.0/specs/mailbox-grant-revocation-v1.registry.json",
+      "normalizedSha256": "2dbca4f167dfa4664aa9059d5df1d1365a93d9d978bc104739e18fd174257fbe"
+    },
+    {
+      "id": "mailbox-grant-revocation-v1-schema",
+      "kind": "normative-document",
+      "path": "docs/survival-program/releases/v3.0.0/specs/mailbox-grant-revocation-v1.registry.schema.json",
+      "normalizedSha256": "9e954e8bb6afefb9c25f447f67e1251eacf5cdf3398ef4cbe2ffcf8be9cd82b9"
+    },
+    {
+      "id": "mailbox-grant-revocation-v1-vectors",
+      "kind": "normative-document",
+      "path": "docs/survival-program/releases/v3.0.0/specs/mailbox-grant-revocation-v1.vectors.json",
+      "normalizedSha256": "b49b4778f01c55870487ba82ba98c33349bc23cefd9608627436f7e940d10314"
+    },
+    {
+      "id": "mailbox-grant-revocation-v1-vectors-schema",
+      "kind": "normative-document",
+      "path": "docs/survival-program/releases/v3.0.0/specs/mailbox-grant-revocation-v1.vectors.schema.json",
+      "normalizedSha256": "e0e8a29d0453cb8d21f7c00969cedca1ef6732d40dd82a77bbc61ad845d40979"
     },
     {
       "id": "carriers-v1",
@@ -122,7 +146,7 @@
       "id": "production-wire-source",
       "kind": "production-source-scan",
       "path": "deep-protocol/src",
-      "normalizedSha256": "3d906af40c8ccf4ab7af1778765e9c38a3a545c4f467b49f9e4d65d6bddf41cd"
+      "normalizedSha256": "d8caa11641d590fc8682321ec2c182d0be2f9b44b43cb2d64c37e20cf66f82c2"
     }
   ],
   "productionInventory": {
@@ -3108,6 +3132,26 @@
           "MCG2",
           "RETIRED_REJECT"
         ]
+      }
+    },
+    {
+      "value": "MGR1",
+      "symbol": "MGR1",
+      "meaning": "current role-issuer-signed cumulative mailbox grant serial revocations",
+      "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+      "sourceId": "contact-resolver-v1",
+      "sourceAnchor": {
+        "anchorSourceId": "protocol-registry-v1",
+        "section": "### 6.9 Mailbox/continuity records",
+        "startLine": 606,
+        "endLine": 606,
+        "normalizedSha256": "d71bf1e96866d22c2f3c5d4cb110d36d8354f1e4b34a5b901bd629e68d29ed95",
+        "ownerSourceId": "contact-resolver-v1",
+        "scope": "magic",
+        "id": "MGR1",
+        "name": "MGR1",
+        "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
+        "evidenceTokens": ["MGR1", "FROZEN_TARGET_NOT_ACTIVE"]
       }
     },
     {

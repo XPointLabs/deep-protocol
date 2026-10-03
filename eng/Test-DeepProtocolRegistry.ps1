@@ -151,6 +151,12 @@ $usedSources = @(
     $registry.interfaces.sourceId
     $registry.retiredAliases.sourceId
     @($registry.sources | Where-Object kind -EQ 'production-source-scan').id
+    # Generate-DeepProtocolRegistry -Check above validates all four exact source
+    # paths/hashes and both closed schemas before deriving the MGR1 exact row.
+    'mailbox-grant-revocation-v1'
+    'mailbox-grant-revocation-v1-schema'
+    'mailbox-grant-revocation-v1-vectors'
+    'mailbox-grant-revocation-v1-vectors-schema'
 )
 foreach ($sourceId in $usedSources) {
     Assert-True ($sourceIds.Contains($sourceId)) "Unknown sourceId: $sourceId"
@@ -400,6 +406,19 @@ foreach ($record in $resolved.records | Where-Object {
     Assert-True (-not [string]::IsNullOrWhiteSpace($record.contractBlocker)) `
         "Unfrozen/source-bound record hides its contract blocker: $($record.magic)"
 }
+
+$mgrRows = @($resolved.records | Where-Object magic -CEQ 'MGR1')
+Assert-True ($mgrRows.Count -eq 1) 'Resolved manifest must contain exactly one MGR1 contract.'
+$mgrRow = $mgrRows[0]
+$mgrContract = Get-Content -Raw -LiteralPath (Join-Path $normativeRoot 'mailbox-grant-revocation-v1.registry.json') | ConvertFrom-Json
+Assert-True ($mgrRow.contractState -ceq 'frozen-exact' -and $null -eq $mgrRow.contractBlocker -and
+    $mgrRow.version -eq $mgrContract.version -and $mgrRow.minBytes -eq $mgrContract.minimumBytes -and
+    $mgrRow.maxBytes -eq $mgrContract.maximumBytes -and $mgrRow.lifecycle -ceq $mgrContract.status -and
+    $mgrRow.normativeSource -ceq 'mailbox-grant-revocation-v1' -and
+    $mgrRow.schemaOwner -ceq 'mailbox-grant-revocation-v1.registry.schema.json' -and
+    $mgrRow.vectorOwner -ceq 'mailbox-grant-revocation-v1.vectors.json' -and
+    @($mgrRow.allowedSuites).Count -eq 1 -and $mgrRow.allowedSuites[0] -eq 0x0201) `
+    'Resolved MGR1 differs from its exact inactive DR-0083 machine contract.'
 
 $artifactModelPath = Join-Path $repoRoot 'src/Deep.Protocol/Generated/Dnp1ArtifactType.Generated.cs'
 $artifactSource = Get-Content -LiteralPath $artifactModelPath -Raw
