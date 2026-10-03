@@ -4,6 +4,13 @@ Production protocol libraries for Deep messaging, membership routes and self-hos
 carriers. The repository targets .NET 10 and is a clean-break implementation: production packages
 contain no compatibility shims, aliases or fallback runtime paths.
 
+[DR81](../docs/survival-program/decisions/DR-0081-did2-mailbox-selection-grant-clean-break.md)
+replaces mailbox authorization with MCG3/MCP3/MAU3 and XMC2. Operational genesis
+and root-signed successors now author PMA2 profile2. The predecessor-only
+historical verifier returns no current authority; delegated renewal cannot
+activate profile1. Matched client/issuer/node/peer deployment and final
+package/API/evidence/device qualification remain gated.
+
 ## Start here
 
 - [`AGENTS.md`](AGENTS.md) defines the production boundary and required checks.

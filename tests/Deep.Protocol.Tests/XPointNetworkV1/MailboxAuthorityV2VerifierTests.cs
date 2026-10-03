@@ -51,6 +51,13 @@ public sealed class MailboxAuthorityV2VerifierTests
         Assert.Equal(1, BinaryPrimitives.ReadUInt16BigEndian(ContactCodec.Decode("PMA2", historical).Field(9).Span));
         Assert.Throws<CryptographicException>(() =>
             MailboxAuthorityV2Verifier.Verify(fixture.Authority, historical, 100, 101));
+        MailboxAuthorityV2Verifier.VerifyHistoricalLineage(fixture.Authority, historical, 100, 101);
+        Assert.Throws<CryptographicException>(() => MailboxAuthorityV2Verifier.VerifyHistoricalLineage(
+            fixture.Authority, AuthorPma2(fixture, true, algorithm: 1), 100, 101));
+        Assert.Throws<CryptographicException>(() => MailboxAuthorityV2Verifier.VerifyHistoricalLineage(
+            fixture.Authority, historical, 100, 800));
+        Assert.DoesNotContain(typeof(MailboxAuthorityV2Verifier).GetMethods(),
+            method => method.Name == "VerifyHistoricalLineage");
     }
 
     private static byte[] AuthorPma2(Fixture fixture, bool tamperSignature, ushort algorithm = 2)

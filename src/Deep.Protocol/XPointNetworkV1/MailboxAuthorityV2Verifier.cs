@@ -93,6 +93,25 @@ public static class MailboxAuthorityV2Verifier
         var record = ContactCodec.Decode(ProtocolMagic.PMA2, exactPma2);
         if (BinaryPrimitives.ReadUInt16BigEndian(record.Field(9).Span) != 2)
             throw new CryptographicException("PMA2 does not authorize the current selection-bound mailbox algorithm.");
+        VerifyRecord(networkAuthority, record, trustedLowerUnixSeconds, trustedUpperUnixSeconds);
+        return new VerifiedMailboxAuthorityV2(record);
+    }
+
+    // Only predecessor authentication for the root-signed successor author.
+    // This deliberately returns no current issuer, host, holder or dispatch authority.
+    internal static void VerifyHistoricalLineage(VerifiedXPointNetworkAuthority networkAuthority,
+        ReadOnlySpan<byte> exactPma2, ulong trustedLowerUnixSeconds, ulong trustedUpperUnixSeconds)
+    {
+        ArgumentNullException.ThrowIfNull(networkAuthority);
+        var record = ContactCodec.Decode(ProtocolMagic.PMA2, exactPma2);
+        VerifyRecord(networkAuthority, record, trustedLowerUnixSeconds, trustedUpperUnixSeconds);
+    }
+
+    private static void VerifyRecord(VerifiedXPointNetworkAuthority networkAuthority,
+        ContactRecord record, ulong trustedLowerUnixSeconds, ulong trustedUpperUnixSeconds)
+    {
+        if (trustedLowerUnixSeconds > trustedUpperUnixSeconds)
+            throw new CryptographicException("The PMA2 trusted-time interval is invalid.");
         if (!Fixed(record.Field(1).Span, networkAuthority.NetworkId.Span) ||
             !Fixed(record.Field(13).Span, networkAuthority.AuthorityCoreReference.Span) ||
             !Fixed(record.Field(14).Span, networkAuthority.DirectoryWitnessPolicyHash.Span) ||
@@ -104,7 +123,6 @@ public static class MailboxAuthorityV2Verifier
                 "PMA2 is outside the exact current XNA1 authority and trusted-time interval.");
 
         VerifyRootThreshold(record, networkAuthority);
-        return new VerifiedMailboxAuthorityV2(record);
     }
 
     private static void VerifyRootThreshold(

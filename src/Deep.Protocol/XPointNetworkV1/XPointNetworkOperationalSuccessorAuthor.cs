@@ -307,7 +307,7 @@ public static class XPointNetworkOperationalSuccessorAuthor
         if (!Fixed(references, view.FieldSpan(12)))
             throw new CryptographicException("The protected view does not commit the exact node descriptor set.");
         var validHistoricalTime = BinaryPrimitives.ReadUInt64BigEndian(pma.FieldSpan(11));
-        _ = MailboxAuthorityV2Verifier.Verify(authority, pma.CanonicalBytes.Span,
+        MailboxAuthorityV2Verifier.VerifyHistoricalLineage(authority, pma.CanonicalBytes.Span,
             validHistoricalTime, validHistoricalTime);
         XPointOnionCapabilityProducer.VerifyPolicy(authority, policy);
         foreach (var exact in request.ExactOrderedXnv1History)
@@ -468,6 +468,7 @@ public static class XPointNetworkOperationalSuccessorAuthor
         var generation = checked(BinaryPrimitives.ReadUInt64BigEndian(previous.FieldSpan(2)) + 1);
         fields[1] = U64(generation);
         fields[2] = previous.CoreHash.ToArray();
+        fields[8] = U16(2); // A root-signed successor activates the current profile; never edit its predecessor.
         fields[9] = U64(request.IssuedAtUnixSeconds);
         fields[10] = U64(request.NotBeforeUnixSeconds);
         fields[11] = U64(request.ExpiresAtUnixSeconds);

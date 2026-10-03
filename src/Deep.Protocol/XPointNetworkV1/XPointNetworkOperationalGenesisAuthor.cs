@@ -423,7 +423,7 @@ public static class XPointNetworkOperationalGenesisAuthor
             request.MailboxAuthorityId,
             request.MailboxDepositIssuerPublicKey,
             request.MailboxRetrieveIssuerPublicKey,
-            U64(1), U32(3_600), U16(1),
+            U64(1), U32(3_600), U16(2),
             U64(request.IssuedAtUnixSeconds), U64(request.NotBeforeUnixSeconds),
             U64(request.RootPolicyExpiresAtUnixSeconds), authority.AuthorityCoreReference,
             authority.DirectoryWitnessPolicyHash,
