@@ -1220,6 +1220,40 @@ public sealed class XPointOnionCapabilityProducerTests
         private readonly VerifiedXPointNetworkAuthority _authority;
         private readonly VerifiedDeepIdV2DirectoryFreshness _freshness;
 
+        internal VerifiedXPointNetworkAuthority Authority => _authority;
+
+        internal async ValueTask<(VerifiedOnionNetworkContext Network, byte[] Pma)> VerifyMailboxAsync()
+        {
+            ReadOnlyMemory<byte>[] fields =
+            [
+                _authority.NetworkId, U64(0), new byte[32], Bytes(32, 0xe0),
+                PublicKeyAuth.GenerateKeyPair(Bytes(32, 0xe1)).PublicKey,
+                PublicKeyAuth.GenerateKeyPair(Bytes(32, 0xe2)).PublicKey,
+                U64(5), U32(60), U16(1), U64(100), U64(100), U64(300),
+                _authority.AuthorityCoreReference, _authority.DirectoryWitnessPolicyHash,
+                new byte[] { 1 }, SignatureRows([(_root.Id, Bytes(64, 0xe3))]),
+            ];
+            var unsigned = ContactCodec.AuthorForOperationalAuthority("PMA2", fields);
+            fields[15] = SignatureRows([(_root.Id,
+                PublicKeyAuth.SignDetached(unsigned.SignatureInput.ToArray(), _root.Pair.PrivateKey))]);
+            var pma = ContactCodec.AuthorForOperationalAuthority("PMA2", fields);
+            var pmt = ContactCodec.Decode("PMT2", _pmt);
+            var projection = Enumerable.Range(1, 16)
+                .Select(tag => pmt.Field(tag)).ToArray();
+            projection[3] = XPointNetworkCodec.EncodeCoreReference("PMA2", pma.CoreHash.Span);
+            var candidate = ContactCodec.AuthorForOperationalAuthority("PMT2", projection);
+            projection[15] = SignatureRows(_witnesses.Take(2).Select(key =>
+                (key.Id, PublicKeyAuth.SignDetached(candidate.SignatureInput.ToArray(), key.Pair.PrivateKey))).ToArray());
+            var exactPmt = ContactCodec.AuthorForOperationalAuthority("PMT2", projection).CanonicalBytes;
+            var network = await OnionNetworkContextVerifier.VerifyAsync(_authority, _freshness,
+                new ReadOnlyMemory<byte>[] { _xvp }, new ReadOnlyMemory<byte>[] { _xnv },
+                new ReadOnlyMemory<byte>[] { _xnh },
+                _nodes.Select(static value => (ReadOnlyMemory<byte>)value).ToArray(),
+                new ReadOnlyMemory<byte>[] { exactPmt }, null,
+                new OnionTrustedTimeAuthority(new FixedClock(Bytes(16, 0xc1), _clockSample)), default);
+            return (network, pma.CanonicalBytes.ToArray());
+        }
+
         private Fixture(
             byte networkMarker,
             ulong selectionEpoch,

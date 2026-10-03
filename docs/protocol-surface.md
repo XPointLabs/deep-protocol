@@ -334,6 +334,15 @@ holder-secret or dispatch surface. Actual package API/evidence bindings and
 consumer repins remain the whole-business batch gate; local checks do not
 activate production or prove physical delivery.
 
+[DR-0080](../../docs/survival-program/decisions/DR-0080-did2-current-mailbox-host-authority.md)
+adds the closed current mailbox host policy, exact PMT2 ranking/node facts and
+independent full-interval MCG2 issuer verification. No caller topology or UTC can
+mint it. It does not authorize a holder request, replay reservation, local exit,
+peer quorum or delivery. The independent PMS2 selector versus blinded placement
+must still be cryptographically closed in the connected consumer; ranking the
+request's placement commitment is not a substitute. Actual API/evidence snapshots,
+consumer repins and physical activation remain final business-batch gates.
+
 [DR-0053](../../docs/survival-program/decisions/DR-0053-did2-mailbox-grant-restart-custody.md)
 adds direct DID2 exact pending-request restoration and independent retained
 winner verification. The former requires the original request to remain current;
