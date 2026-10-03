@@ -45,7 +45,7 @@ public sealed class ContactCodecTests
                 "dmc2-contact-accept" => ContactFixtures.Accept.CanonicalBytes,
                 "dmc2-contact-reject" => ContactFixtures.Reject.CanonicalBytes,
                 "dmc2-contact-route-update" => ContactFixtures.Route.CanonicalBytes,
-                _ => default,
+                _ => throw new InvalidDataException($"Unmapped contact primitive: {id}"),
             };
             if (!expected.IsEmpty) Assert.Equal(expected.ToArray(), bytes);
         }

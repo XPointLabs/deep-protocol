@@ -164,11 +164,7 @@ public static class ContactRouteThresholdAuthor
             ranked.Add((nodeId, RendezvousScore(
                 network, pmtReference, selectionEpoch, placementInput, nodeId)));
         }
-        ranked.Sort(static (left, right) =>
-        {
-            var score = left.Score.AsSpan().SequenceCompareTo(right.Score);
-            return score != 0 ? score : left.NodeId.AsSpan().SequenceCompareTo(right.NodeId);
-        });
+        ranked.Sort(ContactCodec.CompareRendezvousCandidates);
         if (replicaCount is < 2 or > 5 || ranked.Count < replicaCount)
             throw new ContactPublicationAuthoringException(
                 "RouteReplicaSetUnavailable",

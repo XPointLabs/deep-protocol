@@ -53,6 +53,8 @@ public sealed class MessagingCryptoSurfaceTests
                 nameof(InitiatorInitialSessionCommitCapability),
                 nameof(ManagedInitiatorInitialSessionFactory),
                 nameof(ManagedResponderInitialSessionFactory),
+                nameof(ResponderInitialSessionAtomicStorePayload),
+                nameof(ResponderInitialSessionCommitCapability),
                 nameof(ResponderInitialSessionMaterial),
                 nameof(MessagingE2eeActivationBlocker),
                 nameof(MessagingE2eeActivationReport),
@@ -110,6 +112,26 @@ public sealed class MessagingCryptoSurfaceTests
         Assert.Empty(typeof(Dph2InitialClaimPreview).GetConstructors());
         Assert.Empty(typeof(VerifiedDph2InitialClaim).GetConstructors());
         Assert.Empty(typeof(ResponderInitialSessionMaterial).GetConstructors());
+        // DR-0025 owns this closed, single-transfer store boundary; it is not
+        // an arbitrary state/reservation author or a readiness/ACK capability.
+        Assert.Empty(typeof(ResponderInitialSessionCommitCapability).GetConstructors());
+        Assert.Empty(typeof(ResponderInitialSessionAtomicStorePayload).GetConstructors());
+        Assert.True(typeof(ResponderInitialSessionCommitCapability).IsSealed);
+        Assert.True(typeof(ResponderInitialSessionAtomicStorePayload).IsSealed);
+        Assert.True(typeof(IDisposable).IsAssignableFrom(typeof(ResponderInitialSessionCommitCapability)));
+        Assert.True(typeof(IDisposable).IsAssignableFrom(typeof(ResponderInitialSessionAtomicStorePayload)));
+        Assert.Equal(new[] { "ClaimOperationId", "SessionId" },
+            typeof(ResponderInitialSessionCommitCapability).GetProperties()
+                .Select(static property => property.Name).Order(StringComparer.Ordinal));
+        Assert.Equal(new[] { "ExactTrs1", "FirstApplicationDmc2", "Reservation", "SessionInitDmc2" },
+            typeof(ResponderInitialSessionAtomicStorePayload).GetProperties()
+                .Select(static property => property.Name).Order(StringComparer.Ordinal));
+        Assert.All(new[] { typeof(ResponderInitialSessionCommitCapability), typeof(ResponderInitialSessionAtomicStorePayload) }
+            .SelectMany(static type => type.GetProperties()), static property => Assert.Null(property.SetMethod));
+        var transfer = typeof(ResponderInitialSessionCommitCapability)
+            .GetMethod(nameof(ResponderInitialSessionCommitCapability.ConsumeForAtomicStore))!;
+        Assert.Empty(transfer.GetParameters());
+        Assert.Equal(typeof(ResponderInitialSessionAtomicStorePayload), transfer.ReturnType);
         Assert.Empty(typeof(InitiatorDph2ClaimPreparation).GetConstructors());
         Assert.Empty(typeof(InitiatorDph2PreKeyClaim).GetConstructors());
         Assert.Empty(typeof(InitiatorInitialSessionAtomicStorePayload).GetConstructors());

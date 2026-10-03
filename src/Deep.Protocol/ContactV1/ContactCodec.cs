@@ -746,15 +746,20 @@ public static class ContactCodec
             ranked.Add((node.ToArray(), RendezvousScore(pms2.FieldSpan(1), pms2.FieldSpan(2),
                 pms2.FieldSpan(4), pms2.FieldSpan(3), node)));
         }
-        ranked.Sort(static (left, right) =>
-        {
-            var score = left.Score.AsSpan().SequenceCompareTo(right.Score);
-            return score != 0 ? score : left.NodeId.AsSpan().SequenceCompareTo(right.NodeId);
-        });
+        ranked.Sort(CompareRendezvousCandidates);
         var actual = pms2.FieldSpan(6);
         for (var index = 0; index < replicaCount; index++)
             if (!actual.Slice(index * 32, 32).SequenceEqual(ranked[index].NodeId))
                 Reject(ContactValidationStage.Closure, "Pms2RendezvousRankMismatch");
+    }
+
+    // One ordering for issuer and verifier. Kept internal so a deterministic
+    // equal-score test does not need a fake hash provider or authority seam.
+    internal static int CompareRendezvousCandidates(
+        (byte[] NodeId, byte[] Score) left, (byte[] NodeId, byte[] Score) right)
+    {
+        var score = left.Score.AsSpan().SequenceCompareTo(right.Score);
+        return score != 0 ? score : left.NodeId.AsSpan().SequenceCompareTo(right.NodeId);
     }
 
     // RFC 3629's shortest-form UTF-8 requirement is not implied by .NET's
