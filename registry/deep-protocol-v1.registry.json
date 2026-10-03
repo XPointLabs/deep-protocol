@@ -50,7 +50,7 @@
       "id": "protocol-registry-v1",
       "kind": "normative-document",
       "path": "docs/architecture/PROTOCOL-REGISTRY-V1.md",
-      "normalizedSha256": "9984fc8f1468d75c2ac2e0bb277132da2e4402377c70a363b5300f201b68cac0"
+      "normalizedSha256": "964531cec845d9d552417b31d4405091af10af6bd90d197ec09561dda4a0a24b"
     },
     {
       "id": "dnp1-frozen",
@@ -74,7 +74,7 @@
       "id": "contact-group-v1",
       "kind": "normative-document",
       "path": "docs/architecture/CONTACT-AND-GROUP-PROTOCOL-V1.md",
-      "normalizedSha256": "1054912d39f9e097034a4274be970d0b777810bb60e64c1113736b7e7f5d7310"
+      "normalizedSha256": "62166daa8bdab2244fc4fb952847dc8691557759b942c4cf2b4703f25cb77320"
     },
     {
       "id": "account-directory-v1",
@@ -86,13 +86,13 @@
       "id": "xpoint-network-v1",
       "kind": "normative-document",
       "path": "docs/architecture/XPOINT-NETWORK-V1.md",
-      "normalizedSha256": "c63b0d52aab07942ee7ad5ae20c66a7c8294b1b0e75cea602e0f3a12e0284d2e"
+      "normalizedSha256": "466b136c361f93439413ec461f2eef0dde0a88409793408d409f60b7cbb4dcc9"
     },
     {
       "id": "contact-resolver-v1",
       "kind": "normative-document",
       "path": "docs/architecture/CONTACT-RESOLVER-V1.md",
-      "normalizedSha256": "a9a07555b8fdc75b90bf4c39db96489aedbba6b5ff617c5259592347eae644fb"
+      "normalizedSha256": "3fcb8a3f5803b2bfa2e847abbddab250117742049fe31bb092d188902eedcd19"
     },
     {
       "id": "carriers-v1",
@@ -104,7 +104,7 @@
       "id": "deployment-profiles-v1",
       "kind": "normative-document",
       "path": "docs/architecture/DEPLOYMENT-PROFILES.md",
-      "normalizedSha256": "fd511671ad95590c13c050d011fd21b29802fd7ca5b0eb1de15b38fe3ee34277"
+      "normalizedSha256": "8fd1821eb22195006cb45a545592bab6abdc8a31bb1e3bdde410f0a43eae2254"
     },
     {
       "id": "call-session-v1",
@@ -116,7 +116,7 @@
       "id": "transport-neutral-v1",
       "kind": "normative-document",
       "path": "docs/architecture/TRANSPORT-NEUTRAL-MESSAGING.md",
-      "normalizedSha256": "b1cca8db722831c26cdd0739ccaac764c743ffe36c2d570e75d02f77fd0567d2"
+      "normalizedSha256": "adedefba3e3266cc7c5b8047565a62f71413e14a9b9693f619871eb85d6bf12f"
     },
     {
       "id": "production-wire-source",
