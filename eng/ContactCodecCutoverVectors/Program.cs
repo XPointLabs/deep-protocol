@@ -20,12 +20,12 @@ var xmg = Record("XMG1",
     Bytes(16, 0x11), Bytes(32, 0x21), Bytes(32, 0x31), Bytes(32, 0x41),
     Bytes(32, 0x51), [1], Reference("PMT2", 0x61), Bytes(32, 0x71),
     U64(100), U64(120), Bytes(32, 0x81), Bytes(64, 0x91));
-var xmc = Record("XMC1",
+var xmc = Record("XMC2",
     Bytes(16, 0x11), Bytes(32, 0x21), U16(2), U64(110), SHA256.HashData(xmg),
     U64(120), new byte[32], []);
 var pma = Record("PMA2",
     Bytes(16, 0x11), U64(0), new byte[32], Bytes(32, 0x21), Bytes(32, 0x31),
-    Bytes(32, 0x41), U64(1), U32(3_600), U16(1), U64(90), U64(95), U64(800),
+    Bytes(32, 0x41), U64(1), U32(3_600), U16(2), U64(90), U64(95), U64(800),
     Reference("XNA1", 0x51), Bytes(32, 0x61), [1],
     Join(Bytes(32, 0x71), Bytes(64, 0x81)));
 
@@ -63,11 +63,14 @@ foreach (var kind in new[] { "hello", "accept" })
 }
 var records = root["records"]!.AsArray();
 Upsert(records, "xmg1-canonical-grammar", xmg);
-Upsert(records, "xmc1-failure-grammar", xmc);
+var retiredResult = records.SingleOrDefault(node => node?["id"]?.GetValue<string>() == "xmc1-failure-grammar");
+if (retiredResult is not null) records.Remove(retiredResult);
+Upsert(records, "xmc2-failure-grammar", xmc);
 Upsert(records, "pma2-canonical", pma, afterId: "xra1-canonical");
 var bounds = root["canonicalBounds"]!.AsObject();
 bounds["XMG1"] = new JsonObject { ["recordBytes"] = 435 };
-bounds["XMC1"] = new JsonObject { ["failureRecordBytes"] = 206, ["successRecordBytes"] = 478 };
+bounds.Remove("XMC1");
+bounds["XMC2"] = new JsonObject { ["failureRecordBytes"] = 206, ["successRecordBytes"] = 510 };
 bounds["PMA2"] = new JsonObject { ["minimumRecordBytes"] = 497, ["maximumRecordBytes"] = 1169 };
 foreach (var kind in new[] { "DMC2/2", "DMC2/3" })
     bounds[kind] = new JsonObject { ["minimumPayloadBytes"] = 5917, ["maximumPayloadBytes"] = 25069,
