@@ -9,7 +9,7 @@ namespace Deep.Protocol.XPointNetworkV1;
 
 /// <summary>Current mailbox policy derived only from the complete verified network.
 /// It does not authorize holder requests, replay, local exit selection or delivery.</summary>
-public sealed class VerifiedMailboxHostAuthorityV2
+public sealed partial class VerifiedMailboxHostAuthorityV2
 {
     private readonly VerifiedOnionNetworkContext network;
     private readonly VerifiedXPointNetworkAuthority root;

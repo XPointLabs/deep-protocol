@@ -3,7 +3,7 @@ using System.Security.Cryptography;
 
 namespace Deep.Protocol.DeepExtension.MailboxCapabilities;
 
-public static class MailboxPeerWireV2Codec
+public static partial class MailboxPeerWireV2Codec
 {
     private const byte Version = 2;
     private static ReadOnlySpan<byte> Magic => ProtocolMagicBytes.PRQ2;
@@ -387,6 +387,14 @@ public static class MailboxPeerWireV2Codec
     {
         ArgumentNullException.ThrowIfNull(verifiedRequest);
         ArgumentNullException.ThrowIfNull(crypto);
+        return VerifyDurableQuorumCore(encoded, verifiedRequest.Request, verifiedRequest.Envelope,
+            verifiedRequest.ReplayClaim.RequestDigest.Span, crypto);
+    }
+
+    private static VerifiedMailboxDurableQuorumV3 VerifyDurableQuorumCore(
+        ReadOnlySpan<byte> encoded, MailboxPeerWireRequestV2 request, MailboxEncryptedEnvelope? envelope,
+        ReadOnlySpan<byte> requestDigest, IMailboxPeerReplicationCrypto crypto)
+    {
         var expectedLength =
             MailboxReceiptV3Limits.QuorumFixedHeaderLength +
             (2 * MailboxPeerWireV2Limits.Ed25519ReplicaResponseLength) +
@@ -398,18 +406,17 @@ public static class MailboxPeerWireV2Codec
         var quorum = MailboxReceiptV3Codec.DecodeDurableQuorum(encoded);
         var first = quorum.FirstReplica;
         var second = quorum.SecondReplica;
-        ValidateReplicaPair(first, second, verifiedRequest);
+        ValidateReplicaPair(first, second, request);
         _ = DecodeAndVerifySelectedReplica(
             MailboxReceiptV2Codec.EncodeReplica(first),
-            verifiedRequest,
+            request, envelope,
             crypto);
         _ = DecodeAndVerifySelectedReplica(
             MailboxReceiptV2Codec.EncodeReplica(second),
-            verifiedRequest,
+            request, envelope,
             crypto);
-        var request = verifiedRequest.Request;
         if (quorum.CoordinatorSequence !=
-                Prq2CoordinatorSequence(verifiedRequest) ||
+                (BinaryPrimitives.ReadUInt64BigEndian(requestDigest) | 0x8000_0000_0000_0000UL) ||
             !IsSelectedRouter(quorum.CoordinatorId.Span, request))
             throw Error(
                 MailboxPeerReplicationError.InvalidReceipt,
@@ -824,17 +831,21 @@ public static class MailboxPeerWireV2Codec
         ReadOnlySpan<byte> encoded,
         VerifiedMailboxPeerWireRequestV2 verifiedRequest,
         IMailboxPeerReplicationCrypto crypto)
+        => DecodeAndVerifySelectedReplica(encoded, verifiedRequest.Request, verifiedRequest.Envelope, crypto);
+
+    private static MailboxReplicaReceiptV2 DecodeAndVerifySelectedReplica(
+        ReadOnlySpan<byte> encoded, MailboxPeerWireRequestV2 request, MailboxEncryptedEnvelope? envelope,
+        IMailboxPeerReplicationCrypto crypto)
     {
         if (encoded.Length != MailboxPeerWireV2Limits.Ed25519ReplicaResponseLength)
             throw Error(
                 MailboxPeerReplicationError.InvalidReceipt,
                 "PRQ2 quorum requires exact Ed25519 MRR2 inputs.");
         var receipt = MailboxReceiptV2Codec.DecodeReplica(encoded);
-        if (!MatchesRequest(receipt, verifiedRequest, allowSender: true))
+        if (!MatchesRequest(receipt, request, envelope, allowSender: true))
             throw Error(
                 MailboxPeerReplicationError.InvalidReceipt,
                 "MRR2 does not match the exact PRQ2 quorum context.");
-        var request = verifiedRequest.Request;
         var key = FixedEquals(receipt.ReplicaId.Span, request.SenderRouterId.Span)
             ? request.SenderMembershipProof.SigningPublicKey
             : request.RecipientMembershipProof.SigningPublicKey;
@@ -852,13 +863,17 @@ public static class MailboxPeerWireV2Codec
         MailboxReplicaReceiptV2 first,
         MailboxReplicaReceiptV2 second,
         VerifiedMailboxPeerWireRequestV2 verifiedRequest)
+        => ValidateReplicaPair(first, second, verifiedRequest.Request);
+
+    private static void ValidateReplicaPair(MailboxReplicaReceiptV2 first,
+        MailboxReplicaReceiptV2 second, MailboxPeerWireRequestV2 request)
     {
         if (first.ReplicaId.Span.SequenceCompareTo(second.ReplicaId.Span) >= 0 ||
             first.Disposition != second.Disposition ||
             !ContainsExactlySelectedRouters(
                 first.ReplicaId.Span,
                 second.ReplicaId.Span,
-                verifiedRequest.Request))
+                request))
             throw Error(
                 MailboxPeerReplicationError.InvalidReceipt,
                 "MQR3 must contain the two distinct PRQ2 routers in canonical order.");
@@ -868,8 +883,11 @@ public static class MailboxPeerWireV2Codec
         MailboxReplicaReceiptV2 receipt,
         VerifiedMailboxPeerWireRequestV2 verifiedRequest,
         bool allowSender)
+        => MatchesRequest(receipt, verifiedRequest.Request, verifiedRequest.Envelope, allowSender);
+
+    private static bool MatchesRequest(MailboxReplicaReceiptV2 receipt,
+        MailboxPeerWireRequestV2 request, MailboxEncryptedEnvelope? envelope, bool allowSender)
     {
-        var request = verifiedRequest.Request;
         var selected =
             FixedEquals(receipt.ReplicaId.Span, request.RecipientRouterId.Span) ||
             allowSender &&
@@ -893,7 +911,9 @@ public static class MailboxPeerWireV2Codec
                    request.MembershipCommitment.Span) &&
                FixedEquals(
                    receipt.EnvelopeDigest.Span,
-                   ExpectedEnvelopeDigest(verifiedRequest).Span);
+                   request.Operation == MailboxPeerReplicationOperation.Store
+                       ? (envelope ?? throw Error(MailboxPeerReplicationError.InvalidPayload, "Store has no canonical envelope.")).DeduplicationDigest.Span
+                       : request.Payload.Span);
     }
 
     private static bool ContainsExactlySelectedRouters(

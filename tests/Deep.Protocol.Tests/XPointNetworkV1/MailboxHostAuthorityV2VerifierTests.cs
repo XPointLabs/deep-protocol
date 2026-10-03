@@ -197,6 +197,78 @@ public sealed class MailboxHostAuthorityV2VerifierTests
         MailboxHostAuthorityV2Verifier.VerifyAsync(inputs.Network, fixture.Authority, inputs.Pma, new(clock));
 
     [Fact]
+    public async Task StoreSettlementHasOnlyClosedInputsAndRejectsHostileSizeBeforeClock()
+    {
+        var fixture = Fixture.Create(); var inputs = await fixture.VerifyMailboxAsync(); var clock = new Clock();
+        var host = await Verify(fixture, inputs, clock); var count = clock.Reads;
+        await Assert.ThrowsAsync<MailboxPeerReplicationException>(() => host.VerifyStoreSettlementAsync(
+            new byte[MailboxPeerWireV2Limits.MaximumRequestLength + 1], new byte[1]).AsTask());
+        Assert.Equal(count, clock.Reads);
+        var api = typeof(VerifiedMailboxHostAuthorityV2).GetMethod(nameof(VerifiedMailboxHostAuthorityV2.VerifyStoreSettlementAsync))!;
+        Assert.Equal(typeof(ValueTask), api.ReturnType);
+        Assert.Equal(new[] { typeof(ReadOnlyMemory<byte>), typeof(ReadOnlyMemory<byte>), typeof(CancellationToken) },
+            api.GetParameters().Select(parameter => parameter.ParameterType));
+    }
+
+    [Theory]
+    [InlineData("body")]
+    [InlineData("quorum-profile")]
+    [InlineData("grant-version")]
+    public async Task StoreSettlementRejectsMalformedInnerGrammarBeforeClock(string defect)
+    {
+        var fixture = Fixture.Create(); var inputs = await fixture.VerifyMailboxAsync(); var clock = new Clock();
+        var host = await Verify(fixture, inputs, clock); var grant = Grant(inputs.Network);
+        var ids = await host.RankReplicasAsync(grant.SelectionInput);
+        var payload = MailboxClientCodec.EncodeEncryptedEnvelope(new()
+        {
+            Epoch = grant.Epoch, MailboxId = new(Bytes(32, 0x61)), PlacementId = new(Bytes(32, 0x52)),
+            OperationId = Bytes(16, 0x62), DeduplicationDigest = Bytes(32, 0x63),
+            CreatedAtUnixSeconds = 200, ExpiresAtUnixSeconds = 260, Ciphertext = Bytes(64, 0x64)
+        });
+        byte[] proof = [.. host.ProjectionReference.Span, .. MailboxAuthenticatedCapabilityCodec.EncodeGrant(grant)];
+        if (defect == "body") payload[4] = 0xff;
+        if (defect == "grant-version") proof[38 + 4] = 0xff;
+        MailboxReplicaMembershipProof Membership(int index) => new()
+        {
+            ReplicaId = ids[index], SigningPublicKey = inputs.Network.ResolveNodeIdentityPublicKey(ids[index]),
+            Epoch = grant.Epoch, MembershipCommitment = host.MembershipCommitment, CanonicalInclusionProof = proof
+        };
+        var request = MailboxPeerWireV2Codec.Encode(new()
+        {
+            Operation = MailboxPeerReplicationOperation.Store, Epoch = grant.Epoch, OperationId = Bytes(16, 0x62),
+            SenderRouterId = ids[0], RecipientRouterId = ids[1], MembershipCommitment = host.MembershipCommitment,
+            PlacementCommitment = grant.PlacementCommitment, BlindedMailboxId = Bytes(32, 0x61), Cursor = 1,
+            CreatedAtUnixSeconds = 200, ExpiresAtUnixSeconds = 260, ReplayNonce = Bytes(32, 0x65),
+            Payload = payload, PayloadDigest = SHA256.HashData(payload), SenderMembershipProof = Membership(0),
+            RecipientMembershipProof = Membership(1), Signature = Bytes(64, 0x66)
+        });
+        // No positive crypto claim: grammar must reject before signature/time.
+        // For the malformed grant case, provide an actual structurally valid
+        // MQR3 so its decoder cannot mask the grant-version assertion.
+        var quorum = new byte[1];
+        if (defect is "grant-version" or "quorum-profile")
+        {
+            MailboxReplicaReceiptV2 Receipt(int index) => new()
+            {
+                OperationId = Bytes(16, 0x62), ReplicaId = ids[index], Epoch = grant.Epoch, Cursor = 1,
+                BlindedMailboxId = Bytes(32, 0x61), PlacementCommitment = grant.PlacementCommitment,
+                MembershipCommitment = host.MembershipCommitment, EnvelopeDigest = Bytes(32, 0x63),
+                AcceptedAtUnixSeconds = 200, DurableAtUnixSeconds = 200, ExpiresAtUnixSeconds = 260,
+                Status = MailboxReceiptStatus.Durable, Disposition = MailboxReplicaDisposition.Stored,
+                Signature = Bytes(64, 0x66)
+            };
+            quorum = MailboxReceiptV3Codec.EncodeDurableQuorum(new()
+            {
+                CoordinatorId = ids[0], CoordinatorSequence = 1, FirstReplica = Receipt(0),
+                SecondReplica = Receipt(1), Signature = Bytes(defect == "quorum-profile" ? 32 : 64, 0x66)
+            });
+        }
+        var reads = clock.Reads;
+        Assert.NotNull(await Record.ExceptionAsync(() => host.VerifyStoreSettlementAsync(request, quorum).AsTask()));
+        Assert.Equal(reads, clock.Reads);
+    }
+
+    [Fact]
     public async Task InvalidBoundsAndSelection_RejectBeforeClockCallback()
     {
         var fixture = Fixture.Create(); var inputs = await fixture.VerifyMailboxAsync(); var clock = new Clock();
