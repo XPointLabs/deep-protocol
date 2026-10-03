@@ -493,6 +493,52 @@ public sealed class AuthenticatedMailboxCapabilityContractTests
         Assert.Equal(31, decisions.Count(value => value == MailboxCapabilityAtomicReplayState.PendingSame));
     }
 
+    [Fact]
+    public void CompletedLiveGrantCannotForgetReplayFloorWhenWorkingPayloadIsRetired()
+    {
+        // Actual signed MCG3/MCP3; only the replay-journal boundary is tested.
+        // This is not native custody, a current host or a remote Store receipt.
+        var crypto = new SodiumMailboxCapabilityCrypto();
+        var issuer = Range(0x10, 32); var holder = Range(0x40, 32);
+        var grant = crypto.SignGrant(Grant(crypto.GetPublicKey(issuer), crypto.GetPublicKey(holder),
+            MailboxCapabilityDomain.Deposit), issuer);
+        var binding = Binding(MailboxAuthenticatedOperation.Store);
+        var exact = MailboxAuthenticatedCapabilityCodec.EncodePresentation(crypto.SignPresentation(grant, binding, 9, holder));
+        var journal = new AtomicReferenceReplayJournal();
+        var first = MailboxAuthenticatedCapabilityCodec.Verify(exact, binding, Policy(grant), crypto, new NoRevocations(), journal);
+        journal.CompleteAtomically(first.ReplayClaim, Range(4, 32));
+        var retained = MailboxAuthenticatedCapabilityCodec.Verify(exact, binding, Policy(grant), crypto, new NoRevocations(), journal);
+        Assert.Equal(MailboxAuthenticatedReplayDisposition.IdempotentCompleted, retained.ReplayDisposition);
+        var lower = MailboxAuthenticatedCapabilityCodec.EncodePresentation(crypto.SignPresentation(grant, binding, 8, holder));
+        Assert.Throws<MailboxAuthenticatedCapabilityException>(() =>
+            MailboxAuthenticatedCapabilityCodec.Verify(lower, binding, Policy(grant), crypto, new NoRevocations(), journal));
+        // Deliberately omitting the journal resurrects this still-admissible
+        // exact request. A compactor may NOT turn live custody into enrollment.
+        var forgotten = MailboxAuthenticatedCapabilityCodec.Verify(exact, binding, Policy(grant), crypto,
+            new NoRevocations(), new AtomicReferenceReplayJournal());
+        Assert.Equal(MailboxAuthenticatedReplayDisposition.NewReserved, forgotten.ReplayDisposition);
+    }
+
+    [Fact]
+    public void ReplayFloorNamespaceIsNotHolderOrAttemptIdentity()
+    {
+        // Pure replay-scope derivation; modified claims are not authority.
+        var claim = Claim(9, Range(1, 32));
+        var original = MailboxCapabilityReplayStateMachine.ComputeScopeKey(claim);
+        var sameScope = claim with { ReplayCounter = 10, OperationId = Range(2, 16),
+            RequestDigest = Range(3, 32), ClaimDigest = Range(4, 32) };
+        Assert.Equal(original, MailboxCapabilityReplayStateMachine.ComputeScopeKey(sameScope));
+        foreach (var other in new[]
+        {
+            claim with { IssuerPublicKey = Range(5, 32) },
+            claim with { Serial = Range(6, 16) },
+            claim with { Epoch = claim.Epoch + 1 },
+            claim with { Generation = claim.Generation + 1 },
+            claim with { Operation = MailboxAuthenticatedOperation.Retrieve },
+            claim with { Operation = MailboxAuthenticatedOperation.Ack }
+        }) Assert.NotEqual(original, MailboxCapabilityReplayStateMachine.ComputeScopeKey(other));
+    }
+
     private static MailboxAuthenticatedGrant Grant(
         byte[] issuer,
         byte[] holder,
