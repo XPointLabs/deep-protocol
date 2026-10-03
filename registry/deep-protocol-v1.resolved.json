@@ -3,7 +3,7 @@
   "schemaVersion": "1.0.0",
   "registryGeneration": 1,
   "registryId": "deep-protocol-v1-resolved",
-  "sourceRegistrySha256": "2d0606d3b9cd7dfcbdf4ee81cec66772632b5cccb9fdec3d78cd14d7b7337b25",
+  "sourceRegistrySha256": "ef0278d03fa6d16b5b25e2ac7a6634f2ec40f8038e118f870182c06c575c4a1e",
   "dnp1ApprovedCommit": "a8456987efe031388ca2eb9006886fb78f31e06c",
   "dnp1RegistrySha256": "e036a0b6acb260e05e18ac536a723b0b8561d2ba1d813429304505b0e7a7da7b",
   "records": [

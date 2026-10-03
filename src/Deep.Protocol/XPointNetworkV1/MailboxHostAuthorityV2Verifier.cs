@@ -61,7 +61,8 @@ public sealed class VerifiedMailboxHostAuthorityV2
             throw new CryptographicException("The node is not in the current mailbox projection.");
         var node = network.ResolveNode(id);
         var key = network.ResolveNodeIdentityPublicKey(id);
-        var result = new VerifiedMailboxReplicaV2(node.NodeId, key.Span);
+        var result = new VerifiedMailboxReplicaV2(node.NodeId, key.Span,
+            new VerifiedOnionNextHopTransport(network, node));
         await ReadAsync(cancellationToken).ConfigureAwait(false);
         return result;
     }
@@ -96,7 +97,8 @@ public sealed class VerifiedMailboxHostAuthorityV2
         var replicas = Enumerable.Range(0, closure.ReplicaCount).Select(index =>
         {
             var id = ranked.AsSpan(index * 32, 32).ToArray();
-            return new VerifiedMailboxReplicaV2(id, network.ResolveNodeIdentityPublicKey(id).Span);
+            return new VerifiedMailboxReplicaV2(id, network.ResolveNodeIdentityPublicKey(id).Span,
+                new VerifiedOnionNextHopTransport(network, network.ResolveNode(id)));
         }).ToArray();
         var after = await ReadAsync(cancellationToken).ConfigureAwait(false);
         RequireGrant(grant, after);
@@ -184,10 +186,14 @@ public sealed class VerifiedMailboxHostAuthorityV2
 public sealed class VerifiedMailboxReplicaV2
 {
     private readonly byte[] nodeId, signingKey;
-    internal VerifiedMailboxReplicaV2(ReadOnlySpan<byte> nodeId, ReadOnlySpan<byte> signingKey)
-    { this.nodeId = nodeId.ToArray(); this.signingKey = signingKey.ToArray(); }
+    internal VerifiedMailboxReplicaV2(ReadOnlySpan<byte> nodeId, ReadOnlySpan<byte> signingKey,
+        VerifiedOnionNextHopTransport transport)
+    { this.nodeId = nodeId.ToArray(); this.signingKey = signingKey.ToArray(); Transport = transport; }
     public ReadOnlyMemory<byte> NodeId => nodeId.ToArray();
     public ReadOnlyMemory<byte> SigningPublicKey => signingKey.ToArray();
+    /// <summary>Origin address/port/current SPKI from the same admitted descriptor.
+    /// Copied transport facts do not replace a live grant/revocation/operation check.</summary>
+    public VerifiedOnionNextHopTransport Transport { get; }
 }
 
 public static class MailboxHostAuthorityV2Verifier

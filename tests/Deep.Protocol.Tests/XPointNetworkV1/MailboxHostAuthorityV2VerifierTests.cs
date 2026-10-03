@@ -29,6 +29,14 @@ public sealed class MailboxHostAuthorityV2VerifierTests
         Assert.Equal(actual[0].ToArray(), replica.NodeId.ToArray());
         Assert.NotEqual(replica.NodeId.ToArray(), replica.SigningPublicKey.ToArray());
         Assert.Equal(inputs.Network.ResolveNodeIdentityPublicKey(actual[0]).ToArray(), replica.SigningPublicKey.ToArray());
+        var descriptor = inputs.Network.ResolveNode(actual[0].Span);
+        Assert.Equal(replica.NodeId.ToArray(), replica.Transport.NodeId.ToArray());
+        Assert.Equal(inputs.Network.NetworkId.ToArray(), replica.Transport.NetworkId.ToArray());
+        Assert.Equal(descriptor.OriginAddress, replica.Transport.Address.ToArray());
+        Assert.Equal(descriptor.OriginPort, replica.Transport.Port);
+        Assert.Equal(descriptor.OriginSpki, replica.Transport.SpkiSha256.ToArray());
+        MemoryMarshal.TryGetArray(replica.Transport.SpkiSha256, out var pin); pin.Array![pin.Offset] ^= 1;
+        Assert.Equal(descriptor.OriginSpki, replica.Transport.SpkiSha256.ToArray());
         MemoryMarshal.TryGetArray(replica.NodeId, out var array); array.Array![array.Offset] ^= 1;
         Assert.Equal(actual[0].ToArray(), replica.NodeId.ToArray());
         MemoryMarshal.TryGetArray(authority.MembershipCommitment, out var hash); hash.Array![hash.Offset] ^= 1;
@@ -50,7 +58,11 @@ public sealed class MailboxHostAuthorityV2VerifierTests
         Assert.Equal(2, selected.Count);
         Assert.Equal(expected.SelectMany(id => id.ToArray()), selected.SelectMany(replica => replica.NodeId.ToArray()));
         foreach (var replica in selected)
+        {
             Assert.Equal(inputs.Network.ResolveNodeIdentityPublicKey(replica.NodeId).ToArray(), replica.SigningPublicKey.ToArray());
+            Assert.Equal(replica.NodeId.ToArray(), replica.Transport.NodeId.ToArray());
+            Assert.Equal(inputs.Network.ResolveNode(replica.NodeId.Span).OriginSpki, replica.Transport.SpkiSha256.ToArray());
+        }
         clock.OnRead = null;
         var changed = grant with { SelectionInput = Bytes(32, 0xf1) };
         await Assert.ThrowsAsync<CryptographicException>(() => authority.ResolveGrantReplicasAsync(
