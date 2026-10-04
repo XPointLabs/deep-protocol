@@ -92,7 +92,7 @@
       "id": "contact-resolver-v1",
       "kind": "normative-document",
       "path": "docs/architecture/CONTACT-RESOLVER-V1.md",
-      "normalizedSha256": "67b1241e5c8c56a3c42e41dbc2d914fef01352920f6d4af6d406e3820b91c29c"
+      "normalizedSha256": "7079eb492081aad044c0766dff8dacda986f604a9e839b06f3c56b9a0f635df2"
     },
     {
       "id": "mailbox-grant-revocation-v1",

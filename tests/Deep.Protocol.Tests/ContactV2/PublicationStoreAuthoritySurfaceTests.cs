@@ -58,13 +58,21 @@ public sealed class PublicationStoreAuthoritySurfaceTests
         Assert.Empty(typeof(VerifiedDeepIdV2PublicationCommit).GetConstructors());
         var methods = typeof(DeepIdV2PublicationCommitVerifier).GetMethods(
             BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
-        Assert.Equal(["VerifyCommittedAsync", "VerifyIssuerPredecessorAsync", "VerifyPredecessorAsync"], methods.Select(value => value.Name).Order().ToArray());
+        Assert.Equal(["VerifyCommittedAsync", "VerifyIssuerPredecessorAsync", "VerifyOneTimeCommittedAsync", "VerifyPredecessorAsync"], methods.Select(value => value.Name).Order().ToArray());
         var method = Assert.Single(methods, value => value.Name == "VerifyCommittedAsync");
         Assert.Equal("VerifyCommittedAsync", method.Name);
         Assert.Equal([typeof(VerifiedDeepIdV2ContactRouteClosure), typeof(AuthoredDeepIdV2ContactObject),
             typeof(ContactPublicationAuthorityWireRequest), typeof(ReadOnlyMemory<byte>),
             typeof(ReadOnlyMemory<byte>), typeof(CancellationToken)],
             method.GetParameters().Select(parameter => parameter.ParameterType).ToArray());
+        var oneTime = Assert.Single(methods, value => value.Name == "VerifyOneTimeCommittedAsync");
+        Assert.Equal([typeof(VerifiedDeepIdV2ContactRouteClosure), typeof(AuthoredDeepIdV2OneTimeContactObject),
+            typeof(ContactPublicationAuthorityWireRequest), typeof(ReadOnlyMemory<byte>),
+            typeof(ReadOnlyMemory<byte>), typeof(CancellationToken)],
+            oneTime.GetParameters().Select(parameter => parameter.ParameterType).ToArray());
+        Assert.Equal(typeof(ValueTask<VerifiedDeepIdV2PublicationCommit>), oneTime.ReturnType);
+        Assert.DoesNotContain(oneTime.GetParameters(), parameter =>
+            typeof(Delegate).IsAssignableFrom(parameter.ParameterType) || parameter.ParameterType == typeof(bool));
         Assert.All(typeof(VerifiedDeepIdV2PublicationCommit).GetProperties(), property => Assert.False(property.CanWrite));
         Assert.Equal(16_384, DeepIdV2PublicationCommitVerifier.MaximumResultBytes);
     }

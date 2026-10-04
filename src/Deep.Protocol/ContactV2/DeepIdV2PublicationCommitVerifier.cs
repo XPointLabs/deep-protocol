@@ -29,16 +29,46 @@ public static partial class DeepIdV2PublicationCommitVerifier
 
     /// <summary>Verifies a signed historical commit under the exact current
     /// owned identity/route. Expired XPA is not renewed or dispatch-authorized.</summary>
-    public static async ValueTask<VerifiedDeepIdV2PublicationCommit> VerifyCommittedAsync(
+    public static ValueTask<VerifiedDeepIdV2PublicationCommit> VerifyCommittedAsync(
         VerifiedDeepIdV2ContactRouteClosure route, AuthoredDeepIdV2ContactObject contact,
         ContactPublicationAuthorityWireRequest ownedRequest, ReadOnlyMemory<byte> exactXpu1,
         ReadOnlyMemory<byte> exactXpo1, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(route); ArgumentNullException.ThrowIfNull(contact);
+        ct.ThrowIfCancellationRequested();
+        return VerifyCoreAsync(route, new(DeepIdV2ResolverClosureCodec.Decode(contact.Closure.CanonicalBytes.Span),
+            contact.ProtectedDcr1, contact.LocatorHash, new byte[16], 1), ownedRequest, exactXpu1, exactXpo1, ct);
+    }
+
+    /// <summary>Exact historical one-time genesis commitment, not protected
+    /// account custody, export, current dispatch permission or redemption.</summary>
+    public static ValueTask<VerifiedDeepIdV2PublicationCommit> VerifyOneTimeCommittedAsync(
+        VerifiedDeepIdV2ContactRouteClosure route, AuthoredDeepIdV2OneTimeContactObject contact,
+        ContactPublicationAuthorityWireRequest ownedRequest, ReadOnlyMemory<byte> exactXpu1,
+        ReadOnlyMemory<byte> exactXpo1, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(route); ArgumentNullException.ThrowIfNull(contact);
+        ct.ThrowIfCancellationRequested();
+        // Closed candidate copies are captured before any callback; disposal
+        // cannot replace ciphertext or public locator during verification.
+        return VerifyCoreAsync(route, new(DeepIdV2ResolverClosureCodec.Decode(contact.Closure.CanonicalBytes.Span),
+            contact.ProtectedDcr1, contact.LocatorHash, contact.PublicLocator, 2), ownedRequest, exactXpu1, exactXpo1, ct);
+    }
+
+    private sealed record PublicationObject(ParsedDcr1V2 Closure, ReadOnlyMemory<byte> ProtectedDcr1,
+        ReadOnlyMemory<byte> LocatorHash, ReadOnlyMemory<byte> PublicLocator, byte Kind);
+
+    private static async ValueTask<VerifiedDeepIdV2PublicationCommit> VerifyCoreAsync(
+        VerifiedDeepIdV2ContactRouteClosure route, PublicationObject contact,
+        ContactPublicationAuthorityWireRequest ownedRequest, ReadOnlyMemory<byte> exactXpu1,
+        ReadOnlyMemory<byte> exactXpo1, CancellationToken ct)
+    {
         ArgumentNullException.ThrowIfNull(ownedRequest); ct.ThrowIfCancellationRequested();
         if (exactXpo1.Length is < 256 or > MaximumResultBytes)
             throw new CryptographicException("Publication commit result exceeds its closed bound.");
         // Own/parse all untrusted response bytes before the first clock callback.
+        ownedRequest = ContactPublicationAuthorityWireCodec.DecodeRequest(
+            ContactPublicationAuthorityWireCodec.EncodeRequest(ownedRequest));
         var request = Xpu1Codec.Decode(exactXpu1.Span);
         var parsed = DeepIdV2ContactPublicationCodec.DecodeXpu1(request.CanonicalBytes.Span);
         var result = Xpo1Codec.Decode(exactXpo1.Span, request.CanonicalBytes.Span);
@@ -46,7 +76,13 @@ public static partial class DeepIdV2PublicationCommitVerifier
         RequireOwned(route, contact, ownedRequest, request);
         RequireResult(request, result);
         var first = await route.ReadPublicationClockAsync(ct).ConfigureAwait(false);
+        var firstWindow = route.VerifyAtReading(first, ct);
+        RequireCurrentObject(route, contact, ownedRequest, firstWindow);
         var window = await route.ReadCurrentTimeAsync(ct).ConfigureAwait(false);
+        if (window.MonotonicSample < first.SampleSeconds ||
+            window.LowerUnixSeconds < firstWindow.LowerUnixSeconds ||
+            window.UpperUnixSeconds < firstWindow.UpperUnixSeconds)
+            throw new CryptographicException("Publication commit reversed its initial protected interval.");
         RequireCurrentObject(route, contact, ownedRequest, window);
         _ = DeepIdV2Xpa1WitnessThresholdVerifier.Verify(parsed.Authorization, route.NetworkAuthority);
         var placement = ContactServicePlacementFactory.Create(route.Network,
@@ -55,14 +91,14 @@ public static partial class DeepIdV2PublicationCommitVerifier
             !Fixed(placement.PlacementHash.Span, request.PlacementHash.Span))
             throw new CryptographicException("Retained publication uses another current placement.");
         VerifyReceipts(request, result, placement);
-        await route.EnsureCurrentAsync(ct).ConfigureAwait(false);
         var releaseWindow = await route.ReadCurrentTimeAsync(ct).ConfigureAwait(false);
-        if (releaseWindow.LowerUnixSeconds < window.LowerUnixSeconds ||
+        if (releaseWindow.MonotonicSample < window.MonotonicSample ||
+            releaseWindow.LowerUnixSeconds < window.LowerUnixSeconds ||
             releaseWindow.UpperUnixSeconds < window.UpperUnixSeconds)
             throw new CryptographicException("Publication commit crossed a trusted time discontinuity.");
         RequireCurrentObject(route, contact, ownedRequest, releaseWindow);
         var final = await route.ReadPublicationClockAsync(ct).ConfigureAwait(false);
-        if (!Fixed(first.BootId.Span, final.BootId.Span) || final.SampleSeconds < first.SampleSeconds)
+        if (!Fixed(first.BootId.Span, final.BootId.Span) || final.SampleSeconds < releaseWindow.MonotonicSample)
             throw new CryptographicException("Publication commit crossed protected clock continuity.");
         var finalWindow = route.VerifyAtReading(final, ct);
         if (finalWindow.LowerUnixSeconds < releaseWindow.LowerUnixSeconds ||
@@ -73,7 +109,7 @@ public static partial class DeepIdV2PublicationCommitVerifier
     }
 
     private static void RequireCurrentObject(VerifiedDeepIdV2ContactRouteClosure route,
-        AuthoredDeepIdV2ContactObject contact, ContactPublicationAuthorityWireRequest request,
+        PublicationObject contact, ContactPublicationAuthorityWireRequest request,
         DeepIdV2ContactRouteTimeWindow window)
     {
         DeepIdV2ContactRouteVerifier.RequireBundleIssuanceAnchor(route, contact.Closure.Bundle);
@@ -85,7 +121,7 @@ public static partial class DeepIdV2PublicationCommitVerifier
     }
 
     private static void RequireOwned(VerifiedDeepIdV2ContactRouteClosure route,
-        AuthoredDeepIdV2ContactObject contact, ContactPublicationAuthorityWireRequest owned, Xpu1Request request)
+        PublicationObject contact, ContactPublicationAuthorityWireRequest owned, Xpu1Request request)
     {
         var dca = route.Recipient.Authorization; var minimum = contact.Closure.Bundle.Field(21).Span;
         if (!Fixed(owned.NetworkId.Span, route.Network.NetworkId.Span) ||
@@ -98,7 +134,13 @@ public static partial class DeepIdV2PublicationCommitVerifier
             !Fixed(request.LocatorHash.Span, contact.LocatorHash.Span) ||
             owned.Generation != BinaryPrimitives.ReadUInt64BigEndian(contact.Closure.Bundle.Field(8).Span) ||
             request.Generation != owned.Generation || request.Generation != BinaryPrimitives.ReadUInt64BigEndian(route.Invite.Field(3).Span) ||
-            request.UsageLimit != 0 ||
+            route.Invite.Field(9).Span[0] != contact.Kind ||
+            BinaryPrimitives.ReadUInt32BigEndian(contact.Closure.Bundle.Field(16).Span) != (contact.Kind == 2 ? 10u : 9u) ||
+            BinaryPrimitives.ReadUInt32BigEndian(route.Invite.Field(10).Span) != (contact.Kind == 2 ? 1u : 0u) ||
+            request.UsageLimit != (contact.Kind == 2 ? 1u : 0u) ||
+            !Fixed(owned.OneTimeLocator.Span, contact.PublicLocator.Span) ||
+            (contact.Kind == 2 && (owned.Generation != 0 || !owned.ExactPriorXpo1.IsEmpty ||
+                owned.PredecessorObjectHash.Span.IndexOfAnyExcept((byte)0) >= 0)) ||
             owned.ExpiresAtUnixSeconds <= owned.IssuedAtUnixSeconds ||
             owned.ExpiresAtUnixSeconds - owned.IssuedAtUnixSeconds > 120 ||
             owned.MinimumAdh1Generation != BinaryPrimitives.ReadUInt64BigEndian(minimum) ||
@@ -142,7 +184,8 @@ public static partial class DeepIdV2PublicationCommitVerifier
             {
                 var id = rows.AsSpan(1 + i * 96, 32);
                 if (!selected.Remove(Convert.ToHexString(id)) ||
-                    !PublicKeyAuth.VerifyDetached(rows.AsSpan(33 + i * 96, 64).ToArray(), input, id.ToArray()))
+                    !PublicKeyAuth.VerifyDetached(rows.AsSpan(33 + i * 96, 64).ToArray(), input,
+                        placement.Network.ResolveNodeIdentityPublicKey(id.ToArray()).ToArray()))
                     throw new CryptographicException("Publication commit replica selection or signature is invalid.");
             }
             if (selected.Count != 0) throw new CryptographicException("Publication commit lacks a selected replica.");
