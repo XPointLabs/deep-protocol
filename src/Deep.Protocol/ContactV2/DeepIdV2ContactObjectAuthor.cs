@@ -96,7 +96,7 @@ public static partial class DeepIdV2ContactObjectAuthor
             throw new CryptographicException("New contact issuance requires a route anchored at the current verified directory head.");
         var dca = route.Recipient.Authorization;
         var directory = dca.Directory.Record;
-        if (inviteKind is < 1 or > 2 || (inviteKind == 2 && (predecessor is not null || issuance is not null)) ||
+        if (inviteKind is < 1 or > 2 || (inviteKind == 2 && (predecessor is not null || issuance?.Request.HasPredecessor == true)) ||
             route.Invite.Field(9).Span[0] != inviteKind || directory.ActiveDevices.Count != services.Length ||
             U64(route.Invite.Field(3).Span) != (predecessor is null ? 0 : checked(U64(predecessor.Closure.Bundle.Field(8).Span) + 1)) ||
             U64(route.Route.Authorization.Field(3).Span) != U64(route.Invite.Field(3).Span))

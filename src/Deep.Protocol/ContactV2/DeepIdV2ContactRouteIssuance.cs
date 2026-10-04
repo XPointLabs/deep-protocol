@@ -102,6 +102,21 @@ public static partial class DeepIdV2ContactRouteVerifier
 
 public static partial class DeepIdV2ContactRouteAuthor
 {
+    /// <summary>Completes only the exact retained one-time genesis issuance.</summary>
+    public static ValueTask<VerifiedDeepIdV2ContactRouteClosure> CompleteRetainedOneTimeGenesisAsync(
+        DeepIdV2CurrentContactAuthorization currentAuthorization, VerifiedOnionNetworkContext network,
+        VerifiedXPointNetworkAuthority networkAuthority, OwnedGenesisDeviceSecrets deviceSecrets,
+        VerifiedDeepIdV2ContactRouteIssuance issuance, ushort minimumReader,
+        OnionTrustedTimeAuthority trustedTime, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(issuance);
+        if (issuance.Request.HasPredecessor)
+            throw new CryptographicException("One-time completion cannot adopt a retained predecessor.");
+        return CompleteCoreAsync(currentAuthorization, network, networkAuthority, deviceSecrets,
+            issuance.Request.ExactXra1, issuance.Threshold, minimumReader, trustedTime, null,
+            cancellationToken, issuance, inviteKind: 2);
+    }
+
     public static ValueTask<VerifiedDeepIdV2ContactRouteClosure> CompleteRetainedGenesisAsync(
         DeepIdV2CurrentContactAuthorization currentAuthorization, VerifiedOnionNetworkContext network,
         VerifiedXPointNetworkAuthority networkAuthority, OwnedGenesisDeviceSecrets deviceSecrets,

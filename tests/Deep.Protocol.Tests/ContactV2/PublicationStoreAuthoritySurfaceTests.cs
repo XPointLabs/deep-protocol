@@ -11,6 +11,33 @@ namespace Deep.Protocol.Tests.ContactV2;
 public sealed class PublicationStoreAuthoritySurfaceTests
 {
     [Fact]
+    public void RetainedOneTimeGenesisRequiresClosedIssuanceWithoutKindOrClockBypass()
+    {
+        var route = Assert.Single(typeof(DeepIdV2ContactRouteAuthor).GetMethods(),
+            method => method.Name == "CompleteRetainedOneTimeGenesisAsync");
+        Assert.Equal([typeof(DeepIdV2CurrentContactAuthorization), typeof(VerifiedOnionNetworkContext),
+            typeof(VerifiedXPointNetworkAuthority), typeof(OwnedGenesisDeviceSecrets),
+            typeof(VerifiedDeepIdV2ContactRouteIssuance), typeof(ushort), typeof(OnionTrustedTimeAuthority),
+            typeof(CancellationToken)], route.GetParameters().Select(parameter => parameter.ParameterType).ToArray());
+        Assert.Equal(typeof(ValueTask<VerifiedDeepIdV2ContactRouteClosure>), route.ReturnType);
+        var author = Assert.Single(typeof(DeepIdV2ContactObjectAuthor).GetMethods(),
+            method => method.Name == "AuthorRetainedOneTimeGenesisAsync");
+        Assert.Equal([typeof(VerifiedDeepIdV2ContactRouteClosure), typeof(VerifiedDeepIdV2ContactRouteIssuance),
+            typeof(OwnedGenesisDeviceSecrets), typeof(IReadOnlyList<ParsedXps1V2>), typeof(string),
+            typeof(CancellationToken)], author.GetParameters().Select(parameter => parameter.ParameterType).ToArray());
+        Assert.Equal(typeof(ValueTask<AuthoredDeepIdV2OneTimeContactObject>), author.ReturnType);
+        foreach (var method in new[] { route, author })
+        {
+            Assert.False(Assert.Single(method.GetParameters(), parameter =>
+                parameter.ParameterType == typeof(VerifiedDeepIdV2ContactRouteIssuance)).IsOptional);
+            Assert.DoesNotContain(method.GetParameters(), parameter => parameter.ParameterType == typeof(bool) ||
+                parameter.ParameterType == typeof(byte) || typeof(Delegate).IsAssignableFrom(parameter.ParameterType));
+        }
+        Assert.Empty(typeof(VerifiedDeepIdV2ContactRouteIssuance).GetConstructors());
+        Assert.Empty(typeof(AuthoredDeepIdV2OneTimeContactObject).GetConstructors());
+    }
+
+    [Fact]
     public void SuccessorCoordinationHasOnlyBoundedParsedBytesAndClosedReadOnlyVerification()
     {
         Assert.Equal(3, ContactRouteAuthorityWireCodec.RequestVersion);

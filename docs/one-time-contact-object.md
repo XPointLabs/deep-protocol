@@ -31,8 +31,14 @@ and identity/support. It rechecks authority/time after callbacks. Lost response
 or restart must adopt the exact retained winner, never regenerate invitation
 ID, locator, key, bundle or nonce. Restore does not provision missing custody.
 
-No shipping client is connected here. The account-owned journal still needs
-an explicit bounded one-time intent/commit lifecycle. The artifact-specific
+The retained counterparts `CompleteRetainedOneTimeGenesisAsync` and
+`AuthorRetainedOneTimeGenesisAsync` follow
+[DR-0091](../../docs/survival-program/decisions/DR-0091-did2-owned-one-time-custody.md).
+They require authenticated exact retained issuance and current authority, never
+an old-clock switch or predecessor. Shared's typed internal owner retains exact
+invitation/ciphertext and verified commit in its single current journal. This
+is a connected source target, not shipping/UI export or installed qualification.
+The artifact-specific
 `AuthorOneTimeGenesisRequestAsync` now signs the key-free V4 request under
 [DR-0089](../../docs/survival-program/decisions/DR-0089-did2-one-time-publication-coordination.md).
 It snapshots ciphertext/public locator from the disposable candidate and owned

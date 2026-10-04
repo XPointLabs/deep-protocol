@@ -179,7 +179,7 @@ public static partial class DeepIdV2ContactRouteAuthor
         cancellationToken.ThrowIfCancellationRequested();
         if (minimumReader is < 1 or > 256) throw new ArgumentOutOfRangeException(nameof(minimumReader));
         ArgumentNullException.ThrowIfNull(currentAuthorization);
-        if (inviteKind is < 1 or > 2 || (inviteKind == 2 && (predecessor is not null || issuance is not null)) ||
+        if (inviteKind is < 1 or > 2 || (inviteKind == 2 && (predecessor is not null || issuance?.Request.HasPredecessor == true)) ||
             (predecessor is not null && predecessor.Invite.Field(9).Span[0] != 1))
             throw new CryptographicException("One-time invitation completion requires a new genesis route.");
         if ((currentAuthorization.Authorization.Record.AllowedInviteKindMask & (inviteKind == 1 ? 1 : 2)) == 0)

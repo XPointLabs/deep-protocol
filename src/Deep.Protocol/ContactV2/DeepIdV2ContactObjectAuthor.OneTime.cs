@@ -38,13 +38,29 @@ public sealed class AuthoredDeepIdV2OneTimeContactObject : IDisposable
 
 public static partial class DeepIdV2ContactObjectAuthor
 {
-    public static async ValueTask<AuthoredDeepIdV2OneTimeContactObject> AuthorOneTimeGenesisAsync(
+    public static ValueTask<AuthoredDeepIdV2OneTimeContactObject> AuthorOneTimeGenesisAsync(
         VerifiedDeepIdV2ContactRouteClosure route, OwnedGenesisDeviceSecrets device,
         IReadOnlyList<ParsedXps1V2> preKeyServices, string profileName,
+        CancellationToken cancellationToken = default) =>
+        AuthorOneTimeGenesisCoreAsync(route, device, preKeyServices, profileName, null, cancellationToken);
+
+    /// <summary>Exact retained genesis issuance; not publication, consent or export authority.</summary>
+    public static ValueTask<AuthoredDeepIdV2OneTimeContactObject> AuthorRetainedOneTimeGenesisAsync(
+        VerifiedDeepIdV2ContactRouteClosure route, VerifiedDeepIdV2ContactRouteIssuance issuance,
+        OwnedGenesisDeviceSecrets device, IReadOnlyList<ParsedXps1V2> preKeyServices, string profileName,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(issuance);
+        return AuthorOneTimeGenesisCoreAsync(route, device, preKeyServices, profileName, issuance, cancellationToken);
+    }
+
+    private static async ValueTask<AuthoredDeepIdV2OneTimeContactObject> AuthorOneTimeGenesisCoreAsync(
+        VerifiedDeepIdV2ContactRouteClosure route, OwnedGenesisDeviceSecrets device,
+        IReadOnlyList<ParsedXps1V2> preKeyServices, string profileName,
+        VerifiedDeepIdV2ContactRouteIssuance? issuance, CancellationToken cancellationToken)
+    {
         var closure = await AuthorClosureCoreAsync(route, device, preKeyServices, profileName,
-            null, null, 2, cancellationToken).ConfigureAwait(false);
+            issuance, null, 2, cancellationToken).ConfigureAwait(false);
         var invitation = DeepIdV2OneTimeObjectProtection.CreateInvitation(closure);
         byte[]? ciphertext = null;
         try
