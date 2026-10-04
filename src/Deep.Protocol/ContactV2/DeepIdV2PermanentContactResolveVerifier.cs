@@ -155,7 +155,8 @@ public static class DeepIdV2PermanentContactResolveVerifier
             {
                 var id = rows.AsSpan(1 + i * 96, 32);
                 if (!selected.Remove(Convert.ToHexString(id)) ||
-                    !PublicKeyAuth.VerifyDetached(rows.AsSpan(33 + i * 96, 64).ToArray(), input, id.ToArray()))
+                    !PublicKeyAuth.VerifyDetached(rows.AsSpan(33 + i * 96, 64).ToArray(), input,
+                        placement.Network.ResolveNodeIdentityPublicKey(id.ToArray()).ToArray()))
                     throw new CryptographicException("Permanent read replica selection/signature is invalid.");
             }
             if (selected.Count != 0) throw new CryptographicException("Permanent read lacks a selected resolver.");
