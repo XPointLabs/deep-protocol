@@ -101,6 +101,43 @@ public sealed partial class MailboxGrantRevocationV1Tests
     }
 
     [Theory]
+    [InlineData("predecessor")]
+    [InlineData("gap")]
+    [InlineData("removed")]
+    [InlineData("missing-prior")]
+    [InlineData("invalid-prior-signature")]
+    public async Task ReservedIntentMustReconcileActualSignedPredecessorBeforeSigning(string change)
+    {
+        var fixture = Fixture.Create(); var input = await fixture.VerifyMailboxAsync();
+        var host = await Host(fixture, input, new Clock());
+        var prior = Snapshot(input.Pma, expires: 195, serials: [Bytes(16, 0x51)]);
+        var core = MailboxGrantRevocationV1Codec.Decode(prior).CoreHash.ToArray();
+        var next = Snapshot(input.Pma, generation: change == "gap" ? 3UL : 2UL,
+            predecessor: change == "predecessor" ? Bytes(32, 0xf1) : core, issued: 195,
+            serials: change == "removed" ? [] : [Bytes(16, 0x51)]);
+        var reserved = await MailboxGrantRevocationV1Author.RestoreReservedAsync(host,
+            MailboxGrantRevocationV1Codec.Decode(next).SignatureInput);
+        if (change == "invalid-prior-signature") prior[^1] ^= 1;
+        await Assert.ThrowsAsync<CryptographicException>(() => MailboxGrantRevocationV1Author.VerifyReservedPredecessorAsync(
+            reserved, change == "missing-prior" ? ReadOnlyMemory<byte>.Empty : prior).AsTask());
+    }
+
+    [Fact]
+    public async Task ReservedExactGenesisAndSuccessorValidateWithoutReturningAdmissionAuthority()
+    {
+        var fixture = Fixture.Create(); var input = await fixture.VerifyMailboxAsync();
+        var host = await Host(fixture, input, new Clock());
+        var expired = Snapshot(input.Pma, expires: 195, serials: [Bytes(16, 0x51)]);
+        var genesis = await MailboxGrantRevocationV1Author.RestoreReservedAsync(host,
+            MailboxGrantRevocationV1Codec.Decode(expired).SignatureInput);
+        await MailboxGrantRevocationV1Author.VerifyReservedPredecessorAsync(genesis, ReadOnlyMemory<byte>.Empty);
+        var next = await MailboxGrantRevocationV1Author.PrepareCurrentAsync(host, MailboxCapabilityDomain.Deposit,
+            expired, new ReadOnlyMemory<byte>[] { Bytes(16, 0x51) });
+        await MailboxGrantRevocationV1Author.VerifyReservedPredecessorAsync(next, expired);
+        Assert.Equal(typeof(ValueTask), typeof(MailboxGrantRevocationV1Author).GetMethod(nameof(MailboxGrantRevocationV1Author.VerifyReservedPredecessorAsync))!.ReturnType);
+    }
+
+    [Theory]
     [InlineData("wrong-role")]
     [InlineData("invalid-signature")]
     [InlineData("changed-key")]

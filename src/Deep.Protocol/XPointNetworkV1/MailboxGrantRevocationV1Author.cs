@@ -19,6 +19,7 @@ public sealed class PreparedMailboxGrantRevocationV1
     public ReadOnlyMemory<byte> NetworkId => Unsigned.Field(1);
     public ReadOnlyMemory<byte> PolicyReference => Unsigned.Field(2);
     public ReadOnlyMemory<byte> IssuerPublicKey => Unsigned.Field(4);
+    public ReadOnlyMemory<byte> CumulativeRevokedSerials => Unsigned.Field(11);
     public MailboxCapabilityDomain Domain => Unsigned.Domain;
     public ulong Generation => Unsigned.Generation;
     public ulong ExpiresAt => Unsigned.ExpiresAt;
@@ -114,6 +115,29 @@ public static class MailboxGrantRevocationV1Author
         var exact = MailboxGrantRevocationV1Codec.Encode(Enumerable.Range(1, 11).Select(unsigned.Field).ToArray(), signature.Span);
         await VerifyReservedCompletionAsync(reservation, exact, cancellationToken).ConfigureAwait(false);
         return exact;
+    }
+
+    /// <summary>Reconcile a retained unsigned intent against the journal's actual
+    /// signed predecessor before signing it. No caller candidate becomes a floor.</summary>
+    public static async ValueTask VerifyReservedPredecessorAsync(PreparedMailboxGrantRevocationV1 reservation,
+        ReadOnlyMemory<byte> exactProtectedPredecessor, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(reservation); cancellationToken.ThrowIfCancellationRequested();
+        var prior = exactProtectedPredecessor.IsEmpty ? null : MailboxGrantRevocationV1Codec.Decode(exactProtectedPredecessor.Span);
+        var next = reservation.Unsigned; var host = reservation.Host;
+        if (prior is null ? next.Generation != 1 : next.Domain != prior.Domain || prior.Generation == ulong.MaxValue ||
+            next.Generation != prior.Generation + 1 || !Fixed(next.FieldSpan(6), prior.CoreHash.Span) || next.IssuedAt < prior.IssuedAt)
+            throw new CryptographicException("MGR1 reservation differs from the actual issuer predecessor.");
+        if (prior is not null)
+            for (var index = 0; index < prior.SerialCount; index++)
+                if (!next.ContainsSerial(prior.FieldSpan(11).Slice(index * 16, 16)))
+                    throw new CryptographicException("MGR1 reservation removed a cumulative revocation.");
+        var before = await host.ReadAsync(cancellationToken).ConfigureAwait(false);
+        RequireReservedContext(next, host, before);
+        if (prior is not null) MailboxGrantRevocationV1Verifier.RequireSnapshot(prior, host, before, true);
+        var after = await host.ReadAsync(cancellationToken).ConfigureAwait(false);
+        RequireReservedContext(next, host, after);
+        if (prior is not null) MailboxGrantRevocationV1Verifier.RequireSnapshot(prior, host, after, true);
     }
 
     /// <summary>Verify the journal's exact signed winner against its retained reservation.
