@@ -88,14 +88,14 @@ public static class MailboxGrantRevocationV1Verifier
 {
     public static bool RuntimeActivation => false;
 
-    /// <summary>Explicit new-scope enrollment only; never recovery from a missing existing protected floor.</summary>
-    public static async ValueTask<VerifiedMailboxGrantRevocationPlan> PlanGenesisAsync(
+    /// <summary>Pin a fresh signed snapshot for explicit genuinely new host-scope enrollment.
+    /// The shared issuer chain may already have advanced; never use this as existing-floor recovery.</summary>
+    public static async ValueTask<VerifiedMailboxGrantRevocationPlan> PlanInitialEnrollmentAsync(
         VerifiedMailboxHostAuthorityV2 host, ReadOnlyMemory<byte> exactSnapshot,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(host); cancellationToken.ThrowIfCancellationRequested();
         var snapshot = MailboxGrantRevocationV1Codec.Decode(exactSnapshot.Span);
-        if (snapshot.Generation != 1) throw new CryptographicException("MGR1 enrollment needs an exact signed genesis.");
         var before = await host.ReadAsync(cancellationToken).ConfigureAwait(false);
         RequireSnapshot(snapshot, host, before, false);
         var after = await host.ReadAsync(cancellationToken).ConfigureAwait(false);

@@ -92,6 +92,13 @@ public sealed class MailboxGrantRevocationV1FrozenTests
         Assert.Equal(Enumerable.Range(1, 11), contract.GetProperty("unsignedTags").EnumerateArray().Select(x => x.GetInt32()));
         Assert.False(contract.GetProperty("clientWireChanged").GetBoolean());
         Assert.False(contract.GetProperty("networkDistributionWireChanged").GetBoolean());
+        var initial = contract.GetProperty("initialEnrollment");
+        Assert.Equal(4, initial.EnumerateObject().Count());
+        Assert.Equal("explicit genuinely new protected host scope only", initial.GetProperty("scope").GetString());
+        Assert.Equal("fresh canonical current-role issuer-signed snapshot at any generation >=1", initial.GetProperty("snapshot").GetString());
+        Assert.Equal("immutable exact bytes; restored floor rejects lower generation or changed bytes at initial generation", initial.GetProperty("initialPin").GetString());
+        Assert.Equal("exact replay or sequential verified successor only; no reset or gap bypass", initial.GetProperty("existingFloor").GetString());
+        Assert.Null(typeof(MailboxGrantRevocationV1Verifier).GetMethod("PlanGenesisAsync"));
     }
 
     private static IEnumerable<object[]> Cases(string property)

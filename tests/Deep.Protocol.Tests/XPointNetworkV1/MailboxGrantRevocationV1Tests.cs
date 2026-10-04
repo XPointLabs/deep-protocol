@@ -18,12 +18,36 @@ public sealed class MailboxGrantRevocationV1Tests
     [Theory]
     [InlineData(MailboxCapabilityDomain.Deposit)]
     [InlineData(MailboxCapabilityDomain.Retrieve)]
+    public async Task NewHostCanPinFreshIssuerTailAfterGlobalGenesisExpired(MailboxCapabilityDomain role)
+    {
+        var fixture = Fixture.Create(); var input = await fixture.VerifyMailboxAsync();
+        var host = await Host(fixture, input, new Clock());
+        var expired = Snapshot(input.Pma, role, expires: 195);
+        var predecessor = MailboxGrantRevocationV1Codec.Decode(expired);
+        var tail = Snapshot(input.Pma, role, generation: 2, predecessor: predecessor.CoreHash.ToArray(),
+            issued: 195, serials: [Bytes(16, 0x51)]);
+        await Assert.ThrowsAsync<CryptographicException>(() =>
+            MailboxGrantRevocationV1Verifier.PlanInitialEnrollmentAsync(host, expired).AsTask());
+        var plan = await MailboxGrantRevocationV1Verifier.PlanInitialEnrollmentAsync(host, tail);
+        var floor = new Floor(plan, host.NetworkId);
+        var committed = await MailboxGrantRevocationV1Verifier.VerifyCommittedAsync(plan, floor.Exact, floor);
+        Assert.Equal(2UL, committed.Generation);
+        await Assert.ThrowsAsync<CryptographicException>(() => committed.EnsureGrantNotRevokedAsync(
+            Grant(input.Network, role, serial: 0x51)).AsTask());
+        await committed.EnsureGrantNotRevokedAsync(Grant(input.Network, role, serial: 0x52));
+        await Assert.ThrowsAsync<MailboxGrantRevocationFloorException>(() =>
+            MailboxGrantRevocationV1Verifier.PlanAdvanceAsync(host, tail, Snapshot(input.Pma, role)).AsTask());
+    }
+
+    [Theory]
+    [InlineData(MailboxCapabilityDomain.Deposit)]
+    [InlineData(MailboxCapabilityDomain.Retrieve)]
     public async Task SignedRoleAndCommittedFloor_RejectRevokedSerialAndAllowUnlistedCurrentGrant(MailboxCapabilityDomain role)
     {
         var fixture = Fixture.Create(); var input = await fixture.VerifyMailboxAsync();
         var host = await Host(fixture, input, new Clock());
         var snapshot = Snapshot(input.Pma, role, serials: [Bytes(16, 0x51)]);
-        var plan = await MailboxGrantRevocationV1Verifier.PlanGenesisAsync(host, snapshot);
+        var plan = await MailboxGrantRevocationV1Verifier.PlanInitialEnrollmentAsync(host, snapshot);
         var floor = new Floor(plan, host.NetworkId);
         var authority = await MailboxGrantRevocationV1Verifier.VerifyCommittedAsync(plan, floor.Exact, floor);
         await authority.EnsureGrantNotRevokedAsync(Grant(input.Network, role, 0x52));
@@ -40,13 +64,13 @@ public sealed class MailboxGrantRevocationV1Tests
     {
         var fixture = Fixture.Create(); var input = await fixture.VerifyMailboxAsync();
         var host = await Host(fixture, input, new Clock());
-        var plan = await MailboxGrantRevocationV1Verifier.PlanGenesisAsync(host, Snapshot(input.Pma));
+        var plan = await MailboxGrantRevocationV1Verifier.PlanInitialEnrollmentAsync(host, Snapshot(input.Pma));
         var floor = new Floor(plan, host.NetworkId);
         var authority = await MailboxGrantRevocationV1Verifier.VerifyCommittedAsync(plan, floor.Exact, floor);
         await authority.EnsureGrantNotRevokedAsync(Grant(input.Network));
         floor.Hash = ReadOnlyMemory<byte>.Empty;
         await Assert.ThrowsAsync<CryptographicException>(() => authority.EnsureGrantNotRevokedAsync(Grant(input.Network)).AsTask());
-        await Assert.ThrowsAsync<ApplicationCoreFormatException>(() => MailboxGrantRevocationV1Verifier.PlanGenesisAsync(host, ReadOnlyMemory<byte>.Empty).AsTask());
+        await Assert.ThrowsAsync<ApplicationCoreFormatException>(() => MailboxGrantRevocationV1Verifier.PlanInitialEnrollmentAsync(host, ReadOnlyMemory<byte>.Empty).AsTask());
     }
 
     [Fact]
@@ -58,7 +82,7 @@ public sealed class MailboxGrantRevocationV1Tests
         var parsedPrior = MailboxGrantRevocationV1Codec.Decode(prior);
         var next = Snapshot(input.Pma, generation: 2, predecessor: parsedPrior.CoreHash.ToArray(),
             issued: 195, serials: [Bytes(16, 0x51), Bytes(16, 0x52)]);
-        await Assert.ThrowsAsync<CryptographicException>(() => MailboxGrantRevocationV1Verifier.PlanGenesisAsync(host, prior).AsTask());
+        await Assert.ThrowsAsync<CryptographicException>(() => MailboxGrantRevocationV1Verifier.PlanInitialEnrollmentAsync(host, prior).AsTask());
         var plan = await MailboxGrantRevocationV1Verifier.PlanAdvanceAsync(host, prior, next);
         var floor = new Floor(plan, host.NetworkId);
         var authority = await MailboxGrantRevocationV1Verifier.VerifyCommittedAsync(plan, floor.Exact, floor);
@@ -122,7 +146,7 @@ public sealed class MailboxGrantRevocationV1Tests
         if (change == "policy-expiry") fields[8] = U64(301);
         var exact = Sign(fields, MailboxCapabilityDomain.Deposit);
         if (change == "signature") exact[^1] ^= 1;
-        var rejected = await Assert.ThrowsAsync<CryptographicException>(() => MailboxGrantRevocationV1Verifier.PlanGenesisAsync(host, exact).AsTask());
+        var rejected = await Assert.ThrowsAsync<CryptographicException>(() => MailboxGrantRevocationV1Verifier.PlanInitialEnrollmentAsync(host, exact).AsTask());
         Assert.IsNotType<MailboxGrantRevocationFloorException>(rejected);
     }
 
@@ -133,7 +157,7 @@ public sealed class MailboxGrantRevocationV1Tests
         var host = await Host(fixture, input, clock);
         var exact = Snapshot(input.Pma); var original = exact.ToArray();
         clock.OnRead = () => Array.Fill(exact, (byte)0);
-        var plan = await MailboxGrantRevocationV1Verifier.PlanGenesisAsync(host, exact);
+        var plan = await MailboxGrantRevocationV1Verifier.PlanInitialEnrollmentAsync(host, exact);
         Assert.Equal(original, plan.ExactSnapshot.ToArray());
         clock.OnRead = null;
         var floor = new Floor(plan, host.NetworkId);
@@ -152,7 +176,7 @@ public sealed class MailboxGrantRevocationV1Tests
     {
         var fixture = Fixture.Create(); var input = await fixture.VerifyMailboxAsync(); var clock = new Clock();
         var host = await Host(fixture, input, clock);
-        var plan = await MailboxGrantRevocationV1Verifier.PlanGenesisAsync(host, Snapshot(input.Pma));
+        var plan = await MailboxGrantRevocationV1Verifier.PlanInitialEnrollmentAsync(host, Snapshot(input.Pma));
         var floor = new Floor(plan, host.NetworkId);
         using var cancellation = new CancellationTokenSource();
         floor.OnRead = () =>
@@ -173,7 +197,7 @@ public sealed class MailboxGrantRevocationV1Tests
     {
         var fixture = Fixture.Create(); var input = await fixture.VerifyMailboxAsync(); var clock = new Clock();
         var host = await Host(fixture, input, clock);
-        var plan = await MailboxGrantRevocationV1Verifier.PlanGenesisAsync(host, Snapshot(input.Pma));
+        var plan = await MailboxGrantRevocationV1Verifier.PlanInitialEnrollmentAsync(host, Snapshot(input.Pma));
         var floor = new Floor(plan, host.NetworkId);
         var authority = await MailboxGrantRevocationV1Verifier.VerifyCommittedAsync(plan, floor.Exact, floor);
         var exactGrant = Grant(input.Network, serial: 0x52, expires: 220);
@@ -187,7 +211,7 @@ public sealed class MailboxGrantRevocationV1Tests
     {
         var fixture = Fixture.Create(); var input = await fixture.VerifyMailboxAsync();
         var host = await Host(fixture, input, new Clock());
-        var plan = await MailboxGrantRevocationV1Verifier.PlanGenesisAsync(host, Snapshot(input.Pma));
+        var plan = await MailboxGrantRevocationV1Verifier.PlanInitialEnrollmentAsync(host, Snapshot(input.Pma));
         var floor = new Floor(plan, host.NetworkId);
         var authority = await MailboxGrantRevocationV1Verifier.VerifyCommittedAsync(plan, floor.Exact, floor);
         var exact = Grant(input.Network, serial: 0x52);
@@ -245,7 +269,7 @@ public sealed class MailboxGrantRevocationV1Tests
             if (change == "reserved") exact[11] = 1;
             if (change == "truncated") exact = exact[..^1];
             if (change == "trailing") exact = [.. exact, 0];
-            await Assert.ThrowsAsync<ApplicationCoreFormatException>(() => MailboxGrantRevocationV1Verifier.PlanGenesisAsync(host, exact).AsTask());
+            await Assert.ThrowsAsync<ApplicationCoreFormatException>(() => MailboxGrantRevocationV1Verifier.PlanInitialEnrollmentAsync(host, exact).AsTask());
         }
         Assert.Equal(before, clock.Reads);
     }
