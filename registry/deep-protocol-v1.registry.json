@@ -92,19 +92,19 @@
       "id": "contact-resolver-v1",
       "kind": "normative-document",
       "path": "docs/architecture/CONTACT-RESOLVER-V1.md",
-      "normalizedSha256": "1affd53c6bc3c5c756889c3dfdcb056a3aeccdbedf2863b3e38959214bf53431"
+      "normalizedSha256": "e9d025362a017674cd65bfe03b73761bc0073bfd2669caa8d31011a0cfc6ff92"
     },
     {
       "id": "mailbox-grant-revocation-v1",
       "kind": "normative-document",
       "path": "docs/survival-program/releases/v3.0.0/specs/mailbox-grant-revocation-v1.registry.json",
-      "normalizedSha256": "13f4c42ada067dc9ba343f0cf954200cf74d9b101c3edab4f41f8d5041e19960"
+      "normalizedSha256": "09f83f521d126bf92d519fde32ccd2571d4ce2f0d7405c2dba14a3062f0613b2"
     },
     {
       "id": "mailbox-grant-revocation-v1-schema",
       "kind": "normative-document",
       "path": "docs/survival-program/releases/v3.0.0/specs/mailbox-grant-revocation-v1.registry.schema.json",
-      "normalizedSha256": "277c88036447016f5f03828473ed5b3822cbe14316d59daf654fddd9a14c87f8"
+      "normalizedSha256": "1ae5f9201f4d0e9741fd0a778ff60109791c7860d3781d8dd99e16c1b2b05fef"
     },
     {
       "id": "mailbox-grant-revocation-v1-vectors",
@@ -146,7 +146,7 @@
       "id": "production-wire-source",
       "kind": "production-source-scan",
       "path": "deep-protocol/src",
-      "normalizedSha256": "e2e435f6c4d055403bba2a287ad21eea4cf93459c2a0e1e200351fce6a7f21f3"
+      "normalizedSha256": "7dcb83a0fc0135c9e16c4ca350a8c68ae9d563b429d543032230d8172fd607d4"
     }
   ],
   "productionInventory": {

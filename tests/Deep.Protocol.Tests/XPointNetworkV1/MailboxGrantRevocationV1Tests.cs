@@ -13,7 +13,7 @@ namespace Deep.Protocol.Tests.XPointNetworkV1;
 
 /// <summary>Real signed network/role proofs; floor I/O is test-owned memory.
 /// This is not native protected-store, node admission or physical delivery evidence.</summary>
-public sealed class MailboxGrantRevocationV1Tests
+public sealed partial class MailboxGrantRevocationV1Tests
 {
     [Theory]
     [InlineData(MailboxCapabilityDomain.Deposit)]

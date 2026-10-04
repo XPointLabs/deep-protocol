@@ -34,6 +34,19 @@ public sealed class VerifiedMailboxGrantRevocationPlan
     public MailboxCapabilityDomain Domain => Snapshot.Domain;
 }
 
+/// <summary>Sequential historical floor write only; cannot be committed as admission evidence.</summary>
+public sealed class VerifiedMailboxGrantRevocationHistoryPlan
+{
+    internal VerifiedMailboxGrantRevocationHistoryPlan(VerifiedMailboxHostAuthorityV2 host, ParsedMailboxGrantRevocationV1 snapshot)
+    { Host = host; Snapshot = snapshot; }
+    internal VerifiedMailboxHostAuthorityV2 Host { get; }
+    internal ParsedMailboxGrantRevocationV1 Snapshot { get; }
+    public ReadOnlyMemory<byte> ExactSnapshot => Snapshot.CanonicalBytes;
+    public ReadOnlyMemory<byte> CoreHash => Snapshot.CoreHash;
+    public ulong Generation => Snapshot.Generation;
+    public MailboxCapabilityDomain Domain => Snapshot.Domain;
+}
+
 /// <summary>Current signed serial revocations after exact protected read-back.
 /// Does not authorize holder, body, local exit, replay, mutation or receipt.</summary>
 public sealed class VerifiedMailboxGrantRevocationV1
@@ -106,6 +119,19 @@ public static class MailboxGrantRevocationV1Verifier
     public static async ValueTask<VerifiedMailboxGrantRevocationPlan> PlanAdvanceAsync(
         VerifiedMailboxHostAuthorityV2 host, ReadOnlyMemory<byte> exactProtectedPredecessor,
         ReadOnlyMemory<byte> exactCandidate, CancellationToken cancellationToken = default)
+        => new(host, await PlanTransitionAsync(host, exactProtectedPredecessor,
+            exactCandidate, false, cancellationToken).ConfigureAwait(false));
+
+    /// <summary>One exact existing-floor step; expired bytes can prove history, never admission.</summary>
+    public static async ValueTask<VerifiedMailboxGrantRevocationHistoryPlan> PlanCatchUpSuccessorAsync(
+        VerifiedMailboxHostAuthorityV2 host, ReadOnlyMemory<byte> exactProtectedPredecessor,
+        ReadOnlyMemory<byte> exactCandidate, CancellationToken cancellationToken = default)
+        => new(host, await PlanTransitionAsync(host, exactProtectedPredecessor,
+            exactCandidate, true, cancellationToken).ConfigureAwait(false));
+
+    private static async ValueTask<ParsedMailboxGrantRevocationV1> PlanTransitionAsync(
+        VerifiedMailboxHostAuthorityV2 host, ReadOnlyMemory<byte> exactProtectedPredecessor,
+        ReadOnlyMemory<byte> exactCandidate, bool historical, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(host); cancellationToken.ThrowIfCancellationRequested();
         var prior = MailboxGrantRevocationV1Codec.Decode(exactProtectedPredecessor.Span);
@@ -113,7 +139,8 @@ public static class MailboxGrantRevocationV1Verifier
         var before = await host.ReadAsync(cancellationToken).ConfigureAwait(false);
         // Prior expiry does not erase a restored floor. It cannot authorize admission.
         RequireSnapshot(prior, host, before, true);
-        RequireSnapshot(next, host, before, false);
+        RequireSnapshot(next, host, before, historical);
+        if (next.NotBefore > before.Lower) throw new CryptographicException("MGR1 candidate starts in the future.");
         if (prior.Domain != next.Domain) throw new CryptographicException("MGR1 successor cannot change role.");
         if (next.Generation < prior.Generation)
             throw Floor(MailboxGrantRevocationFloorError.Rollback, "MGR1 candidate is below the protected floor.");
@@ -135,8 +162,33 @@ public static class MailboxGrantRevocationV1Verifier
         }
         var after = await host.ReadAsync(cancellationToken).ConfigureAwait(false);
         RequireSnapshot(prior, host, after, true);
-        RequireSnapshot(next, host, after, false);
-        return new(host, next);
+        RequireSnapshot(next, host, after, historical);
+        if (next.NotBefore > after.Lower) throw new CryptographicException("MGR1 candidate starts in the future.");
+        return next;
+    }
+
+    /// <summary>Validate historical commit facts only. No revocation capability is returned.</summary>
+    public static async ValueTask VerifyHistoricalCommitAsync(
+        VerifiedMailboxGrantRevocationHistoryPlan plan, ReadOnlyMemory<byte> exactProtectedReadBack,
+        IMailboxGrantRevocationFloorReader floors, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(plan); ArgumentNullException.ThrowIfNull(floors);
+        cancellationToken.ThrowIfCancellationRequested();
+        var snapshot = MailboxGrantRevocationV1Codec.Decode(exactProtectedReadBack.Span);
+        if (!Fixed(snapshot.CanonicalBytes.Span, plan.ExactSnapshot.Span))
+            throw new CryptographicException("MGR1 historical read-back differs from the verified plan.");
+        var before = await plan.Host.ReadAsync(cancellationToken).ConfigureAwait(false);
+        RequireSnapshot(snapshot, plan.Host, before, true);
+        if (snapshot.NotBefore > before.Lower) throw new CryptographicException("MGR1 history starts in the future.");
+        var hash = await floors.ReadCurrentCoreHashAsync(plan.Host.NetworkId, snapshot.Field(2),
+            snapshot.Domain, cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (hash.Length != 32) throw new CryptographicException("The protected MGR1 historical floor is unavailable.");
+        var ownedHash = hash.ToArray();
+        var after = await plan.Host.ReadAsync(cancellationToken).ConfigureAwait(false);
+        RequireSnapshot(snapshot, plan.Host, after, true);
+        if (snapshot.NotBefore > after.Lower || !Fixed(ownedHash, snapshot.CoreHash.Span))
+            throw new CryptographicException("MGR1 history is not the actual protected floor.");
     }
 
     /// <summary>Host must supply actual protected-store read-back and a reader bound to that same scoped store.</summary>
@@ -158,6 +210,16 @@ public static class MailboxGrantRevocationV1Verifier
         VerifiedMailboxHostAuthorityV2 host, (VerifiedMailboxAuthorityV2 Policy, ulong Lower, ulong Upper) current,
         bool protectedPredecessor)
     {
+        RequireSnapshotContext(snapshot, host, current, protectedPredecessor);
+        if (!PublicKeyAuth.VerifyDetached(snapshot.FieldSpan(12).ToArray(), snapshot.SignatureInput.ToArray(),
+            current.Policy.ResolveIssuer(snapshot.Domain).PublicKey.ToArray()))
+            throw new CryptographicException("MGR1 role signature is invalid.");
+    }
+
+    internal static void RequireSnapshotContext(ParsedMailboxGrantRevocationV1 snapshot,
+        VerifiedMailboxHostAuthorityV2 host, (VerifiedMailboxAuthorityV2 Policy, ulong Lower, ulong Upper) current,
+        bool protectedPredecessor)
+    {
         var policy = current.Policy;
         var issuer = policy.ResolveIssuer(snapshot.Domain);
         var reference = XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.PMA2, policy.CoreHash.Span);
@@ -165,8 +227,7 @@ public static class MailboxGrantRevocationV1Verifier
             !Fixed(snapshot.FieldSpan(4), issuer.PublicKey.Span) || snapshot.NotBefore < policy.NotBeforeUnixSeconds ||
             snapshot.ExpiresAt > policy.ExpiresAtUnixSeconds || snapshot.IssuedAt < issuer.ValidFromUnixSeconds ||
             snapshot.IssuedAt > current.Lower ||
-            (!protectedPredecessor && (snapshot.NotBefore > current.Lower || current.Upper >= snapshot.ExpiresAt)) ||
-            !PublicKeyAuth.VerifyDetached(snapshot.FieldSpan(12).ToArray(), snapshot.SignatureInput.ToArray(), issuer.PublicKey.ToArray()))
+            (!protectedPredecessor && (snapshot.NotBefore > current.Lower || current.Upper >= snapshot.ExpiresAt)))
             throw new CryptographicException("MGR1 is outside current PMA2 role/network/protected-time authority.");
     }
 
