@@ -26,6 +26,16 @@ an independent current monotonic clock. Directory issuance remains with the
 directory owner. This source/API candidate changes no wire and grants no
 production activation or permission to reset genesis, floors or node keys.
 
+The operational genesis candidate no longer imposes node-ID/Ed25519-key equality
+absent from the frozen XND1 contract. The separate canonical fields are preserved;
+generation-zero, bounded nonzero IDs/keys, unique node IDs/hosts/origins and
+independently verified descriptor signatures remain required. Invalid identity
+metadata rejects before operational signer callbacks. Successor identity-key
+immutability is unchanged. See the [descriptor-key checkpoint](testing/s03-descriptor-keys-2026-10-04.md)
+for the matching native mailbox consumer and remaining package/activation gates.
+Existing installed identities are not regenerated, migrated or rotated by this
+source change. Consumers require the matching source/package repin before use.
+
 ### DID2 reachability successor candidate
 
 [DR-0071](../../docs/survival-program/decisions/DR-0071-did2-reachability-advertisement-successor.md)

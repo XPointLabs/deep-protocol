@@ -533,8 +533,8 @@ public static class XPointNetworkOperationalGenesisAuthor
         var signer = node.IdentitySigner;
         var nodeId = signer.SignerId.ToArray();
         var publicKey = signer.Ed25519PublicKey.ToArray();
-        if (!nodeId.AsSpan().SequenceEqual(publicKey) || signer.KeyGeneration != 0)
-            throw new CryptographicException("A genesis node ID must equal its generation-zero Ed25519 identity key.");
+        if (signer.KeyGeneration != 0)
+            throw new CryptographicException("A genesis node identity signer must have key generation zero.");
         var failureDomain = XPointNetworkCrypto.Sha256Domain(
             XPointNetworkRegistry.FailureDomainDomain,
             Join(request.Bootstrap.Authority.NetworkId.ToArray(), node.OperatorId.ToArray(),
@@ -809,7 +809,10 @@ public static class XPointNetworkOperationalGenesisAuthor
         {
             ArgumentNullException.ThrowIfNull(node);
             var id = node.IdentitySigner.SignerId.Span;
+            var identityKey = node.IdentitySigner.Ed25519PublicKey.Span;
             if (id.Length != 32 || id.IndexOfAnyExcept((byte)0) < 0 ||
+                identityKey.Length != 32 || identityKey.IndexOfAnyExcept((byte)0) < 0 ||
+                node.IdentitySigner.KeyGeneration != 0 ||
                 !ids.Add(Convert.ToHexString(id)) ||
                 !hosts.Add(Convert.ToHexString(node.HostId.Span)) ||
                 !origins.Add($"{node.OriginAddressFamily}:{Convert.ToHexString(node.OriginAddress.Span)}:{node.OriginPort}"))
