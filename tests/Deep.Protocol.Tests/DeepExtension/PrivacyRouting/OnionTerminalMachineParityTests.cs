@@ -51,7 +51,7 @@ public sealed class OnionTerminalMachineParityTests
             results = [ProtocolMagic.XPO1, ProtocolMagic.XIS1, ProtocolMagic.XPC1,
                 ProtocolMagic.XUS1, ProtocolMagic.XMC2, ProtocolMagic.XIC1, ProtocolMagic.XCS2];
             requestMaximum = ContactCoordinationOnionCodec.MaximumRequestBytes;
-            Assert.Equal(12 + 171_598, requestMaximum); // accepted DR-0079 V3 predecessor envelope
+            Assert.Equal(12 + 171_614, requestMaximum); // DR-0089 key-free one-time publication envelope
             Assert.Equal(PrivacyRoutingLimits.MaximumContactResolverRequestBytes, requestMaximum);
             Assert.Equal(OnionLimits.MaximumContactResolverRequestBytes, requestMaximum);
             resultMaximum = PrivacyRoutingLimits.MaximumContactResolverResponseBytes;

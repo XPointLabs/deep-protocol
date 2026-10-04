@@ -150,9 +150,11 @@ public static class Xpa1PublicationAuthorizationVerifier
             // Reparse exact V2 bytes before any clock/source callback.
             request = Xpu1Codec.Decode(request.CanonicalBytes.Span);
             var parsed = DeepIdV2ContactPublicationCodec.DecodeXpu1(request.CanonicalBytes.Span);
-            if (request.Generation != 0 || request.UsageLimit != 0 ||
-                parsed.Authorization.Field(5).Span[0] != (byte)Xpa1PublicationKind.PermanentAddress)
-                Fail("UnsupportedPublicationKind", "Only current DID2 reusable genesis publication is admitted.");
+            var kind = (Xpa1PublicationKind)parsed.Authorization.Field(5).Span[0];
+            if (request.Generation != 0 ||
+                !(kind == Xpa1PublicationKind.PermanentAddress && request.UsageLimit == 0 ||
+                  kind == Xpa1PublicationKind.OneTimeInvite && request.UsageLimit == 1))
+                Fail("UnsupportedPublicationKind", "Only exact current DID2 reusable or one-time genesis publication is admitted.");
             if (request.ExpiresAtUnixSeconds <= request.IssuedAtUnixSeconds ||
                 request.ExpiresAtUnixSeconds - request.IssuedAtUnixSeconds > 120 ||
                 ServiceWire.U64(parsed.Authorization.Field(15).Span) != request.IssuedAtUnixSeconds ||

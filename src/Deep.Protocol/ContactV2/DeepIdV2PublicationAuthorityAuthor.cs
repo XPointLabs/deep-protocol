@@ -40,35 +40,64 @@ public static partial class DeepIdV2PublicationAuthorityAuthor
         CancellationToken ct = default) =>
         AuthorRequestCoreAsync(route, contact, device, requestNonce32, operationId32, ownerRetrieveCapability32, null, ct);
 
-    private static async ValueTask<AuthoredDeepIdV2PublicationRequest> AuthorRequestCoreAsync(
+    public static ValueTask<AuthoredDeepIdV2PublicationRequest> AuthorOneTimeGenesisRequestAsync(
+        VerifiedDeepIdV2ContactRouteClosure route, AuthoredDeepIdV2OneTimeContactObject contact,
+        OwnedGenesisDeviceSecrets device, ReadOnlyMemory<byte> requestNonce32,
+        ReadOnlyMemory<byte> operationId32, ReadOnlyMemory<byte> ownerRetrieveCapability32,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(contact); ArgumentNullException.ThrowIfNull(route);
+        if (route.Invite.Field(9).Span[0] != 2)
+            throw new CryptographicException("One-time request author requires the exact kind-2 route.");
+        return AuthorRequestBodyCoreAsync(route, contact.Closure, contact.ProtectedDcr1, contact.PublicLocator,
+            device, requestNonce32, operationId32, ownerRetrieveCapability32, null, ct);
+    }
+
+    private static ValueTask<AuthoredDeepIdV2PublicationRequest> AuthorRequestCoreAsync(
         VerifiedDeepIdV2ContactRouteClosure route, AuthoredDeepIdV2ContactObject contact,
         OwnedGenesisDeviceSecrets device, ReadOnlyMemory<byte> requestNonce32,
         ReadOnlyMemory<byte> operationId32, ReadOnlyMemory<byte> ownerRetrieveCapability32,
         VerifiedDeepIdV2PublicationPredecessor? predecessor, CancellationToken ct)
     {
-        ArgumentNullException.ThrowIfNull(route); ArgumentNullException.ThrowIfNull(contact);
+        ArgumentNullException.ThrowIfNull(contact); ArgumentNullException.ThrowIfNull(route);
+        if (route.Invite.Field(9).Span[0] != 1)
+            throw new CryptographicException("Reusable request author requires the exact kind-1 route.");
+        return AuthorRequestBodyCoreAsync(route, contact.Closure, contact.ProtectedDcr1, new byte[16],
+            device, requestNonce32, operationId32, ownerRetrieveCapability32, predecessor, ct);
+    }
+
+    private static async ValueTask<AuthoredDeepIdV2PublicationRequest> AuthorRequestBodyCoreAsync(
+        VerifiedDeepIdV2ContactRouteClosure route, ParsedDcr1V2 exactClosure,
+        ReadOnlyMemory<byte> protectedDcr1, ReadOnlyMemory<byte> publicLocator,
+        OwnedGenesisDeviceSecrets device, ReadOnlyMemory<byte> requestNonce32,
+        ReadOnlyMemory<byte> operationId32, ReadOnlyMemory<byte> ownerRetrieveCapability32,
+        VerifiedDeepIdV2PublicationPredecessor? predecessor, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(route); ArgumentNullException.ThrowIfNull(exactClosure);
         ArgumentNullException.ThrowIfNull(device); ct.ThrowIfCancellationRequested();
         Require32(requestNonce32.Span); Require32(operationId32.Span); Require32(ownerRetrieveCapability32.Span);
         var nonce = requestNonce32.ToArray(); var operation = operationId32.ToArray();
         var owner = ownerRetrieveCapability32.ToArray();
+        var closure = DeepIdV2ResolverClosureCodec.Decode(exactClosure.CanonicalBytes.Span);
+        var ciphertext = protectedDcr1.ToArray(); var locator = publicLocator.ToArray();
         try
         {
             var first = await route.ReadCurrentTimeAsync(ct).ConfigureAwait(false);
-            if (predecessor is null && U64(contact.Closure.Bundle.Field(8).Span) != 0)
+            if (predecessor is null && U64(closure.Bundle.Field(8).Span) != 0)
                 throw new CryptographicException("Genesis publication cannot replace a nonzero contact generation.");
             var expiry = RequestExpiry(route, first.LowerUnixSeconds);
             var placeholder = new byte[64]; placeholder[^1] = 1;
             var freshness = route.Recipient.Freshness;
-            var minimum = contact.Closure.Bundle.Field(21);
+            var minimum = closure.Bundle.Field(21);
             var wire = new ContactPublicationAuthorityWireRequest(route.Network.NetworkId.Span, nonce,
                 freshness.QueriedDirectoryLeafKey.Span, U64(minimum.Span),
                 minimum.Span[8..], route.Recipient.Authorization.Record.CanonicalBytes.Span,
-                contact.Closure.CanonicalBytes.Span, route.ExactRouteClosure.Span, operation,
-                U64(contact.Closure.Bundle.Field(8).Span),
+                closure.CanonicalBytes.Span, route.ExactRouteClosure.Span, operation,
+                U64(closure.Bundle.Field(8).Span),
                 predecessor is null ? new byte[32] : predecessor.Object.CiphertextHash.ToArray(),
-                contact.ProtectedDcr1.Span, first.LowerUnixSeconds, expiry,
-                U64(contact.Closure.Bundle.Field(18).Span), owner, placeholder,
-                predecessor is null ? ReadOnlySpan<byte>.Empty : predecessor.Result.WireBytes.Span);
+                ciphertext, first.LowerUnixSeconds, expiry,
+                U64(closure.Bundle.Field(18).Span), owner, placeholder,
+                predecessor is null ? ReadOnlySpan<byte>.Empty : predecessor.Result.WireBytes.Span, locator);
             RequirePlaintext(route, wire, first, predecessor, ct);
             var signature = device.SignCurrentContactPublicationRequest(wire, route.Recipient.Authorization);
             try
@@ -84,6 +113,7 @@ public static partial class DeepIdV2PublicationAuthorityAuthor
         {
             CryptographicOperations.ZeroMemory(nonce); CryptographicOperations.ZeroMemory(operation);
             CryptographicOperations.ZeroMemory(owner);
+            CryptographicOperations.ZeroMemory(ciphertext); CryptographicOperations.ZeroMemory(locator);
         }
     }
 
@@ -137,12 +167,13 @@ public static partial class DeepIdV2PublicationAuthorityAuthor
         var prior = await route.ReadCurrentTimeAsync(ct).ConfigureAwait(false);
         await VerifyRequestCoreAsync(route, request, predecessor, ct).ConfigureAwait(false);
         var closure = DeepIdV2ResolverClosureCodec.Decode(request.ExactDcr1.Span); var bundle = closure.Bundle;
-        var locator = Locator(request.NetworkId.Span, bundle.Field(22).Span);
+        var locator = request.LocatorHash.ToArray();
         var placement = ContactServicePlacementFactory.Create(route.Network, ContactServiceRequestKind.PublishInvite, locator);
+        var usage = request.PublicationKind == 1 ? new byte[4] : new byte[] { 0, 0, 0, 1 };
         ReadOnlyMemory<byte>[] body = [request.NetworkId, request.OperationId, placement.ViewHash, placement.PlacementHash,
             U64Bytes(request.IssuedAtUnixSeconds), U64Bytes(request.ExpiresAtUnixSeconds), locator,
             SHA256.HashData(bundle.Field(14).Span[40..]), U64Bytes(request.Generation), request.PredecessorObjectHash,
-            SHA256.HashData(request.ObjectCiphertext.Span), request.ObjectCiphertext, new byte[4],
+            SHA256.HashData(request.ObjectCiphertext.Span), request.ObjectCiphertext, usage,
             U64Bytes(request.EffectiveExpiresAtUnixSeconds), SHA256.HashData(request.ExactRouteClosure.Span),
             request.ExactRouteClosure, new byte[594 + count * 96], request.OwnerRetrieveCapability];
         var hash = DeepIdV2ContactPublicationCodec.ComputeAuthorizedBodyHash(Encode(ProtocolMagicBytes.XPU1,
@@ -152,8 +183,8 @@ public static partial class DeepIdV2PublicationAuthorityAuthor
         hash.CopyTo(identity, 32); issuanceHead.Span.CopyTo(identity.AsSpan(64));
         byte[][] xpa = [request.NetworkId.ToArray(), ApplicationCoreFormat.Sha256Domain(
             "Deep/ContactResolver/V2/publication-authorization-id", identity), request.OperationId.ToArray(), locator,
-            [1], SHA256.HashData(closure.CanonicalBytes.Span), SHA256.HashData(bundle.CanonicalBytes.Span),
-            body[7].ToArray(), U64Bytes(request.Generation), request.PredecessorObjectHash.ToArray(), body[10].ToArray(), new byte[4],
+            [request.PublicationKind], SHA256.HashData(closure.CanonicalBytes.Span), SHA256.HashData(bundle.CanonicalBytes.Span),
+            body[7].ToArray(), U64Bytes(request.Generation), request.PredecessorObjectHash.ToArray(), body[10].ToArray(), usage,
             U64Bytes(request.EffectiveExpiresAtUnixSeconds), PolicyHash(request.ExactDca1.Span),
             U64Bytes(request.IssuedAtUnixSeconds), U64Bytes(request.IssuedAtUnixSeconds), U64Bytes(request.ExpiresAtUnixSeconds),
             issuanceHead.ToArray(), hash, [checked((byte)count)], new byte[count * 96]];
@@ -230,10 +261,12 @@ public static partial class DeepIdV2PublicationAuthorityAuthor
             !Fixed(bundle.Field(14).Span[40..], route.ExactXir1V2.Span) ||
             request.Generation != U64(bundle.Field(8).Span) || request.Generation != U64(route.Invite.Field(3).Span) ||
             (predecessor is null && (request.Generation != 0 || request.PredecessorObjectHash.Span.IndexOfAnyExcept((byte)0) >= 0)) ||
-            BinaryPrimitives.ReadUInt32BigEndian(bundle.Field(16).Span) != 9 ||
+            route.Invite.Field(9).Span[0] != request.PublicationKind ||
+            BinaryPrimitives.ReadUInt32BigEndian(bundle.Field(16).Span) != (request.PublicationKind == 1 ? 9u : 10u) ||
+            request.PublicationKind == 2 && (predecessor is not null || request.Generation != 0) ||
             request.IssuedAtUnixSeconds > current.LowerUnixSeconds || current.UpperUnixSeconds >= request.ExpiresAtUnixSeconds ||
             request.ExpiresAtUnixSeconds > RequestExpiry(route, request.IssuedAtUnixSeconds))
-            throw new CryptographicException("Publication request is not exact current owned reusable DID2 lineage.");
+            throw new CryptographicException("Publication request is not exact current owned DID2 lineage.");
         predecessor?.RequireSuccessor(route, request, current, ct);
         DeepIdV2ResolverClosureCodec.VerifyIdentityAndSupport(closure, dca, current.UpperUnixSeconds);
     }
@@ -246,7 +279,7 @@ public static partial class DeepIdV2PublicationAuthorityAuthor
         try
         {
             if (!PublicKeyAuth.VerifyDetached(request.PublisherSignature.ToArray(), input, device.Certificate.DeviceEd25519PublicKey.ToArray()))
-                throw new CryptographicException("The publisher did not sign the complete exact V3 request.");
+                throw new CryptographicException("The publisher did not sign the complete exact V4 request.");
         }
         finally { CryptographicOperations.ZeroMemory(input); }
     }
@@ -268,7 +301,7 @@ public static partial class DeepIdV2PublicationAuthorityAuthor
         new(r.NetworkId.Span, r.RequestNonce.Span, r.DirectoryLookupKey.Span, r.MinimumAdh1Generation,
             r.MinimumAdh1CoreHash.Span, r.ExactDca1.Span, r.ExactDcr1.Span, r.ExactRouteClosure.Span,
             r.OperationId.Span, r.Generation, r.PredecessorObjectHash.Span, r.ObjectCiphertext.Span,
-            r.IssuedAtUnixSeconds, r.ExpiresAtUnixSeconds, r.EffectiveExpiresAtUnixSeconds, r.OwnerRetrieveCapability.Span, sig, r.ExactPriorXpo1.Span);
+            r.IssuedAtUnixSeconds, r.ExpiresAtUnixSeconds, r.EffectiveExpiresAtUnixSeconds, r.OwnerRetrieveCapability.Span, sig, r.ExactPriorXpo1.Span, r.OneTimeLocator.Span);
     private static byte[] Encode(ReadOnlySpan<byte> magic, ushort[] tags, ReadOnlyMemory<byte>[] fields)
     {
         var bytes = new byte[12 + fields.Sum(value => 8 + value.Length)];
@@ -276,8 +309,6 @@ public static partial class DeepIdV2PublicationAuthorityAuthor
         for (var i = 0; i < tags.Length; i++) writer.Write(tags[i], fields[i].Span);
         writer.Complete(); return bytes;
     }
-    private static byte[] Locator(ReadOnlySpan<byte> network, ReadOnlySpan<byte> didHash)
-    { var bytes = new byte[48]; network.CopyTo(bytes); didHash.CopyTo(bytes.AsSpan(16)); return ApplicationCoreFormat.Sha256Domain("Deep/ContactResolver/V2/permanent-locator", bytes); }
     private static byte[] PolicyHash(ReadOnlySpan<byte> dca) => ApplicationCoreFormat.Sha256Domain("Deep/ContactResolver/V2/publication-policy", dca);
     private static byte[] U64Bytes(ulong n) { var bytes = new byte[8]; BinaryPrimitives.WriteUInt64BigEndian(bytes, n); return bytes; }
     private static ulong U64(ReadOnlySpan<byte> n) => BinaryPrimitives.ReadUInt64BigEndian(n);

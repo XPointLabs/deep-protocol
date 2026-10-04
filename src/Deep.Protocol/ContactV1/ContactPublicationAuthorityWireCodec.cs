@@ -6,7 +6,7 @@ using Deep.Protocol.ContactV2;
 namespace Deep.Protocol.ContactV1;
 
 /// <summary>
-/// Untrusted, bounded wire request for one permanent-address XPA1 authorization.
+/// Untrusted, bounded wire request for one DID2 publication authorization.
 /// It carries the exact publisher-authored closure; the authority must reverify
 /// every record against its own current directory and network state.
 /// </summary>
@@ -25,6 +25,8 @@ public sealed class ContactPublicationAuthorityWireRequest
     private readonly byte[] ownerRetrieveCapability;
     private readonly byte[] exactPriorXpo1;
     private readonly byte[] publisherSignature;
+    private readonly byte[] oneTimeLocator;
+    private readonly byte[] locatorHash;
 
     public ContactPublicationAuthorityWireRequest(
         ReadOnlySpan<byte> networkId,
@@ -44,7 +46,8 @@ public sealed class ContactPublicationAuthorityWireRequest
         ulong effectiveExpiresAtUnixSeconds,
         ReadOnlySpan<byte> ownerRetrieveCapability,
         ReadOnlySpan<byte> publisherSignature,
-        ReadOnlySpan<byte> exactPriorXpo1 = default)
+        ReadOnlySpan<byte> exactPriorXpo1 = default,
+        ReadOnlySpan<byte> oneTimeLocator16 = default)
     {
         this.networkId = Required(networkId, 16, nameof(networkId));
         this.requestNonce = Required(requestNonce, 32, nameof(requestNonce));
@@ -64,6 +67,31 @@ public sealed class ContactPublicationAuthorityWireRequest
         if (!Fixed(dcr.Bundle.Field(1).Span, this.networkId) ||
             !Fixed(dcr.Bundle.Field(6).Span, exactDca1))
             throw new CryptographicException("The exact DCR1 belongs to another network.");
+
+        oneTimeLocator = oneTimeLocator16.IsEmpty ? new byte[16] : Exact(oneTimeLocator16, 16, nameof(oneTimeLocator16));
+        var invite = DeepIdV2InviteRendezvousCodec.Decode(dcr.Bundle.Field(14).Span[40..]);
+        PublicationKind = invite.Field(9).Span[0];
+        var policy = BinaryPrimitives.ReadUInt32BigEndian(dcr.Bundle.Field(16).Span);
+        var usage = BinaryPrimitives.ReadUInt32BigEndian(invite.Field(10).Span);
+        if (PublicationKind == 1 && (!IsZero(oneTimeLocator) || policy != 9 || usage != 0) ||
+            PublicationKind == 2 && (IsZero(oneTimeLocator) || policy != 10 || usage != 1 || generation != 0 ||
+                !exactPriorXpo1.IsEmpty || BinaryPrimitives.ReadUInt64BigEndian(dcr.Bundle.Field(8).Span) != 0 ||
+                BinaryPrimitives.ReadUInt64BigEndian(invite.Field(3).Span) != 0) ||
+            PublicationKind is < 1 or > 2 || (dca.AllowedInviteKindMask & (PublicationKind == 1 ? 1 : 2)) == 0)
+            throw new CryptographicException("Publication kind, policy, usage or public locator is inconsistent.");
+        if (PublicationKind == 2)
+        {
+            var bundleIssue = BinaryPrimitives.ReadUInt64BigEndian(dcr.Bundle.Field(17).Span);
+            var bundleExpiry = BinaryPrimitives.ReadUInt64BigEndian(dcr.Bundle.Field(18).Span);
+            if (bundleExpiry <= bundleIssue || bundleExpiry - bundleIssue > 2_592_000)
+                throw new CryptographicException("One-time publication exceeds its signed object horizon.");
+            locatorHash = ContactCodec.Sha256Domain("Deep/ContactResolver/V1/one-time-locator", oneTimeLocator);
+        }
+        else
+        {
+            var input = new byte[48]; this.networkId.CopyTo(input, 0); dcr.Bundle.Field(22).Span.CopyTo(input.AsSpan(16));
+            locatorHash = ApplicationCoreFormat.Sha256Domain("Deep/ContactResolver/V2/permanent-locator", input);
+        }
 
         var route = ContactRouteClosureCodec.Decode(exactRouteClosure);
         foreach (var record in new[]
@@ -145,6 +173,11 @@ public sealed class ContactPublicationAuthorityWireRequest
     public ReadOnlyMemory<byte> OwnerRetrieveCapability => ownerRetrieveCapability.ToArray();
     public ReadOnlyMemory<byte> ExactPriorXpo1 => exactPriorXpo1.ToArray();
     public ReadOnlyMemory<byte> PublisherSignature => publisherSignature.ToArray();
+    public byte PublicationKind { get; }
+    /// <summary>Public locator only; never the DIA1 decryption key or complete invitation.</summary>
+    public ReadOnlyMemory<byte> OneTimeLocator => oneTimeLocator.ToArray();
+    /// <summary>Computed from parsed inputs, not a verified publication capability.</summary>
+    public ReadOnlyMemory<byte> LocatorHash => locatorHash.ToArray();
 
     private static byte[] Required(ReadOnlySpan<byte> value, int length, string name)
     {
@@ -202,23 +235,23 @@ public sealed class ContactPublicationAuthorityWireResponse
 
 public static class ContactPublicationAuthorityWireCodec
 {
-    public const ushort Version = 3;
+    public const ushort Version = 4;
     public const int MinimumDcr1Bytes = 62 + DeepIdV2ContactBundleCodec.MinimumLength + 1;
     public const int MaximumDcr1Bytes = 65_535;
-    public const int MinimumRequestBytes = 809 + MinimumDcr1Bytes +
+    public const int MinimumRequestBytes = 825 + MinimumDcr1Bytes +
         ContactRouteClosureCodec.MinimumEncodedBytes + DeepIdV2ContactPublicationCodec.MinimumCiphertextLength;
-    public const int MaximumRequestBytes = 171_598;
+    public const int MaximumRequestBytes = 171_614;
     public const int MinimumResponseBytes = 60 + DeepIdV2ContactPublicationCodec.MinimumXpuLength;
     public const int MaximumResponseBytes = 93_092;
     public const string RequestMediaType =
-        "application/vnd.deep.contact-publication-authority-request.v3+octet-stream";
+        "application/vnd.deep.contact-publication-authority-request.v4+octet-stream";
     public const string ResponseMediaType =
-        "application/vnd.deep.contact-publication-authority-response.v3+octet-stream";
+        "application/vnd.deep.contact-publication-authority-response.v4+octet-stream";
 
     public static byte[] EncodeRequest(ContactPublicationAuthorityWireRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var length = checked(809 + request.ExactDcr1.Length +
+        var length = checked(825 + request.ExactDcr1.Length +
             request.ExactRouteClosure.Length + request.ObjectCiphertext.Length + request.ExactPriorXpo1.Length);
         if (length is < MinimumRequestBytes or > MaximumRequestBytes)
             throw new InvalidOperationException("The publication-authority request length is invalid.");
@@ -241,6 +274,7 @@ public static class ContactPublicationAuthorityWireCodec
         BinaryPrimitives.WriteUInt64BigEndian(result.AsSpan(offset), request.ExpiresAtUnixSeconds); offset += 8;
         BinaryPrimitives.WriteUInt64BigEndian(result.AsSpan(offset), request.EffectiveExpiresAtUnixSeconds); offset += 8;
         request.OwnerRetrieveCapability.Span.CopyTo(result.AsSpan(offset)); offset += 32;
+        request.OneTimeLocator.Span.CopyTo(result.AsSpan(offset)); offset += 16;
         WriteArtifact(result, ref offset, request.ExactPriorXpo1.Span);
         request.PublisherSignature.Span.CopyTo(result.AsSpan(offset)); offset += 64;
         if (offset != result.Length)
@@ -264,12 +298,13 @@ public static class ContactPublicationAuthorityWireCodec
         var ciphertext = ReadArtifact(encoded, ref offset,
             DeepIdV2ContactPublicationCodec.MinimumCiphertextLength,
             DeepIdV2ContactPublicationCodec.MaximumCiphertextLength);
-        if (offset > encoded.Length - 124)
+        if (offset > encoded.Length - 140)
             throw new FormatException("The publication-authority request is truncated.");
         var issued = BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(offset, 8)); offset += 8;
         var expires = BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(offset, 8)); offset += 8;
         var effective = BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(offset, 8)); offset += 8;
         var owner = encoded.Slice(offset, 32); offset += 32;
+        var publicLocator = encoded.Slice(offset, 16); offset += 16;
         var priorXpo = ReadArtifact(encoded, ref offset, 0, 16_384);
         if (offset > encoded.Length - 64)
             throw new FormatException("The publication-authority signature is truncated.");
@@ -281,7 +316,7 @@ public static class ContactPublicationAuthorityWireCodec
             BinaryPrimitives.ReadUInt64BigEndian(encoded.Slice(88, 8)), encoded.Slice(96, 32),
             encoded.Slice(128, ContactRouteAuthorityWireCodec.ExactDca1Bytes), dcr, route,
             operation, generation, predecessor, ciphertext, issued, expires, effective,
-            owner, signature, priorXpo);
+            owner, signature, priorXpo, publicLocator);
     }
 
     public static byte[] EncodeResponse(
@@ -327,7 +362,7 @@ public static class ContactPublicationAuthorityWireCodec
     }
 
 
-    /// <summary>Exact unsigned V3 envelope including prior receipts; never a retired publisher tuple.</summary>
+    /// <summary>Exact unsigned V4 envelope including public locator and prior receipts.</summary>
     public static byte[] CreatePublisherSigningInput(ContactPublicationAuthorityWireRequest request)
     {
         var encoded = EncodeRequest(request);
@@ -352,14 +387,10 @@ public static class ContactPublicationAuthorityWireCodec
         var closure = DeepIdV2ResolverClosureCodec.Decode(request.ExactDcr1.Span);
         var bundle = closure.Bundle;
         var xpa = xpu.Authorization;
-        var locatorInput = new byte[48];
-        request.NetworkId.Span.CopyTo(locatorInput);
-        bundle.Field(22).Span.CopyTo(locatorInput.AsSpan(16));
-        var locator = ApplicationCoreFormat.Sha256Domain(
-            "Deep/ContactResolver/V2/permanent-locator", locatorInput);
+        var locator = request.LocatorHash;
         if (!Fixed(xpu.Field(1).Span, request.NetworkId.Span) ||
             !Fixed(xpu.Field(2).Span, request.OperationId.Span) ||
-            !Fixed(xpu.Field(16).Span, locator) ||
+            !Fixed(xpu.Field(16).Span, locator.Span) ||
             !Fixed(xpu.Field(17).Span, SHA256.HashData(bundle.Field(14).Span[40..])) ||
             BinaryPrimitives.ReadUInt64BigEndian(xpu.Field(18).Span) != request.Generation ||
             !Fixed(xpu.Field(19).Span, request.PredecessorObjectHash.Span) ||
@@ -368,9 +399,9 @@ public static class ContactPublicationAuthorityWireCodec
             BinaryPrimitives.ReadUInt64BigEndian(xpu.Field(5).Span) != request.IssuedAtUnixSeconds ||
             BinaryPrimitives.ReadUInt64BigEndian(xpu.Field(6).Span) != request.ExpiresAtUnixSeconds ||
             BinaryPrimitives.ReadUInt64BigEndian(xpu.Field(23).Span) != request.EffectiveExpiresAtUnixSeconds ||
-            BinaryPrimitives.ReadUInt32BigEndian(xpu.Field(22).Span) != 0 ||
+            BinaryPrimitives.ReadUInt32BigEndian(xpu.Field(22).Span) != (request.PublicationKind == 1 ? 0u : 1u) ||
             !Fixed(xpu.Field(27).Span, request.OwnerRetrieveCapability.Span) ||
-            xpa.Field(5).Span[0] != 1 ||
+            xpa.Field(5).Span[0] != request.PublicationKind ||
             !Fixed(xpa.Field(6).Span, SHA256.HashData(closure.CanonicalBytes.Span)) ||
             !Fixed(xpa.Field(7).Span, SHA256.HashData(bundle.CanonicalBytes.Span)) ||
             !Fixed(xpa.Field(14).Span, ApplicationCoreFormat.Sha256Domain(

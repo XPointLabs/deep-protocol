@@ -7,18 +7,20 @@ namespace Deep.Protocol.ContactV2;
 public sealed class AuthoredDeepIdV2OneTimeContactObject : IDisposable
 {
     private readonly object sync = new();
-    private readonly byte[] invitation, ciphertext, locator;
+    private readonly byte[] invitation, ciphertext, locator, publicLocator;
     private bool disposed;
     internal AuthoredDeepIdV2OneTimeContactObject(ParsedDcr1V2 closure, byte[] invitation, byte[] ciphertext)
     {
         Closure = closure; this.invitation = invitation.ToArray(); this.ciphertext = ciphertext.ToArray();
         locator = DeepIdV2OneTimeObjectProtection.ComputeLocator(invitation);
+        publicLocator = Deep.Protocol.ContactV1.ContactCodec.Decode(ProtocolMagic.DIA1, invitation).Field(5).ToArray();
     }
     public ParsedDcr1V2 Closure { get; }
     /// <summary>Caller-owned secret bytes: retain only in protected account custody, never logs/coordination.</summary>
     public ReadOnlyMemory<byte> ExactInvitation { get { lock (sync) { ThrowIfDisposed(); return invitation.ToArray(); } } }
     public ReadOnlyMemory<byte> ProtectedDcr1 { get { lock (sync) { ThrowIfDisposed(); return ciphertext.ToArray(); } } }
     public ReadOnlyMemory<byte> LocatorHash { get { lock (sync) { ThrowIfDisposed(); return locator.ToArray(); } } }
+    internal ReadOnlyMemory<byte> PublicLocator { get { lock (sync) { ThrowIfDisposed(); return publicLocator.ToArray(); } } }
     public void Dispose()
     {
         lock (sync)
@@ -28,6 +30,7 @@ public sealed class AuthoredDeepIdV2OneTimeContactObject : IDisposable
             CryptographicOperations.ZeroMemory(invitation);
             CryptographicOperations.ZeroMemory(ciphertext);
             CryptographicOperations.ZeroMemory(locator);
+            CryptographicOperations.ZeroMemory(publicLocator);
         }
     }
     private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(disposed, this);

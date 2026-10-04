@@ -85,10 +85,10 @@ public sealed class PublicationStoreAuthoritySurfaceTests
             var method = Assert.Single(typeof(DeepIdV2PublicationAuthorityAuthor).GetMethods(), value => value.Name == name);
             Assert.False(Assert.Single(method.GetParameters(), parameter => parameter.ParameterType == type).IsOptional);
         }
-        Assert.Equal(3, ContactPublicationAuthorityWireCodec.Version);
-        Assert.Equal(23_306, ContactPublicationAuthorityWireCodec.MinimumRequestBytes);
-        Assert.Equal(171_598, ContactPublicationAuthorityWireCodec.MaximumRequestBytes);
-        Assert.Equal(171_610, ContactCoordinationOnionCodec.MaximumRequestBytes);
+        Assert.Equal(4, ContactPublicationAuthorityWireCodec.Version);
+        Assert.Equal(23_322, ContactPublicationAuthorityWireCodec.MinimumRequestBytes);
+        Assert.Equal(171_614, ContactPublicationAuthorityWireCodec.MaximumRequestBytes);
+        Assert.Equal(171_626, ContactCoordinationOnionCodec.MaximumRequestBytes);
     }
 
     [Fact]

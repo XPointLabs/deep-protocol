@@ -32,9 +32,14 @@ or restart must adopt the exact retained winner, never regenerate invitation
 ID, locator, key, bundle or nonce. Restore does not provision missing custody.
 
 No shipping client is connected here. The account-owned journal still needs
-an explicit bounded one-time intent/commit lifecycle; current V3 publication
-coordination is permanent-only and lacks the key-free signed invitation
-commitment. Do not dispatch this candidate through that envelope or expose it
-to QR/UI before exact custody. Matched Registry/witness issuance, selected-node
-publication/claim and Windows/Android evidence remain unfinished. Status and
+an explicit bounded one-time intent/commit lifecycle. The artifact-specific
+`AuthorOneTimeGenesisRequestAsync` now signs the key-free V4 request under
+[DR-0089](../../docs/survival-program/decisions/DR-0089-did2-one-time-publication-coordination.md).
+It snapshots ciphertext/public locator from the disposable candidate and owned
+device before callbacks. Witnesses receive neither invitation nor key; changing
+the locator invalidates the publisher signature. Threshold issuance and node
+claim have connected local coverage, not shipping custody or device evidence.
+Do not expose QR/UI or dispatch from a shipping client before exact protected
+intent/winner custody. Matched provisioning/packages and Windows/Android
+evidence remain unfinished. Status and
 matching commits belong to [NEXT-SPRINT](../../docs/NEXT-SPRINT.md).
