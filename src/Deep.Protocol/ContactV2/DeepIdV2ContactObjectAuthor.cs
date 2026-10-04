@@ -42,10 +42,40 @@ public static partial class DeepIdV2ContactObjectAuthor
         VerifiedDeepIdV2ContactObjectPredecessor? predecessor,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(route);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (resolverReadCapability16.Length != 16)
+            throw new ArgumentException("An exact resolver capability is required.", nameof(resolverReadCapability16));
+        var capability = resolverReadCapability16.ToArray();
+        byte[]? protectedBytes = null;
+        try
+        {
+            using var resolution = DeepIdV2PermanentContactResolutionDerivation.Derive(
+                route.Network.NetworkId.Span, route.Recipient.Authorization.Binding.DeepId, capability);
+            var closure = await AuthorClosureCoreAsync(route, device, preKeyServices, profileName,
+                issuance, predecessor, 1, cancellationToken).ConfigureAwait(false);
+            protectedBytes = DeepIdV2ResolverObjectProtection.Seal(closure, route.Network.NetworkId.Span,
+                route.Recipient.Authorization.Binding.DeepId, resolution);
+            cancellationToken.ThrowIfCancellationRequested();
+            return new(closure, protectedBytes, resolution.LocatorHash.ToArray());
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(capability);
+            if (protectedBytes is not null) CryptographicOperations.ZeroMemory(protectedBytes);
+        }
+    }
+
+    private static async ValueTask<ParsedDcr1V2> AuthorClosureCoreAsync(
+        VerifiedDeepIdV2ContactRouteClosure route, OwnedGenesisDeviceSecrets device,
+        IReadOnlyList<ParsedXps1V2> preKeyServices, string profileName,
+        VerifiedDeepIdV2ContactRouteIssuance? issuance,
+        VerifiedDeepIdV2ContactObjectPredecessor? predecessor, byte inviteKind,
+        CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(route); ArgumentNullException.ThrowIfNull(device);
         ArgumentNullException.ThrowIfNull(preKeyServices); ArgumentNullException.ThrowIfNull(profileName);
         cancellationToken.ThrowIfCancellationRequested();
-        if (resolverReadCapability16.Length != 16) throw new ArgumentException("An exact resolver capability is required.", nameof(resolverReadCapability16));
         // Own every caller input before the first asynchronous clock read.
         if (profileName.Length > 128) throw new ArgumentException("Contact profile exceeds its character bound.", nameof(profileName));
         var name = ApplicationCoreFormat.StrictUtf8.GetBytes(profileName);
@@ -58,89 +88,79 @@ public static partial class DeepIdV2ContactObjectAuthor
                 throw new ArgumentException("A prekey descriptor is absent.", nameof(preKeyServices))).CanonicalBytes.Span);
         if (services.Select(value => Convert.ToHexString(value.Field(3).Span)).Distinct(StringComparer.Ordinal).Count() != serviceCount)
             throw new CryptographicException("Duplicate device prekey descriptors are forbidden.");
-        var capability = resolverReadCapability16.ToArray();
-        byte[]? protectedBytes = null;
-        try
+        var binding = route.Recipient.Authorization.Binding;
+        var window = await route.ReadCurrentTimeAsync(cancellationToken).ConfigureAwait(false);
+        issuance?.RequireExactRoute(route);
+        predecessor?.RequireSuccessorRoute(route, window, cancellationToken);
+        if (issuance is null && !Fixed(route.Route.Route.Field(19).Span[6..], route.Recipient.Freshness.NextProtectedLkg.CoreHash.Span))
+            throw new CryptographicException("New contact issuance requires a route anchored at the current verified directory head.");
+        var dca = route.Recipient.Authorization;
+        var directory = dca.Directory.Record;
+        if (inviteKind is < 1 or > 2 || (inviteKind == 2 && (predecessor is not null || issuance is not null)) ||
+            route.Invite.Field(9).Span[0] != inviteKind || directory.ActiveDevices.Count != services.Length ||
+            U64(route.Invite.Field(3).Span) != (predecessor is null ? 0 : checked(U64(predecessor.Closure.Bundle.Field(8).Span) + 1)) ||
+            U64(route.Route.Authorization.Field(3).Span) != U64(route.Invite.Field(3).Span))
+            throw new CryptographicException("The object requires the exact authorized invite kind and route generation.");
+        var issued = window.LowerUnixSeconds;
+        var expiry = Math.Min(dca.Record.ExpiresAtUnixSeconds, U64(route.Invite.Field(14).Span));
+        if (inviteKind == 2) expiry = Math.Min(expiry, checked(issued + 2_592_000));
+        var ordered = new List<ParsedXps1V2>(services.Length);
+        foreach (var entry in directory.ActiveDevices)
         {
-            var binding = route.Recipient.Authorization.Binding;
-            using var resolution = DeepIdV2PermanentContactResolutionDerivation.Derive(
-                route.Network.NetworkId.Span, binding.DeepId, capability);
-            var window = await route.ReadCurrentTimeAsync(cancellationToken).ConfigureAwait(false);
-            issuance?.RequireExactRoute(route);
-            predecessor?.RequireSuccessorRoute(route, window, cancellationToken);
-            if (issuance is null && !Fixed(route.Route.Route.Field(19).Span[6..], route.Recipient.Freshness.NextProtectedLkg.CoreHash.Span))
-                throw new CryptographicException("New contact issuance requires a route anchored at the current verified directory head.");
-            var dca = route.Recipient.Authorization;
-            var directory = dca.Directory.Record;
-            if (route.Invite.Field(9).Span[0] != 1 || directory.ActiveDevices.Count != services.Length ||
-                U64(route.Invite.Field(3).Span) != (predecessor is null ? 0 : checked(U64(predecessor.Closure.Bundle.Field(8).Span) + 1)) ||
-                U64(route.Route.Authorization.Field(3).Span) != U64(route.Invite.Field(3).Span))
-                throw new CryptographicException("Only the exact reusable genesis or closed successor route is supported.");
-            var issued = window.LowerUnixSeconds;
-            var expiry = Math.Min(dca.Record.ExpiresAtUnixSeconds, U64(route.Invite.Field(14).Span));
-            var ordered = new List<ParsedXps1V2>(services.Length);
-            foreach (var entry in directory.ActiveDevices)
-            {
-                var service = services.SingleOrDefault(value => Fixed(value.Field(3).Span, entry.DeviceId.Span)) ??
-                    throw new CryptographicException("The exact active-device prekey descriptor is absent.");
-                var verifiedDevice = binding.Identity.ActiveDevices.Single(value => Fixed(value.Certificate.DeviceId.Span, entry.DeviceId.Span));
-                if (!Fixed(service.Field(1).Span, dca.Record.NetworkId.Span) ||
-                    !Fixed(service.Field(4).Span, Reference(ProtocolMagicBytes.DPD1, verifiedDevice.Certificate.CanonicalHash.Span)) ||
-                    U64(service.Field(5).Span) != 1 || U64(service.Field(10).Span) > issued)
-                    throw new CryptographicException("The prekey descriptor is not the exact current genesis service.");
-                DeepIdV2PreKeyServiceCodec.VerifyDeviceSignature(service, verifiedDevice.Certificate.DeviceEd25519PublicKey.Span);
-                expiry = Math.Min(expiry, U64(service.Field(11).Span)); ordered.Add(service);
-            }
-            if (issued >= expiry || window.UpperUnixSeconds >= expiry)
-                throw new CryptographicException("Contact validity cannot cover the complete trusted time interval.");
-            var head = issuance?.IssuanceHead ?? route.Recipient.Freshness.NextProtectedLkg;
-            var lookup = DeepIdV2AccountDirectoryLookupCodec.Author(binding.DeepId, dca.Record.NetworkId.Span,
-                head.LogGeneration, head.CoreHash.Span, 1, new byte[38], new byte[32]);
-            var minimumHead = new byte[40]; U64Bytes(head.LogGeneration).CopyTo(minimumHead, 0);
-            head.CoreHash.Span.CopyTo(minimumHead.AsSpan(8));
-            var descriptor = new byte[651]; BinaryPrimitives.WriteUInt16BigEndian(descriptor, 1);
-            BinaryPrimitives.WriteUInt16BigEndian(descriptor.AsSpan(2), 1);
-            SHA256.HashData(route.ExactXir1V2.Span).CopyTo(descriptor, 4);
-            BinaryPrimitives.WriteUInt32BigEndian(descriptor.AsSpan(36), 611);
-            route.ExactXir1V2.Span.CopyTo(descriptor.AsSpan(40));
-            var list = new byte[1 + 356 * ordered.Count]; list[0] = checked((byte)ordered.Count);
-            for (var i = 0; i < ordered.Count; i++)
-            {
-                BinaryPrimitives.WriteUInt32BigEndian(list.AsSpan(1 + 356 * i), 352);
-                ordered[i].CanonicalBytes.Span.CopyTo(list.AsSpan(5 + 356 * i));
-            }
-            var placeholder = new byte[64]; placeholder.AsSpan().Fill(1);
-            ReadOnlyMemory<byte>[] fields = [dca.Record.NetworkId, dca.Record.DeepAccountId,
+            var service = services.SingleOrDefault(value => Fixed(value.Field(3).Span, entry.DeviceId.Span)) ??
+                throw new CryptographicException("The exact active-device prekey descriptor is absent.");
+            var verifiedDevice = binding.Identity.ActiveDevices.Single(value => Fixed(value.Certificate.DeviceId.Span, entry.DeviceId.Span));
+            if (!Fixed(service.Field(1).Span, dca.Record.NetworkId.Span) ||
+                !Fixed(service.Field(4).Span, Reference(ProtocolMagicBytes.DPD1, verifiedDevice.Certificate.CanonicalHash.Span)) ||
+                U64(service.Field(5).Span) != 1 || U64(service.Field(10).Span) > issued)
+                throw new CryptographicException("The prekey descriptor is not the exact current genesis service.");
+            DeepIdV2PreKeyServiceCodec.VerifyDeviceSignature(service, verifiedDevice.Certificate.DeviceEd25519PublicKey.Span);
+            expiry = Math.Min(expiry, U64(service.Field(11).Span)); ordered.Add(service);
+        }
+        if (issued >= expiry || window.UpperUnixSeconds >= expiry)
+            throw new CryptographicException("Contact validity cannot cover the complete trusted time interval.");
+        var head = issuance?.IssuanceHead ?? route.Recipient.Freshness.NextProtectedLkg;
+        var lookup = DeepIdV2AccountDirectoryLookupCodec.Author(binding.DeepId, dca.Record.NetworkId.Span,
+            head.LogGeneration, head.CoreHash.Span, 1, new byte[38], new byte[32]);
+        var minimumHead = new byte[40]; U64Bytes(head.LogGeneration).CopyTo(minimumHead, 0);
+        head.CoreHash.Span.CopyTo(minimumHead.AsSpan(8));
+        var descriptor = new byte[651]; BinaryPrimitives.WriteUInt16BigEndian(descriptor, 1);
+        BinaryPrimitives.WriteUInt16BigEndian(descriptor.AsSpan(2), 1);
+        SHA256.HashData(route.ExactXir1V2.Span).CopyTo(descriptor, 4);
+        BinaryPrimitives.WriteUInt32BigEndian(descriptor.AsSpan(36), 611);
+        route.ExactXir1V2.Span.CopyTo(descriptor.AsSpan(40));
+        var list = new byte[1 + 356 * ordered.Count]; list[0] = checked((byte)ordered.Count);
+        for (var i = 0; i < ordered.Count; i++)
+        {
+            BinaryPrimitives.WriteUInt32BigEndian(list.AsSpan(1 + 356 * i), 352);
+            ordered[i].CanonicalBytes.Span.CopyTo(list.AsSpan(5 + 356 * i));
+        }
+        var placeholder = new byte[64]; placeholder.AsSpan().Fill(1);
+        ReadOnlyMemory<byte>[] fields = [dca.Record.NetworkId, dca.Record.DeepAccountId,
                 binding.Identity.Account.Certificate.CanonicalBytes,
                 Reference(ProtocolMagicBytes.DRS1, binding.Identity.Revocations.Snapshot.CanonicalHash.Span),
                 directory.CanonicalBytes, dca.Record.CanonicalBytes, predecessor?.Closure.Bundle.Field(7) ?? RandomNonzero32(),
                 U64Bytes(predecessor is null ? 0 : checked(U64(predecessor.Closure.Bundle.Field(8).Span) + 1)),
                 predecessor?.Closure.Bundle.ObjectHash ?? new byte[32],
                 dca.Record.PublisherDeviceId, new byte[] { checked((byte)services.Length) }, list, new byte[] { 1 },
-                descriptor, name, new byte[] { 0, 0, 0, 9 }, U64Bytes(issued), U64Bytes(expiry), placeholder,
+                descriptor, name, new byte[] { 0, 0, 0, inviteKind == 1 ? (byte)9 : (byte)10 },
+                U64Bytes(issued), U64Bytes(expiry), placeholder,
                 lookup.CanonicalBytes, minimumHead, binding.DeepId.RecordHash, binding.DeepId.CanonicalBytes,
                 binding.Record.CanonicalBytes];
-            var unsigned = EncodeBundle(fields);
-            predecessor?.RequireSuccessorBundle(route, unsigned, window, cancellationToken);
-            var signature = device.SignCurrentContactBundle(unsigned, dca);
-            ParsedDcb1V2 bundle;
-            try { fields[18] = signature; bundle = EncodeBundle(fields); }
-            finally { CryptographicOperations.ZeroMemory(signature); }
-            var closure = CloseSupport(bundle, dca);
-            var final = await route.ReadCurrentTimeAsync(cancellationToken).ConfigureAwait(false);
-            RequireContinuous(window, final);
-            issuance?.RequireExactRoute(route);
-            predecessor?.RequireSuccessorObject(route, closure, final, cancellationToken);
-            RequireObject(route, closure, final);
-            protectedBytes = DeepIdV2ResolverObjectProtection.Seal(closure, route.Network.NetworkId.Span, binding.DeepId, resolution);
-            cancellationToken.ThrowIfCancellationRequested();
-            return new(closure, protectedBytes, resolution.LocatorHash.ToArray());
-        }
-        finally
-        {
-            CryptographicOperations.ZeroMemory(capability);
-            if (protectedBytes is not null) CryptographicOperations.ZeroMemory(protectedBytes);
-        }
+        var unsigned = EncodeBundle(fields);
+        predecessor?.RequireSuccessorBundle(route, unsigned, window, cancellationToken);
+        var signature = device.SignCurrentContactBundle(unsigned, dca);
+        ParsedDcb1V2 bundle;
+        try { fields[18] = signature; bundle = EncodeBundle(fields); }
+        finally { CryptographicOperations.ZeroMemory(signature); }
+        var closure = CloseSupport(bundle, dca);
+        var final = await route.ReadCurrentTimeAsync(cancellationToken).ConfigureAwait(false);
+        RequireContinuous(window, final);
+        issuance?.RequireExactRoute(route);
+        predecessor?.RequireSuccessorObject(route, closure, final, cancellationToken);
+        RequireObject(route, closure, final, inviteKind);
+        cancellationToken.ThrowIfCancellationRequested();
+        return closure;
     }
 
     public static async ValueTask<AuthoredDeepIdV2ContactObject> RestoreAsync(
@@ -173,13 +193,14 @@ public static partial class DeepIdV2ContactObjectAuthor
     }
 
     private static void RequireObject(VerifiedDeepIdV2ContactRouteClosure route, ParsedDcr1V2 closure,
-        DeepIdV2ContactRouteTimeWindow window)
+        DeepIdV2ContactRouteTimeWindow window, byte inviteKind = 1)
     {
         var bundle = closure.Bundle;
         DeepIdV2ContactRouteVerifier.RequireBundleIssuanceAnchor(route, bundle);
         if (!Fixed(bundle.Field(14).Span[40..], route.ExactXir1V2.Span) ||
             U64(bundle.Field(8).Span) != U64(route.Invite.Field(3).Span) ||
-            BinaryPrimitives.ReadUInt32BigEndian(bundle.Field(16).Span) != 9 ||
+            route.Invite.Field(9).Span[0] != inviteKind ||
+            BinaryPrimitives.ReadUInt32BigEndian(bundle.Field(16).Span) != (inviteKind == 1 ? 9u : 10u) ||
             U64(bundle.Field(17).Span) > window.LowerUnixSeconds)
             throw new CryptographicException("The contact object is not the exact current reusable route.");
         DeepIdV2ResolverClosureCodec.VerifyIdentityAndSupport(closure, route.Recipient.Authorization, window.UpperUnixSeconds);

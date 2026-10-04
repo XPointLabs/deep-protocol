@@ -158,19 +158,32 @@ public static partial class DeepIdV2ContactRouteAuthor
         CompleteCoreAsync(currentAuthorization, network, networkAuthority, deviceSecrets, exactXra1,
             threshold, minimumReader, trustedTime, null, cancellationToken);
 
+    /// <summary>Owned one-time genesis; not a publication, redemption or contact consent.</summary>
+    public static ValueTask<VerifiedDeepIdV2ContactRouteClosure> CompleteOneTimeGenesisAsync(
+        DeepIdV2CurrentContactAuthorization currentAuthorization, VerifiedOnionNetworkContext network,
+        VerifiedXPointNetworkAuthority networkAuthority, OwnedGenesisDeviceSecrets deviceSecrets,
+        ReadOnlyMemory<byte> exactXra1, ParsedDeepIdV2RouteThreshold threshold, ushort minimumReader,
+        OnionTrustedTimeAuthority trustedTime, CancellationToken cancellationToken = default) =>
+        CompleteCoreAsync(currentAuthorization, network, networkAuthority, deviceSecrets, exactXra1,
+            threshold, minimumReader, trustedTime, null, cancellationToken, inviteKind: 2);
+
     private static async ValueTask<VerifiedDeepIdV2ContactRouteClosure> CompleteCoreAsync(
         DeepIdV2CurrentContactAuthorization currentAuthorization, VerifiedOnionNetworkContext network,
         VerifiedXPointNetworkAuthority networkAuthority, OwnedGenesisDeviceSecrets deviceSecrets,
         ReadOnlyMemory<byte> exactXra1, ParsedDeepIdV2RouteThreshold threshold, ushort minimumReader,
         OnionTrustedTimeAuthority trustedTime, VerifiedDeepIdV2ContactRoutePredecessor? predecessor,
-        CancellationToken cancellationToken, VerifiedDeepIdV2ContactRouteIssuance? issuance = null)
+        CancellationToken cancellationToken, VerifiedDeepIdV2ContactRouteIssuance? issuance = null,
+        byte inviteKind = 1)
     {
         ArgumentNullException.ThrowIfNull(deviceSecrets); ArgumentNullException.ThrowIfNull(threshold);
         cancellationToken.ThrowIfCancellationRequested();
         if (minimumReader is < 1 or > 256) throw new ArgumentOutOfRangeException(nameof(minimumReader));
         ArgumentNullException.ThrowIfNull(currentAuthorization);
-        if ((currentAuthorization.Authorization.Record.AllowedInviteKindMask & 1) == 0)
-            throw new CryptographicException("This delegation does not authorize the reusable genesis invite.");
+        if (inviteKind is < 1 or > 2 || (inviteKind == 2 && (predecessor is not null || issuance is not null)) ||
+            (predecessor is not null && predecessor.Invite.Field(9).Span[0] != 1))
+            throw new CryptographicException("One-time invitation completion requires a new genesis route.");
+        if ((currentAuthorization.Authorization.Record.AllowedInviteKindMask & (inviteKind == 1 ? 1 : 2)) == 0)
+            throw new CryptographicException("This delegation does not authorize the requested invite kind.");
         if (exactXra1.Length != 550) throw new CryptographicException("XRA1 must have its exact bounded size.");
         var xra = ContactCodec.Decode(ProtocolMagic.XRA1, exactXra1.Span);
         if (predecessor is null) RequireGenesis(xra, 3);
@@ -210,7 +223,8 @@ public static partial class DeepIdV2ContactRouteAuthor
             invitation = [network.NetworkId, priorInvite?.Field(2) ?? Random32(),
                 U64(priorInvite is null ? 0 : DeepIdV2RouteContext.U64(priorInvite.Field(3).Span) + 1),
                 priorInvite?.ObjectHash ?? new byte[32], current.PmtReference,
-                xra.Field(6), xra.Field(10), xra.Field(11), new byte[] { 1 }, U32(0), U16(minimumReader),
+                xra.Field(6), xra.Field(10), xra.Field(11), new byte[] { inviteKind },
+                U32(inviteKind == 1 ? 0u : 1u), U16(minimumReader),
                 xra.Field(9), xra.Field(12), xra.Field(13), current.DeviceReference, current.DcaReference,
                 PlaceholderSignature(), Reference(xra)];
             var inviteCandidate = DeepIdV2InviteRendezvousCodec.AuthorForOperationalAuthority(invitation);
