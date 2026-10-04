@@ -5,6 +5,41 @@ namespace Deep.Protocol.Tests.DeepExtension;
 
 public sealed class AuthenticatedMailboxCapabilityContractTests
 {
+    [Theory]
+    [InlineData(MailboxAuthenticatedOperation.Store)]
+    [InlineData(MailboxAuthenticatedOperation.Retrieve)]
+    [InlineData(MailboxAuthenticatedOperation.Ack)]
+    public void GrantOperationNamespaceIsByteIdenticalToActualSignedClaim(MailboxAuthenticatedOperation operation)
+    {
+        var crypto = new SodiumMailboxCapabilityCrypto(); var issuer = Range(0x10, 32); var holder = Range(0x40, 32);
+        var domain = operation == MailboxAuthenticatedOperation.Store ? MailboxCapabilityDomain.Deposit : MailboxCapabilityDomain.Retrieve;
+        var grant = crypto.SignGrant(Grant(crypto.GetPublicKey(issuer), crypto.GetPublicKey(holder), domain), issuer);
+        var binding = Binding(operation); var presentation = crypto.SignPresentation(grant, binding, 9, holder);
+        var replay = new MemoryReplayJournal();
+        _ = MailboxAuthenticatedCapabilityCodec.Verify(MailboxAuthenticatedCapabilityCodec.EncodePresentation(presentation),
+            binding, Policy(grant), crypto, new NoRevocations(), replay);
+        var claim = Assert.IsType<MailboxCapabilityAtomicReplayClaim>(replay.LastClaim);
+        var key = MailboxCapabilityReplayStateMachine.ComputeScopeKey(grant, operation);
+        Assert.Equal(MailboxCapabilityReplayStateMachine.ComputeScopeKey(claim), key);
+        Assert.Equal(MailboxCapabilityReplayStateMachine.ComputeScopeKey(claim with { ReplayCounter = 10, OperationId = Range(3, 16) }), key);
+        foreach (var other in new[] { grant with { Serial = Range(4, 16) }, grant with { Epoch = grant.Epoch + 1 },
+            grant with { Generation = grant.Generation + 1 }, grant with { IssuerPublicKey = Range(5, 32) } })
+            Assert.NotEqual(key, MailboxCapabilityReplayStateMachine.ComputeScopeKey(other, operation));
+        // These are structural namespace computations, not signature or
+        // currentness verification: modified grants confer no authority.
+    }
+
+    [Theory]
+    [InlineData(0)] [InlineData(1)] [InlineData(2)] [InlineData(3)]
+    public void GrantNamespaceRejectsWrongRoleUnknownOperationAndMalformedGrant(int fault)
+    {
+        var grant = Grant(Range(0x10, 32), Range(0x40, 32), MailboxCapabilityDomain.Deposit) with { IssuerSignature = Range(1, 64) };
+        var operation = fault switch { 0 => MailboxAuthenticatedOperation.Retrieve, 1 => (MailboxAuthenticatedOperation)0,
+            2 => (MailboxAuthenticatedOperation)255, _ => MailboxAuthenticatedOperation.Store };
+        if (fault == 3) grant = grant with { Serial = new byte[16] };
+        Assert.Throws<MailboxAuthenticatedCapabilityException>(() => MailboxCapabilityReplayStateMachine.ComputeScopeKey(grant, operation));
+    }
+
     [Fact]
     public void OfflineIssuerAndHolder_BindExactStoreRequest()
     {
@@ -679,11 +714,13 @@ public sealed class AuthenticatedMailboxCapabilityContractTests
         private readonly HashSet<string> _claims = new(StringComparer.Ordinal);
 
         public int Calls { get; private set; }
+        internal MailboxCapabilityAtomicReplayClaim? LastClaim { get; private set; }
 
         public MailboxCapabilityAtomicReplayEvaluation EvaluateAndReserve(
             MailboxCapabilityAtomicReplayClaim claim)
         {
             Calls++;
+            LastClaim = claim;
             var key = Convert.ToHexString(claim.ClaimDigest.Span);
             return new()
             {

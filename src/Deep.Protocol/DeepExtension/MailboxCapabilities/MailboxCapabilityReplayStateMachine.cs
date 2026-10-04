@@ -8,16 +8,42 @@ public static class MailboxCapabilityReplayStateMachine
     {
         ArgumentNullException.ThrowIfNull(claim);
         ValidateClaim(claim);
+        return ComputeScopeKeyCore(claim.IssuerPublicKey.Span, claim.Serial.Span,
+            claim.Epoch, claim.Generation, claim.Operation);
+    }
+
+    /// <summary>Computes the existing replay namespace from a structurally
+    /// canonical grant and operation. This does not verify signatures,
+    /// currentness, revocation or grant authority, and reserves no counter.</summary>
+    public static byte[] ComputeScopeKey(MailboxAuthenticatedGrant grant, MailboxAuthenticatedOperation operation)
+    {
+        ArgumentNullException.ThrowIfNull(grant);
+        var exact = MailboxAuthenticatedCapabilityCodec.EncodeGrant(grant);
+        try
+        {
+            var canonical = MailboxAuthenticatedCapabilityCodec.DecodeGrant(exact);
+            if (operation is not (MailboxAuthenticatedOperation.Store or MailboxAuthenticatedOperation.Retrieve or MailboxAuthenticatedOperation.Ack) ||
+                (operation == MailboxAuthenticatedOperation.Store ? canonical.Domain != MailboxCapabilityDomain.Deposit : canonical.Domain != MailboxCapabilityDomain.Retrieve))
+                throw new MailboxAuthenticatedCapabilityException(MailboxAuthenticatedCapabilityError.InvalidDomainForOperation,
+                    "Grant domain cannot name this replay operation.");
+            return ComputeScopeKeyCore(canonical.IssuerPublicKey.Span, canonical.Serial.Span, canonical.Epoch, canonical.Generation, operation);
+        }
+        finally { CryptographicOperations.ZeroMemory(exact); }
+    }
+
+    private static byte[] ComputeScopeKeyCore(ReadOnlySpan<byte> issuer, ReadOnlySpan<byte> serial,
+        ulong epoch, ulong generation, MailboxAuthenticatedOperation operation)
+    {
         Span<byte> fixedFields = stackalloc byte[32 + 16 + 8 + 8 + 1];
-        claim.IssuerPublicKey.Span.CopyTo(fixedFields);
-        claim.Serial.Span.CopyTo(fixedFields[32..]);
+        issuer.CopyTo(fixedFields);
+        serial.CopyTo(fixedFields[32..]);
         System.Buffers.Binary.BinaryPrimitives.WriteUInt64BigEndian(
             fixedFields[48..],
-            claim.Epoch);
+            epoch);
         System.Buffers.Binary.BinaryPrimitives.WriteUInt64BigEndian(
             fixedFields[56..],
-            claim.Generation);
-        fixedFields[64] = (byte)claim.Operation;
+            generation);
+        fixedFields[64] = (byte)operation;
         return SHA256.HashData([
             .. "deep.mailbox.replay-scope.v2"u8,
             .. fixedFields
