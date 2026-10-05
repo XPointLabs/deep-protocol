@@ -390,8 +390,71 @@ Shared production solution build completes0/0 warnings/errors; Node and Registry
 source-cutover solution builds also complete0/0. Node's retired adapter depended
 on the removed PMT1 helper and is removed, not adapted into current MCG3 authority;
 its neutral capacity tests and mixed peer/ingress assertions survive. Node
-focused94/0/0 completes, but its new unfiltered full is not yet qualified; see
+focused94/0/0 completes; sequential unfiltered full completes terminal0,
+1216/0/0 after the initial full's three setup/budget failures and isolated9/0/0
+on unchanged binaries and budgets; see
 [Node checkpoint](../../../xnode/docs/testing/s02-retired-forwarding-2026-10-04.md#s00-route-control-consumer-removal-2026-10-05).
-MAUI app builds, shipping composition, real HTTPS/ONION client data and physical
-Windows/Android scenarios are not qualified by these source checks. No production,
+MAUI consumer checks follow below; shipping composition, real HTTPS/ONION client
+data and physical Windows/Android scenarios are not qualified. No production,
 account, registered key, secret, authority lineage or protected floor is changed.
+
+#### Remaining native dependency: source findings, 2026-10-05
+
+Read-only inspection of Protocol `2ae11346af2d1c691627e395702ac78fc1210ef8`
+and Shared `b238fb4f9bc750185e4fc431b1bf4ae6f33c2b1f` narrows the next S00
+change. This is not a frozen replacement mapping or runtime qualification.
+
+| Existing dependency | Current owner observed in source | Boundary still requiring review |
+| --- | --- | --- |
+| `NativeRoutingVerifier` verifies DNR1 fields4/6 against exact PMA1/PMR1, issuer signature and authority window | `VerifiedOnionNetworkContext` resolves node identity keys; `VerifiedMailboxHostAuthorityV2.ResolveReplicaAsync` consumes that verified network and exact PMT2 membership | PMA2 is a grant-issuer policy, explicitly not node/certificate issuance authority. Substituting PMA2 into the old DNR1 verifier is not a valid owner mapping |
+| `VerifiedGenesisBaseIdentityContext` binds identity/device/mailbox/router facts, exact Distributed GMD1 and four DCM1 component rows | DID2 local genesis uses independent DNP1 account/device issuance, `ApplicationCoreVerifier.CreateIdentityClosure`, DAB2/DMD1/DCA1V2/ADC1V2 and protected bootstrap | Local DID2 account creation does not implement the four-component deployment/reset barrier. Removing Router or inserting an empty fact would discard that guarantee |
+| `RecoveryVerifier` restores exact DPM1 → PMA1/PMR1 → DNR1 predecessor chains; recovery manifest requires these exact typed rows | Current network authority, grant-revocation floors and client/node protected custody have separate current owners | No reviewed join to the generic ReleaseRoot/reset/recovery closure is established by these source findings. Preserve its integrity, predecessor, nonterminal and protected-floor requirements |
+
+Evidence owners: `DeepNative/Dnp1NativeRoutingVerifier.cs`,
+`Dnp1GenesisAuthoringContexts.cs`, `Dnp1RecoveryProvider.cs` and
+`Dnp1RecoveryManifest.cs`; current network owners:
+`DeepExtension/PrivacyRouting/PrivacyRoutingProductionBoundary.cs`,
+`XPointNetworkV1/MailboxAuthorityV2Verifier.cs` and
+`MailboxHostAuthorityV2Verifier.cs`; Shared account producer:
+`Persistence/DeviceV2/DeepIdV2OfflineGenesisIssuer.cs`.
+The frozen DNP1 specification §6 still requires independent membership and
+mailbox-authority closures and their atomic protected join; DR-0093 excludes
+changing that native contract without separately reviewed authorization.
+
+A bounded search of current Shared DeviceV2/ContactV2/account-service sources
+and MAUI Core.Did2 finds no direct calls to `NativeRoutingVerifier`,
+`VerifiedGenesisBaseIdentityContext`, `GenesisManifestAuthor` or
+`RecoveryVerifier`. The two downstream old-authority codec callers found in
+Shared `ProductionMailboxControlPlane` and MAUI
+`ProductionMailboxCredentialAcquirer` are outside the current production
+compile lists. This is source reachability evidence only, not permission to
+drop recovery from release scope or claim deployed composition is qualified.
+No parser, factory, wire record, public API, timeout or gate is changed here.
+
+#### Downstream MAUI consumer qualification, 2026-10-05
+
+MAUI `56065e0bf311f6b61aa22bf693792d6256951c03` consumes the same Protocol
+source removal and Shared production project. After the sequential Node full
+is terminal, the Core.Did2 Release and unpackaged Windows ARM64 Debug app
+builds complete exit0 with0 warnings/errors. No app is installed or launched.
+The Android Debug app build also completes exit0 with0 warnings/errors,
+5m03s; it is not installed, launched or device-qualified.
+
+```powershell
+dotnet build src/Deep.Client.Maui.Core.Did2/Deep.Client.Maui.Core.Did2.csproj -c Release -m:1 -warnaserror -p:DeepProtocolSourceCutover=true
+dotnet build src/Deep.Client.Maui/Deep.Client.Maui.csproj -c Debug -f net10.0-windows10.0.19041.0 -m:1 -warnaserror -p:DeepProtocolSourceCutover=true -p:RuntimeIdentifierOverride=win-arm64 -p:WindowsPackageType=None -p:UseSharedCompilation=false -nodeReuse:false
+dotnet test tests/Deep.Client.Maui.Clean.Tests/Deep.Client.Maui.Clean.Tests.csproj -c Release -m:1 -warnaserror -p:DeepProtocolSourceCutover=true --logger trx --results-directory artifacts/s00-route-control-removal/clean
+dotnet test tests/Deep.Client.Maui.SmokeTests/Deep.Client.Maui.SmokeTests.csproj -c Release -m:1 -warnaserror -p:DeepProtocolSourceCutover=true --logger trx --results-directory artifacts/s00-route-control-removal/smoke
+dotnet build src/Deep.Client.Maui/Deep.Client.Maui.csproj -c Debug -f net10.0-android -m:1 -warnaserror -p:DeepProtocolSourceCutover=true -p:UseSharedCompilation=false -nodeReuse:false
+```
+
+Clean95/0/0 and Smoke119/0/0 complete terminal0. Local receipts in MAUI:
+
+| Receipt under `artifacts/s00-route-control-removal/` | SHA-256 |
+| --- | --- |
+| `clean/nikit_SURFACE-LT_2026-10-05_11_02_53_net10.0.trx` | `55edfdf2cdd27cedbd6f5a91ea65b2f5a596ad001b79dcd75cd6b06952388628` |
+| `smoke/nikit_SURFACE-LT_2026-10-05_11_03_32_net10.0.trx` | `19fd43d03d9d4648ee698c370534d5868d28a2e55194f7ae273ee9dfdcdef270` |
+
+The default Debug composition is not the authenticated physical HTTPS lane
+or Release composition. These tests do not prove contacts, messages, files or
+groups on devices, signing, artifact publication, S00 acceptance or release.
