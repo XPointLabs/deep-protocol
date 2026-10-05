@@ -555,6 +555,13 @@ internal static class XPointOnionCapabilityProducer
             pmt.FieldSpan(7)[0] != policy.MailboxReplicaCount)
             Fail("pmt-binding-invalid", "A PMT2 successor is not the exact projection required by its verified XVP1/XNV1 pair.");
         VerifyContactThreshold(pmt, authority);
+        // A signed, append-only PMT generation is not permission to revive an
+        // older replay epoch. Routine projection renewal may retain the epoch;
+        // once advanced, every retained step must preserve that floor.
+        if (previous is not null &&
+            BinaryPrimitives.ReadUInt64BigEndian(pmt.FieldSpan(6)) <
+            BinaryPrimitives.ReadUInt64BigEndian(previous.FieldSpan(6)))
+            Fail("pmt-selection-epoch-rollback", "PMT2 lowers the protected mailbox selection epoch.");
         if (!allowForwardReset) VerifyOrderedPmtLineage(previous, pmt, allowUnchanged);
     }
 

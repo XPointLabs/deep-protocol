@@ -86,7 +86,7 @@
       "id": "xpoint-network-v1",
       "kind": "normative-document",
       "path": "docs/architecture/XPOINT-NETWORK-V1.md",
-      "normalizedSha256": "677240b3b2348191cfbd013c4694a1f404ae9aa14b716bc5071526085157a230"
+      "normalizedSha256": "6ab4becf93bcec60e6452d621fbbf5bec3a4b039123982447173944fa81d63de"
     },
     {
       "id": "contact-resolver-v1",
@@ -140,7 +140,7 @@
       "id": "transport-neutral-v1",
       "kind": "normative-document",
       "path": "docs/architecture/TRANSPORT-NEUTRAL-MESSAGING.md",
-      "normalizedSha256": "780c76bfe74449818960281553bb91960b7806ff44d1020c61a95b8ff128cd7c"
+      "normalizedSha256": "19d28c7faa5d0f1dd84073b6f3f581710eb046b3abfd8d4d0f1110f5bf4ed6b5"
     },
     {
       "id": "production-wire-source",

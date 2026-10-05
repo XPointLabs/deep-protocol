@@ -773,6 +773,53 @@ public sealed class XPointOnionCapabilityProducerTests
         Assert.Equal("head-threshold-invalid", tampered.Code);
     }
 
+    [Theory]
+    [InlineData(false, 6UL, 9UL)]
+    [InlineData(false, 8UL, 7UL)]
+    [InlineData(true, 6UL, 9UL)]
+    [InlineData(true, 8UL, 7UL)]
+    public async Task SignedSuccessor_RejectsSelectionEpochRollbackAtEveryStep(
+        bool coldRestore, ulong firstEpoch, ulong secondEpoch)
+    {
+        var genesis = Fixture.Create(selectionEpoch: 7);
+        var previous = await genesis.VerifyDid2Async();
+        var history = OnionNetworkProtectedHistoryCodec.Encode(previous);
+        // All policy/view/head/PMT generations and signatures are genuine.
+        // A newer final epoch must not hide an intermediate rollback, and a
+        // newer PMT generation must not revive a previously excluded epoch.
+        var successors = genesis.BuildSuccessorChain(firstEpoch, secondEpoch);
+        var error = await Assert.ThrowsAsync<OnionBoundaryException>(async () =>
+        {
+            if (coldRestore) await genesis.VerifyHistoryAsync(history, successors);
+            else await successors.VerifyAsync(previous);
+        });
+        Assert.Equal("pmt-selection-epoch-rollback", error.Code);
+        // Verification cannot replace the caller's independently protected tip.
+        Assert.Equal(history, OnionNetworkProtectedHistoryCodec.Encode(previous));
+    }
+
+    [Theory]
+    [InlineData(false, 7UL, 7UL)]
+    [InlineData(false, 8UL, 9UL)]
+    [InlineData(true, 7UL, 7UL)]
+    [InlineData(true, 8UL, 9UL)]
+    public async Task SignedSuccessor_AllowsSelectionEpochPreservationOrAdvance(
+        bool coldRestore, ulong firstEpoch, ulong secondEpoch)
+    {
+        var genesis = Fixture.Create(selectionEpoch: 7);
+        var previous = await genesis.VerifyDid2Async();
+        var history = OnionNetworkProtectedHistoryCodec.Encode(previous);
+        var successors = genesis.BuildSuccessorChain(firstEpoch, secondEpoch);
+        var current = coldRestore
+            ? await genesis.VerifyHistoryAsync(history, successors)
+            : await successors.VerifyAsync(previous);
+        Assert.Equal(secondEpoch, current.Closure!.SelectionEpoch);
+        Assert.Equal(2UL, current.ProtectedLkg!.ViewGeneration);
+        if (coldRestore)
+            Assert.True(OnionNetworkProtectedHistoryCodec.BindsPredecessor(current, history));
+        // Epoch continuity is not, by itself, permission to delete any state.
+    }
+
     [Fact]
     public async Task Path_RejectsMissingRoleDuplicateHostAndForeignPlacement()
     {
@@ -1418,7 +1465,8 @@ public sealed class XPointOnionCapabilityProducerTests
                 new ReadOnlyMemory<byte>[] { _pmt }, protectedCurrent,
                 new OnionTrustedTimeAuthority(new FixedClock(Bytes(16, 0xc1), _clockSample)), default);
 
-        internal SuccessorFixture BuildSuccessorChain()
+        internal SuccessorFixture BuildSuccessorChain(ulong? firstSelectionEpoch = null,
+            ulong? secondSelectionEpoch = null)
         {
             var network = Bytes(16, _networkMarker);
             var policies = new List<byte[]>();
@@ -1457,8 +1505,10 @@ public sealed class XPointOnionCapabilityProducerTests
             for (var index = 0; index < views.Count; index++)
             {
                 var generation = checked((ulong)(index + 1));
+                var epoch = (index == 0 ? firstSelectionEpoch : secondSelectionEpoch)
+                    ?? checked(_selectionEpoch + generation);
                 var pmt = BuildPmt(network, XPointNetworkCodec.Parse<Xnv1Record>(views[index]), freshness,
-                    nodeSets[index], _witnesses, _selectionEpoch + generation, generation,
+                    nodeSets[index], _witnesses, epoch, generation,
                     priorPmt.CoreHash.ToArray());
                 pmts.Add(pmt);
                 priorPmt = ContactCodec.Decode("PMT2", pmt);
