@@ -50,7 +50,7 @@
       "id": "protocol-registry-v1",
       "kind": "normative-document",
       "path": "docs/architecture/PROTOCOL-REGISTRY-V1.md",
-      "normalizedSha256": "27e364f3726a1316c5f9679bedaf3899345230bbc5d4ccfbeb937e71989ac923"
+      "normalizedSha256": "2740daf0add7efe7afd510d09e6ddfbeaa69e7508b33b6c33a753304706fc0c6"
     },
     {
       "id": "dnp1-frozen",
@@ -146,7 +146,7 @@
       "id": "production-wire-source",
       "kind": "production-source-scan",
       "path": "deep-protocol/src",
-      "normalizedSha256": "7dcb83a0fc0135c9e16c4ca350a8c68ae9d563b429d543032230d8172fd607d4"
+      "normalizedSha256": "2815cb250b59344c85cd9b826b1324e5fbfd4d2f3a3cccdd9076b84d8f8a9d3a"
     }
   ],
   "productionInventory": {
@@ -3346,7 +3346,7 @@
       "value": "OCR1",
       "symbol": "OCR1",
       "meaning": "current production wire allocation OCR1",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "lifecycle": "RETIRED_REJECT",
       "sourceId": "production-wire-source"
     },
     {
@@ -3367,49 +3367,49 @@
       "value": "PMCQ",
       "symbol": "PMCQ",
       "meaning": "current production wire allocation PMCQ",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "lifecycle": "RETIRED_REJECT",
       "sourceId": "production-wire-source"
     },
     {
       "value": "PMCR",
       "symbol": "PMCR",
       "meaning": "current production wire allocation PMCR",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "lifecycle": "RETIRED_REJECT",
       "sourceId": "production-wire-source"
     },
     {
       "value": "PMFA",
       "symbol": "PMFA",
       "meaning": "current production wire allocation PMFA",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "lifecycle": "RETIRED_REJECT",
       "sourceId": "production-wire-source"
     },
     {
       "value": "PMS1",
       "symbol": "PMS1",
       "meaning": "current production wire allocation PMS1",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "lifecycle": "RETIRED_REJECT",
       "sourceId": "production-wire-source"
     },
     {
       "value": "PMT1",
       "symbol": "PMT1",
       "meaning": "current production wire allocation PMT1",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "lifecycle": "RETIRED_REJECT",
       "sourceId": "production-wire-source"
     },
     {
       "value": "POC1",
       "symbol": "POC1",
       "meaning": "current production wire allocation POC1",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "lifecycle": "RETIRED_REJECT",
       "sourceId": "production-wire-source"
     },
     {
       "value": "PRC1",
       "symbol": "PRC1",
       "meaning": "current production wire allocation PRC1",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "lifecycle": "RETIRED_REJECT",
       "sourceId": "production-wire-source"
     },
     {
@@ -3430,7 +3430,7 @@
       "value": "RCH1",
       "symbol": "RCH1",
       "meaning": "current production wire allocation RCH1",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "lifecycle": "RETIRED_REJECT",
       "sourceId": "production-wire-source"
     },
     {
@@ -3444,7 +3444,7 @@
       "value": "RHB1",
       "symbol": "RHB1",
       "meaning": "current production wire allocation RHB1",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "lifecycle": "RETIRED_REJECT",
       "sourceId": "production-wire-source"
     },
     {
@@ -3458,7 +3458,7 @@
       "value": "ROL1",
       "symbol": "ROL1",
       "meaning": "current production wire allocation ROL1",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "lifecycle": "RETIRED_REJECT",
       "sourceId": "production-wire-source"
     },
     {
@@ -3697,22 +3697,22 @@
       "value": "PRA1",
       "symbol": "PRA1",
       "meaning": "pre-cutover route advertisement magic",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "targetLifecycle": "RETIRED_REJECT",
+      "lifecycle": "RETIRED_REJECT",
       "sourceId": "protocol-registry-v1",
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.9 Mailbox/continuity records",
         "startLine": 612,
         "endLine": 612,
-        "normalizedSha256": "4b991256478c2a8a54af78f04db8f0d93269c4a067febd4192548701d24ecd56",
+        "normalizedSha256": "42b4eb29d046f3c0566e6047c20a4fc53c9e3ba32abcc8e22b98ba4333187e9e",
         "ownerSourceId": "protocol-registry-v1",
         "scope": "magic",
         "id": "PRA1",
         "name": "PRA1",
-        "lifecycle": "CURRENT_PRE_CUTOVER",
+        "lifecycle": "RETIRED_REJECT",
         "evidenceTokens": [
-          "PRA1"
+          "PRA1",
+          "RETIRED_REJECT"
         ]
       }
     },
@@ -3720,22 +3720,22 @@
       "value": "PSS1",
       "symbol": "PSS1",
       "meaning": "pre-cutover route successor magic",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "targetLifecycle": "RETIRED_REJECT",
+      "lifecycle": "RETIRED_REJECT",
       "sourceId": "protocol-registry-v1",
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.9 Mailbox/continuity records",
         "startLine": 612,
         "endLine": 612,
-        "normalizedSha256": "4b991256478c2a8a54af78f04db8f0d93269c4a067febd4192548701d24ecd56",
+        "normalizedSha256": "42b4eb29d046f3c0566e6047c20a4fc53c9e3ba32abcc8e22b98ba4333187e9e",
         "ownerSourceId": "protocol-registry-v1",
         "scope": "magic",
         "id": "PSS1",
         "name": "PSS1",
-        "lifecycle": "CURRENT_PRE_CUTOVER",
+        "lifecycle": "RETIRED_REJECT",
         "evidenceTokens": [
-          "PSS1"
+          "PSS1",
+          "RETIRED_REJECT"
         ]
       }
     },
@@ -3743,23 +3743,22 @@
       "value": "RCD1",
       "symbol": "RCD1",
       "meaning": "pre-cutover route continuity descriptor",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "targetLifecycle": "RETIRED_REJECT",
+      "lifecycle": "RETIRED_REJECT",
       "sourceId": "protocol-registry-v1",
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.9 Mailbox/continuity records",
         "startLine": 613,
         "endLine": 613,
-        "normalizedSha256": "6f1ef66f0d4d47123415697aac9cf81b7ed395d8b386eab7ca245dc80ffdc1cc",
+        "normalizedSha256": "5f2d83114aa3cd5d64c329c140be464c5434e1db72da8ac82301f980cdfee59d",
         "ownerSourceId": "protocol-registry-v1",
         "scope": "magic",
         "id": "RCD1",
         "name": "RCD1",
-        "lifecycle": "CURRENT_PRE_CUTOVER",
+        "lifecycle": "RETIRED_REJECT",
         "evidenceTokens": [
           "RCD1",
-          "CURRENT_PRE_CUTOVER"
+          "RETIRED_REJECT"
         ]
       }
     },
@@ -3767,23 +3766,22 @@
       "value": "RDA1",
       "symbol": "RDA1",
       "meaning": "pre-cutover delegated route authorization",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "targetLifecycle": "RETIRED_REJECT",
+      "lifecycle": "RETIRED_REJECT",
       "sourceId": "protocol-registry-v1",
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.9 Mailbox/continuity records",
         "startLine": 613,
         "endLine": 613,
-        "normalizedSha256": "6f1ef66f0d4d47123415697aac9cf81b7ed395d8b386eab7ca245dc80ffdc1cc",
+        "normalizedSha256": "5f2d83114aa3cd5d64c329c140be464c5434e1db72da8ac82301f980cdfee59d",
         "ownerSourceId": "protocol-registry-v1",
         "scope": "magic",
         "id": "RDA1",
         "name": "RDA1",
-        "lifecycle": "CURRENT_PRE_CUTOVER",
+        "lifecycle": "RETIRED_REJECT",
         "evidenceTokens": [
           "RDA1",
-          "CURRENT_PRE_CUTOVER"
+          "RETIRED_REJECT"
         ]
       }
     },
@@ -3791,23 +3789,22 @@
       "value": "RCR1",
       "symbol": "RCR1",
       "meaning": "pre-cutover route certificate record",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "targetLifecycle": "RETIRED_REJECT",
+      "lifecycle": "RETIRED_REJECT",
       "sourceId": "protocol-registry-v1",
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.9 Mailbox/continuity records",
         "startLine": 613,
         "endLine": 613,
-        "normalizedSha256": "6f1ef66f0d4d47123415697aac9cf81b7ed395d8b386eab7ca245dc80ffdc1cc",
+        "normalizedSha256": "5f2d83114aa3cd5d64c329c140be464c5434e1db72da8ac82301f980cdfee59d",
         "ownerSourceId": "protocol-registry-v1",
         "scope": "magic",
         "id": "RCR1",
         "name": "RCR1",
-        "lifecycle": "CURRENT_PRE_CUTOVER",
+        "lifecycle": "RETIRED_REJECT",
         "evidenceTokens": [
           "RCR1",
-          "CURRENT_PRE_CUTOVER"
+          "RETIRED_REJECT"
         ]
       }
     },
@@ -3815,23 +3812,22 @@
       "value": "RHC1",
       "symbol": "RHC1",
       "meaning": "pre-cutover route handoff certificate",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "targetLifecycle": "RETIRED_REJECT",
+      "lifecycle": "RETIRED_REJECT",
       "sourceId": "protocol-registry-v1",
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.9 Mailbox/continuity records",
         "startLine": 613,
         "endLine": 613,
-        "normalizedSha256": "6f1ef66f0d4d47123415697aac9cf81b7ed395d8b386eab7ca245dc80ffdc1cc",
+        "normalizedSha256": "5f2d83114aa3cd5d64c329c140be464c5434e1db72da8ac82301f980cdfee59d",
         "ownerSourceId": "protocol-registry-v1",
         "scope": "magic",
         "id": "RHC1",
         "name": "RHC1",
-        "lifecycle": "CURRENT_PRE_CUTOVER",
+        "lifecycle": "RETIRED_REJECT",
         "evidenceTokens": [
           "RHC1",
-          "CURRENT_PRE_CUTOVER"
+          "RETIRED_REJECT"
         ]
       }
     },
@@ -3839,23 +3835,22 @@
       "value": "RTC1",
       "symbol": "RTC1",
       "meaning": "pre-cutover route transition certificate",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "targetLifecycle": "RETIRED_REJECT",
+      "lifecycle": "RETIRED_REJECT",
       "sourceId": "protocol-registry-v1",
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.9 Mailbox/continuity records",
         "startLine": 613,
         "endLine": 613,
-        "normalizedSha256": "6f1ef66f0d4d47123415697aac9cf81b7ed395d8b386eab7ca245dc80ffdc1cc",
+        "normalizedSha256": "5f2d83114aa3cd5d64c329c140be464c5434e1db72da8ac82301f980cdfee59d",
         "ownerSourceId": "protocol-registry-v1",
         "scope": "magic",
         "id": "RTC1",
         "name": "RTC1",
-        "lifecycle": "CURRENT_PRE_CUTOVER",
+        "lifecycle": "RETIRED_REJECT",
         "evidenceTokens": [
           "RTC1",
-          "CURRENT_PRE_CUTOVER"
+          "RETIRED_REJECT"
         ]
       }
     },
@@ -3863,23 +3858,22 @@
       "value": "RCA1",
       "symbol": "RCA1",
       "meaning": "pre-cutover route continuity authorization",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "targetLifecycle": "RETIRED_REJECT",
+      "lifecycle": "RETIRED_REJECT",
       "sourceId": "protocol-registry-v1",
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.9 Mailbox/continuity records",
         "startLine": 613,
         "endLine": 613,
-        "normalizedSha256": "6f1ef66f0d4d47123415697aac9cf81b7ed395d8b386eab7ca245dc80ffdc1cc",
+        "normalizedSha256": "5f2d83114aa3cd5d64c329c140be464c5434e1db72da8ac82301f980cdfee59d",
         "ownerSourceId": "protocol-registry-v1",
         "scope": "magic",
         "id": "RCA1",
         "name": "RCA1",
-        "lifecycle": "CURRENT_PRE_CUTOVER",
+        "lifecycle": "RETIRED_REJECT",
         "evidenceTokens": [
           "RCA1",
-          "CURRENT_PRE_CUTOVER"
+          "RETIRED_REJECT"
         ]
       }
     },
@@ -3887,23 +3881,22 @@
       "value": "PRA2",
       "symbol": "PRA2",
       "meaning": "pre-cutover continuity advertisement v2",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "targetLifecycle": "RETIRED_REJECT",
+      "lifecycle": "RETIRED_REJECT",
       "sourceId": "protocol-registry-v1",
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.9 Mailbox/continuity records",
         "startLine": 613,
         "endLine": 613,
-        "normalizedSha256": "6f1ef66f0d4d47123415697aac9cf81b7ed395d8b386eab7ca245dc80ffdc1cc",
+        "normalizedSha256": "5f2d83114aa3cd5d64c329c140be464c5434e1db72da8ac82301f980cdfee59d",
         "ownerSourceId": "protocol-registry-v1",
         "scope": "magic",
         "id": "PRA2",
         "name": "PRA2",
-        "lifecycle": "CURRENT_PRE_CUTOVER",
+        "lifecycle": "RETIRED_REJECT",
         "evidenceTokens": [
           "PRA2",
-          "CURRENT_PRE_CUTOVER"
+          "RETIRED_REJECT"
         ]
       }
     },
@@ -3911,23 +3904,22 @@
       "value": "PSS2",
       "symbol": "PSS2",
       "meaning": "pre-cutover continuity successor v2",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "targetLifecycle": "RETIRED_REJECT",
+      "lifecycle": "RETIRED_REJECT",
       "sourceId": "protocol-registry-v1",
       "sourceAnchor": {
         "anchorSourceId": "protocol-registry-v1",
         "section": "### 6.9 Mailbox/continuity records",
         "startLine": 613,
         "endLine": 613,
-        "normalizedSha256": "6f1ef66f0d4d47123415697aac9cf81b7ed395d8b386eab7ca245dc80ffdc1cc",
+        "normalizedSha256": "5f2d83114aa3cd5d64c329c140be464c5434e1db72da8ac82301f980cdfee59d",
         "ownerSourceId": "protocol-registry-v1",
         "scope": "magic",
         "id": "PSS2",
         "name": "PSS2",
-        "lifecycle": "CURRENT_PRE_CUTOVER",
+        "lifecycle": "RETIRED_REJECT",
         "evidenceTokens": [
           "PSS2",
-          "CURRENT_PRE_CUTOVER"
+          "RETIRED_REJECT"
         ]
       }
     }

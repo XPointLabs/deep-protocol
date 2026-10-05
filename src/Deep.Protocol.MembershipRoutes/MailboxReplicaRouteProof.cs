@@ -1,6 +1,5 @@
 using System.Buffers.Binary;
 using Deep.Protocol.DeepExtension.MailboxCapabilities;
-using Deep.Protocol.DeepExtension.MailboxTopology;
 
 namespace Deep.Protocol.DeepExtension.MembershipRoutes;
 
@@ -94,14 +93,15 @@ public static class MailboxReplicaRouteProofCodec
 public sealed class MembershipRoutesMailboxReplicaProofVerifier
     : IMailboxReplicaMembershipProofVerifier
 {
+    private const uint MaximumClockSkewSeconds = 300;
+
     public bool VerifyStorageReplica(
         MailboxReplicaMembershipProof proof,
         ulong verificationTimeUnixSeconds) =>
         VerifyStorageReplica(proof, verificationTimeUnixSeconds, 0);
 
     /// <summary>
-    /// Verifies a storage replica proof while allowing the bounded clock skew already accepted by
-    /// the enclosing production mailbox topology verification context.
+    /// Verifies a storage replica proof with the retained, closed clock-skew bound.
     /// </summary>
     public bool VerifyStorageReplica(
         MailboxReplicaMembershipProof proof,
@@ -109,7 +109,7 @@ public sealed class MembershipRoutesMailboxReplicaProofVerifier
         uint clockSkewSeconds)
     {
         if (proof is null ||
-            clockSkewSeconds > ProductionMailboxTopologyConstants.MaximumClockSkewSeconds)
+            clockSkewSeconds > MaximumClockSkewSeconds)
             return false;
         try
         {

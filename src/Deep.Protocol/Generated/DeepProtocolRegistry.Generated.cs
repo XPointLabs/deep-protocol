@@ -170,45 +170,24 @@ public static class DeepProtocolIdentifiers
         public const string NCP2 = "NCP2";
         public const string NCQ2 = "NCQ2";
         public const string NFP1 = "NFP1";
-        public const string OCR1 = "OCR1";
         public const string PHP1 = "PHP1";
         public const string PMA1 = "PMA1";
         public const string PMA2 = "PMA2";
         public const string PMB1 = "PMB1";
-        public const string PMCQ = "PMCQ";
-        public const string PMCR = "PMCR";
-        public const string PMFA = "PMFA";
         public const string PMR1 = "PMR1";
-        public const string PMS1 = "PMS1";
         public const string PMS2 = "PMS2";
-        public const string PMT1 = "PMT1";
         public const string PMT2 = "PMT2";
-        public const string POC1 = "POC1";
-        public const string PRA1 = "PRA1";
-        public const string PRA2 = "PRA2";
-        public const string PRC1 = "PRC1";
         public const string PRQ1 = "PRQ1";
         public const string PRQ2 = "PRQ2";
-        public const string PSS1 = "PSS1";
-        public const string PSS2 = "PSS2";
         public const string RAH1 = "RAH1";
-        public const string RCA1 = "RCA1";
-        public const string RCD1 = "RCD1";
-        public const string RCH1 = "RCH1";
-        public const string RCR1 = "RCR1";
-        public const string RDA1 = "RDA1";
         public const string RFC1 = "RFC1";
-        public const string RHB1 = "RHB1";
-        public const string RHC1 = "RHC1";
         public const string RIB1 = "RIB1";
         public const string RIP1 = "RIP1";
         public const string RIP2 = "RIP2";
-        public const string ROL1 = "ROL1";
         public const string RPF1 = "RPF1";
         public const string RRL1 = "RRL1";
         public const string RRM1 = "RRM1";
         public const string RSM2 = "RSM2";
-        public const string RTC1 = "RTC1";
         public const string SHR1 = "SHR1";
         public const string TRC1 = "TRC1";
         public const string TRS1 = "TRS1";
@@ -403,45 +382,24 @@ public static class DeepProtocolIdentifiers
         public static System.ReadOnlySpan<byte> NCP2 => "NCP2"u8;
         public static System.ReadOnlySpan<byte> NCQ2 => "NCQ2"u8;
         public static System.ReadOnlySpan<byte> NFP1 => "NFP1"u8;
-        public static System.ReadOnlySpan<byte> OCR1 => "OCR1"u8;
         public static System.ReadOnlySpan<byte> PHP1 => "PHP1"u8;
         public static System.ReadOnlySpan<byte> PMA1 => "PMA1"u8;
         public static System.ReadOnlySpan<byte> PMA2 => "PMA2"u8;
         public static System.ReadOnlySpan<byte> PMB1 => "PMB1"u8;
-        public static System.ReadOnlySpan<byte> PMCQ => "PMCQ"u8;
-        public static System.ReadOnlySpan<byte> PMCR => "PMCR"u8;
-        public static System.ReadOnlySpan<byte> PMFA => "PMFA"u8;
         public static System.ReadOnlySpan<byte> PMR1 => "PMR1"u8;
-        public static System.ReadOnlySpan<byte> PMS1 => "PMS1"u8;
         public static System.ReadOnlySpan<byte> PMS2 => "PMS2"u8;
-        public static System.ReadOnlySpan<byte> PMT1 => "PMT1"u8;
         public static System.ReadOnlySpan<byte> PMT2 => "PMT2"u8;
-        public static System.ReadOnlySpan<byte> POC1 => "POC1"u8;
-        public static System.ReadOnlySpan<byte> PRA1 => "PRA1"u8;
-        public static System.ReadOnlySpan<byte> PRA2 => "PRA2"u8;
-        public static System.ReadOnlySpan<byte> PRC1 => "PRC1"u8;
         public static System.ReadOnlySpan<byte> PRQ1 => "PRQ1"u8;
         public static System.ReadOnlySpan<byte> PRQ2 => "PRQ2"u8;
-        public static System.ReadOnlySpan<byte> PSS1 => "PSS1"u8;
-        public static System.ReadOnlySpan<byte> PSS2 => "PSS2"u8;
         public static System.ReadOnlySpan<byte> RAH1 => "RAH1"u8;
-        public static System.ReadOnlySpan<byte> RCA1 => "RCA1"u8;
-        public static System.ReadOnlySpan<byte> RCD1 => "RCD1"u8;
-        public static System.ReadOnlySpan<byte> RCH1 => "RCH1"u8;
-        public static System.ReadOnlySpan<byte> RCR1 => "RCR1"u8;
-        public static System.ReadOnlySpan<byte> RDA1 => "RDA1"u8;
         public static System.ReadOnlySpan<byte> RFC1 => "RFC1"u8;
-        public static System.ReadOnlySpan<byte> RHB1 => "RHB1"u8;
-        public static System.ReadOnlySpan<byte> RHC1 => "RHC1"u8;
         public static System.ReadOnlySpan<byte> RIB1 => "RIB1"u8;
         public static System.ReadOnlySpan<byte> RIP1 => "RIP1"u8;
         public static System.ReadOnlySpan<byte> RIP2 => "RIP2"u8;
-        public static System.ReadOnlySpan<byte> ROL1 => "ROL1"u8;
         public static System.ReadOnlySpan<byte> RPF1 => "RPF1"u8;
         public static System.ReadOnlySpan<byte> RRL1 => "RRL1"u8;
         public static System.ReadOnlySpan<byte> RRM1 => "RRM1"u8;
         public static System.ReadOnlySpan<byte> RSM2 => "RSM2"u8;
-        public static System.ReadOnlySpan<byte> RTC1 => "RTC1"u8;
         public static System.ReadOnlySpan<byte> SHR1 => "SHR1"u8;
         public static System.ReadOnlySpan<byte> TRC1 => "TRC1"u8;
         public static System.ReadOnlySpan<byte> TRS1 => "TRS1"u8;
@@ -550,7 +508,7 @@ internal readonly record struct GeneratedRegistryIdentifier(
 
 internal static class DeepProtocolRegistryGenerated
 {
-    internal const string RegistrySha256 = "f41a5bb5fe2dd2f80abb2bd6442875fb8e8b55fc26dafeb0eee2d17df1745813";
+    internal const string RegistrySha256 = "31ed3afce623405552728e9d24e503b314cdc3539495ad0809d147d0d2ae5f91";
     internal const string Dnp1RegistrySha256 = "e036a0b6acb260e05e18ac536a723b0b8561d2ba1d813429304505b0e7a7da7b";
     internal const string Dnp1ApprovedCommit = "a8456987efe031388ca2eb9006886fb78f31e06c";
 
@@ -702,45 +660,24 @@ internal static class DeepProtocolRegistryGenerated
         new("magic", "NCP2", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "NCQ2", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "NFP1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
-        new("magic", "OCR1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "PHP1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "PMA1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "PMA2", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "PMB1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
-        new("magic", "PMCQ", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
-        new("magic", "PMCR", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
-        new("magic", "PMFA", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "PMR1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
-        new("magic", "PMS1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "PMS2", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
-        new("magic", "PMT1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "PMT2", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
-        new("magic", "POC1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
-        new("magic", "PRA1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
-        new("magic", "PRA2", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
-        new("magic", "PRC1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "PRQ1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "PRQ2", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
-        new("magic", "PSS1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
-        new("magic", "PSS2", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "RAH1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
-        new("magic", "RCA1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
-        new("magic", "RCD1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
-        new("magic", "RCH1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
-        new("magic", "RCR1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
-        new("magic", "RDA1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "RFC1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
-        new("magic", "RHB1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
-        new("magic", "RHC1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "RIB1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "RIP1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "RIP2", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
-        new("magic", "ROL1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "RPF1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "RRL1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "RRM1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "RSM2", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
-        new("magic", "RTC1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "SHR1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "TRC1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "TRS1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),

@@ -307,3 +307,91 @@ Node's remaining signed one-time invite prerequisite and Windows atomic-replace
 nondeterminism remain as recorded in the [node baseline](../../../xnode/docs/testing/s00-node-baseline-2026-10-03.md).
 This checkpoint closes neither S00/S01 nor shipping contacts, messages,
 attachments, groups, production readiness or physical Windows/Android E2E.
+
+### Authorized route-control leaf retirement, 2026-10-05
+
+Input Protocol `83a0f32656d1cc5315b548c3488111cc6fa05886`, root
+`c7284f6d373bc5cec11f552b4bb7f76bfa676b83` and Node
+`65fdf1fa7163b3ae0013af0710c797590675c990`. This source batch follows
+[DR-0093](../../../docs/survival-program/decisions/DR-0093-retired-mailbox-route-control-source-api.md),
+not a new wire generation or an authorization to weaken native recovery.
+
+Removed27 old MembershipRoutes route-control source files,14 wholly owned
+positive test files and the parent Protocol route-verification facade. All120
+removed route-control results were Passed in the preceding unfiltered receipt
+`artifacts/s00-native-discovery/full/nikit_SURFACE-LT_2026-10-05_09_07_36_net10.0.trx`
+(SHA-256 `cebead1eb05af31dc0ed11787b471714d1e18977bd4a5970d04a4913e8383991`).
+They are not unexplained failures being discarded. The retained six replica-proof
+and five descriptor tests remain. The exact300-second bound moves privately out
+of the deleted topology constants; no proof bytes/signature checks change.
+
+Three new actual-assembly tests require absence of the retired namespace/facade
+and retain exactly9 membership public types with90 reviewed semantic API lines.
+The latter fingerprint, captured independently before removal and sorted Ordinal,
+is `998b290e3e8a41b2fb9017c3b77bd6fd33ad173bd5d8284f780c672d61fd7904`.
+The routes assembly no longer exports the139 retired route-control public types.
+The new parent registry test checks absence of both public encoding APIs for
+all21 removed local allocations and preserves current MCG3 inactive allocation.
+
+Source inventory was independently reproduced from the exact old Git source:
+`7dcb83a0fc0135c9e16c4ca350a8c68ae9d563b429d543032230d8172fd607d4`.
+Current inventory is
+`2815cb250b59344c85cd9b826b1324e5fbfd4d2f3a3cccdd9076b84d8f8a9d3a`.
+Only references from the27 authorized deleted files differ; no new symbol or
+unrelated path delta exists. All244 resolved allocation rows remain. Of23
+changed rows,21 become RETIRED_REJECT/allocation-only and PMA1/PMR1 lose only
+the deleted leaf implementation paths. Frozen versions, grammars, domains,
+suites and byte bounds do not change. Generated allowed/retired policy sets
+change exactly229 to208 and28 to49; the two non-protocol literals are unchanged.
+
+The human registry's three reviewed rows and10 lifecycle/anchor bindings are
+updated together. Existing repin/generation scripts mechanically refresh that
+source hash and those10 anchors; no approved DNP1 blob or strict API/package
+snapshot is repinned. The registry gate's empty planned-retirement collection
+now enumerates safely. Its schema-negative test creates an invalid proposed
+retirement on a retained current row instead of requiring an old positive row.
+The mixed lifecycle test retains its invariant using current DGI1, not PMT1.
+Initial harness failures (missing Xunit import, empty collection and obsolete
+PMT1 fixture) were corrected without weakening a rejection predicate.
+
+Commands and completed results on this batch:
+
+```powershell
+./eng/Test-DeepProtocolRegistry.ps1
+dotnet build Deep.Protocol.slnx -c Release --no-restore -m:1 -warnaserror
+dotnet test tests/Deep.Protocol.Tests/Deep.Protocol.Tests.csproj -c Release -m:1 -warnaserror --filter FullyQualifiedName~DeepProtocolRegistryTests --logger trx --results-directory artifacts/s00-route-control-removal/final-registry
+dotnet test tests/Deep.Protocol.MembershipRoutes.Tests/Deep.Protocol.MembershipRoutes.Tests.csproj -c Release --no-build --logger trx --results-directory artifacts/s00-route-control-removal/final-focused
+dotnet test Deep.Protocol.slnx -c Release --no-build --logger trx --results-directory artifacts/s00-route-control-removal/full
+./eng/Test-ProductionProtocolGraph.ps1 -Configuration Release
+```
+
+Registry consistency exits0; whole solution build exits0 with0 warnings/errors.
+Registry focused10/0/0 and routes focused14/0/0 complete terminal0.
+Unfiltered full completes terminal1: **2005 passed /1 failed /7 skipped**
+(main1886/1/7, routes14/0/0, carrier105/0/0). Actual result elements, not the
+TRX notExecuted counter, identify the seven skips. The one actual-package failure
+now names MAU2 in compiled Deep.Protocol; MCG2 was the preceding witness's first
+observed token, not a defect repaired by this leaf. Both remain unresolved.
+Source graph also exits1 on MAU2 in ProductionMailboxAuthorityCodec. Neither
+strict gate is weakened; current native PMA1/PMR1 governance/recovery dependency
+and package/API closure still prevent S00 acceptance.
+
+Receipts below are local under `artifacts/s00-route-control-removal/`:
+
+| Receipt | SHA-256 |
+| --- | --- |
+| `final-registry/nikit_SURFACE-LT_2026-10-05_09_43_00_net10.0.trx` | `beba6e30c90797e12196c2055a07a4a2158046ee31ba3b819557d3d044a00c32` |
+| `final-focused/nikit_SURFACE-LT_2026-10-05_09_43_01_net10.0.trx` | `8c64cef82339d58372f318c6c7d044564b66a46ed9739501fe80ddbf92a3685b` |
+| `full/nikit_SURFACE-LT_2026-10-05_09_43_14_net10.0.trx` | `e0ca30b83f08003600788a84304acff72e9f554663c11635250f484fcb3570be` |
+| `full/nikit_SURFACE-LT_2026-10-05_09_43_15_net10.0.trx` | `51011eec653397067a77067f41acde8488304cd9ffee3648c32194066e8cc448` |
+| `full/nikit_SURFACE-LT_2026-10-05_09_43_15_net10.0[1].trx` | `8777119c69e7cf02b2bdd988b9b0d0bd372a8e98cbca48be8b1e51dd9bf0243b` |
+
+Shared production solution build completes0/0 warnings/errors; Node and Registry
+source-cutover solution builds also complete0/0. Node's retired adapter depended
+on the removed PMT1 helper and is removed, not adapted into current MCG3 authority;
+its neutral capacity tests and mixed peer/ingress assertions survive. Node
+focused94/0/0 completes, but its new unfiltered full is not yet qualified; see
+[Node checkpoint](../../../xnode/docs/testing/s02-retired-forwarding-2026-10-04.md#s00-route-control-consumer-removal-2026-10-05).
+MAUI app builds, shipping composition, real HTTPS/ONION client data and physical
+Windows/Android scenarios are not qualified by these source checks. No production,
+account, registered key, secret, authority lineage or protected floor is changed.

@@ -50,6 +50,28 @@ public sealed class DeepProtocolRegistryTests
     }
 
     [Fact]
+    public void RemovedRouteControlAllocationsExposeNoProductionEncodingApi()
+    {
+        string[] retired =
+        [
+            "OCR1", "PMCQ", "PMCR", "PMFA", "PMS1", "PMT1", "POC1", "PRC1",
+            "RCH1", "RHB1", "ROL1", "PRA1", "PSS1", "RCD1", "RDA1", "RCR1",
+            "RHC1", "RTC1", "RCA1", "PRA2", "PSS2"
+        ];
+        foreach (var magic in retired)
+        {
+            Assert.Null(typeof(DeepProtocolIdentifiers.Magic).GetField(magic));
+            Assert.Null(typeof(DeepProtocolIdentifiers.MagicBytes).GetProperty(magic));
+            Assert.DoesNotContain(DeepProtocolRegistryGenerated.Identifiers,
+                value => value.Namespace == "magic" && value.CanonicalName == magic);
+        }
+        Assert.NotNull(typeof(DeepProtocolIdentifiers.Magic).GetField("MCG3"));
+        Assert.Equal(ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE,
+            Assert.Single(DeepProtocolRegistryGenerated.Identifiers,
+                value => value.Namespace == "magic" && value.CanonicalName == "MCG3").Lifecycle);
+    }
+
+    [Fact]
     public void GeneratedIdentifiers_AreCollisionFreeWithinTheirNamespaces()
     {
         foreach (var group in DeepProtocolRegistryGenerated.Identifiers.GroupBy(static value => value.Namespace))
@@ -164,7 +186,7 @@ public sealed class DeepProtocolRegistryTests
                             value.Lifecycle == ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE);
         Assert.Contains(
             DeepProtocolRegistryGenerated.Identifiers,
-            static value => value.Namespace == "magic" && value.CanonicalName == "PMT1" &&
+            static value => value.Namespace == "magic" && value.CanonicalName == "DGI1" &&
                             value.Lifecycle == ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER);
         Assert.DoesNotContain(
             DeepProtocolRegistryGenerated.Identifiers,

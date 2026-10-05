@@ -1,12 +1,13 @@
 using Deep.Protocol.DeepExtension.MailboxCapabilities;
 using Deep.Protocol.DeepExtension.MembershipRoutes;
-using Deep.Protocol.DeepExtension.MailboxTopology;
 using Xunit;
 
 namespace Deep.Protocol.MembershipRoutes.Tests;
 
 public sealed class MailboxReplicaRouteProofTests
 {
+    private const uint MaximumClockSkewSeconds = 300;
+
     [Fact]
     public void ExactMrl1Proof_BindsReplicaKeyRoleEpochAndMembershipRoot()
     {
@@ -85,8 +86,8 @@ public sealed class MailboxReplicaRouteProofTests
 
     [Theory]
     [InlineData(4, true)]
-    [InlineData(ProductionMailboxTopologyConstants.MaximumClockSkewSeconds, true)]
-    [InlineData(ProductionMailboxTopologyConstants.MaximumClockSkewSeconds + 1, false)]
+    [InlineData(MaximumClockSkewSeconds, true)]
+    [InlineData(MaximumClockSkewSeconds + 1, false)]
     public void SkewAwareVerification_AcceptsOnlyTheBoundedFutureWindow(
         int futureSeconds,
         bool expected)
@@ -111,7 +112,7 @@ public sealed class MailboxReplicaRouteProofTests
 
         Assert.False(verifier.VerifyStorageReplica(proof, now));
         Assert.Equal(expected, verifier.VerifyStorageReplica(
-            proof, now, ProductionMailboxTopologyConstants.MaximumClockSkewSeconds));
+            proof, now, MaximumClockSkewSeconds));
     }
 
     [Fact]
@@ -132,7 +133,7 @@ public sealed class MailboxReplicaRouteProofTests
         Assert.False(new MembershipRoutesMailboxReplicaProofVerifier().VerifyStorageReplica(
             proof,
             1_050,
-            ProductionMailboxTopologyConstants.MaximumClockSkewSeconds + 1));
+            MaximumClockSkewSeconds + 1));
     }
 
     private static MembershipRouteDescriptor Descriptor(int start) =>

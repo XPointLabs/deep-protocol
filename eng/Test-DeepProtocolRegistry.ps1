@@ -227,7 +227,7 @@ $expectedPlannedRetirements = @($registry.magic | Where-Object {
         $_.lifecycle -eq 'CURRENT_PRE_CUTOVER' -and
         $_.PSObject.Properties.Name -contains 'targetLifecycle' -and $_.targetLifecycle -eq 'RETIRED_REJECT'
     } | ForEach-Object value | Sort-Object)
-Assert-True ((@($resolved.plannedRetirements.value | Sort-Object) -join "`n") -ceq
+Assert-True ((@($resolved.plannedRetirements | ForEach-Object value | Sort-Object) -join "`n") -ceq
     ($expectedPlannedRetirements -join "`n")) `
     'Planned retirements are conflated with the active retired deny-list.'
 Assert-Unique @($registry.productionInventory.excludedLiterals.value) 'excluded production literal'
@@ -377,9 +377,9 @@ $mutation = Copy-JsonObject $registry
 $mutation.suiteScopes += Copy-JsonObject $mutation.suiteScopes[0]
 Assert-SchemaRejects $mutation 'suite scope duplicate/max+1'
 $mutation = Copy-JsonObject $registry
-($mutation.magic | Where-Object {
-        $_.PSObject.Properties.Name -contains 'targetLifecycle' -and $_.targetLifecycle -eq 'RETIRED_REJECT'
-    } | Select-Object -First 1).lifecycle = 'TARGET_UNFROZEN'
+$retirementMutation = $mutation.magic | Where-Object lifecycle -EQ 'CURRENT_PRE_CUTOVER' | Select-Object -First 1
+$retirementMutation | Add-Member -NotePropertyName targetLifecycle -NotePropertyValue 'RETIRED_REJECT'
+$retirementMutation.lifecycle = 'TARGET_UNFROZEN'
 Assert-SchemaRejects $mutation 'target retirement without current pre-cutover lifecycle'
 $mutation = Copy-JsonObject $registry
 $mutation.carriers[0].sourceAnchor.PSObject.Properties.Remove('scope')

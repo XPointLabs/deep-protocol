@@ -3,7 +3,7 @@
   "schemaVersion": "1.0.0",
   "registryGeneration": 1,
   "registryId": "deep-protocol-v1-resolved",
-  "sourceRegistrySha256": "f41a5bb5fe2dd2f80abb2bd6442875fb8e8b55fc26dafeb0eee2d17df1745813",
+  "sourceRegistrySha256": "31ed3afce623405552728e9d24e503b314cdc3539495ad0809d147d0d2ae5f91",
   "dnp1ApprovedCommit": "a8456987efe031388ca2eb9006886fb78f31e06c",
   "dnp1RegistrySha256": "e036a0b6acb260e05e18ac536a723b0b8561d2ba1d813429304505b0e7a7da7b",
   "records": [
@@ -137,18 +137,15 @@
       "allowedSuites": [],
       "minBytes": null,
       "maxBytes": null,
-      "visibility": "public",
+      "visibility": "unfrozen",
       "normativeSource": "production-wire-source",
-      "ownerPackage": "Deep.Protocol.MembershipRoutes",
+      "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:production-wire-source:vectors",
       "schemaOwner": "deep-protocol:production-wire-source:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
-      "implementationPaths": [
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxOwnerControlTransportCodec.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteIssuerAuthoringModels.cs"
-      ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "lifecycle": "RETIRED_REJECT",
+      "contractState": "allocation-only",
+      "implementationPaths": [],
+      "contractBlocker": null
     },
     {
       "magic": "PHP1",
@@ -228,17 +225,15 @@
       "allowedSuites": [],
       "minBytes": null,
       "maxBytes": null,
-      "visibility": "public",
+      "visibility": "unfrozen",
       "normativeSource": "production-wire-source",
-      "ownerPackage": "Deep.Protocol.MembershipRoutes",
+      "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:production-wire-source:vectors",
       "schemaOwner": "deep-protocol:production-wire-source:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
-      "implementationPaths": [
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxOwnerControlTransportCodec.cs"
-      ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "lifecycle": "RETIRED_REJECT",
+      "contractState": "allocation-only",
+      "implementationPaths": [],
+      "contractBlocker": null
     },
     {
       "magic": "PMCR",
@@ -248,17 +243,15 @@
       "allowedSuites": [],
       "minBytes": null,
       "maxBytes": null,
-      "visibility": "public",
+      "visibility": "unfrozen",
       "normativeSource": "production-wire-source",
-      "ownerPackage": "Deep.Protocol.MembershipRoutes",
+      "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:production-wire-source:vectors",
       "schemaOwner": "deep-protocol:production-wire-source:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
-      "implementationPaths": [
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxOwnerControlTransportCodec.cs"
-      ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "lifecycle": "RETIRED_REJECT",
+      "contractState": "allocation-only",
+      "implementationPaths": [],
+      "contractBlocker": null
     },
     {
       "magic": "PMFA",
@@ -268,17 +261,15 @@
       "allowedSuites": [],
       "minBytes": null,
       "maxBytes": null,
-      "visibility": "public",
+      "visibility": "unfrozen",
       "normativeSource": "production-wire-source",
-      "ownerPackage": "Deep.Protocol.MembershipRoutes",
+      "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:production-wire-source:vectors",
       "schemaOwner": "deep-protocol:production-wire-source:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
-      "implementationPaths": [
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxOwnerControlTransportCodec.cs"
-      ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "lifecycle": "RETIRED_REJECT",
+      "contractState": "allocation-only",
+      "implementationPaths": [],
+      "contractBlocker": null
     },
     {
       "magic": "MSD1",
@@ -308,19 +299,15 @@
       "allowedSuites": [],
       "minBytes": null,
       "maxBytes": null,
-      "visibility": "public",
+      "visibility": "unfrozen",
       "normativeSource": "production-wire-source",
-      "ownerPackage": "Deep.Protocol.MembershipRoutes",
+      "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:production-wire-source:vectors",
       "schemaOwner": "deep-protocol:production-wire-source:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
-      "implementationPaths": [
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxNodeCacheVerifier.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxOwnerControlTransportCodec.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxTopologyCodec.cs"
-      ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "lifecycle": "RETIRED_REJECT",
+      "contractState": "allocation-only",
+      "implementationPaths": [],
+      "contractBlocker": null
     },
     {
       "magic": "PMT1",
@@ -330,21 +317,15 @@
       "allowedSuites": [],
       "minBytes": null,
       "maxBytes": null,
-      "visibility": "public",
+      "visibility": "unfrozen",
       "normativeSource": "production-wire-source",
-      "ownerPackage": "Deep.Protocol.MembershipRoutes",
+      "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:production-wire-source:vectors",
       "schemaOwner": "deep-protocol:production-wire-source:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
-      "implementationPaths": [
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxNodeCacheVerifier.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxOwnerControlTransportCodec.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteIssuerAuthoring.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxSelectionSuccessorVerifier.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxTopologyCodec.cs"
-      ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "lifecycle": "RETIRED_REJECT",
+      "contractState": "allocation-only",
+      "implementationPaths": [],
+      "contractBlocker": null
     },
     {
       "magic": "PMT2",
@@ -391,17 +372,15 @@
       "allowedSuites": [],
       "minBytes": null,
       "maxBytes": null,
-      "visibility": "public",
+      "visibility": "unfrozen",
       "normativeSource": "production-wire-source",
-      "ownerPackage": "Deep.Protocol.MembershipRoutes",
+      "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:production-wire-source:vectors",
       "schemaOwner": "deep-protocol:production-wire-source:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
-      "implementationPaths": [
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxSelectionSuccessorVerifier.cs"
-      ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "lifecycle": "RETIRED_REJECT",
+      "contractState": "allocation-only",
+      "implementationPaths": [],
+      "contractBlocker": null
     },
     {
       "magic": "PRA1",
@@ -411,18 +390,15 @@
       "allowedSuites": [],
       "minBytes": null,
       "maxBytes": null,
-      "visibility": "public",
+      "visibility": "unfrozen",
       "normativeSource": "protocol-registry-v1",
-      "ownerPackage": "Deep.Protocol.MembershipRoutes",
+      "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:protocol-registry-v1:vectors",
       "schemaOwner": "deep-protocol:protocol-registry-v1:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
-      "implementationPaths": [
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteAdvertisementCodec.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteAdvertisementVerifier.cs"
-      ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "lifecycle": "RETIRED_REJECT",
+      "contractState": "allocation-only",
+      "implementationPaths": [],
+      "contractBlocker": null
     },
     {
       "magic": "PRA2",
@@ -432,18 +408,15 @@
       "allowedSuites": [],
       "minBytes": null,
       "maxBytes": null,
-      "visibility": "public",
+      "visibility": "unfrozen",
       "normativeSource": "protocol-registry-v1",
-      "ownerPackage": "Deep.Protocol.MembershipRoutes",
+      "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:protocol-registry-v1:vectors",
       "schemaOwner": "deep-protocol:protocol-registry-v1:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
-      "implementationPaths": [
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteAuthorizationCodec.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteAuthorizationVerifier.cs"
-      ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "lifecycle": "RETIRED_REJECT",
+      "contractState": "allocation-only",
+      "implementationPaths": [],
+      "contractBlocker": null
     },
     {
       "magic": "PRC1",
@@ -453,18 +426,15 @@
       "allowedSuites": [],
       "minBytes": null,
       "maxBytes": null,
-      "visibility": "public",
+      "visibility": "unfrozen",
       "normativeSource": "production-wire-source",
-      "ownerPackage": "Deep.Protocol.MembershipRoutes",
+      "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:production-wire-source:vectors",
       "schemaOwner": "deep-protocol:production-wire-source:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
-      "implementationPaths": [
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteAdvertisementCodec.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteAdvertisementVerifier.cs"
-      ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "lifecycle": "RETIRED_REJECT",
+      "contractState": "allocation-only",
+      "implementationPaths": [],
+      "contractBlocker": null
     },
     {
       "magic": "PRQ1",
@@ -494,18 +464,15 @@
       "allowedSuites": [],
       "minBytes": null,
       "maxBytes": null,
-      "visibility": "public",
+      "visibility": "unfrozen",
       "normativeSource": "protocol-registry-v1",
-      "ownerPackage": "Deep.Protocol.MembershipRoutes",
+      "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:protocol-registry-v1:vectors",
       "schemaOwner": "deep-protocol:protocol-registry-v1:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
-      "implementationPaths": [
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxSelectionSuccessorCodec.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxSelectionSuccessorVerifier.cs"
-      ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "lifecycle": "RETIRED_REJECT",
+      "contractState": "allocation-only",
+      "implementationPaths": [],
+      "contractBlocker": null
     },
     {
       "magic": "PSS2",
@@ -515,20 +482,15 @@
       "allowedSuites": [],
       "minBytes": null,
       "maxBytes": null,
-      "visibility": "public",
+      "visibility": "unfrozen",
       "normativeSource": "protocol-registry-v1",
-      "ownerPackage": "Deep.Protocol.MembershipRoutes",
+      "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:protocol-registry-v1:vectors",
       "schemaOwner": "deep-protocol:protocol-registry-v1:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
-      "implementationPaths": [
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxNodeCacheVerifier.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxOwnerControlTransportCodec.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxSelectionSuccessorCodec.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxSelectionSuccessorVerifier.cs"
-      ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "lifecycle": "RETIRED_REJECT",
+      "contractState": "allocation-only",
+      "implementationPaths": [],
+      "contractBlocker": null
     },
     {
       "magic": "RAH1",
@@ -560,19 +522,15 @@
       "allowedSuites": [],
       "minBytes": null,
       "maxBytes": null,
-      "visibility": "public",
+      "visibility": "unfrozen",
       "normativeSource": "protocol-registry-v1",
-      "ownerPackage": "Deep.Protocol.MembershipRoutes",
+      "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:protocol-registry-v1:vectors",
       "schemaOwner": "deep-protocol:protocol-registry-v1:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
-      "implementationPaths": [
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteAuthorizationCodec.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteAuthorizationVerifier.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteIssuerAuthoring.cs"
-      ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "lifecycle": "RETIRED_REJECT",
+      "contractState": "allocation-only",
+      "implementationPaths": [],
+      "contractBlocker": null
     },
     {
       "magic": "RCD1",
@@ -582,18 +540,15 @@
       "allowedSuites": [],
       "minBytes": null,
       "maxBytes": null,
-      "visibility": "public",
+      "visibility": "unfrozen",
       "normativeSource": "protocol-registry-v1",
-      "ownerPackage": "Deep.Protocol.MembershipRoutes",
+      "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:protocol-registry-v1:vectors",
       "schemaOwner": "deep-protocol:protocol-registry-v1:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
-      "implementationPaths": [
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteContinuityCodec.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteContinuityVerifier.cs"
-      ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "lifecycle": "RETIRED_REJECT",
+      "contractState": "allocation-only",
+      "implementationPaths": [],
+      "contractBlocker": null
     },
     {
       "magic": "PMS2",
@@ -1230,20 +1185,15 @@
       "allowedSuites": [],
       "minBytes": null,
       "maxBytes": null,
-      "visibility": "public",
+      "visibility": "unfrozen",
       "normativeSource": "production-wire-source",
-      "ownerPackage": "Deep.Protocol.MembershipRoutes",
+      "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:production-wire-source:vectors",
       "schemaOwner": "deep-protocol:production-wire-source:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
-      "implementationPaths": [
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxLiveTransitionAuthoring.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteContinuityCodec.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteContinuityVerifier.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteIssuerAuthoring.cs"
-      ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "lifecycle": "RETIRED_REJECT",
+      "contractState": "allocation-only",
+      "implementationPaths": [],
+      "contractBlocker": null
     },
     {
       "magic": "MAK1",
@@ -1273,17 +1223,15 @@
       "allowedSuites": [],
       "minBytes": null,
       "maxBytes": null,
-      "visibility": "public",
+      "visibility": "unfrozen",
       "normativeSource": "protocol-registry-v1",
-      "ownerPackage": "Deep.Protocol.MembershipRoutes",
+      "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:protocol-registry-v1:vectors",
       "schemaOwner": "deep-protocol:protocol-registry-v1:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
-      "implementationPaths": [
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteContinuityCodec.cs"
-      ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "lifecycle": "RETIRED_REJECT",
+      "contractState": "allocation-only",
+      "implementationPaths": [],
+      "contractBlocker": null
     },
     {
       "magic": "RFC1",
@@ -2012,18 +1960,15 @@
       "allowedSuites": [],
       "minBytes": null,
       "maxBytes": null,
-      "visibility": "public",
+      "visibility": "unfrozen",
       "normativeSource": "production-wire-source",
-      "ownerPackage": "Deep.Protocol.MembershipRoutes",
+      "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:production-wire-source:vectors",
       "schemaOwner": "deep-protocol:production-wire-source:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
-      "implementationPaths": [
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxOwnerControlTransportCodec.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteHistoryCodec.cs"
-      ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "lifecycle": "RETIRED_REJECT",
+      "contractState": "allocation-only",
+      "implementationPaths": [],
+      "contractBlocker": null
     },
     {
       "magic": "RHC1",
@@ -2033,17 +1978,15 @@
       "allowedSuites": [],
       "minBytes": null,
       "maxBytes": null,
-      "visibility": "public",
+      "visibility": "unfrozen",
       "normativeSource": "protocol-registry-v1",
-      "ownerPackage": "Deep.Protocol.MembershipRoutes",
+      "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:protocol-registry-v1:vectors",
       "schemaOwner": "deep-protocol:protocol-registry-v1:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
-      "implementationPaths": [
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteContinuityCodec.cs"
-      ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "lifecycle": "RETIRED_REJECT",
+      "contractState": "allocation-only",
+      "implementationPaths": [],
+      "contractBlocker": null
     },
     {
       "magic": "RIP1",
@@ -2073,17 +2016,15 @@
       "allowedSuites": [],
       "minBytes": null,
       "maxBytes": null,
-      "visibility": "public",
+      "visibility": "unfrozen",
       "normativeSource": "production-wire-source",
-      "ownerPackage": "Deep.Protocol.MembershipRoutes",
+      "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:production-wire-source:vectors",
       "schemaOwner": "deep-protocol:production-wire-source:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
-      "implementationPaths": [
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteContinuityCodec.cs"
-      ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "lifecycle": "RETIRED_REJECT",
+      "contractState": "allocation-only",
+      "implementationPaths": [],
+      "contractBlocker": null
     },
     {
       "magic": "RPF1",
@@ -2134,20 +2075,15 @@
       "allowedSuites": [],
       "minBytes": null,
       "maxBytes": null,
-      "visibility": "public",
+      "visibility": "unfrozen",
       "normativeSource": "protocol-registry-v1",
-      "ownerPackage": "Deep.Protocol.MembershipRoutes",
+      "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:protocol-registry-v1:vectors",
       "schemaOwner": "deep-protocol:protocol-registry-v1:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
-      "implementationPaths": [
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxLiveTransitionAuthoring.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteAuthorizationCodec.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteAuthorizationVerifier.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxSelectionSuccessorVerifier.cs"
-      ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "lifecycle": "RETIRED_REJECT",
+      "contractState": "allocation-only",
+      "implementationPaths": [],
+      "contractBlocker": null
     },
     {
       "magic": "SHR1",
@@ -2559,18 +2495,15 @@
       "allowedSuites": [],
       "minBytes": null,
       "maxBytes": null,
-      "visibility": "public",
+      "visibility": "unfrozen",
       "normativeSource": "protocol-registry-v1",
-      "ownerPackage": "Deep.Protocol.MembershipRoutes",
+      "ownerPackage": "Deep.Protocol",
       "vectorOwner": "deep-protocol:protocol-registry-v1:vectors",
       "schemaOwner": "deep-protocol:protocol-registry-v1:schema",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
-      "contractState": "current-source-bound",
-      "implementationPaths": [
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteContinuityCodec.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteIssuerAuthoring.cs"
-      ],
-      "contractBlocker": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "lifecycle": "RETIRED_REJECT",
+      "contractState": "allocation-only",
+      "implementationPaths": [],
+      "contractBlocker": null
     },
     {
       "magic": "IPK2",
@@ -2858,10 +2791,6 @@
       "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "current-source-bound",
       "implementationPaths": [
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxNodeCacheVerifier.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteHistoryAuthoring.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteIssuerAuthoring.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxSelectionSuccessorVerifier.cs",
         "src/Deep.Protocol/DeepExtension/MailboxAuthority/ProductionMailboxAuthorityCodec.cs"
       ],
       "contractBlocker": "The approved DNP1 registry allocates this retained opaque artifact type but does not define a canonical record grammar or byte bounds."
@@ -2882,10 +2811,6 @@
       "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "current-source-bound",
       "implementationPaths": [
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxNodeCacheVerifier.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxOwnerControlTransportCodec.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxRouteHistoryAuthoring.cs",
-        "src/Deep.Protocol.MembershipRoutes/ProductionMailboxSelectionSuccessorVerifier.cs",
         "src/Deep.Protocol/DeepExtension/MailboxAuthority/ProductionMailboxRevocationSnapshotCodec.cs"
       ],
       "contractBlocker": "The approved DNP1 registry allocates this retained opaque artifact type but does not define a canonical record grammar or byte bounds."
@@ -5996,6 +5921,111 @@
     },
     {
       "namespace": "magic",
+      "value": "OCR1",
+      "replacement": null
+    },
+    {
+      "namespace": "magic",
+      "value": "PMCQ",
+      "replacement": null
+    },
+    {
+      "namespace": "magic",
+      "value": "PMCR",
+      "replacement": null
+    },
+    {
+      "namespace": "magic",
+      "value": "PMFA",
+      "replacement": null
+    },
+    {
+      "namespace": "magic",
+      "value": "PMS1",
+      "replacement": null
+    },
+    {
+      "namespace": "magic",
+      "value": "PMT1",
+      "replacement": null
+    },
+    {
+      "namespace": "magic",
+      "value": "POC1",
+      "replacement": null
+    },
+    {
+      "namespace": "magic",
+      "value": "PRA1",
+      "replacement": null
+    },
+    {
+      "namespace": "magic",
+      "value": "PRA2",
+      "replacement": null
+    },
+    {
+      "namespace": "magic",
+      "value": "PRC1",
+      "replacement": null
+    },
+    {
+      "namespace": "magic",
+      "value": "PSS1",
+      "replacement": null
+    },
+    {
+      "namespace": "magic",
+      "value": "PSS2",
+      "replacement": null
+    },
+    {
+      "namespace": "magic",
+      "value": "RCA1",
+      "replacement": null
+    },
+    {
+      "namespace": "magic",
+      "value": "RCD1",
+      "replacement": null
+    },
+    {
+      "namespace": "magic",
+      "value": "RCH1",
+      "replacement": null
+    },
+    {
+      "namespace": "magic",
+      "value": "RCR1",
+      "replacement": null
+    },
+    {
+      "namespace": "magic",
+      "value": "RDA1",
+      "replacement": null
+    },
+    {
+      "namespace": "magic",
+      "value": "RHB1",
+      "replacement": null
+    },
+    {
+      "namespace": "magic",
+      "value": "RHC1",
+      "replacement": null
+    },
+    {
+      "namespace": "magic",
+      "value": "ROL1",
+      "replacement": null
+    },
+    {
+      "namespace": "magic",
+      "value": "RTC1",
+      "replacement": null
+    },
+    {
+      "namespace": "magic",
       "value": "XMC1",
       "replacement": null
     },
@@ -6065,81 +6095,34 @@
       "replacement": "ICallMediaPathProvider"
     }
   ],
-  "plannedRetirements": [
-    {
-      "namespace": "magic",
-      "value": "PRA1",
-      "targetLifecycle": "RETIRED_REJECT"
-    },
-    {
-      "namespace": "magic",
-      "value": "PRA2",
-      "targetLifecycle": "RETIRED_REJECT"
-    },
-    {
-      "namespace": "magic",
-      "value": "PSS1",
-      "targetLifecycle": "RETIRED_REJECT"
-    },
-    {
-      "namespace": "magic",
-      "value": "PSS2",
-      "targetLifecycle": "RETIRED_REJECT"
-    },
-    {
-      "namespace": "magic",
-      "value": "RCA1",
-      "targetLifecycle": "RETIRED_REJECT"
-    },
-    {
-      "namespace": "magic",
-      "value": "RCD1",
-      "targetLifecycle": "RETIRED_REJECT"
-    },
-    {
-      "namespace": "magic",
-      "value": "RCR1",
-      "targetLifecycle": "RETIRED_REJECT"
-    },
-    {
-      "namespace": "magic",
-      "value": "RDA1",
-      "targetLifecycle": "RETIRED_REJECT"
-    },
-    {
-      "namespace": "magic",
-      "value": "RHC1",
-      "targetLifecycle": "RETIRED_REJECT"
-    },
-    {
-      "namespace": "magic",
-      "value": "RTC1",
-      "targetLifecycle": "RETIRED_REJECT"
-    }
-  ],
+  "plannedRetirements": [],
   "contractBlockers": [
     {
       "magic": "MDG1",
       "reason": "The approved DNP1 registry allocates this retained opaque artifact type but does not define a canonical record grammar or byte bounds."
     },
     {
-      "magic": "PRA2",
+      "magic": "PHP1",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "PRC1",
+      "magic": "PMA2",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "PMB1",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "PMS2",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "PMT2",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
       "magic": "PRQ1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "PSS1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "PSS2",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
@@ -6147,43 +6130,11 @@
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "RCA1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "RCD1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "RCH1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "PRA1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "RCR1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
       "magic": "RFC1",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "RHB1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "RHC1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
       "magic": "RIP1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "ROL1",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
@@ -6195,15 +6146,7 @@
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "RTC1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
       "magic": "SHR1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "RDA1",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
@@ -6211,11 +6154,79 @@
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "POC1",
+      "magic": "TRS1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "WHL1",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "PMT1",
+      "magic": "XBA1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "XBB1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "NFP1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "NCQ2",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "NCP2",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "MST1",
+      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "MCP3",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "MEO1",
+      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "MFA1",
+      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "MFW1",
+      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "MIP1",
+      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "MPA1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "MPC1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "MQR1",
+      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "XCA2",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "MQR2",
+      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "MRC1",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
@@ -6247,83 +6258,19 @@
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "MST1",
+      "magic": "MQR3",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "NCP2",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "PMT2",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "NCQ2",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "OCR1",
+      "magic": "MCP1",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "PHP1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "PMA2",
+      "magic": "XCB1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "PMB1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "PMCQ",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "PMCR",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "PMFA",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "PMS1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "PMS2",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "NFP1",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "MRC1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "TRS1",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "XBA1",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "XPA1",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "XPC1",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "XPI1",
+      "magic": "XCD1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -6351,11 +6298,11 @@
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "XOR1",
+      "magic": "XRA1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "XRA1",
+      "magic": "XRC1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -6395,39 +6342,19 @@
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "XRC1",
+      "magic": "XPI1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "WHL1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "XOQ1",
+      "magic": "XPC1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "XNV1",
+      "magic": "XPA1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "XBB1",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "XCA2",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "XCB1",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "XCC1",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "XCD1",
+      "magic": "XOR1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -6447,11 +6374,11 @@
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "XOD1",
+      "magic": "XIC1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "XIC1",
+      "magic": "XIQ1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -6463,11 +6390,11 @@
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "XMC2",
+      "magic": "XCC1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "XMG1",
+      "magic": "XMC2",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -6491,20 +6418,40 @@
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "XIQ1",
+      "magic": "XNV1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "MQR3",
+      "magic": "XOD1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "XOQ1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "XMG1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "XUW1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "MCG3",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "MBR2",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "MQR2",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "magic": "DAO1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "MQR1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "magic": "DCA1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
       "magic": "DCB1",
@@ -6543,11 +6490,11 @@
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "DCA1",
+      "magic": "DGT1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "DGT1",
+      "magic": "DHQ2",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -6567,39 +6514,19 @@
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "DMC2",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "DMD1",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "DPE2",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "DPF1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "DPH2",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "DHQ2",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "DPK2",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "DAO1",
+      "magic": "DAM1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
       "magic": "DAB2",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "CMD1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "CAR1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -6635,15 +6562,15 @@
       "reason": "The approved DNP1 registry allocates this retained opaque artifact type but does not define a canonical record grammar or byte bounds."
     },
     {
+      "magic": "DMC2",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
       "magic": "ADC1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "DAM1",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "ADF1",
+      "magic": "ADH1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
@@ -6675,28 +6602,52 @@
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "CAR1",
+      "magic": "ADF1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "CMD1",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "ADH1",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "DPP2",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "DPQ2",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "DRMV",
+      "magic": "MBS1",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "DMD1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "DPF1",
+      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "GQS1",
+      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "GRA1",
+      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "GRI1",
+      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "GRR1",
+      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+    },
+    {
+      "magic": "GSQ1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "GSR1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "GSS1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "GSW1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
       "magic": "GTI1",
@@ -6735,64 +6686,40 @@
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "GSW1",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "MBR2",
+      "magic": "GQP1",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "MCG3",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "MCP1",
+      "magic": "GMD1",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
     },
     {
-      "magic": "MCP3",
+      "magic": "GLS1",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "MEO1",
+      "magic": "GIV1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "DPH2",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "DPK2",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "DPP2",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "DPQ2",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
+    },
+    {
+      "magic": "DRMV",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "MFA1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "MFW1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "MIP1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "MPA1",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "MPC1",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "MBS1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "GSS1",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "GSR1",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "GSQ1",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
       "magic": "DTC2",
@@ -6807,12 +6734,12 @@
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "DTT1",
+      "magic": "DPE2",
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "DWH1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
+      "magic": "DTT1",
+      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
       "magic": "GAJ1",
@@ -6847,40 +6774,8 @@
       "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
-      "magic": "GIV1",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "GLS1",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
-    },
-    {
-      "magic": "GMD1",
+      "magic": "DWH1",
       "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "GQP1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "GQS1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "GRA1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "GRI1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "GRR1",
-      "reason": "Pre-cutover codec has no frozen REG-01 machine grammar/bounds; this source-bound inventory row cannot become V1 release-active."
-    },
-    {
-      "magic": "XUW1",
-      "reason": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
     {
       "magic": "XVP1",
