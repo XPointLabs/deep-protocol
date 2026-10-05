@@ -136,6 +136,76 @@ open. An initial ownership invocation without fragments correctly rejected
 
 ## Root gate scope and residuals
 
+### Explicit Windows native execution, 2026-10-05
+
+Runtime/test source is unchanged; documentation HEAD is `981ab767`, runtime
+HEAD `d1ccb573`. On this Windows ARM64 host the default Braid test discovery
+looks for a locally built `native/.../aarch64-pc-windows-msvc` candidate, not the
+already reviewed `src/Deep.Protocol/runtimes/win-arm64/native` asset. The latter's
+exact size and SHA match `DeepMlKemBraidApprovedAssets`; no C++/Rust build or
+approval-manifest change is made. Explicit test input uses that reviewed asset.
+
+Against the existing Release test assembly, the six state-machine cases execute
+and pass with0 skips, including all five previously omitted cases. The existing
+standard ML-KEM and incremental Braid wrapper probes each directly execute their
+three delegated Windows methods and finish exit0. Digest/tamper, production
+approval, disposal/concurrency, interop, role reversal and restart assertions are
+unchanged. Repeat execution in an x64 process also passes6 state-machine and3+3
+wrapper cases. x64 runs under emulation on this same ARM64 machine, not separate
+x64 hardware; neither run is Android, UI/message E2E or release qualification.
+
+Both managed probe projects build with0 warnings/errors. Test assembly SHA-256:
+`dc543d9522bea91885006199dd06939162a58dcabab7c0fec638e8785df79e86`;
+its Protocol dependency is the test-seam assembly, SHA-256
+`0e50d42f782b835e74ae499871a818fc12c332f261cdc3543cbbd58186d5d9b6`.
+This is prebuilt-assembly execution; a current-source rebuild/recheck remains
+necessary before treating it as a newly qualified source matrix.
+
+| Receipt under `artifacts/s00-native-wrapper/` | SHA-256 |
+| --- | --- |
+| `state-machine/nikit_SURFACE-LT_2026-10-05_08_28_21_net10.0.trx` | `63490f1dceab4c75fcacd1d85bafd54ae7372dc3fdc63fb3c809a28d2947801c` |
+| `state-machine-x64/nikit_SURFACE-LT_2026-10-05_08_32_00_net10.0.trx` | `d3c7c6510acfdf5bb92458620cfca41e6d0d8c19302345a6e4c56628f62c9584` |
+
+State-machine execution sets `DEEP_MLKEM_BRAID_TEST_ASSET` only for its command
+and restores the prior environment value. ARM64 uses Release/no-build focused
+`dotnet test`; x64 uses the existing ARM64 SDK's `dotnet vstest /Platform:x64`
+over the same test assembly. The initial x64-host `dotnet test` command cannot
+start because that host has runtimes but no SDK; it executes no product test.
+No SDK is installed and no SDK pin is changed. The separate existing probes
+are `eng/Deep.MlKem.RuntimeWrapperProbe` and
+`eng/Deep.MlKemBraid.RuntimeWrapperProbe`, invoked with the test assembly and
+the corresponding exact reviewed standard/Braid asset paths. After the probes'
+deliberate corruption tests, all four staged Windows asset digests again match
+their reviewed source assets. Source binaries are untouched.
+
+The previous full2087/1/12 remains that previous full, not a new zero-skip run.
+These executions provide evidence for eleven formerly omitted Windows cases;
+the six delegated Fact skips are still intentional in ordinary test discovery.
+The authenticated operator capture is absent. MAU2 source / MCG2 package failures
+remain open; no package/API/resource gate or physical scenario is claimed passed.
+
+After the Node full and sequential Registry check finish, rebuild the current
+Protocol test project into isolated Release output with0 warnings/errors:
+`dotnet build tests/Deep.Protocol.Tests/Deep.Protocol.Tests.csproj -c Release --no-restore -m:1 -warnaserror -o artifacts/s00-native-wrapper/current-test-assembly`.
+The freshly compiled test DLL SHA-256 is
+`fab3759ae7bc04467c000b03c9db3270713fc6a5fb3d3066bc050cb9ecd44835`;
+its test-seam Protocol DLL is
+`338533f81d289c38a3b2bc5a0a3fa62d40a16b26ba75122baf4f83504766901e`.
+Run `dotnet vstest` against that exact fresh test DLL, the same focused filter
+and process-scoped reviewed Braid input; use `/Platform:x64` for the x64 host.
+Both current-source runs complete6/0/0; the existing standard/Braid probes
+against that same DLL each complete3/0 on both architectures. All assertions
+remain unchanged. All four staged ML-KEM/Braid digests still match their reviewed
+source assets after deliberate corruption checks. No native source is rebuilt.
+
+| Current-source receipt under `artifacts/s00-native-wrapper/` | SHA-256 |
+| --- | --- |
+| `current-state-machine-arm64/nikit_SURFACE-LT_2026-10-05_08_54_50_net10.0.trx` | `d34a9396e732a483634b70f8ddc9afc29ccd89f9309f986aa0cdb9f7ec8eb7ff` |
+| `current-state-machine-x64/nikit_SURFACE-LT_2026-10-05_08_55_13_net10.0.trx` | `c499f5ea86cb85a4f4c109140a48a48104b86cedc6f62aed85871756f4e96c70` |
+
+This qualifies the focused Windows cases against current source, not a new
+whole-suite, independent x64-hardware, Android or shipping-client result.
+
 ### Focused recheck, 2026-10-05
 
 Source HEAD `d1ccb573d552960f0c1cb21a655483f4065e74d5`, unchanged runtime.
