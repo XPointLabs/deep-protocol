@@ -136,6 +136,32 @@ open. An initial ownership invocation without fragments correctly rejected
 
 ## Root gate scope and residuals
 
+### Focused recheck, 2026-10-05
+
+Source HEAD `d1ccb573d552960f0c1cb21a655483f4065e74d5`, unchanged runtime.
+`./eng/Test-ProductionProtocolGraph.ps1 -Configuration Release` exits1 on
+retired MAU2 in `ProductionMailboxAuthorityCodec`. Its actual transport check
+still requires `ProductionMailboxAuthorityTransport.AuthenticatedMau2`; this
+is not merely a source-name assertion mismatch.
+
+The existing actual-package witness was run alone with Release/no-build:
+`dotnet test tests/Deep.Protocol.Tests/Deep.Protocol.Tests.csproj --configuration
+Release --no-build --filter FullyQualifiedName~PackageExactThreeSessionFree_InspectsActualPackageZipsAssembliesResourcesAndPublicApi
+--logger 'trx;LogFileName=s00-package-status.trx' --results-directory
+artifacts/s00/status-sequential-20261005 -m:1`.
+The witness itself rebuilds/packages the captured current source, including
+locked restores and normalization; no-build applies only to its test runner.
+Result **0 pass /1 fail /0 skip**, terminal exit1,1m21s: actual `Deep.Protocol`
+package inspection rejects MCG2 in assembly bytes. TRX
+`artifacts/s00/status-sequential-20261005/s00-package-status.trx`, SHA-256
+`9eff54a8b3fe15800a85ab905ac20fe5ca09b7cdac8ac34b04e8395afca7a74c`.
+The witness-owned temporary package/source directory was removed by its guarded
+finally cleanup; the TRX remains local. No runtime, frozen input, assertion,
+package policy or consumer was changed. This reproduces an open S00 blocker,
+not a repaired defect or full-suite result. Removing the old authority requires
+following its compiled producer/consumer dependencies; string renaming does
+not qualify the current graph.
+
 From root, both `scripts/check-deep-crypto-spec.ps1` and
 `scripts/check-contact-codec-spec.ps1` pass after replacing obsolete counts/path
 with the exact approved retained target/hostile/negative-ID sets and current
