@@ -334,17 +334,13 @@ public sealed class ManagedMlKemBraidStateMachineTests
 
     private static DeepMlKemBraidNativeProvider LoadRealCandidateOrSkip()
     {
-        var candidate = DeepMlKemBraidApprovedAssets.CandidateForCurrentWindowsProcess();
-        var target = RuntimeInformation.ProcessArchitecture == Architecture.X64
-            ? "x86_64-pc-windows-msvc"
-            : "aarch64-pc-windows-msvc";
+        var approved = DeepMlKemBraidApprovedAssets.ForCurrentProcess();
         var source = FindAsset(
             "DEEP_MLKEM_BRAID_TEST_ASSET",
-            "native", "Deep.MlKemBraid", "target",
-            target, "release", "deep_mlkem_braid.dll");
-        Stage(source, candidate.RelativePath);
-        return DeepMlKemBraidNativeProvider.LoadCandidateForTests(
-            candidate);
+            "src", "Deep.Protocol",
+            approved.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+        Stage(source, approved.RelativePath);
+        return DeepMlKemBraidNativeProvider.LoadApprovedForCurrentProcess();
     }
 
     private static void Stage(string source, string relativePath)
@@ -369,8 +365,12 @@ public sealed class ManagedMlKemBraidStateMachineTests
     private static string FindAsset(string environmentName, params string[] relativeParts)
     {
         var explicitPath = Environment.GetEnvironmentVariable(environmentName);
-        if (!string.IsNullOrWhiteSpace(explicitPath) && File.Exists(explicitPath))
+        if (!string.IsNullOrWhiteSpace(explicitPath))
+        {
+            if (!File.Exists(explicitPath))
+                throw new FileNotFoundException("The explicit reviewed Braid test asset is absent.");
             return Path.GetFullPath(explicitPath);
+        }
         var current = new DirectoryInfo(AppContext.BaseDirectory);
         while (current is not null)
         {
@@ -408,22 +408,7 @@ internal sealed class WindowsBraidCandidateFactAttribute : FactAttribute
             return;
         }
 
-        var explicitPath = Environment.GetEnvironmentVariable("DEEP_MLKEM_BRAID_TEST_ASSET");
-        if (!string.IsNullOrWhiteSpace(explicitPath) && File.Exists(explicitPath)) return;
-
-        var target = RuntimeInformation.ProcessArchitecture == Architecture.X64
-            ? "x86_64-pc-windows-msvc"
-            : "aarch64-pc-windows-msvc";
-        var current = new DirectoryInfo(AppContext.BaseDirectory);
-        while (current is not null)
-        {
-            var candidate = Path.Combine(
-                current.FullName,
-                "native", "Deep.MlKemBraid", "target",
-                target, "release", "deep_mlkem_braid.dll");
-            if (File.Exists(candidate)) return;
-            current = current.Parent;
-        }
-        Skip = "The reviewed Windows incremental ML-KEM candidate is absent.";
+        // Reviewed Windows assets are tracked production inputs. Their absence,
+        // wrong digest or failed approval must fail execution, never hide as a skip.
     }
 }

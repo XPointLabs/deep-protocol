@@ -206,6 +206,57 @@ source assets after deliberate corruption checks. No native source is rebuilt.
 This qualifies the focused Windows cases against current source, not a new
 whole-suite, independent x64-hardware, Android or shipping-client result.
 
+### Default Windows native discovery correction, 2026-10-05
+
+Input Protocol `739cc5325117e8afc249912086d85d9c9f53cdce`. Only the
+`ManagedMlKemBraidStateMachineTests` harness changes. It locates the tracked
+reviewed asset for the current Windows RID and uses the production-approved
+loader, instead of searching for a local Rust build and using the candidate
+loader. No runtime, registry, crypto byte/domain, public API or native binary
+is changed. All state-machine, role reversal, tamper, restart and import
+assertions are unchanged. On supported Windows, a missing asset fails execution,
+never discovery-skips. An explicitly selected absent input fails without
+falling back to a repository asset. Unsupported OS/architecture still skips.
+
+With `DEEP_MLKEM_BRAID_TEST_ASSET` cleared only in each command and restored
+afterwards, current-source Release focused6/0/0 passes on ARM64. An x64 process
+over that same fresh test DLL also completes6/0/0 without an explicit input;
+this remains emulation on the same ARM64 host, not separate device evidence.
+The missing-explicit-input negative run deliberately exits1 with one failed
+case, zero skips and the exact missing-input exception before staging; its
+outer harness verifies that result and completes exit0. It is a rejection
+test, not an unexplained product failure or a passing positive TRX.
+
+```powershell
+dotnet test Deep.Protocol.slnx -c Release -m:1 -warnaserror --logger trx --results-directory artifacts/s00-native-discovery/full
+```
+
+The new unfiltered whole-solution run finishes exit1, not GO. Actual result
+outcomes are2121 passed,1 failed,7 skipped (total2129):
+main Protocol1885/1/7, MembershipRoutes131/0/0, ProfileCarrier105/0/0.
+All five state-machine native cases execute and pass in this full run.
+The sole failure is still the actual-package witness rejecting compiled MCG2;
+no assertion, package policy or public-API snapshot is relaxed. The seven
+NotExecuted results are the six explicitly delegated wrapper tests and absent
+authenticated operator capture. Use actual result outcomes: this TRX adapter
+reports `Counters.notExecuted=0` despite seven NotExecuted test results.
+Builds finish with0 warnings/errors. Current test DLL SHA-256:
+`97a2eff95276fbad770d52a1847cd0d62d950d876ec54e7366be9d2147cc817a`.
+
+| Receipt under `artifacts/s00-native-discovery/` | SHA-256 |
+| --- | --- |
+| `focused/nikit_SURFACE-LT_2026-10-05_09_06_45_net10.0.trx` | `238b2f0f5fad0603273866c6686922dea061762c35498cecf604451a9e6ab559` |
+| `x64/nikit_SURFACE-LT_2026-10-05_09_10_30_net10.0.trx` | `37c38fdeaee739348d2ec52954bdbf6b72412fb63dea73fb41521e8229d50568` |
+| `explicit-missing/explicit-missing-negative.trx` | `1201036b7844ca2e05b271784b03eedc66903074e28633021f99ad59bb1fbfbe` |
+| `full/nikit_SURFACE-LT_2026-10-05_09_07_36_net10.0.trx` | `cebead1eb05af31dc0ed11787b471714d1e18977bd4a5970d04a4913e8383991` |
+| `full/nikit_SURFACE-LT_2026-10-05_09_07_41_net10.0.trx` | `4986c3f30e0558f372228b16ca0f771bd1302fec9a967659a83a98f8694d9c9d` |
+| `full/nikit_SURFACE-LT_2026-10-05_09_07_45_net10.0.trx` | `e04cadb7d6102bd238ff5fe67d42a6647891ff933a3ba59d6caeff0b8e32a6b4` |
+
+Registry source/resolved consistency and exact314/package219/final95 evidence
+ownership pass. The source production graph still rejects MAU2 in the retained
+PMA1 codec. This closes the default Windows five-case omission only; S00,
+package graph, recovery/capture and physical client qualification remain open.
+
 ### Focused recheck, 2026-10-05
 
 Source HEAD `d1ccb573d552960f0c1cb21a655483f4065e74d5`, unchanged runtime.
