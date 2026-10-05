@@ -1,85 +1,61 @@
-# Unsupported Or Unspecified - DNP1 Wave 1
+# Unsupported or unqualified Protocol behavior
 
-Updated: 2026-09-07.
+Updated: 2026-10-05. This is a repository boundary guide, not a second protocol
+specification, execution plan or release status ledger.
 
-## Clean-break state
+## Current target and source are separate facts
 
-There is no Session compatibility or database migration path. Session,
-protobuf, P03A, DPB/DPE, Nearby and LoRa code is offline reference evidence,
-not a dormant production feature.
+The sole version/lifecycle owner is the superproject
+[Protocol registry](../../docs/architecture/PROTOCOL-REGISTRY-V1.md). Current
+identity uses DID2/DAB2 with a hybrid PQ root; DID1/DAB1 and their dependent
+authoring surfaces are retired by
+[DR-0069](../../docs/survival-program/decisions/DR-0069-did2-retired-identity-surface-removal.md).
+DNP1 account/device verification remains an independent input where its frozen
+contract requires it. It is not a DID1 compatibility reader or authority to
+replace the DID2 root with a classical-only credential.
 
-DNP1-native message confidentiality and ratchet remain absent from production
-code. Their clean-break target is now specified by the superproject crypto and
-contact/group specifications; specification does not constitute runtime
-activation. Current Shared/MAUI messaging uses a separate static-key E2EE
-envelope over authenticated MAU2 and Deep privacy routing and is disposable
-evidence, not a public-release protocol. Managed ingress is transport-only and
-does not interpret or authorize those inner bytes.
+Current mailbox selection and presentation belong to
+[DR-0081](../../docs/survival-program/decisions/DR-0081-did2-mailbox-selection-grant-clean-break.md),
+not the pre-cutover managed lane. There is no Session, protobuf, old identity,
+database migration, authorization adapter or direct-HTTP fallback permitted by
+this guide. A parsed artifact, a public codec or a test fixture never grants
+current dispatch, holder, account or message authority.
 
-The exact ONION-01 XRF1/XRL1/XRE1/XPR1/XRS1 codec and deterministic test seam are
-implemented, but production use is unsupported while `runtimeActivation=false`.
-No caller may treat the internal builder/open helpers or process-local replay window
-as a public codec. Missing/inactive production pieces are the sealed verified
-XNA1/XVP1/XNV1/XND1 plus DTT1-backed XTT capability producers, exact-three receive-
-position proof, mandatory durable replay transaction/key lease, opaque key-vault
-binding, explicit exit/client reply contexts, closed operation payload verifier set,
-protected monotonic expiry and durable CSPRNG nonce/key uniqueness authority. These
-are specified by `deep-extension-privacy-routing-v1.md` section 7 and must be
-implemented without raw-key, wall-clock, trust-callback, arbitrary-route or replay-
-optional shortcuts.
+The source tree still contains pre-cutover PMA1/PMR1 producers and their
+membership/governance consumers. The actual source/package gates reject that
+remaining graph; see the
+[reproduced S00 failure and receipts](testing/s00-contact-baseline-2026-10-03.md#focused-recheck-2026-10-05).
+Removal must follow actual compiled consumers and reviewed frozen API/evidence
+ownership. Renaming diagnostics, ignoring retired tokens, deleting failing
+assertions or enabling the old lane does not qualify its replacement.
 
-The frozen internal payload verifier now rejects non-MAU2 mailbox requests,
-cross-operation/cross-network MAU2, arbitrary mailbox success bodies, and invalid
-ContactResolve request/result pairs. This does not activate ONION-01: Contact and
-mailbox consumers still have no public synchronous/raw integration surface, and no
-direct HTTP fallback is part of the protocol contract.
+## Qualification and activation fences
 
-Pre-cutover PMA1/PMT1/PMS1 and PRA/PSS/RCD/RCA route-continuity bytes are also
-not the clean-break target. DR-0004 selects PMA2/PMT2/PMS2 and
-XRA1/XRC1/XRR1/XSS1. Their frozen CONTACT-CODEC grammar is present but runtime
-activation is absent: production has no ADL1/ADH1 or XNV1/XNH1 authority
-capability producer, and therefore cannot promote parsed bytes into contact or
-route state.
+The sole unfinished-work status is
+[NEXT-SPRINT](../../docs/NEXT-SPRINT.md); the sole execution sequence is
+[IMPLEMENTATION-PLAN](../../docs/architecture/IMPLEMENTATION-PLAN-V1.md).
+Protocol, Registry, node, Shared, MAUI, operator tools and installed artifacts
+must qualify one matching graph. Compilation, native wrapper tests, local
+signed ceremonies and Docker health are different evidence from physical
+Windows/Android delivery. Missing provider/capture cases are not successful
+native or release qualification.
 
-Direct P2P mesh is a future architecture requirement, not part of the current
-DNP1 production surface. No peer/relay handshake, authenticated neighbor
-discovery, multi-hop routing, store-and-forward, TTL/loop suppression or mesh
-abuse-control grammar is specified here. Nearby and Session reference code do
-not satisfy that requirement. A later ADR must preserve E2EE origin/destination
-authentication across both one-hop and relayed paths without depending on the
-official mailbox/control plane. Its required transport-neutral boundary and
-deployment guarantees are now specified in the superproject
-`docs/architecture/` documents, while its wire protocol and runtime remain
-deliberately absent.
+Key custody, protected persistence, external latest-head floors, witness
+operation, immutable pins, atomic old/new CAS and rechecks after external
+callbacks remain responsibilities of the owning consumers. Source removal
+does not authorize deleting registered node keys, retained signed lineage,
+genesis, journals, volumes or independent protected floors. Recovery cannot
+silently re-author an already issued binding or mint replacement custody.
 
-## DNP1 classical baseline
+Application confidentiality/ratchet semantics are owned by
+[DEEP-CRYPTO](../../docs/survival-program/releases/v3.0.0/specs/DEEP-CRYPTO-V1-DRAFT.md)
+and [contact/group semantics](../../docs/architecture/CONTACT-AND-GROUP-PROTOCOL-V1.md),
+not the retired static-key diagnostic transport. Routing/placement and privacy
+fences belong to [XPOINT-NETWORK](../../docs/architecture/XPOINT-NETWORK-V1.md).
+An implemented component does not prove scheduler, receipts, remote attachments,
+governed groups, sustained recovery or shipping composition.
 
-The classical identity, revocation, reset, external-witness, MRL2/DNRC/DPC,
-recovery-candidate and native-peer grammar is implemented as relative
-cryptographic verification. This does not authorize production publication,
-consumer activation or a destructive reset. Consumers still own immutable
-ReleaseRoot pins, HSM/provider trust, protected HMAC keys, exact old/new CAS,
-durability, external witness operation and final kill-switch/lease/key-health
-rechecks.
-
-Message confidentiality, a ratchet and a production post-quantum provider are
-absent and blocked. Unknown/PQ suites are not accepted by Wave 1 grammar.
-
-## Identity boundaries
-
-The old `Deep.Protocol.Native` identity package is removed. `DeepRecoveryV1`
-is production code under `Deep.Protocol.Identity`, but consumer activation,
-secure-storage integration and destructive account reset remain later packages.
-The frozen future `account-pq-signing-seed` role has no production capability:
-V1 account authentication is Ed25519-only. Recovery-derived device keys,
-Ed25519/X25519 conversion, non-24-word phrases and generation zero are unsupported
-and fail closed.
-
-## Host responsibilities
-
-Key custody, protected persistence, external witness deployment, destructive
-reset orchestration, consumer-owned authoritative reads and connectors,
-consumer repinning and release governance remain outside this library. The
-provided address policy and isolated DPC transport verify their supplied
-sealed current facts, resolver results and TLS/SPKI observations; they do not
-operate DNS, sockets, HSMs or deployment policy themselves.
+Direct P2P/on-prem/Apple and the six-node profile are not activated by the
+current [deployment profile](../../docs/architecture/DEPLOYMENT-PROFILES.md).
+Their presence in future requirements is not permission to invent handshake,
+discovery or mesh wire, reuse a retired protocol, or claim current support.
