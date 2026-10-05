@@ -12,7 +12,7 @@ public sealed class ProductionMailboxRevocationSnapshotContractTests
     private const ulong Now = 1_800_000_000;
 
     [Fact]
-    public void PreApprovalWorkflowRoundTripsAndProducesFailClosedRevocationSource()
+    public void PreApprovalWorkflowRoundTripsAsImmutableNativeProvenance()
     {
         var fixture = CreateFixture([Serial(1), Serial(9)]);
         var decoded = ProductionMailboxRevocationSnapshotCodec.Decode(fixture.EncodedSnapshot);
@@ -20,10 +20,8 @@ public sealed class ProductionMailboxRevocationSnapshotContractTests
         Assert.Equal(fixture.EncodedSnapshot, ProductionMailboxRevocationSnapshotCodec.Encode(decoded));
         var verified = VerifySnapshot(fixture);
         Assert.Equal(2, verified.RevokedGrantSerialCount);
-        Assert.True(verified.IsRevokedSerial(Serial(1)));
-        Assert.False(verified.IsRevokedSerial(Serial(2)));
-        Assert.True(verified.IsRevoked(Query(fixture.IssuerPublicKey, Serial(9))));
-        Assert.False(verified.IsRevoked(Query(fixture.IssuerPublicKey, Serial(10))));
+        Assert.Equal(Serial(1), verified.Snapshot.RevokedGrantSerials[0].ToArray());
+        Assert.Equal(Serial(9), verified.Snapshot.RevokedGrantSerials[1].ToArray());
         Assert.Equal(SHA256.HashData(fixture.EncodedSnapshot), verified.CanonicalSnapshotHash.ToArray());
     }
 
@@ -193,12 +191,10 @@ public sealed class ProductionMailboxRevocationSnapshotContractTests
     }
 
     [Fact]
-    public void VerifiedHandlesDefensivelyCopyAndRejectAnotherIssuer()
+    public void VerifiedHandlesDefensivelyCopyNativeProvenance()
     {
         var fixture = CreateFixture([Serial(1)]);
         var verified = VerifySnapshot(fixture);
-        Assert.Throws<ProductionMailboxRevocationSnapshotException>(() => verified.IsRevoked(Query(Bytes(77, 32), Serial(1))));
-
         var sourceAuthorityNetwork = GetWritableArray(fixture.Authority.NetworkId);
         sourceAuthorityNetwork[0] ^= 0xff;
         Assert.Equal(Bytes(1, 16), fixture.VerifiedAuthority.Authority.NetworkId.ToArray());
@@ -208,7 +204,8 @@ public sealed class ProductionMailboxRevocationSnapshotContractTests
 
         var exposedSnapshot = verified.Snapshot;
         GetWritableArray(exposedSnapshot.RevokedGrantSerials[0])[15] ^= 0xff;
-        Assert.True(verified.IsRevokedSerial(Serial(1)));
+        Assert.Equal(Serial(1), verified.Snapshot.RevokedGrantSerials[0].ToArray());
+        Assert.Equal(1, verified.RevokedGrantSerialCount);
     }
 
     [Fact]
@@ -393,16 +390,6 @@ public sealed class ProductionMailboxRevocationSnapshotContractTests
     private static void AssertDecodeError(byte[] encoded, ProductionMailboxRevocationSnapshotError expected) =>
         Assert.Equal(expected, Assert.Throws<ProductionMailboxRevocationSnapshotException>(() =>
             ProductionMailboxRevocationSnapshotCodec.Decode(encoded)).Error);
-
-    private static MailboxCapabilityRevocationQuery Query(ReadOnlyMemory<byte> issuer, ReadOnlyMemory<byte> serial) => new()
-    {
-        IssuerPublicKey = issuer,
-        Serial = serial,
-        Domain = MailboxCapabilityDomain.Deposit,
-        Generation = 70,
-        Epoch = 9,
-        MembershipCommitment = Bytes(8, 32)
-    };
 
     private static ProductionMailboxAuthorityEndpoint Endpoint(string uri, byte seed) => new()
     {

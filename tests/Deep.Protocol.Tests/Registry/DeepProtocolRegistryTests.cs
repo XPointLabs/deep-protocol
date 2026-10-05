@@ -50,13 +50,13 @@ public sealed class DeepProtocolRegistryTests
     }
 
     [Fact]
-    public void RemovedRouteControlAllocationsExposeNoProductionEncodingApi()
+    public void RemovedMailboxControlAllocationsExposeNoProductionEncodingApi()
     {
         string[] retired =
         [
             "OCR1", "PMCQ", "PMCR", "PMFA", "PMS1", "PMT1", "POC1", "PRC1",
             "RCH1", "RHB1", "ROL1", "PRA1", "PSS1", "RCD1", "RDA1", "RCR1",
-            "RHC1", "RTC1", "RCA1", "PRA2", "PSS2"
+            "RHC1", "RTC1", "RCA1", "PRA2", "PSS2", "PHP1"
         ];
         foreach (var magic in retired)
         {

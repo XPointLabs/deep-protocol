@@ -458,3 +458,69 @@ Clean95/0/0 and Smoke119/0/0 complete terminal0. Local receipts in MAUI:
 The default Debug composition is not the authenticated physical HTTPS lane
 or Release composition. These tests do not prove contacts, messages, files or
 groups on devices, signing, artifact publication, S00 acceptance or release.
+
+### Mailbox issuance and current-grant adapter retirement, 2026-10-05
+
+Input Protocol `624850f27ac12a4a85a0dd5dc6bcadd6696d8107`, root
+`9e276476facfbd1e12d209e3cac6e8f215eebe2f` and Shared
+`b238fb4f9bc750185e4fc431b1bf4ae6f33c2b1f`. Exact removal authorization is
+[DR-0094](../../../docs/survival-program/decisions/DR-0094-retired-mailbox-issuance-and-revocation-adapter.md).
+Removed the PHP1 source and its eight public types; all four removed cases were
+Passed in the preceding DR-0093 full receipt. Removed the retained verified PMR1
+handle's current-grant interface and IsRevoked/IsRevokedSerial APIs. Its immutable
+snapshot/hash/count remain; the internal constructor loses only the unused issuer
+argument. Both verifier/recovery call sites retain all signature, provenance,
+time and binding checks. PMR1 contract coverage keeps all12 cases, replacing only
+obsolete grant-query assertions with immutable-provenance assertions.
+
+Nine new actual-assembly cases require all eight retired PHP1 types to be absent
+and PMR1 to expose exactly its three getters, no public constructor and no current
+grant-query interface. The existing registry absence test now also checks PHP1's
+two encoding APIs. Native DNP1 grammar/domains/reference types and account/device,
+Root/reset/recovery guarantees are not removed or changed by this batch.
+
+Semantic comparison retains all244 allocation rows; only PHP1 changes to
+RETIRED_REJECT/allocation-only with no implementation paths. Its allocation is
+never reused. Source inventory and the human registry's existing row are reviewed
+and mechanically repinned;175 anchors validate with zero anchor changes.
+Frozen DNP1 registry SHA remains
+`e036a0b6acb260e05e18ac536a723b0b8561d2ba1d813429304505b0e7a7da7b`.
+No approved native blob or strict API/package snapshot is repinned.
+
+```powershell
+./eng/Test-DeepProtocolRegistry.ps1
+dotnet build Deep.Protocol.slnx -c Release --no-restore -m:1 -warnaserror
+dotnet test tests/Deep.Protocol.Tests/Deep.Protocol.Tests.csproj -c Release -m:1 -warnaserror --filter 'FullyQualifiedName~RetiredMailboxIssuanceSurfaceTests|FullyQualifiedName~ProductionMailboxRevocationSnapshotContractTests|FullyQualifiedName~DeepProtocolRegistryTests' --logger trx --results-directory artifacts/s00-issuance-adapter-removal/focused
+dotnet test tests/Deep.Protocol.Tests/Deep.Protocol.Tests.csproj -c Release --no-build -m:1 -warnaserror --filter 'FullyQualifiedName~Deep.Protocol.Tests.DeepNative.NativeRoutingVerifierTests|FullyQualifiedName~Deep.Protocol.Tests.DeepNative.NativeMembershipVerifierTests|FullyQualifiedName~Deep.Protocol.Tests.DeepNative.RecoveryProviderTests|FullyQualifiedName~Deep.Protocol.Tests.DeepNative.MembershipClosureIntegrationTests' --logger trx --results-directory artifacts/s00-issuance-adapter-removal/native-corrected
+dotnet test Deep.Protocol.slnx -c Release --no-build -m:1 -warnaserror --logger trx --results-directory artifacts/s00-issuance-adapter-removal/full
+```
+
+Registry consistency and whole Protocol Release build complete terminal0;
+build has0 warnings/errors. Focused31/0/0 and retained native23/0/0 complete
+terminal0. An initial native filter mistakenly used file names rather than actual
+class names and selected zero tests; its terminal0 is a harness error, not a pass.
+The corrected23-case run above supplies the evidence. Shared Production solution
+build also completes terminal0 with0 warnings/errors. Other consumer fulls and
+MAUI builds from the preceding batch do not qualify this changed Protocol matrix.
+
+New unfiltered Protocol full completes terminal1: **2010 passed /1 failed /7 skipped**
+(main1891/1/7, routes14/0/0, carrier105/0/0). Actual UnitTestResult outcomes identify
+the seven skips. The remaining failure inspects real package ZIP/assembly content
+and rejects retired MAU2 in Deep.Protocol; source graph also rejects retained MAU2.
+Neither gate is weakened. The remaining native current-owner join, coherent
+source/package/API closure and connected/physical acceptance stay open.
+
+Local receipts under `artifacts/s00-issuance-adapter-removal/`:
+
+| Receipt | SHA-256 |
+| --- | --- |
+| `focused/nikit_SURFACE-LT_2026-10-05_11_38_29_net10.0.trx` | `1c1441edd7b74a52c4f20b1ab78f291c101cd6649b6e51f95b7ace26f4a0afd9` |
+| `native/nikit_SURFACE-LT_2026-10-05_11_49_17_net10.0.trx` (zero-test harness error) | `ae58baf059b15428b03803cf8d2960a9c18f7ecdf91e9e72e48b99cc184d4591` |
+| `native-corrected/nikit_SURFACE-LT_2026-10-05_11_50_27_net10.0.trx` | `2f937ed4d9b50d71cceff30740ab637c5771536bf49824eb53381b5e45162d88` |
+| `full/nikit_SURFACE-LT_2026-10-05_12_04_17_net10.0.trx` | `8e55d0e41d520228aaeef4cfdefe35de1571004c2480bf7ca24f57b7041d28a7` |
+| `full/nikit_SURFACE-LT_2026-10-05_12_04_19_net10.0.trx` | `0f47d1e3e07474f09a96c83e95348c171e575012609574c5c6f5bf908e0b4dac` |
+| `full/nikit_SURFACE-LT_2026-10-05_12_04_23_net10.0.trx` | `2db4f1e4d4dd9131c8a3390c5290b32fa0b0e6ec9aae8962f7183826ca489969` |
+
+No production deployment, device account, registered key, protected state, secret
+or authority lineage changes. This source retirement does not close S00 or qualify
+contacts, messages, files, groups, release signing, package publication or devices.

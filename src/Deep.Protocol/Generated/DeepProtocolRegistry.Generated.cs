@@ -170,7 +170,6 @@ public static class DeepProtocolIdentifiers
         public const string NCP2 = "NCP2";
         public const string NCQ2 = "NCQ2";
         public const string NFP1 = "NFP1";
-        public const string PHP1 = "PHP1";
         public const string PMA1 = "PMA1";
         public const string PMA2 = "PMA2";
         public const string PMB1 = "PMB1";
@@ -382,7 +381,6 @@ public static class DeepProtocolIdentifiers
         public static System.ReadOnlySpan<byte> NCP2 => "NCP2"u8;
         public static System.ReadOnlySpan<byte> NCQ2 => "NCQ2"u8;
         public static System.ReadOnlySpan<byte> NFP1 => "NFP1"u8;
-        public static System.ReadOnlySpan<byte> PHP1 => "PHP1"u8;
         public static System.ReadOnlySpan<byte> PMA1 => "PMA1"u8;
         public static System.ReadOnlySpan<byte> PMA2 => "PMA2"u8;
         public static System.ReadOnlySpan<byte> PMB1 => "PMB1"u8;
@@ -508,7 +506,7 @@ internal readonly record struct GeneratedRegistryIdentifier(
 
 internal static class DeepProtocolRegistryGenerated
 {
-    internal const string RegistrySha256 = "31ed3afce623405552728e9d24e503b314cdc3539495ad0809d147d0d2ae5f91";
+    internal const string RegistrySha256 = "779cf25b3d35f941b00da896cfd4d3e7b1d9be3f75d1ba609cc51592371d3b0a";
     internal const string Dnp1RegistrySha256 = "e036a0b6acb260e05e18ac536a723b0b8561d2ba1d813429304505b0e7a7da7b";
     internal const string Dnp1ApprovedCommit = "a8456987efe031388ca2eb9006886fb78f31e06c";
 
@@ -660,7 +658,6 @@ internal static class DeepProtocolRegistryGenerated
         new("magic", "NCP2", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "NCQ2", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "NFP1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
-        new("magic", "PHP1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "PMA1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "PMA2", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "PMB1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),

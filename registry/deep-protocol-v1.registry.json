@@ -50,7 +50,7 @@
       "id": "protocol-registry-v1",
       "kind": "normative-document",
       "path": "docs/architecture/PROTOCOL-REGISTRY-V1.md",
-      "normalizedSha256": "2740daf0add7efe7afd510d09e6ddfbeaa69e7508b33b6c33a753304706fc0c6"
+      "normalizedSha256": "3d1df51ac39079942b0668cbabc54ff726fbd5cabef9cdfbb970d87aece9afb9"
     },
     {
       "id": "dnp1-frozen",
@@ -146,7 +146,7 @@
       "id": "production-wire-source",
       "kind": "production-source-scan",
       "path": "deep-protocol/src",
-      "normalizedSha256": "2815cb250b59344c85cd9b826b1324e5fbfd4d2f3a3cccdd9076b84d8f8a9d3a"
+      "normalizedSha256": "1c793f0a916ee6e4cd25faf29914c7458f9a60dbaf0a31b5e8730af9f16adeba"
     }
   ],
   "productionInventory": {
@@ -3353,7 +3353,7 @@
       "value": "PHP1",
       "symbol": "PHP1",
       "meaning": "current production wire allocation PHP1",
-      "lifecycle": "CURRENT_PRE_CUTOVER",
+      "lifecycle": "RETIRED_REJECT",
       "sourceId": "production-wire-source"
     },
     {

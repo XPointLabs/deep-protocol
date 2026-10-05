@@ -202,7 +202,7 @@ public sealed class NativeRoutingVerifier
         var verifiedPma = new VerifiedProductionMailboxAuthority(
             pma, SHA256.HashData(pmaBytes), pma.AuthorityGeneration);
         var verifiedPmr = new VerifiedProductionMailboxRevocationSnapshot(
-            pmr, SHA256.HashData(pmrBytes), pma.MailboxIssuerEd25519PublicKey.Span);
+            pmr, SHA256.HashData(pmrBytes));
         return VerifyRouterCertificate(
             mailbox, verifiedPma, verifiedPmr, canonicalDnr1,
             transactionTimeUnixSeconds);

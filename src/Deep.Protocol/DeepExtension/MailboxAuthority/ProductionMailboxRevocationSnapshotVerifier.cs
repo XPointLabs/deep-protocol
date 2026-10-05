@@ -87,7 +87,7 @@ public static class ProductionMailboxRevocationSnapshotVerifier
             throw Error(ProductionMailboxRevocationSnapshotError.InvalidSignature, "PMR1 issuer signature is invalid.");
 
         return new VerifiedProductionMailboxRevocationSnapshot(
-            snapshot, canonicalHash, authority.MailboxIssuerEd25519PublicKey.Span);
+            snapshot, canonicalHash);
     }
 
     private static void VerifyWindow(ulong from, ulong until, ulong now, uint skew, string name)
