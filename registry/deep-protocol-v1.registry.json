@@ -140,7 +140,7 @@
       "id": "transport-neutral-v1",
       "kind": "normative-document",
       "path": "docs/architecture/TRANSPORT-NEUTRAL-MESSAGING.md",
-      "normalizedSha256": "19d28c7faa5d0f1dd84073b6f3f581710eb046b3abfd8d4d0f1110f5bf4ed6b5"
+      "normalizedSha256": "d26f79d5d33cd9e80ac36629eae7689495dde3583e2bd3dd60cb418c98b871cb"
     },
     {
       "id": "production-wire-source",
