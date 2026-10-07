@@ -189,6 +189,9 @@ internal sealed class VerifiedOnionNetworkClosure
     internal required Xnv1Record View { get; init; }
     internal required Xnh1Record Head { get; init; }
     internal required ContactRecord Pmt { get; init; }
+    // Verified lineage facts, not current routing or grant authority. They are
+    // never populated from an unsigned cache or terminal-only rehydration.
+    internal required ContactRecord[] RetainedPmts { get; init; }
     internal required byte[] ViewCoreHash { get; init; }
     internal required byte[] ViewCoreReference { get; init; }
     internal required byte[] PmtArtifactReference { get; init; }
@@ -309,6 +312,12 @@ internal static class XPointOnionCapabilityProducer
                 pmtCursor = candidate;
             }
 
+            // Forward-only checkpoints are not exact protected-prefix joins.
+            // They may mint their terminal current fact, not retained history.
+            var retainedPmts = forwardCheckpoint is null
+                ? CaptureRetainedPmts(previous, pmts)
+                : new[] { pmts[^1] };
+
             var xvp = policies[^1];
             var xnv = views[^1];
             var xnh = heads[^1];
@@ -346,6 +355,7 @@ internal static class XPointOnionCapabilityProducer
                 View = xnv,
                 Head = xnh,
                 Pmt = pmt,
+                RetainedPmts = retainedPmts,
                 ViewCoreHash = xnv.CoreHash.ToArray(),
                 ViewCoreReference = viewReference,
                 PmtArtifactReference = pmtReference,
@@ -811,6 +821,23 @@ internal static class XPointOnionCapabilityProducer
                 $"The exact ordered {name} chain must contain 1..{MaximumSuccessorChainLength} artifacts.",
                 name);
         return values.Select(value => Own(value, name)).ToArray();
+    }
+
+    private static ContactRecord[] CaptureRetainedPmts(VerifiedOnionNetworkClosure? previous,
+        IReadOnlyList<ContactRecord> verifiedSteps)
+    {
+        var facts = new List<ContactRecord>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        long bytes = 0;
+        foreach (var step in (previous?.RetainedPmts ?? []).Concat(verifiedSteps))
+        {
+            if (!seen.Add(Convert.ToHexString(step.ArtifactHash.Span))) continue;
+            bytes = checked(bytes + step.CanonicalBytes.Length);
+            if (facts.Count >= MaximumSuccessorChainLength || bytes > MaximumSuccessorChainBytes)
+                Fail("retained-pmt-capacity", "Verified retained projection facts exceed the bounded lineage capacity.");
+            facts.Add(step);
+        }
+        return facts.ToArray();
     }
 
     private static byte[] U64(ulong value)

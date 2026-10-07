@@ -9,7 +9,7 @@ using Fixture = Deep.Protocol.Tests.XPointNetworkV1.XPointOnionCapabilityProduce
 
 namespace Deep.Protocol.Tests.XPointNetworkV1;
 
-public sealed class MailboxHostAuthorityV2VerifierTests
+public sealed partial class MailboxHostAuthorityV2VerifierTests
 {
     [Fact]
     public async Task CurrentSignedNetwork_BindsExactPolicyEpochAndPmsRanking()

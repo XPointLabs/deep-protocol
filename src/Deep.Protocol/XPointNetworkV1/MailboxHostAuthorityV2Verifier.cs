@@ -162,11 +162,18 @@ public sealed partial class VerifiedMailboxHostAuthorityV2
     internal void RequireGrant(MailboxAuthenticatedGrant grant,
         (VerifiedMailboxAuthorityV2 Policy, ulong Lower, ulong Upper) current)
     {
+        if (!Fixed(grant.MembershipCommitment.Span, MembershipCommitment.Span) || grant.Epoch != SelectionEpoch)
+            throw new CryptographicException("Mailbox grant is outside the exact current selection.");
+        RequireIssuerGrant(grant, current);
+    }
+
+    private void RequireIssuerGrant(MailboxAuthenticatedGrant grant,
+        (VerifiedMailboxAuthorityV2 Policy, ulong Lower, ulong Upper) current)
+    {
         var issuer = current.Policy.ResolveIssuer(grant.Domain);
         if (grant.Lifecycle != MailboxCapabilityLifecycle.Active ||
             !Fixed(grant.NetworkId.Span, network.NetworkId.Span) ||
-            !Fixed(grant.MembershipCommitment.Span, MembershipCommitment.Span) ||
-            grant.Epoch != SelectionEpoch || grant.Generation < current.Policy.MinimumGrantGeneration ||
+            grant.Generation < current.Policy.MinimumGrantGeneration ||
             !Fixed(grant.IssuerPublicKey.Span, issuer.PublicKey.Span) ||
             grant.NotBeforeUnixSeconds < issuer.ValidFromUnixSeconds ||
             grant.NotBeforeUnixSeconds > current.Lower || current.Upper >= grant.ExpiresAtUnixSeconds ||

@@ -390,7 +390,7 @@ public sealed partial class DeepIdV2PreKeyClaimReceiptVerifierTests
         var pmt = ContactCodec.Decode(wire);
         var closure = new VerifiedOnionNetworkClosure
         {
-            NetworkId = network, Policy = policy, View = view, Head = head, Pmt = pmt,
+            NetworkId = network, Policy = policy, View = view, Head = head, Pmt = pmt, RetainedPmts = [pmt],
             ViewCoreHash = view.CoreHash.ToArray(), ViewCoreReference = viewRef,
             PmtArtifactReference = ContactCodec.ArtifactReference("PMT2", pmt).CanonicalBytes.ToArray(),
             PmtNodeIds = nodeIds, SelectionEpoch = 1, ReplicaCount = 2, HardUpperUnixSeconds = 20,

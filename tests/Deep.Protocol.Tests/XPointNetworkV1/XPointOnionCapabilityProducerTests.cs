@@ -1301,6 +1301,65 @@ public sealed class XPointOnionCapabilityProducerTests
             return (network, pma.CanonicalBytes.ToArray());
         }
 
+        internal async ValueTask<(VerifiedOnionNetworkContext Network, byte[] Pma)> VerifyMailboxHistoryAsync(
+            bool cold = false, bool unchangedEpoch = false, bool terminalOnly = false,
+            int? removedMailboxNode = null)
+        {
+            var initial = await VerifyMailboxAsync();
+            var chain = BuildSuccessorChain(unchangedEpoch ? _selectionEpoch : null,
+                unchangedEpoch ? _selectionEpoch : null, removedMailboxNode);
+            var pma = ContactCodec.Decode("PMA2", initial.Pma);
+            var first = PinMailboxPmt(initial.Network.Closure!.Pmt, pma, null, 210);
+            var steps = new List<ReadOnlyMemory<byte>> { first.CanonicalBytes };
+            var previous = first;
+            foreach (var bytes in chain.Pmts)
+            {
+                previous = PinMailboxPmt(ContactCodec.Decode("PMT2", bytes), pma, previous.CoreHash.ToArray(), null);
+                steps.Add(previous.CanonicalBytes);
+            }
+            var time = new OnionTrustedTimeAuthority(new FixedClock(Bytes(16, 0xc1), _clockSample));
+            var firstNetwork = await OnionNetworkContextVerifier.VerifyAsync(_authority, _freshness,
+                [_xvp], [_xnv], [_xnh], _nodes.Select(bytes => (ReadOnlyMemory<byte>)bytes).ToArray(),
+                [first.CanonicalBytes], null, time, default);
+            var network = await OnionNetworkContextVerifier.VerifyAsync(_authority, chain.Freshness,
+                chain.Policies.Select(bytes => (ReadOnlyMemory<byte>)bytes).ToArray(),
+                chain.Views.Select(bytes => (ReadOnlyMemory<byte>)bytes).ToArray(),
+                chain.Heads.Select(bytes => (ReadOnlyMemory<byte>)bytes).ToArray(),
+                chain.Nodes.Select(bytes => (ReadOnlyMemory<byte>)bytes).ToArray(),
+                steps.Skip(1).ToArray(), firstNetwork, time, default);
+            if (cold)
+            {
+                var protectedHistory = OnionNetworkProtectedHistoryCodec.Encode(network);
+                network = await OnionNetworkContextVerifier.VerifyFromProtectedHistoryAsync(_authority, chain.Freshness,
+                    new ReadOnlyMemory<byte>[] { _xvp }.Concat(chain.Policies.Select(bytes => (ReadOnlyMemory<byte>)bytes)).ToArray(),
+                    new ReadOnlyMemory<byte>[] { _xnv }.Concat(chain.Views.Select(bytes => (ReadOnlyMemory<byte>)bytes)).ToArray(),
+                    new ReadOnlyMemory<byte>[] { _xnh }.Concat(chain.Heads.Select(bytes => (ReadOnlyMemory<byte>)bytes)).ToArray(),
+                    chain.Nodes.Select(bytes => (ReadOnlyMemory<byte>)bytes).ToArray(), steps.ToArray(),
+                    protectedHistory, time, default);
+            }
+            if (terminalOnly)
+            {
+                network = await OnionNetworkContextVerifier.VerifyRehydratedCurrentAsync(_authority, chain.Freshness,
+                    [chain.Policies[^1]], [chain.Views[^1]], [chain.Heads[^1]],
+                    chain.Nodes.Select(bytes => (ReadOnlyMemory<byte>)bytes).ToArray(), [steps[^1]],
+                    network.ProtectedLkg!, time, default);
+            }
+            return (network, initial.Pma);
+        }
+
+        private ContactRecord PinMailboxPmt(ContactRecord pmt, ContactRecord pma, byte[]? predecessor,
+            ulong? expires)
+        {
+            var fields = Enumerable.Range(1, 16).Select(tag => pmt.Field(tag)).ToArray();
+            fields[3] = XPointNetworkCodec.EncodeCoreReference("PMA2", pma.CoreHash.Span);
+            if (predecessor is not null) fields[2] = predecessor;
+            if (expires is not null) fields[11] = U64(expires.Value);
+            var unsigned = ContactCodec.AuthorForOperationalAuthority("PMT2", fields);
+            fields[15] = SignatureRows(_witnesses.Take(2).Select(key =>
+                (key.Id, PublicKeyAuth.SignDetached(unsigned.SignatureInput.ToArray(), key.Pair.PrivateKey))).ToArray());
+            return ContactCodec.AuthorForOperationalAuthority("PMT2", fields);
+        }
+
         private Fixture(
             byte networkMarker,
             ulong selectionEpoch,
@@ -1466,7 +1525,7 @@ public sealed class XPointOnionCapabilityProducerTests
                 new OnionTrustedTimeAuthority(new FixedClock(Bytes(16, 0xc1), _clockSample)), default);
 
         internal SuccessorFixture BuildSuccessorChain(ulong? firstSelectionEpoch = null,
-            ulong? secondSelectionEpoch = null)
+            ulong? secondSelectionEpoch = null, int? removedMailboxNode = null)
         {
             var network = Bytes(16, _networkMarker);
             var policies = new List<byte[]>();
@@ -1483,7 +1542,9 @@ public sealed class XPointOnionCapabilityProducerTests
                 var policyBytes = BuildXvp(network, _authority, _root, generation, priorPolicy.CoreHash.ToArray());
                 var policy = XPointNetworkCodec.Parse<Xvp1Record>(policyBytes);
                 var nodes = Enumerable.Range(0, 3).Select(index => BuildXnd(
-                    network, index, _roles[index], _hosts[index], generation, priorNodes[index].CoreHash.ToArray())).ToArray();
+                    network, index, generation == 2 && index == removedMailboxNode
+                        ? (ushort)(_roles[index] & ~4) : _roles[index],
+                    _hosts[index], generation, priorNodes[index].CoreHash.ToArray())).ToArray();
                 var viewBytes = BuildXnv(network, _authority, policy, nodes, _witnesses,
                     checked((byte)(0x70 + generation)), 2, generation, priorView.CoreHash.ToArray());
                 var view = XPointNetworkCodec.Parse<Xnv1Record>(viewBytes);
@@ -1509,7 +1570,7 @@ public sealed class XPointOnionCapabilityProducerTests
                     ?? checked(_selectionEpoch + generation);
                 var pmt = BuildPmt(network, XPointNetworkCodec.Parse<Xnv1Record>(views[index]), freshness,
                     nodeSets[index], _witnesses, epoch, generation,
-                    priorPmt.CoreHash.ToArray());
+                    priorPmt.CoreHash.ToArray(), filterMailbox: removedMailboxNode is not null);
                 pmts.Add(pmt);
                 priorPmt = ContactCodec.Decode("PMT2", pmt);
             }
@@ -1778,9 +1839,11 @@ public sealed class XPointOnionCapabilityProducerTests
             SigningKey[] witnesses,
             ulong selectionEpoch,
             ulong generation = 0,
-            byte[]? predecessorCoreHash = null)
+            byte[]? predecessorCoreHash = null,
+            bool filterMailbox = false)
         {
             var parsed = nodes.Select(static value => XPointNetworkCodec.Parse<Xnd1Record>(value))
+                .Where(node => !filterMailbox || (node.RoleMask & 4) != 0)
                 .OrderBy(static value => value.NodeId.ToArray(), ByteArrayComparer.Instance).ToArray();
             var rows = parsed.Select(static node =>
             {
@@ -1792,7 +1855,7 @@ public sealed class XPointOnionCapabilityProducerTests
             [
                 network, U64(generation), predecessorCoreHash ?? new byte[32], ArtifactReference("PMA2", Bytes(32, 0x77)),
                 XPointNetworkCodec.EncodeCoreReference("XNV1", view.CoreHash.Span), U64(selectionEpoch),
-                new byte[] { 2 }, U16(3), Join(rows), U64(100), U64(100), U64(300), new byte[32],
+                new byte[] { 2 }, U16(checked((ushort)parsed.Length)), Join(rows), U64(100), U64(100), U64(300), new byte[32],
                 ((IVerifiedDirectoryNetworkTime)freshness).ExactAdh1CoreReference, new byte[] { 2 },
                 SignatureRows(witnesses.Take(2).Select(static (value, index) =>
                     (value.Id, Bytes(64, checked((byte)(0xa9 + index))))).ToArray()),

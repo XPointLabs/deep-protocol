@@ -93,6 +93,44 @@ public sealed class VerifiedMailboxGrantRevocationV1
         await EnsureCurrentAsync(grant, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>Current signed revocation/floor check for a still-current
+    /// Retrieve grant naming verified retained selection. No holder, replay,
+    /// object availability, mutation or dispatch permission is returned.</summary>
+    public async ValueTask EnsureRetainedReadGrantNotRevokedAsync(ReadOnlyMemory<byte> exactMcg3,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var grant = MailboxAuthenticatedCapabilityCodec.DecodeGrant(exactMcg3.Span);
+        var snapshot = plan.Snapshot;
+        if (grant.Domain != MailboxCapabilityDomain.Retrieve || grant.Domain != snapshot.Domain ||
+            !Fixed(grant.IssuerPublicKey.Span, snapshot.FieldSpan(4)) ||
+            !Fixed(grant.NetworkId.Span, snapshot.FieldSpan(1)))
+            throw new CryptographicException("Retained read differs from the current MGR1 Retrieve issuer scope.");
+        await EnsureRetainedReadCurrentAsync(grant, cancellationToken).ConfigureAwait(false);
+        if (snapshot.ContainsSerial(grant.Serial.Span))
+            throw new CryptographicException("The retained read grant serial is revoked.");
+        await EnsureRetainedReadCurrentAsync(grant, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async ValueTask EnsureRetainedReadCurrentAsync(MailboxAuthenticatedGrant grant,
+        CancellationToken cancellationToken)
+    {
+        var host = plan.Host; var snapshot = plan.Snapshot;
+        var before = await host.ReadAsync(cancellationToken).ConfigureAwait(false);
+        MailboxGrantRevocationV1Verifier.RequireSnapshot(snapshot, host, before, false);
+        _ = host.RequireRetainedReadGrant(grant, before);
+        var hash = await floors.ReadCurrentCoreHashAsync(host.NetworkId, snapshot.Field(2),
+            snapshot.Domain, cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (hash.Length != 32) throw new CryptographicException("The protected MGR1 floor is unavailable.");
+        var ownedHash = hash.ToArray();
+        var after = await host.ReadAsync(cancellationToken).ConfigureAwait(false);
+        MailboxGrantRevocationV1Verifier.RequireSnapshot(snapshot, host, after, false);
+        _ = host.RequireRetainedReadGrant(grant, after);
+        if (!CryptographicOperations.FixedTimeEquals(ownedHash, snapshot.CoreHash.Span))
+            throw new CryptographicException("Retained read does not use the current protected MGR1 floor.");
+    }
+
     private static bool Fixed(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right) =>
         left.Length == right.Length && CryptographicOperations.FixedTimeEquals(left, right);
 }

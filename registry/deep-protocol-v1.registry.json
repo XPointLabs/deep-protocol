@@ -50,7 +50,7 @@
       "id": "protocol-registry-v1",
       "kind": "normative-document",
       "path": "docs/architecture/PROTOCOL-REGISTRY-V1.md",
-      "normalizedSha256": "3d1df51ac39079942b0668cbabc54ff726fbd5cabef9cdfbb970d87aece9afb9"
+      "normalizedSha256": "9a0d6f1180b9ff50825cb7025977bbf9ddcbf873deeb0e86cf461bf5ed745a84"
     },
     {
       "id": "dnp1-frozen",
@@ -86,7 +86,7 @@
       "id": "xpoint-network-v1",
       "kind": "normative-document",
       "path": "docs/architecture/XPOINT-NETWORK-V1.md",
-      "normalizedSha256": "6ab4becf93bcec60e6452d621fbbf5bec3a4b039123982447173944fa81d63de"
+      "normalizedSha256": "37fceb646bb65dd4db438a915d474898269df0b159c71da145012a51cce6696d"
     },
     {
       "id": "contact-resolver-v1",
@@ -146,7 +146,7 @@
       "id": "production-wire-source",
       "kind": "production-source-scan",
       "path": "deep-protocol/src",
-      "normalizedSha256": "1c793f0a916ee6e4cd25faf29914c7458f9a60dbaf0a31b5e8730af9f16adeba"
+      "normalizedSha256": "d232846c83f79d4ad8cfe34ae1015f8886fe0792d1ec84608cdf0c81e99b2977"
     }
   ],
   "productionInventory": {
