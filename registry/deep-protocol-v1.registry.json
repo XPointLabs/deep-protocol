@@ -50,7 +50,7 @@
       "id": "protocol-registry-v1",
       "kind": "normative-document",
       "path": "docs/architecture/PROTOCOL-REGISTRY-V1.md",
-      "normalizedSha256": "9a0d6f1180b9ff50825cb7025977bbf9ddcbf873deeb0e86cf461bf5ed745a84"
+      "normalizedSha256": "257f32fb5f4148820654ce516ceb2ba48bb6a9c1d4205e6154dcb0a816368be9"
     },
     {
       "id": "dnp1-frozen",
@@ -92,7 +92,7 @@
       "id": "contact-resolver-v1",
       "kind": "normative-document",
       "path": "docs/architecture/CONTACT-RESOLVER-V1.md",
-      "normalizedSha256": "e99e5af472020888b8cee29594f153468173de56a4781c6fe343773c1f8f4fb7"
+      "normalizedSha256": "052ffc8ae8a401d419cdba2c91477fe8a203a42e06048ce55ca2846386bb55f1"
     },
     {
       "id": "mailbox-grant-revocation-v1",
@@ -146,7 +146,7 @@
       "id": "production-wire-source",
       "kind": "production-source-scan",
       "path": "deep-protocol/src",
-      "normalizedSha256": "d232846c83f79d4ad8cfe34ae1015f8886fe0792d1ec84608cdf0c81e99b2977"
+      "normalizedSha256": "676193964deb1bb6a9e6c33f147c793f49580f63c91160590102839420b500c9"
     }
   ],
   "productionInventory": {

@@ -112,6 +112,12 @@ public sealed partial class VerifiedMailboxHostAuthorityV2
         ct.ThrowIfCancellationRequested();
         var reading = await time.ReadCurrentAsync(ct).ConfigureAwait(false);
         ct.ThrowIfCancellationRequested();
+        return ReadAtReading(reading);
+    }
+
+    private (VerifiedMailboxAuthorityV2 Policy, ulong Lower, ulong Upper) ReadAtReading(
+        OnionMonotonicReading reading)
+    {
         var result = VerifyAtReading(network, root, pma, reading);
         lock (clockGate)
         {
