@@ -3,7 +3,7 @@
   "schemaVersion": "1.0.0",
   "registryGeneration": 1,
   "registryId": "deep-protocol-v1-resolved",
-  "sourceRegistrySha256": "a4772628ef8a1c9985eb99a8a4192755922fd9ef5bc066dd626e698edd478f2f",
+  "sourceRegistrySha256": "184a80afa3036d5d99e09d7c858e01d683acbd731be02609f162a35caeb9ef8a",
   "dnp1ApprovedCommit": "a8456987efe031388ca2eb9006886fb78f31e06c",
   "dnp1RegistrySha256": "e036a0b6acb260e05e18ac536a723b0b8561d2ba1d813429304505b0e7a7da7b",
   "records": [
@@ -355,6 +355,8 @@
         "src/Deep.Protocol/DeepExtension/PrivacyRouting/OnionNetworkProtectedHistoryCodec.cs",
         "src/Deep.Protocol/GroupV1/GroupCodec.cs",
         "src/Deep.Protocol/XPointNetworkV1/MailboxAuthorityV2Verifier.cs",
+        "src/Deep.Protocol/XPointNetworkV1/VerifiedMailboxHostAuthorityV2.RetainedClient.cs",
+        "src/Deep.Protocol/XPointNetworkV1/VerifiedMailboxHostAuthorityV2.RetainedIssuance.cs",
         "src/Deep.Protocol/XPointNetworkV1/VerifiedMailboxHostAuthorityV2.RetainedRead.cs",
         "src/Deep.Protocol/XPointNetworkV1/VerifiedMailboxHostAuthorityV2.RetainedRequest.cs",
         "src/Deep.Protocol/XPointNetworkV1/XPointNetworkClosureWireCodec.cs",
@@ -2493,7 +2495,9 @@
         "src/Deep.Protocol/ContactV1/MailboxGrantAcquisition.cs",
         "src/Deep.Protocol/ContactV2/DeepIdV2MailboxGrantIssuanceVerifier.cs",
         "src/Deep.Protocol/ContactV2/DeepIdV2MailboxGrantResultVerifier.cs",
-        "src/Deep.Protocol/DeepExtension/PrivacyRouting/PrivacyRoutingCodec.cs"
+        "src/Deep.Protocol/DeepExtension/PrivacyRouting/PrivacyRoutingCodec.cs",
+        "src/Deep.Protocol/XPointNetworkV1/VerifiedMailboxHostAuthorityV2.RetainedClient.cs",
+        "src/Deep.Protocol/XPointNetworkV1/VerifiedMailboxHostAuthorityV2.RetainedIssuance.cs"
       ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
@@ -2519,7 +2523,10 @@
         "src/Deep.Protocol/ContactV2/DeepIdV2MailboxGrantIssuanceVerifier.cs",
         "src/Deep.Protocol/ContactV2/DeepIdV2MailboxGrantRequestAuthor.cs",
         "src/Deep.Protocol/ContactV2/DeepIdV2MailboxGrantResultVerifier.cs",
+        "src/Deep.Protocol/ContactV2/MailboxRetainedReadAuthorityAuthentication.cs",
         "src/Deep.Protocol/DeepExtension/PrivacyRouting/PrivacyRoutingCodec.cs",
+        "src/Deep.Protocol/XPointNetworkV1/VerifiedMailboxHostAuthorityV2.RetainedClient.cs",
+        "src/Deep.Protocol/XPointNetworkV1/VerifiedMailboxHostAuthorityV2.RetainedIssuance.cs",
         "src/Deep.Protocol/XPointNetworkV1/VerifiedMailboxHostAuthorityV2.RetainedRequest.cs"
       ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."

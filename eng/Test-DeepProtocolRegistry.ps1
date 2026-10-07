@@ -157,6 +157,10 @@ $usedSources = @(
     'mailbox-grant-revocation-v1-schema'
     'mailbox-grant-revocation-v1-vectors'
     'mailbox-grant-revocation-v1-vectors-schema'
+    'mailbox-retained-read-v2'
+    'mailbox-retained-read-v2-schema'
+    'mailbox-retained-read-v2-vectors'
+    'mailbox-retained-read-v2-vectors-schema'
 )
 foreach ($sourceId in $usedSources) {
     Assert-True ($sourceIds.Contains($sourceId)) "Unknown sourceId: $sourceId"

@@ -50,7 +50,7 @@
       "id": "protocol-registry-v1",
       "kind": "normative-document",
       "path": "docs/architecture/PROTOCOL-REGISTRY-V1.md",
-      "normalizedSha256": "1046cbace4866a88d40b69faf5b29927a2e8d1461b086b4ceffba5eed62c7d88"
+      "normalizedSha256": "1d48bb639848466b8dd78ad2b25aea62864733d94d8c864158675bdbc1b8175b"
     },
     {
       "id": "dnp1-frozen",
@@ -92,13 +92,37 @@
       "id": "contact-resolver-v1",
       "kind": "normative-document",
       "path": "docs/architecture/CONTACT-RESOLVER-V1.md",
-      "normalizedSha256": "2d78055ce201075da4da784f3e8deaaa4af8269073f4e3bef883269054ce2231"
+      "normalizedSha256": "3398a722d23beea01353fc308268dd0d1043495668cb94525fe07897a088d8c4"
     },
     {
       "id": "mailbox-grant-revocation-v1",
       "kind": "normative-document",
       "path": "docs/survival-program/releases/v3.0.0/specs/mailbox-grant-revocation-v1.registry.json",
       "normalizedSha256": "d095cf341893acf8750a3ec7b216c37986e269c8e7a88ca8df3ca40dc999f463"
+    },
+    {
+      "id": "mailbox-retained-read-v2",
+      "kind": "normative-document",
+      "path": "docs/survival-program/releases/v3.0.0/specs/mailbox-retained-read-v2.registry.json",
+      "normalizedSha256": "57dbbcc243a6bef5cf113bccdb28addf9f1b0c0c2a6037ebd8e37e333713644f"
+    },
+    {
+      "id": "mailbox-retained-read-v2-schema",
+      "kind": "normative-document",
+      "path": "docs/survival-program/releases/v3.0.0/specs/mailbox-retained-read-v2.registry.schema.json",
+      "normalizedSha256": "f6b9ece1820270c86bf1730f3f9468373d7baf47c336957d6f58a6e74c077df5"
+    },
+    {
+      "id": "mailbox-retained-read-v2-vectors",
+      "kind": "normative-document",
+      "path": "docs/survival-program/releases/v3.0.0/specs/mailbox-retained-read-v2.vectors.json",
+      "normalizedSha256": "e28132f992eff8080cc812dc1efac4346149422bfc58587bf782d0e0233367c5"
+    },
+    {
+      "id": "mailbox-retained-read-v2-vectors-schema",
+      "kind": "normative-document",
+      "path": "docs/survival-program/releases/v3.0.0/specs/mailbox-retained-read-v2.vectors.schema.json",
+      "normalizedSha256": "4c17612ac5bd0a9dab0d2305a916cf936daf386be7094caf0e7b77456224c6e9"
     },
     {
       "id": "mailbox-grant-revocation-v1-schema",
@@ -146,7 +170,7 @@
       "id": "production-wire-source",
       "kind": "production-source-scan",
       "path": "deep-protocol/src",
-      "normalizedSha256": "7e79ecb14913c50115e58b7168d68cf4799837d72e7d327643b21a4807fb35dc"
+      "normalizedSha256": "80268b4e48174e5b56ebd02f0796103a79041d77714bdea05db68aa5558314a1"
     }
   ],
   "productionInventory": {

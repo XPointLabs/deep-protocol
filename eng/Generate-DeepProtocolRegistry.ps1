@@ -351,8 +351,7 @@ $normalMagic = @(
     $normalLocalMagic
 ) | Sort-Object value
 
-# DR-0083 is the only additional exact local contract in this change. Its four
-# checked/hash-bound inputs must exist; no inference from implementation constants.
+# Exact local contracts have checked/hash-bound inputs, never inferred constants.
 $mgrInputs = @{
     'mailbox-grant-revocation-v1' = 'mailbox-grant-revocation-v1.registry.json'
     'mailbox-grant-revocation-v1-schema' = 'mailbox-grant-revocation-v1.registry.schema.json'
@@ -371,6 +370,26 @@ if (-not (Test-Json -Json $mgrRaw -SchemaFile (Join-Path $normativeRoot $mgrInpu
     throw 'DR-0083 frozen registry/vectors violate their closed schemas.'
 }
 $mgr = $mgrRaw | ConvertFrom-Json
+
+# DR-0104 adds a private signing transcript, not a public record allocation.
+$retainedInputs = @{
+    'mailbox-retained-read-v2' = 'mailbox-retained-read-v2.registry.json'
+    'mailbox-retained-read-v2-schema' = 'mailbox-retained-read-v2.registry.schema.json'
+    'mailbox-retained-read-v2-vectors' = 'mailbox-retained-read-v2.vectors.json'
+    'mailbox-retained-read-v2-vectors-schema' = 'mailbox-retained-read-v2.vectors.schema.json'
+}
+foreach ($inputId in $retainedInputs.Keys) {
+    $expectedPath = "docs/survival-program/releases/v3.0.0/specs/$($retainedInputs[$inputId])"
+    if (-not $sources.ContainsKey($inputId) -or $sources[$inputId].kind -cne 'normative-document' -or
+        $sources[$inputId].path -cne $expectedPath) { throw "DR-0104 frozen source binding is missing/changed: $inputId" }
+}
+foreach ($pair in @(@('mailbox-retained-read-v2', 'mailbox-retained-read-v2-schema'),
+    @('mailbox-retained-read-v2-vectors', 'mailbox-retained-read-v2-vectors-schema'))) {
+    if (-not (Test-Json -LiteralPath (Join-Path $normativeRoot $retainedInputs[$pair[0]]) `
+        -SchemaFile (Join-Path $normativeRoot $retainedInputs[$pair[1]]))) {
+        throw 'DR-0104 frozen registry/vectors violate their closed schemas.'
+    }
+}
 
 $resolvedRecords = [Collections.Generic.List[object]]::new()
 foreach ($record in $dnp.records | Sort-Object magic) {
