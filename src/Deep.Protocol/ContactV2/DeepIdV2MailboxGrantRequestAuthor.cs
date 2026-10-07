@@ -6,39 +6,39 @@ using Sodium;
 
 namespace Deep.Protocol.ContactV2;
 
-/// <summary>Direct current DID2 XMG1 authoring. Not issuance, holder custody,
+/// <summary>Direct current DID2 XMG2 authoring. Not issuance, holder custody,
 /// durable retry, installation or dispatch. No retired identity route overload.</summary>
 public static class DeepIdV2MailboxGrantRequestAuthor
 {
     /// <summary>Restores only an exact still-current pending request. Never
-    /// signs, changes its nonce/window or establishes protected custody.</summary>
+    /// signs, changes its operation/route/window or establishes protected custody.</summary>
     public static ValueTask<AuthoredMailboxGrantRequest> RestoreDepositAsync(
         VerifiedDeepIdV2ContactRouteClosure route, ReadOnlyMemory<byte> locatorHash,
-        ReadOnlyMemory<byte> holderPublicKey, ReadOnlyMemory<byte> exactXmg1,
+        ReadOnlyMemory<byte> holderPublicKey, ReadOnlyMemory<byte> exactXmg2,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(route);
         return RestoreAsync(route, locatorHash, route.Route.Reachability.Field(10),
-            holderPublicKey, MailboxCapabilityDomain.Deposit, exactXmg1, cancellationToken);
+            holderPublicKey, MailboxCapabilityDomain.Deposit, exactXmg2, cancellationToken);
     }
 
     public static ValueTask<AuthoredMailboxGrantRequest> RestoreRetrieveAsync(
         VerifiedDeepIdV2ContactRouteClosure route, ReadOnlyMemory<byte> locatorHash,
         ReadOnlyMemory<byte> ownerRetrieveCapability, ReadOnlyMemory<byte> holderPublicKey,
-        ReadOnlyMemory<byte> exactXmg1, CancellationToken cancellationToken = default) =>
+        ReadOnlyMemory<byte> exactXmg2, CancellationToken cancellationToken = default) =>
         RestoreAsync(route, locatorHash, ownerRetrieveCapability, holderPublicKey,
-            MailboxCapabilityDomain.Retrieve, exactXmg1, cancellationToken);
+            MailboxCapabilityDomain.Retrieve, exactXmg2, cancellationToken);
 
     private static async ValueTask<AuthoredMailboxGrantRequest> RestoreAsync(
         VerifiedDeepIdV2ContactRouteClosure route, ReadOnlyMemory<byte> locatorHash,
         ReadOnlyMemory<byte> capability, ReadOnlyMemory<byte> holderPublicKey,
-        MailboxCapabilityDomain domain, ReadOnlyMemory<byte> exactXmg1, CancellationToken ct)
+        MailboxCapabilityDomain domain, ReadOnlyMemory<byte> exactXmg2, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(route); ct.ThrowIfCancellationRequested();
         Required32(locatorHash.Span); Required32(capability.Span); Required32(holderPublicKey.Span);
-        if (exactXmg1.Length != 435)
-            throw new CryptographicException("An exact bounded retained XMG1 is required.");
-        var request = ContactCodec.Decode(ProtocolMagic.XMG1, exactXmg1.Span);
+        if (exactXmg2.Length != 435)
+            throw new CryptographicException("An exact bounded retained XMG2 is required.");
+        var request = ContactCodec.Decode(ProtocolMagic.XMG2, exactXmg2.Span);
         ContactCodec.VerifyMailboxGrantHolderSignature(request);
         DeepIdV2MailboxGrantResultVerifier.RequireRequestScope(route, request);
         if (request.Field(6).Span[0] != (byte)domain ||
@@ -84,7 +84,7 @@ public static class DeepIdV2MailboxGrantRequestAuthor
             throw new CryptographicException("A public deposit capability cannot authorize owner retrieval.");
         var locator = locatorHash.ToArray(); var secret = capability.ToArray();
         // A mutable signer cannot substitute the key during an asynchronous callback.
-        byte[]? holder = null, operation = null, nonce = null;
+        byte[]? holder = null, operation = null;
         var signature = new byte[64];
         try
         {
@@ -97,13 +97,13 @@ public static class DeepIdV2MailboxGrantRequestAuthor
                 U64(records.Route.Field(18).Span), U64(records.Successor.Field(11).Span),
                 U64(records.Projection.Field(12).Span), U64(records.Selection.Field(9).Span) }.Min();
             RequireWindow(first, start, expiry);
-            operation = Random32(); nonce = Random32();
+            operation = Random32();
             var placeholder = new byte[64]; placeholder[^1] = 1;
             ReadOnlyMemory<byte>[] fields = [records.Reachability.Field(1), operation,
                 locator, secret, holder, new byte[] { (byte)domain },
                 ContactCodec.ArtifactReference(ProtocolMagic.PMT2, records.Projection).CanonicalBytes,
-                records.Selection.ArtifactHash, EncodeU64(start), EncodeU64(expiry), nonce, placeholder];
-            var unsigned = ContactCodec.AuthorForOperationalAuthority(ProtocolMagic.XMG1, fields);
+                records.Selection.ArtifactHash, EncodeU64(start), EncodeU64(expiry), records.ExactHash, placeholder];
+            var unsigned = ContactCodec.AuthorForOperationalAuthority(ProtocolMagic.XMG2, fields);
             RequireWindow(await route.ReadCurrentTimeAsync(ct).ConfigureAwait(false), start, expiry);
             var written = await signer.SignMailboxGrantRequestAsync(unsigned.SignatureInput, signature, ct).ConfigureAwait(false);
             ct.ThrowIfCancellationRequested();
@@ -112,7 +112,7 @@ public static class DeepIdV2MailboxGrantRequestAuthor
                 !PublicKeyAuth.VerifyDetached(signature, unsigned.SignatureInput.ToArray(), holder))
                 throw new CryptographicException("The DID2 mailbox holder returned an invalid proof of possession.");
             fields[11] = signature;
-            var exact = ContactCodec.AuthorForOperationalAuthority(ProtocolMagic.XMG1, fields);
+            var exact = ContactCodec.AuthorForOperationalAuthority(ProtocolMagic.XMG2, fields);
             ContactCodec.VerifyMailboxGrantHolderSignature(exact);
             return new(exact);
         }
@@ -122,7 +122,6 @@ public static class DeepIdV2MailboxGrantRequestAuthor
             CryptographicOperations.ZeroMemory(signature);
             if (holder is not null) CryptographicOperations.ZeroMemory(holder);
             if (operation is not null) CryptographicOperations.ZeroMemory(operation);
-            if (nonce is not null) CryptographicOperations.ZeroMemory(nonce);
         }
     }
     private static void Required32(ReadOnlySpan<byte> value)

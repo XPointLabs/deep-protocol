@@ -53,7 +53,7 @@ public sealed class VerifiedDeepIdV2MailboxGrantIssuance
     }
 
     public MailboxCapabilityDomain Domain => (MailboxCapabilityDomain)request.Field(6).Span[0];
-    public ReadOnlyMemory<byte> ExactXmg1 => request.CanonicalBytes.ToArray();
+    public ReadOnlyMemory<byte> ExactXmg2 => request.CanonicalBytes.ToArray();
 
     public async ValueTask EnsureCurrentAsync(CancellationToken cancellationToken = default)
     { _ = await ReadAsync(cancellationToken).ConfigureAwait(false); }
@@ -159,7 +159,7 @@ public static class DeepIdV2MailboxGrantIssuanceVerifier
 {
     public static async ValueTask<VerifiedDeepIdV2MailboxGrantIssuance> VerifyAsync(
         VerifiedOnionNetworkContext network, VerifiedXPointNetworkAuthority root,
-        ReadOnlyMemory<byte> exactPma2, ReadOnlyMemory<byte> exactXmg1,
+        ReadOnlyMemory<byte> exactPma2, ReadOnlyMemory<byte> exactXmg2,
         ReadOnlyMemory<byte> exactRouteClosure, ulong effectiveExpiry,
         IReadOnlyList<DeepIdV2MailboxGrantReplicaEvidence> replicaEvidence,
         OnionTrustedTimeAuthority trustedTime, CancellationToken cancellationToken = default)
@@ -167,12 +167,12 @@ public static class DeepIdV2MailboxGrantIssuanceVerifier
         ArgumentNullException.ThrowIfNull(network); ArgumentNullException.ThrowIfNull(root);
         ArgumentNullException.ThrowIfNull(replicaEvidence); ArgumentNullException.ThrowIfNull(trustedTime);
         cancellationToken.ThrowIfCancellationRequested();
-        if (exactPma2.Length is < 12 or > 65_535 || exactXmg1.Length != 435 ||
+        if (exactPma2.Length is < 12 or > 65_535 || exactXmg2.Length != 435 ||
             exactRouteClosure.Length is < ContactRouteClosureCodec.MinimumEncodedBytes or > ContactRouteClosureCodec.MaximumEncodedBytes ||
             replicaEvidence.Count != 2)
             throw new CryptographicException("Mailbox issuance inputs exceed their exact bounds.");
         var pma = ContactCodec.Decode(ProtocolMagic.PMA2, exactPma2.Span);
-        var request = ContactCodec.Decode(ProtocolMagic.XMG1, exactXmg1.Span);
+        var request = ContactCodec.Decode(ProtocolMagic.XMG2, exactXmg2.Span);
         var route = ContactRouteClosureCodec.Decode(exactRouteClosure.Span);
         var evidence = new DeepIdV2MailboxGrantReplicaEvidence[2];
         for (var index = 0; index < evidence.Length; index++)
@@ -222,6 +222,7 @@ public static class DeepIdV2MailboxGrantIssuanceVerifier
             !Fixed(route.Reachability.Field(1).Span, network.NetworkId.Span) ||
             !Fixed(request.Field(7).Span, closure.PmtArtifactReference) ||
             !Fixed(request.Field(8).Span, route.Selection.ArtifactHash.Span) ||
+            !Fixed(request.Field(11).Span, route.ExactHash.Span) ||
             !Fixed(route.Route.Field(8).Span, closure.ViewCoreReference) ||
             !Fixed(route.Route.Field(9).Span, XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XNH1, closure.Head.CoreHash.Span)) ||
             !Fixed(route.Route.Field(19).Span, route.Successor.Field(12).Span) ||

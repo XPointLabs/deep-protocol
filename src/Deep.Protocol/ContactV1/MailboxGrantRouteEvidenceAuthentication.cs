@@ -17,7 +17,7 @@ public static class MailboxGrantRouteEvidenceAuthentication
         Encoding.ASCII.GetBytes("Deep/ContactResolver/V1/mailbox-grant-route");
 
     public static byte[] CreateTuple(
-        ReadOnlySpan<byte> exactXmg1Hash,
+        ReadOnlySpan<byte> exactXmg2Hash,
         ReadOnlySpan<byte> locatorHash,
         ReadOnlySpan<byte> capabilityDigest,
         byte role,
@@ -25,7 +25,7 @@ public static class MailboxGrantRouteEvidenceAuthentication
         ReadOnlySpan<byte> exactRouteClosureHash,
         ulong effectiveExpiresAtUnixSeconds)
     {
-        RequireNonZero32(exactXmg1Hash, nameof(exactXmg1Hash));
+        RequireNonZero32(exactXmg2Hash, nameof(exactXmg2Hash));
         RequireNonZero32(locatorHash, nameof(locatorHash));
         RequireNonZero32(capabilityDigest, nameof(capabilityDigest));
         if (role is not (1 or 2)) throw new ArgumentOutOfRangeException(nameof(role));
@@ -43,7 +43,7 @@ public static class MailboxGrantRouteEvidenceAuthentication
             throw new ArgumentException("Non-current route evidence must carry zero route authority.");
 
         var tuple = new byte[TupleLength];
-        exactXmg1Hash.CopyTo(tuple);
+        exactXmg2Hash.CopyTo(tuple);
         locatorHash.CopyTo(tuple.AsSpan(32));
         capabilityDigest.CopyTo(tuple.AsSpan(64));
         tuple[96] = role;

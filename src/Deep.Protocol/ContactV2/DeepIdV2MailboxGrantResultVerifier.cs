@@ -22,7 +22,7 @@ public sealed class VerifiedDeepIdV2MailboxGrant
         DeepIdV2ContactRouteTimeWindow verifiedAt)
     { this.route = route; this.pma = pma; this.request = request; this.response = response; this.verifiedAt = verifiedAt; }
 
-    public ReadOnlyMemory<byte> ExactXmg1 => request.CanonicalBytes.ToArray();
+    public ReadOnlyMemory<byte> ExactXmg2 => request.CanonicalBytes.ToArray();
     public ReadOnlyMemory<byte> ExactXmc2 => response.CanonicalBytes.ToArray();
     public ReadOnlyMemory<byte> ExactGrant => response.Field(8).ToArray();
     public ReadOnlyMemory<byte> ExactPma2 => pma.CanonicalBytes.ToArray();
@@ -48,14 +48,14 @@ public static class DeepIdV2MailboxGrantResultVerifier
     /// authority. Historical envelope expiry is not current grant expiry;
     /// this does not restore holder custody or authorize dispatch.</summary>
     public static async ValueTask<VerifiedDeepIdV2MailboxGrant> VerifyRetainedSuccessAsync(
-        VerifiedDeepIdV2ContactRouteClosure route, ReadOnlyMemory<byte> exactXmg1,
+        VerifiedDeepIdV2ContactRouteClosure route, ReadOnlyMemory<byte> exactXmg2,
         ReadOnlyMemory<byte> exactXmc2, ReadOnlyMemory<byte> exactPma2,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(route); cancellationToken.ThrowIfCancellationRequested();
-        if (exactXmg1.Length != 435 || exactXmc2.Length != 510 || exactPma2.Length is < 12 or > 65_535)
+        if (exactXmg2.Length != 435 || exactXmc2.Length != 510 || exactPma2.Length is < 12 or > 65_535)
             throw new CryptographicException("Retained mailbox success requires bounded exact records.");
-        var request = ContactCodec.Decode(ProtocolMagic.XMG1, exactXmg1.Span);
+        var request = ContactCodec.Decode(ProtocolMagic.XMG2, exactXmg2.Span);
         var response = ContactCodec.Decode(ProtocolMagic.XMC2, exactXmc2.Span);
         var pma = ContactCodec.Decode(ProtocolMagic.PMA2, exactPma2.Span);
         ContactCodec.VerifyMailboxGrantHolderSignature(request);
@@ -83,7 +83,7 @@ public static class DeepIdV2MailboxGrantResultVerifier
         if (exactXmc2.Length != 510 || exactPma2.Length is < 12 or > 65_535)
             throw new CryptographicException("Mailbox acquisition requires bounded exact success and issuer records.");
         // Canonical decoders own every input before the first asynchronous clock read.
-        var request = ContactCodec.Decode(ProtocolMagic.XMG1, authoredRequest.ExactXmg1.Span);
+        var request = ContactCodec.Decode(ProtocolMagic.XMG2, authoredRequest.ExactXmg2.Span);
         var response = ContactCodec.Decode(ProtocolMagic.XMC2, exactXmc2.Span);
         var pma = ContactCodec.Decode(ProtocolMagic.PMA2, exactPma2.Span);
         ContactCodec.VerifyMailboxGrantHolderSignature(request);
@@ -121,6 +121,7 @@ public static class DeepIdV2MailboxGrantResultVerifier
         if (!Fixed(request.Field(1).Span, route.Network.NetworkId.Span) ||
             !Fixed(request.Field(7).Span, ContactCodec.ArtifactReference(ProtocolMagic.PMT2, records.Projection).CanonicalBytes.Span) ||
             !Fixed(request.Field(8).Span, records.Selection.ArtifactHash.Span) ||
+            !Fixed(request.Field(11).Span, records.ExactHash.Span) ||
             (domain == MailboxCapabilityDomain.Deposit && !Fixed(request.Field(4).Span, depositCapability.Span)) ||
             (domain == MailboxCapabilityDomain.Retrieve && Fixed(request.Field(4).Span, depositCapability.Span)))
             throw new CryptographicException("Mailbox acquisition differs from the exact current route and role.");

@@ -9,7 +9,7 @@ namespace Deep.Protocol.Tests.ContactV1;
 public sealed class MailboxGrantAcquisitionCodecTests
 {
     [Fact]
-    public void Xmg1AndSuccessfulXmc2BindExactRequestAndReachabilityScopedHolder()
+    public void Xmg2AndSuccessfulXmc2BindExactRequestAndReachabilityScopedHolder()
     {
         var holder = PublicKeyAuth.GenerateKeyPair(Bytes(32, 0x31));
         var issuer = PublicKeyAuth.GenerateKeyPair(Bytes(32, 0x51));
@@ -23,7 +23,7 @@ public sealed class MailboxGrantAcquisitionCodecTests
         var result = ContactCodecValidation.AuthorRecord("XMC2",
         [
             network, request.Field(2), U16(1), U64(110), SHA256.HashData(request.CanonicalBytes.Span),
-            U64(120), Bytes(32, 0x81), MailboxAuthenticatedCapabilityCodec.EncodeGrant(current)
+            U64(120), request.Field(11), MailboxAuthenticatedCapabilityCodec.EncodeGrant(current)
         ]);
 
         Assert.Equal(435, request.CanonicalBytes.Length);
@@ -49,7 +49,7 @@ public sealed class MailboxGrantAcquisitionCodecTests
     }
 
     [Fact]
-    public void Xmg1RejectsInvalidProofAndXmc2RejectsChangedRequestBinding()
+    public void Xmg2RejectsInvalidProofAndXmc2RejectsChangedRequestBinding()
     {
         var holder = PublicKeyAuth.GenerateKeyPair(Bytes(32, 0x33));
         var request = SignedRequest(holder, Bytes(16, 0x13), Bytes(32, 0x23), Bytes(32, 0x43));
@@ -57,7 +57,7 @@ public sealed class MailboxGrantAcquisitionCodecTests
         var changedSignature = fields[11].ToArray();
         changedSignature[0] ^= 1;
         fields[11] = changedSignature;
-        var invalidProof = ContactCodecValidation.AuthorRecord("XMG1", fields);
+        var invalidProof = ContactCodecValidation.AuthorRecord("XMG2", fields);
         var proofError = Assert.Throws<ContactFormatException>(
             () => ContactCodec.VerifyMailboxGrantHolderSignature(invalidProof));
         Assert.Equal(ContactValidationStage.Signature, proofError.Stage);
@@ -84,7 +84,7 @@ public sealed class MailboxGrantAcquisitionCodecTests
         var issuer = PublicKeyAuth.GenerateKeyPair(Bytes(32, 0x51));
         var crypto = new SodiumMailboxCapabilityCrypto();
         var request = SignedRequest(holder, route.Reachability.Field(1).ToArray(),
-            route.Reachability.Field(10).ToArray(), route.Selection.ArtifactHash.ToArray());
+            route.Reachability.Field(10).ToArray(), route.Selection.ArtifactHash.ToArray(), route.ExactHash.ToArray());
         var grant = SignedGrant(crypto, issuer, holder.PublicKey, request.Field(1).ToArray(),
             MailboxPlacementCommitment.Compute(new BlindedPlacementId(route.Reachability.Field(10).Span)),
             route.Projection.ArtifactHash.ToArray(),
@@ -95,6 +95,80 @@ public sealed class MailboxGrantAcquisitionCodecTests
         var failure = Assert.Throws<ContactFormatException>(() =>
             MailboxGrantResultAuthor.AuthorSuccess(request, routeBytes, substituted, 110, 120));
         Assert.Equal(ContactValidationStage.Closure, failure.Stage);
+    }
+
+    [Fact]
+    public void Xmg2RejectsRetiredMagicAndCopiedOldPurposeSignature()
+    {
+        var holder = PublicKeyAuth.GenerateKeyPair(Bytes(32, 0x34));
+        var request = SignedRequest(holder, Bytes(16, 0x14), Bytes(32, 0x24), Bytes(32, 0x44));
+        var retired = request.CanonicalBytes.ToArray();
+        "XMG1"u8.CopyTo(retired);
+        Assert.Equal(ContactValidationStage.Header,
+            Assert.Throws<ContactFormatException>(() => ContactCodec.Decode(retired)).Stage);
+
+        // Compose hostile old signing bytes only; never decode or authorize XMG1.
+        var oldProjection = request.SigningProjection.ToArray();
+        "XMG1"u8.CopyTo(oldProjection);
+        var oldInput = ContactCodec.SignatureInput("Deep/ContactResolver/V1/XMG1", oldProjection);
+        var fields = Enumerable.Range(1, 12).Select(request.Field).ToArray();
+        fields[11] = PublicKeyAuth.SignDetached(oldInput, holder.PrivateKey);
+        var copied = ContactCodecValidation.AuthorRecord("XMG2", fields);
+        Assert.Equal(ContactValidationStage.Signature,
+            Assert.Throws<ContactFormatException>(() => ContactCodec.VerifyMailboxGrantHolderSignature(copied)).Stage);
+    }
+
+    [Fact]
+    public void Xmg2RouteIntentIsSignedNonzeroAndRequiredForBothRoles()
+    {
+        var records = ContactCodecTests.Records.RouteClosure;
+        var route = ContactRouteClosureCodec.Decode(ContactRouteClosureCodec.EncodeRecords(
+            [records.Xrr, records.Xra, records.Xrc, records.Xss, records.Pmt, records.Pms]));
+        var holder = PublicKeyAuth.GenerateKeyPair(Bytes(32, 0x35));
+        var deposit = SignedRequest(holder, route.Reachability.Field(1).ToArray(),
+            route.Reachability.Field(10).ToArray(), route.Selection.ArtifactHash.ToArray(), route.ExactHash.ToArray());
+        var fields = Enumerable.Range(1, 12).Select(deposit.Field).ToArray();
+        fields[6] = ContactCodec.ArtifactReference("PMT2", route.Projection).CanonicalBytes;
+        var owner = Bytes(32, 0xb8);
+        foreach (var domain in new byte[] { 1, 2 })
+        {
+            fields[3] = domain == 1 ? route.Reachability.Field(10) : owner;
+            fields[5] = new byte[] { domain };
+            fields[10] = route.ExactHash;
+            var exact = Resign(holder, fields);
+            ContactRecord Verify(ContactRecord candidate) => domain == 1
+                ? MailboxGrantRequestVerifier.VerifyDeposit(candidate.CanonicalBytes.Span, route, 110)
+                : MailboxGrantRequestVerifier.VerifyRetrieve(candidate.CanonicalBytes.Span, route, owner, 110);
+            _ = Verify(exact);
+            fields[10] = Bytes(32, 0xc8);
+            var unsignedSubstitution = ContactCodecValidation.AuthorRecord("XMG2", fields);
+            Assert.Equal(ContactValidationStage.Signature,
+                Assert.Throws<ContactFormatException>(() => Verify(unsignedSubstitution)).Stage);
+            var signedSubstitution = Resign(holder, fields);
+            ContactCodec.VerifyMailboxGrantHolderSignature(signedSubstitution);
+            Assert.Equal("MailboxGrantRequestRouteBindingMismatch",
+                Assert.Throws<ContactFormatException>(() => Verify(signedSubstitution)).Code);
+            fields[10] = new byte[32];
+            Assert.Equal(ContactValidationStage.Scalar,
+                Assert.Throws<ContactFormatException>(() => ContactCodecValidation.AuthorRecord("XMG2", fields)).Stage);
+        }
+    }
+
+    [Fact]
+    public void Xmc2RejectsChangedRouteIntentEvenWithMatchingRequestDigest()
+    {
+        var holder = PublicKeyAuth.GenerateKeyPair(Bytes(32, 0x36));
+        var issuer = PublicKeyAuth.GenerateKeyPair(Bytes(32, 0x56));
+        var request = SignedRequest(holder, Bytes(16, 0x16), Bytes(32, 0x26), Bytes(32, 0x46));
+        var grant = SignedGrant(new SodiumMailboxCapabilityCrypto(), issuer, holder.PublicKey,
+            request.Field(1).ToArray(), Bytes(32, 0x66), Bytes(32, 0x76), 7, 0x86);
+        var result = ContactCodecValidation.AuthorRecord("XMC2",
+        [
+            request.Field(1), request.Field(2), U16(1), U64(110), SHA256.HashData(request.CanonicalBytes.Span),
+            U64(120), Bytes(32, 0xd1), MailboxAuthenticatedCapabilityCodec.EncodeGrant(grant)
+        ]);
+        Assert.Equal("MailboxGrantResultRouteIntentMismatch",
+            Assert.Throws<ContactFormatException>(() => ContactCodec.ValidateMailboxGrantResultBinding(request, result)).Code);
     }
 
     [Fact]
@@ -113,17 +187,23 @@ public sealed class MailboxGrantAcquisitionCodecTests
         KeyPair holder,
         byte[] network,
         byte[] capability,
-        byte[] pmsHash)
+        byte[] pmsHash,
+        byte[]? exactRouteHash = null)
     {
         ReadOnlyMemory<byte>[] fields =
         [
             network, Bytes(32, 0x20), Bytes(32, 0x19), capability, holder.PublicKey, new byte[] { 1 },
             Reference("PMT2", 0x30), pmsHash, U64(100), U64(120),
-            Bytes(32, 0x50), Bytes(64, 0x60)
+            exactRouteHash ?? Bytes(32, 0x50), Bytes(64, 0x60)
         ];
-        var unsigned = ContactCodecValidation.AuthorRecord("XMG1", fields);
+        return Resign(holder, fields);
+    }
+
+    private static ContactRecord Resign(KeyPair holder, ReadOnlyMemory<byte>[] fields)
+    {
+        var unsigned = ContactCodecValidation.AuthorRecord("XMG2", fields);
         fields[11] = PublicKeyAuth.SignDetached(unsigned.SignatureInput.ToArray(), holder.PrivateKey);
-        return ContactCodecValidation.AuthorRecord("XMG1", fields);
+        return ContactCodecValidation.AuthorRecord("XMG2", fields);
     }
 
     private static MailboxAuthenticatedGrant SignedGrant(

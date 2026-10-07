@@ -14,7 +14,7 @@ public static class MailboxGrantAuthorityAuthentication
         Encoding.ASCII.GetBytes("Deep/Registry/Internal/V1/mailbox-grant-authority");
 
     public static byte[] GetSigningBytes(
-        ReadOnlySpan<byte> exactXmg1,
+        ReadOnlySpan<byte> exactXmg2,
         MailboxGrantAcquisitionResultCode resultCode,
         ReadOnlySpan<byte> exactRouteClosure,
         ulong resultExpiresAtUnixSeconds,
@@ -22,7 +22,7 @@ public static class MailboxGrantAuthorityAuthentication
         ulong issuedAtUnixSeconds,
         ReadOnlySpan<byte> nonce)
     {
-        _ = ContactCodec.Decode(ProtocolMagic.XMG1, exactXmg1);
+        _ = ContactCodec.Decode(ProtocolMagic.XMG2, exactXmg2);
         if (!Enum.IsDefined(resultCode))
             throw new ArgumentOutOfRangeException(nameof(resultCode));
         if (resultCode == MailboxGrantAcquisitionResultCode.Success)
@@ -38,7 +38,7 @@ public static class MailboxGrantAuthorityAuthentication
         if (nonce.Length != 32 || nonce.IndexOfAnyExcept((byte)0) < 0)
             throw new ArgumentException("The authentication nonce must be 32 non-zero bytes.", nameof(nonce));
 
-        var size = checked(Domain.Length + 1 + 2 + 4 + exactXmg1.Length + 2
+        var size = checked(Domain.Length + 1 + 2 + 4 + exactXmg2.Length + 2
             + 4 + exactRouteClosure.Length + 8 + 32 + 8 + 32);
         var output = new byte[size];
         var offset = 0;
@@ -46,7 +46,7 @@ public static class MailboxGrantAuthorityAuthentication
         offset += Domain.Length + 1;
         BinaryPrimitives.WriteUInt16BigEndian(output.AsSpan(offset), 0x0201);
         offset += 2;
-        WriteLp32(output, ref offset, exactXmg1);
+        WriteLp32(output, ref offset, exactXmg2);
         BinaryPrimitives.WriteUInt16BigEndian(
             output.AsSpan(offset), checked((ushort)resultCode));
         offset += 2;

@@ -34,7 +34,7 @@ public sealed partial class MailboxHostAuthorityV2VerifierTests
         Assert.Equal(230UL, window.UpperUnixSeconds);
         Assert.Equal(ContactCodec.ArtifactReference(ProtocolMagic.PMT2, old).CanonicalBytes.ToArray(),
             request.ProjectionReference.ToArray());
-        Assert.Equal(exact, request.ExactXmg1.ToArray());
+        Assert.Equal(exact, request.ExactXmg2.ToArray());
         Assert.Equal(Bytes(32, 0x96), request.SelectionHash.ToArray());
         await request.EnsureCurrentAsync();
         // The arbitrary PMS hash/capability in this request is deliberately not
@@ -96,10 +96,10 @@ public sealed partial class MailboxHostAuthorityV2VerifierTests
         var original = exact.ToArray();
         clock.OnRead = () => Array.Fill(exact, (byte)0);
         var request = await host.VerifyRetainedReadRequestAsync(exact);
-        foreach (var copy in new[] { request.ExactXmg1, request.ProjectionReference, request.SelectionHash })
+        foreach (var copy in new[] { request.ExactXmg2, request.ProjectionReference, request.SelectionHash })
         { Assert.True(MemoryMarshal.TryGetArray(copy, out var segment)); segment.Array!.AsSpan(segment.Offset, segment.Count).Clear(); }
-        Assert.Equal(original, request.ExactXmg1.ToArray());
-        Assert.Equal(ContactCodec.Decode(ProtocolMagic.XMG1, original).Field(7).ToArray(), request.ProjectionReference.ToArray());
+        Assert.Equal(original, request.ExactXmg2.ToArray());
+        Assert.Equal(ContactCodec.Decode(ProtocolMagic.XMG2, original).Field(7).ToArray(), request.ProjectionReference.ToArray());
         Assert.Equal(Bytes(32, 0x96), request.SelectionHash.ToArray());
     }
 
@@ -154,7 +154,7 @@ public sealed partial class MailboxHostAuthorityV2VerifierTests
         var clock = new Clock { Sample = 1_025 }; var host = await Verify(fixture, input, clock);
         var exact = RetainedRequest(input.Network, input.Network.Closure!.RetainedPmts[0], "maximum-window");
         var request = await host.VerifyRetainedReadRequestAsync(exact);
-        Assert.Equal(exact, request.ExactXmg1.ToArray());
+        Assert.Equal(exact, request.ExactXmg2.ToArray());
     }
 
     [Theory]
@@ -187,7 +187,7 @@ public sealed partial class MailboxHostAuthorityV2VerifierTests
         clock.Sample = 1_046;
         await Assert.ThrowsAsync<CryptographicException>(() => request.EnsureCurrentAsync().AsTask());
         Assert.Equal(250UL, BinaryPrimitives.ReadUInt64BigEndian(
-            ContactCodec.Decode(ProtocolMagic.XMG1, request.ExactXmg1.Span).Field(10).Span));
+            ContactCodec.Decode(ProtocolMagic.XMG2, request.ExactXmg2.Span).Field(10).Span));
     }
 
     [Fact]
@@ -217,9 +217,9 @@ public sealed partial class MailboxHostAuthorityV2VerifierTests
             defect == "projection" ? new ContactArtifactReference(ProtocolMagic.PMT2, 1, Bytes(32, 0xff)).CanonicalBytes :
                 ContactCodec.ArtifactReference(ProtocolMagic.PMT2, projection).CanonicalBytes,
             Bytes(32, 0x96), U64Request(start), U64Request(end), Bytes(32, 0x97), Bytes(64, 0x98)];
-        var unsigned = ContactCodec.AuthorForOperationalAuthority(ProtocolMagic.XMG1, fields);
+        var unsigned = ContactCodec.AuthorForOperationalAuthority(ProtocolMagic.XMG2, fields);
         fields[11] = PublicKeyAuth.SignDetached(unsigned.SignatureInput.ToArray(), key.PrivateKey);
-        return ContactCodec.AuthorForOperationalAuthority(ProtocolMagic.XMG1, fields).CanonicalBytes.ToArray();
+        return ContactCodec.AuthorForOperationalAuthority(ProtocolMagic.XMG2, fields).CanonicalBytes.ToArray();
     }
 
     private static byte[] U64Request(ulong value)

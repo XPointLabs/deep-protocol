@@ -19,9 +19,9 @@ public sealed class ContactCodecTests
         var manifest = File.ReadAllBytes(FindSpec("contact-codec-v1.vectors.json"));
         var canonicalManifest = System.Text.Encoding.UTF8.GetBytes(
             System.Text.Encoding.UTF8.GetString(manifest).Replace("\r\n", "\n", StringComparison.Ordinal));
-        Assert.Equal("9a567ec9066b956f7dfbabcc3502861766df0c3cbd57f85d9ea08664b10e844e", Convert.ToHexString(SHA256.HashData(canonicalManifest)).ToLowerInvariant());
+        Assert.Equal("fd69eabcbd5aca7add00cb83f7e21947556d0ac3145a94bd2735e203a8fc0df9", Convert.ToHexString(SHA256.HashData(canonicalManifest)).ToLowerInvariant());
         using var anchor = JsonDocument.Parse(File.ReadAllBytes(FindSpec("contact-codec-v1.vectors.anchor.json")));
-        Assert.Equal("9a567ec9066b956f7dfbabcc3502861766df0c3cbd57f85d9ea08664b10e844e", anchor.RootElement.GetProperty("sha256").GetString());
+        Assert.Equal("fd69eabcbd5aca7add00cb83f7e21947556d0ac3145a94bd2735e203a8fc0df9", anchor.RootElement.GetProperty("sha256").GetString());
         using var document = JsonDocument.Parse(manifest);
         Assert.Equal("FROZEN_TARGET_NOT_ACTIVE", document.RootElement.GetProperty("status").GetString());
         Assert.False(ContactCodec.RuntimeActivation);
@@ -84,6 +84,7 @@ public sealed class ContactCodecTests
 
             var decodedContact = ContactCodec.Decode(bytes);
             Assert.Equal(target, decodedContact.Magic);
+            if (target == "XMG2") ContactCodec.VerifyMailboxGrantHolderSignature(decodedContact);
             Assert.Equal(vector.GetProperty("artifactHash").GetString(), Convert.ToHexString(decodedContact.ArtifactHash.Span).ToLowerInvariant());
             Assert.Equal(vector.GetProperty("coreHash").GetString(), Convert.ToHexString(decodedContact.CoreHash.Span).ToLowerInvariant());
             Assert.Equal(bytes, decodedContact.CanonicalBytes.ToArray());

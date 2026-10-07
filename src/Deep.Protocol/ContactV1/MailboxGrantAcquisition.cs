@@ -35,7 +35,7 @@ public sealed class AuthoredMailboxGrantRequest
     }
 
     public ContactRecord Record { get; }
-    public ReadOnlyMemory<byte> ExactXmg1 => Record.CanonicalBytes.ToArray();
+    public ReadOnlyMemory<byte> ExactXmg2 => Record.CanonicalBytes.ToArray();
     public ReadOnlyMemory<byte> OperationId => Record.Field(2);
     public ReadOnlyMemory<byte> LocatorHash => Record.Field(3);
     public ReadOnlyMemory<byte> HolderPublicKey => Record.Field(5);
@@ -46,13 +46,13 @@ public sealed class AuthoredMailboxGrantRequest
 public static class MailboxGrantRequestVerifier
 {
     public static ContactRecord VerifyDeposit(
-        ReadOnlySpan<byte> exactXmg1,
+        ReadOnlySpan<byte> exactXmg2,
         ParsedContactRouteClosure route,
         ulong nowUnixSeconds)
     {
         ArgumentNullException.ThrowIfNull(route);
         return Verify(
-            exactXmg1,
+            exactXmg2,
             route,
             route.Reachability.Field(10).Span,
             MailboxCapabilityDomain.Deposit,
@@ -60,18 +60,18 @@ public static class MailboxGrantRequestVerifier
     }
 
     public static ContactRecord VerifyRetrieve(
-        ReadOnlySpan<byte> exactXmg1,
+        ReadOnlySpan<byte> exactXmg2,
         ParsedContactRouteClosure route,
         ReadOnlySpan<byte> ownerRetrieveCapability,
         ulong nowUnixSeconds) => Verify(
-            exactXmg1,
+            exactXmg2,
             route,
             ownerRetrieveCapability,
             MailboxCapabilityDomain.Retrieve,
             nowUnixSeconds);
 
     private static ContactRecord Verify(
-        ReadOnlySpan<byte> exactXmg1,
+        ReadOnlySpan<byte> exactXmg2,
         ParsedContactRouteClosure route,
         ReadOnlySpan<byte> expectedCapability,
         MailboxCapabilityDomain expectedDomain,
@@ -80,7 +80,7 @@ public static class MailboxGrantRequestVerifier
         ArgumentNullException.ThrowIfNull(route);
         if (expectedCapability.Length != 32 || expectedCapability.IndexOfAnyExcept((byte)0) < 0)
             throw new ArgumentException("The expected mailbox grant capability is invalid.", nameof(expectedCapability));
-        var request = ContactCodec.Decode(ProtocolMagic.XMG1, exactXmg1);
+        var request = ContactCodec.Decode(ProtocolMagic.XMG2, exactXmg2);
         ContactCodec.VerifyMailboxGrantHolderSignature(request);
         if (!Fixed(request.Field(1).Span, route.Reachability.Field(1).Span) ||
             !Fixed(request.Field(4).Span, expectedCapability) ||
@@ -88,6 +88,7 @@ public static class MailboxGrantRequestVerifier
             !Fixed(request.Field(7).Span,
                 ContactCodec.ArtifactReference(ProtocolMagic.PMT2, route.Projection).CanonicalBytes.Span) ||
             !Fixed(request.Field(8).Span, route.Selection.ArtifactHash.Span) ||
+            !Fixed(request.Field(11).Span, route.ExactHash.Span) ||
             nowUnixSeconds < U64(request.Field(9).Span) ||
             nowUnixSeconds >= U64(request.Field(10).Span))
             throw new ContactFormatException(ContactValidationStage.Closure, "MailboxGrantRequestRouteBindingMismatch");
@@ -148,8 +149,8 @@ public static class MailboxGrantResultAuthor
         ReadOnlyMemory<byte> routeClosureHash,
         ReadOnlyMemory<byte> current)
     {
-        if (!StringComparer.Ordinal.Equals(request.Magic, ProtocolMagic.XMG1))
-            throw new ArgumentException("The mailbox grant result requires an exact XMG1 request.", nameof(request));
+        if (!StringComparer.Ordinal.Equals(request.Magic, ProtocolMagic.XMG2))
+            throw new ArgumentException("The mailbox grant result requires an exact XMG2 request.", nameof(request));
         if (serverTimeUnixSeconds == 0 || expiresAtUnixSeconds <= serverTimeUnixSeconds ||
             expiresAtUnixSeconds - serverTimeUnixSeconds > 300)
             throw new ArgumentOutOfRangeException(nameof(expiresAtUnixSeconds));

@@ -459,9 +459,9 @@ internal static class PrivacyRoutingPayloadVerifier
                     throw PrivacyRoutingWire.Error(PrivacyRoutingProtocolError.InvalidKeyBinding, "Coordination wrapper belongs to another network.");
                 return;
             }
-            if (ReadMagic(request) == ProtocolMagic.XMG1)
+            if (ReadMagic(request) == ProtocolMagic.XMG2)
             {
-                var grantRequest = ContactCodec.Decode(ProtocolMagic.XMG1, request);
+                var grantRequest = ContactCodec.Decode(ProtocolMagic.XMG2, request);
                 ContactCodec.VerifyMailboxGrantHolderSignature(grantRequest);
                 if (!CryptographicOperations.FixedTimeEquals(grantRequest.Field(1).Span, networkId) ||
                     !grantRequest.CanonicalBytes.Span.SequenceEqual(request))
@@ -612,9 +612,9 @@ internal static class PrivacyRoutingPayloadVerifier
                     Deep.Protocol.ContactV2.ContactCoordinationOnionCodec.DecodeRequest(exactRequest), body);
                 return;
             }
-            if (ReadMagic(exactRequest) == ProtocolMagic.XMG1)
+            if (ReadMagic(exactRequest) == ProtocolMagic.XMG2)
             {
-                var request = ContactCodec.Decode(ProtocolMagic.XMG1, exactRequest);
+                var request = ContactCodec.Decode(ProtocolMagic.XMG2, exactRequest);
                 var grantResult = ContactCodec.Decode(ProtocolMagic.XMC2, body);
                 ContactCodec.ValidateMailboxGrantResultBinding(request, grantResult);
                 if (!grantResult.CanonicalBytes.Span.SequenceEqual(body))

@@ -7,6 +7,7 @@ using System.Text.RegularExpressions;
 using Deep.Protocol.ContactV1;
 using Deep.Protocol.ApplicationCore;
 using Deep.Protocol.ContactV2;
+using Sodium;
 
 var repository = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
 var specifications = Path.Combine(
@@ -16,10 +17,19 @@ var vectorsPath = Path.Combine(specifications, "contact-codec-v1.vectors.json");
 var anchorPath = Path.Combine(specifications, "contact-codec-v1.vectors.anchor.json");
 var testPath = Path.Combine(repository, "tests", "Deep.Protocol.Tests", "ContactV1", "ContactCodecTests.cs");
 
-var xmg = Record("XMG1",
+// Published RFC8032 test seed only, never deployment custody. Freeze a real
+// holder signature under the new purpose, not a placeholder-positive proof.
+var rfc8032Seed = Convert.FromHexString("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60");
+var holder = PublicKeyAuth.GenerateKeyPair(rfc8032Seed);
+var xmg = Record("XMG2",
     Bytes(16, 0x11), Bytes(32, 0x21), Bytes(32, 0x31), Bytes(32, 0x41),
-    Bytes(32, 0x51), [1], Reference("PMT2", 0x61), Bytes(32, 0x71),
+    holder.PublicKey, [1], Reference("PMT2", 0x61), Bytes(32, 0x71),
     U64(100), U64(120), Bytes(32, 0x81), Bytes(64, 0x91));
+var xmgRecord = ContactCodec.Decode(xmg);
+xmg = ReplaceField(xmg, 12, PublicKeyAuth.SignDetached(xmgRecord.SignatureInput.ToArray(), holder.PrivateKey));
+ContactCodec.VerifyMailboxGrantHolderSignature(ContactCodec.Decode(xmg));
+CryptographicOperations.ZeroMemory(rfc8032Seed);
+CryptographicOperations.ZeroMemory(holder.PrivateKey);
 var xmc = Record("XMC2",
     Bytes(16, 0x11), Bytes(32, 0x21), U16(2), U64(110), SHA256.HashData(xmg),
     U64(120), new byte[32], []);
@@ -62,13 +72,27 @@ foreach (var kind in new[] { "hello", "accept" })
     UpdateExact(root["records"]!.AsArray(), canonicalId, exactDmc);
 }
 var records = root["records"]!.AsArray();
-Upsert(records, "xmg1-canonical-grammar", xmg);
+var retiredRequest = records.SingleOrDefault(node => node?["target"]?.GetValue<string>() == "XMG1");
+if (retiredRequest is not null) records.Remove(retiredRequest);
+Upsert(records, "xmg2-canonical-grammar", xmg);
+var retiredXmg = xmg.ToArray(); "XMG1"u8.CopyTo(retiredXmg);
+var hostileRequests = root["hostileFixtures"]!.AsArray();
+var oldHostile = hostileRequests.SingleOrDefault(node => node?["id"]?.GetValue<string>() == "xmg1-retired-request");
+if (oldHostile is not null) hostileRequests.Remove(oldHostile);
+hostileRequests.Add(new JsonObject
+{
+    ["id"] = "xmg1-retired-request", ["target"] = "XMG2",
+    ["fixtureBytesHex"] = Convert.ToHexString(retiredXmg).ToLowerInvariant(),
+    ["sha256"] = Hex(SHA256.HashData(retiredXmg)), ["api"] = "Contact",
+    ["stage"] = "Header", ["rejection"] = "UnsupportedRecord",
+});
 var retiredResult = records.SingleOrDefault(node => node?["id"]?.GetValue<string>() == "xmc1-failure-grammar");
 if (retiredResult is not null) records.Remove(retiredResult);
 Upsert(records, "xmc2-failure-grammar", xmc);
 Upsert(records, "pma2-canonical", pma, afterId: "xra1-canonical");
 var bounds = root["canonicalBounds"]!.AsObject();
-bounds["XMG1"] = new JsonObject { ["recordBytes"] = 435 };
+bounds.Remove("XMG1");
+bounds["XMG2"] = new JsonObject { ["recordBytes"] = 435 };
 bounds.Remove("XMC1");
 bounds["XMC2"] = new JsonObject { ["failureRecordBytes"] = 206, ["successRecordBytes"] = 510 };
 bounds["PMA2"] = new JsonObject { ["minimumRecordBytes"] = 497, ["maximumRecordBytes"] = 1169 };

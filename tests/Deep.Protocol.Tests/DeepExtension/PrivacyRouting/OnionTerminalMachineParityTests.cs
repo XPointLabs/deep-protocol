@@ -46,7 +46,7 @@ public sealed class OnionTerminalMachineParityTests
         else if (id == 4)
         {
             requests = [ProtocolMagic.XPU1, ProtocolMagic.XIQ1, ProtocolMagic.XPK1,
-                ProtocolMagic.XUW1, ProtocolMagic.XUQ1, ProtocolMagic.XMG1,
+                ProtocolMagic.XUW1, ProtocolMagic.XUQ1, ProtocolMagic.XMG2,
                 ProtocolMagic.XPP1, ProtocolMagic.XCA2];
             results = [ProtocolMagic.XPO1, ProtocolMagic.XIS1, ProtocolMagic.XPC1,
                 ProtocolMagic.XUS1, ProtocolMagic.XMC2, ProtocolMagic.XIC1, ProtocolMagic.XCS2];

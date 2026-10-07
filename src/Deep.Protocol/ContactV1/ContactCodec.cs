@@ -46,8 +46,8 @@ public static class ContactCodec
                 "Deep/XPoint/V1/XSS1", "Deep/XPoint/V1/XSS1/core", [1,2,3,4,5,6,7,8,9,10,11,12]),
             [ProtocolMagic.XRR1] = new(ProtocolMagic.XRR1, [16, 32, 8, 32, 38, 38, 38, 38, 32, 32, 32, 1, 4, 2, 8, 8, 8, 38, 64, 2], 643, 643,
                 "Deep/XPoint/V1/XRR1", "Deep/XPoint/V1/XRR1/core", [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,20]),
-            [ProtocolMagic.XMG1] = new(ProtocolMagic.XMG1, [16, 32, 32, 32, 32, 1, 38, 32, 8, 8, 32, 64], 435, 435,
-                "Deep/ContactResolver/V1/XMG1", null, [1,2,3,4,5,6,7,8,9,10,11]),
+            [ProtocolMagic.XMG2] = new(ProtocolMagic.XMG2, [16, 32, 32, 32, 32, 1, 38, 32, 8, 8, 32, 64], 435, 435,
+                "Deep/ContactResolver/V2/XMG2", null, [1,2,3,4,5,6,7,8,9,10,11]),
             [ProtocolMagic.XMC2] = new(ProtocolMagic.XMC2, [16, 32, 2, 8, 32, 8, 32, -1], 206, 510,
                 null, null, []),
         };
@@ -173,42 +173,44 @@ public static class ContactCodec
             Reject(ContactValidationStage.Signature, "SignatureVerificationFailed");
     }
 
-    /// <summary>Verifies the reachability-scoped XMG1 holder proof of possession.</summary>
-    public static void VerifyMailboxGrantHolderSignature(ContactRecord xmg1)
+    /// <summary>Verifies the reachability-scoped XMG2 holder proof of possession.</summary>
+    public static void VerifyMailboxGrantHolderSignature(ContactRecord xmg2)
     {
-        ArgumentNullException.ThrowIfNull(xmg1);
-        RequireRecord(xmg1, ProtocolMagic.XMG1);
-        if (!VerifyEd25519(xmg1.FieldSpan(5), xmg1.SignatureInput.Span, xmg1.FieldSpan(12)))
+        ArgumentNullException.ThrowIfNull(xmg2);
+        RequireRecord(xmg2, ProtocolMagic.XMG2);
+        if (!VerifyEd25519(xmg2.FieldSpan(5), xmg2.SignatureInput.Span, xmg2.FieldSpan(12)))
             Reject(ContactValidationStage.Signature, "MailboxGrantHolderSignatureVerificationFailed");
     }
 
     /// <summary>
-    /// Validates the closed XMG1/XMC2 binding. Issuer authority and route-closure
+    /// Validates the closed XMG2/XMC2 binding. Issuer authority and route-closure
     /// freshness remain mandatory checks for the higher-level verifier.
     /// </summary>
-    public static void ValidateMailboxGrantResultBinding(ContactRecord xmg1, ContactRecord xmc2)
+    public static void ValidateMailboxGrantResultBinding(ContactRecord xmg2, ContactRecord xmc2)
     {
-        ArgumentNullException.ThrowIfNull(xmg1);
+        ArgumentNullException.ThrowIfNull(xmg2);
         ArgumentNullException.ThrowIfNull(xmc2);
-        RequireRecord(xmg1, ProtocolMagic.XMG1);
+        RequireRecord(xmg2, ProtocolMagic.XMG2);
         RequireRecord(xmc2, ProtocolMagic.XMC2);
-        if (!CryptographicOperations.FixedTimeEquals(xmc2.FieldSpan(1), xmg1.FieldSpan(1)) ||
-            !CryptographicOperations.FixedTimeEquals(xmc2.FieldSpan(2), xmg1.FieldSpan(2)) ||
-            !CryptographicOperations.FixedTimeEquals(xmc2.FieldSpan(5), SHA256.HashData(xmg1.CanonicalBytes.Span)))
+        if (!CryptographicOperations.FixedTimeEquals(xmc2.FieldSpan(1), xmg2.FieldSpan(1)) ||
+            !CryptographicOperations.FixedTimeEquals(xmc2.FieldSpan(2), xmg2.FieldSpan(2)) ||
+            !CryptographicOperations.FixedTimeEquals(xmc2.FieldSpan(5), SHA256.HashData(xmg2.CanonicalBytes.Span)))
             Reject(ContactValidationStage.Closure, "MailboxGrantResultRequestMismatch");
 
         if (U16(xmc2.FieldSpan(3)) != 1) return;
+        if (!CryptographicOperations.FixedTimeEquals(xmc2.FieldSpan(7), xmg2.FieldSpan(11)))
+            Reject(ContactValidationStage.Closure, "MailboxGrantResultRouteIntentMismatch");
         var current = MailboxAuthenticatedCapabilityCodec.DecodeGrant(xmc2.FieldSpan(8));
-        var requestedDomain = (MailboxCapabilityDomain)xmg1.FieldSpan(6)[0];
+        var requestedDomain = (MailboxCapabilityDomain)xmg2.FieldSpan(6)[0];
         if (current.Domain != requestedDomain ||
-            !CryptographicOperations.FixedTimeEquals(current.NetworkId.Span, xmg1.FieldSpan(1)) ||
-            !CryptographicOperations.FixedTimeEquals(current.HolderPublicKey.Span, xmg1.FieldSpan(5)))
+            !CryptographicOperations.FixedTimeEquals(current.NetworkId.Span, xmg2.FieldSpan(1)) ||
+            !CryptographicOperations.FixedTimeEquals(current.HolderPublicKey.Span, xmg2.FieldSpan(5)))
             Reject(ContactValidationStage.Closure, "MailboxGrantAuthorityBindingMismatch");
     }
 
     /// <summary>
     /// Binds a successful XMC2 to the exact verified route. Placement is always
-    /// derived from public XRR1 tag 10; XMG1 tag 4 is an authorization secret
+    /// derived from public XRR1 tag 10; XMG2 tag 4 is an authorization secret
     /// and is deliberately not overloaded as a placement identifier.
     /// </summary>
     public static void ValidateMailboxGrantResultRouteBinding(
@@ -479,7 +481,7 @@ public static class ContactCodec
                 NonZero(f(2)); GenPredecessor(f(3), f(4)); Reference(f(5), ProtocolMagic.XRA1); Reference(f(6), ProtocolMagic.XRC1); Reference(f(7), ProtocolMagic.XSS1); Reference(f(8), ProtocolMagic.PMT2); NonZero(f(9)); NonZero(f(10)); NonZero(f(11));
                 var policy = f(12)[0]; var maximum = U32(f(13)); if (policy is < 1 or > 3 || U16(f(14)) == 0 || (policy == 1 && maximum != 1) || (policy == 2 && (maximum < 2 || maximum > 65_535)) || (policy == 3 && (maximum < 1 || maximum > 65_535)) || !ValidWindowWithNotBefore(U64(f(15)), U64(f(16)), U64(f(17)), ulong.MaxValue)) Reject(ContactValidationStage.Scalar, "InvalidReachabilityPolicy");
                 Reference(f(18), ProtocolMagic.DPD1); NonZero(f(19)); if (!IsZero(f(20))) Reject(ContactValidationStage.Scalar, "ReservedMustBeZero"); break;
-            case ProtocolMagic.XMG1:
+            case ProtocolMagic.XMG2:
                 NonZero(f(2)); NonZero(f(3)); NonZero(f(4)); NonZero(f(5));
                 if (f(6)[0] != (byte)MailboxCapabilityDomain.Deposit &&
                     f(6)[0] != (byte)MailboxCapabilityDomain.Retrieve ||

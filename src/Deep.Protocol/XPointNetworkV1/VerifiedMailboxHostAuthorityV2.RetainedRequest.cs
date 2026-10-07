@@ -18,9 +18,10 @@ public sealed class VerifiedMailboxRetainedReadRequestV2
         ContactRecord request)
     { this.host = host; this.request = request; }
 
-    public ReadOnlyMemory<byte> ExactXmg1 => request.CanonicalBytes.ToArray();
+    public ReadOnlyMemory<byte> ExactXmg2 => request.CanonicalBytes.ToArray();
     public ReadOnlyMemory<byte> ProjectionReference => request.Field(7).ToArray();
     public ReadOnlyMemory<byte> SelectionHash => request.Field(8).ToArray();
+    public ReadOnlyMemory<byte> ExactRouteHash => request.Field(11).ToArray();
 
     /// <summary>Authenticated time from this original request's current host.
     /// No historical clock, route or caller time can replace it. Copied bounds
@@ -40,12 +41,12 @@ public sealed partial class VerifiedMailboxHostAuthorityV2
     /// The PMS2 hash/capability are still unverified lookup inputs, not route
     /// or issuance authority. Deposit and expired requests are never accepted.</summary>
     public async ValueTask<VerifiedMailboxRetainedReadRequestV2> VerifyRetainedReadRequestAsync(
-        ReadOnlyMemory<byte> exactXmg1, CancellationToken cancellationToken = default)
+        ReadOnlyMemory<byte> exactXmg2, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (exactXmg1.Length != 435)
-            throw new CryptographicException("A retained read requires an exact bounded XMG1.");
-        var request = ContactCodec.Decode(ProtocolMagic.XMG1, exactXmg1.Span);
+        if (exactXmg2.Length != 435)
+            throw new CryptographicException("A retained read requires an exact bounded XMG2.");
+        var request = ContactCodec.Decode(ProtocolMagic.XMG2, exactXmg2.Span);
         ContactCodec.VerifyMailboxGrantHolderSignature(request);
         RequireRetainedRequestSelection(request);
         _ = await ReadRetainedRequestTimeAsync(request, cancellationToken).ConfigureAwait(false);
