@@ -51,3 +51,11 @@ qualification under DR-0095, not green package or S01 acceptance. Protected
 retained custody, two-store retained evidence, renewed issuer/holder, node
 Retrieve/ACK and object horizon remain unfinished. No production deploy/reset,
 GitHub Release, main merge or physical delivery claim occurred.
+
+CI cross-protocol snapshot is pinned to superproject
+`c284062bb69fc321e41a3a7a464156f892f6e71a`, which freezes this XMG2 request
+contract, machine inputs and matched consumer checkpoints. The independent
+approved DNP1 snapshot `a8456987efe031388ca2eb9006886fb78f31e06c` is unchanged.
+No graph, test, evidence or publication gate is bypassed; the known MAU2 graph
+failure remains a shipping blocker. Actual GitHub execution is not implied by
+this pin update.
