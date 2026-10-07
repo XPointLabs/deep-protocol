@@ -38,3 +38,9 @@ exact314/package219/final95, mapped219/packageMissing0, using the unchanged
 approved mapping projection. Static ownership does not mean219 executed
 package approvals. This mechanical repin does not close S01, activate retained
 issuance, approve shipping composition or demonstrate physical delivery.
+
+The cross-protocol CI specification checkout is repinned to exact superproject
+`7ad75940fd565dbc2abfb9656391459619cd151c`, containing the qualified node and
+native contract. The separately approved DNP1 snapshot remains
+`a8456987efe031388ca2eb9006886fb78f31e06c`. No gate is bypassed; this pin is not
+evidence that the new GitHub execution has passed.
