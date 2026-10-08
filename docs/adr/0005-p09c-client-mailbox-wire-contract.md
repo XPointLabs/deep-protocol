@@ -47,8 +47,11 @@ operation ID.
 end-to-end deduplication/ack digest, creation/expiry seconds and 32..81768 bytes of opaque
 ciphertext. The complete canonical `MEO1` frame is therefore at most 81920 bytes, matching xnode
 `a193dcc`'s default `MaxBlobBytes`; the earlier 81920-byte ciphertext limit produced an
-incompatible 82072-byte frame and is rejected by the corrected contract. TTL is 60 seconds through
-7 days. The protocol library does not encrypt, decrypt or inspect the ciphertext.
+incompatible 82072-byte frame and is rejected by the corrected contract. The minimum TTL is
+60 seconds; the product maximum is owned by
+[RETENTION-AND-RECOVERY](../../../docs/architecture/RETENTION-AND-RECOVERY-V1.md#1-service-and-protocol-retention),
+with the matching source cutover authorized by DR-0104. The protocol library does not encrypt,
+decrypt or inspect the ciphertext. Short grant validity is not the object-retention bound.
 
 Retrieve and ack page sizes are 1..100. Continuation tokens are opaque and at most 256 bytes.
 Retrieve responses are at most 1 MiB including framing and nested envelopes. Ack entries use

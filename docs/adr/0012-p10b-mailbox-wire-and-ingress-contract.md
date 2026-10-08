@@ -97,7 +97,11 @@ seconds old and must not be later than verification time (future skew is exactly
 fresh admission is durably reserved, an exact pending/completed retry may exceed 120 seconds only
 through a read-only lookup of the existing request-identity scope; an unknown stale request cannot
 create replay state. Expiry must remain strictly after verification time. Expiry is also bound to
-`MEO1` for Store. Tombstone expiry must be no more than seven days after request creation.
+`MEO1` for Store. Tombstone lifetime uses the same product object horizon as MEO1, owned by
+[RETENTION-AND-RECOVERY](../../../docs/architecture/RETENTION-AND-RECOVERY-V1.md#1-service-and-protocol-retention)
+and authorized for the matching source cutover by DR-0104. In the current DID2 consumer the private
+Store/ACK retention bound is the exact signed object expiry, independent of current NET authority;
+the separately checked current host/role/grant and the existing replay grace are unchanged.
 Every successful `MRR2`, including a validly signed cached response, must have
 `AcceptedAtUnixSeconds >= PRQ2.CreatedAtUnixSeconds`.
 

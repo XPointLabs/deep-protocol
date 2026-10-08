@@ -125,6 +125,9 @@ public sealed class MailboxClientContractTests
     [Fact]
     public void CiphertextAndTtlBounds_AreStrict()
     {
+        Assert.Equal(30UL * 24 * 60 * 60, MailboxClientLimits.MaximumTtlSeconds);
+        Assert.Equal(MailboxClientLimits.MaximumTtlSeconds, MailboxPeerWireV2Limits.MaximumEpochLifetimeSeconds);
+        Assert.Equal(MailboxClientLimits.MaximumTtlSeconds, MailboxPeerWireV2Limits.MaximumTombstoneLifetimeSeconds);
         _ = MailboxClientCodec.EncodeEncryptedEnvelope(Envelope() with
         {
             Ciphertext = Range(0, MailboxClientLimits.MinimumCiphertextLength),

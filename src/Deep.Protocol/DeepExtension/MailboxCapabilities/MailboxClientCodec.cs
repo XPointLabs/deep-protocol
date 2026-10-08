@@ -639,7 +639,7 @@ public static class MailboxClientCodec
                 < MailboxClientLimits.MinimumTtlSeconds or
                 > MailboxClientLimits.MaximumTtlSeconds)
         {
-            throw Error(MailboxClientError.InvalidTtl, "Envelope TTL is outside the canonical 1 minute..7 day range.");
+            throw Error(MailboxClientError.InvalidTtl, "Envelope TTL is outside the canonical 1 minute..30 day range.");
         }
 
         if (policy is null)

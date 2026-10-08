@@ -13,7 +13,7 @@ public static class MailboxClientLimits
     public const int MaximumPageItems = 100;
     public const int MaximumContinuationTokenLength = 256;
     public const ulong MinimumTtlSeconds = 60;
-    public const ulong MaximumTtlSeconds = 7 * 24 * 60 * 60;
+    public const ulong MaximumTtlSeconds = 30 * 24 * 60 * 60;
     public const int EncryptedEnvelopeHeaderLength = 152;
 }
 

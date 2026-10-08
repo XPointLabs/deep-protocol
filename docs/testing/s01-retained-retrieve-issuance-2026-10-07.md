@@ -70,3 +70,41 @@ No Node/Registry/Shared runtime changes, Docker topology/data reset, deployment,
 GitHub Release or main merge occurred. Actual two protected stores over HTTP,
 private issuer replay, owned installation, typed Retrieve/ACK and object horizon
 remain the same unfinished S01 batch; physical E2E remains unverified.
+
+## Matching accepted-object horizon source matrix — 2026-10-08
+
+The DR-0104 source increment aligns MEO1 and private peer retention bounds with
+the sole product horizon, without changing layout, signing domains or replay
+grace. Focused50/0/0 retains the existing case names with additional matching
+client/peer-bound assertions. Restore/build/strict registry completed0, with
+zero build warnings/errors. The unfiltered solution run in
+`artifacts/s01-object-horizon-final/full` completed actual exit1:
+**2132 Passed/1 Failed/7 Skipped** (2140 result rows).
+
+The sole failure still inspects actual package/assembly content and rejects
+MAU2. No failure/skip is removed or treated as success. The initial qualifier
+failed because it assumed TRX `notExecuted` counted skipped xUnit rows. Actual
+receipts have `notExecuted=0`, with all seven skipped rows counted by
+`total-executed`. Original manifest, validator, qualification failure, terminal
+and receipts remain intact. An independent post-terminal validator checks that
+counter convention, exact row/definition/execution-entry mappings, all2140 prior
+outcomes, all50 focused cases and all3030 unchanged prelaunch inputs. Its actual
+exit is0; native test exit remains1. It does not rerun or rewrite the tests.
+
+Capture SHA256:
+`A4B5A9084C9B6CBDC5E668674AB32E1E42B66AF05F4B21745DD21CF7B3609739`.
+Post-terminal validator SHA256:
+`72E2D7BFE851462F6DE2D4FD3A1B3EAB275899CD8ED133774A7C8D0FED0B1E2D`.
+
+| Current receipt | SHA256 |
+| --- | --- |
+| Membership14: `nikit_SURFACE-LT_2026-10-08_13_02_57_net10.0.trx` | `B3DE5C3726357B4AD6D48AD85A0AD0ECD98A2D9B32760B996BFF11D9293BAAED` |
+| Carrier105: `nikit_SURFACE-LT_2026-10-08_13_02_58_net10.0.trx` | `A377C4DA46BCE3DC7B1946A0F9E2D500BC126137612F30C95CE1ACF059F13BF8` |
+| Protocol2021: `nikit_SURFACE-LT_2026-10-08_13_03_02_net10.0.trx` | `54BC56CF727EC85506D940F0B288AABB66B825A116C7B6DFCF1979EF883458B6` |
+
+The separately executed production graph returns1 on the same retired MAU2
+source; evidence ownership returns0, mapped219/packageMissing0. This accepts
+only the source matrix classification permitted by DR-0095. Full/package/
+release acceptance remain false; no deployment, publication or reset occurred.
+This checkpoint itself is updated after qualification and is not claimed to
+have been an unchanged executing input.

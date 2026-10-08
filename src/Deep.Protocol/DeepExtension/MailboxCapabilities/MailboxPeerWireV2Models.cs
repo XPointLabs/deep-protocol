@@ -7,8 +7,9 @@ public static class MailboxPeerWireV2Limits
     public const int RequestHeaderLength = 296;
     public const ulong MaximumPastAgeSeconds = 120;
     public const ulong MaximumFutureSkewSeconds = 0;
-    public const ulong MaximumEpochLifetimeSeconds = 7 * 24 * 60 * 60;
-    public const ulong MaximumTombstoneLifetimeSeconds = 7 * 24 * 60 * 60;
+    // Object/replay metadata bounds, not current network or grant authority.
+    public const ulong MaximumEpochLifetimeSeconds = MailboxClientLimits.MaximumTtlSeconds;
+    public const ulong MaximumTombstoneLifetimeSeconds = MailboxClientLimits.MaximumTtlSeconds;
     public const ulong ReplayRetentionSeconds = 7 * 24 * 60 * 60;
     public const int MaximumReplayCollectionBatch = 1024;
     public const int MaximumReplayRecordsPerRouterPairPerEpoch =
