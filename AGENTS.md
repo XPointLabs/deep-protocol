@@ -37,3 +37,15 @@ dotnet test Deep.Protocol.slnx --no-build
 
 Run the evidence-ownership gate with the applicable mapping fragments. Run
 `Deep.Protocol.Dark.slnx` separately only for an authorized dark-path change.
+
+Use the root canonical `scripts/Invoke-RepositoryTestGate.ps1 -Repository
+deep-protocol` for source qualification, with exact prior/focused references.
+The native provider preflight runs before full. Declare the exact accepted
+platform skip names and any classified package failure names explicitly;
+classification preserves native exit1 and `FullAccepted=false`. It never
+waives the graph/package gate above. Runtime theory rows may share a method
+definition or display name; use the root mapping implementation, not counts
+or a per-run parser. Windows local gates explicitly use PowerShell5.1.
+The nested executable witnesses require PowerShell7.5.4 separately: use an
+available `pwsh` or explicit `-WitnessPowerShellPath`. Missing/wrong interpreter
+fails before full; installing it is not an implicit runner action.

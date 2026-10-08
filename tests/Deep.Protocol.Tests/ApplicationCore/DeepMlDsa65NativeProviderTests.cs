@@ -7,6 +7,7 @@ namespace Deep.Protocol.Tests.ApplicationCore;
 public sealed class DeepMlDsa65NativeProviderTests
 {
     [Fact]
+    [Trait("FixturePreflight", "true")]
     public void CurrentDesktopCandidate_ExactAssetSignsVerifiesAndRejectsSubstitution()
     {
         if (!((OperatingSystem.IsWindows() &&

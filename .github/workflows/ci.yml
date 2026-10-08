@@ -54,6 +54,9 @@ jobs:
       - name: Build
         run: dotnet build Deep.Protocol.slnx --configuration Release --no-restore
 
+      - name: Verify native fixture prerequisite before full gates
+        run: dotnet test Deep.Protocol.slnx --configuration Release --no-build --no-restore -m:1 --filter "FixturePreflight=true"
+
       - name: Exact-three actual assembly/resource/public API graph
         shell: pwsh
         run: ./eng/Test-ProductionProtocolGraph.ps1 -Configuration Release
