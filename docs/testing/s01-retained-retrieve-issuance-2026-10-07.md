@@ -108,3 +108,28 @@ only the source matrix classification permitted by DR-0095. Full/package/
 release acceptance remain false; no deployment, publication or reset occurred.
 This checkpoint itself is updated after qualification and is not claimed to
 have been an unchanged executing input.
+
+## Reviewed normative source repin — 2026-10-09
+
+The Shared S01 retained-publication/lost-ACK increment clarifies native-committed
+Hello/Accept semantic reconstruction in DR-0063 and CONTACT-AND-GROUP. It calls
+the existing DR-0072 historical predecessor verifier, not a new public API or
+current-route fallback. Exact focused scope and retained failures are recorded
+in the [Shared checkpoint](../../../deep-client-shared/docs/testing/s01-idle-mailbox-floors-2026-10-09.md#retained-publication-polling-and-original-lost-ack).
+
+Reviewed mechanical source repin changes exactly four digests: contact-group,
+protocol-registry, contact-resolver and production-wire inventory. The latter
+three were already stale from accepted DR-0106/source93ef9bd and signed-request
+NotBefore changes; their exact diffs were reviewed, not silently waived. Resolved
+inventory adds only the existing original-contact and Store-evidence consumer
+locations, and the generated private registry digest changes. Allocations,
+approved frozen Git blobs, domains, versions, public codec bytes and activation
+states remain unchanged. All176 normative anchors validate; none needs repin.
+
+The initial check rejects the stale protocol-registry digest; the original failure
+is not a PASS. The source-repin tool requires PowerShell7 (`Path.GetRelativePath`);
+an initial5.1 dry-run fails without writes. After reviewed repin/generation under7,
+`Generate-DeepProtocolRegistry.ps1 -Check` and `Test-DeepProtocolRegistry.ps1`
+return0:44 frozen DNP1 artifacts,245 magics,10 suites,5 carriers,4 profiles,
+11 retired aliases. This is registry consistency, not current Protocol full,
+package/API/resource qualification, shipping activation or physical devices.
