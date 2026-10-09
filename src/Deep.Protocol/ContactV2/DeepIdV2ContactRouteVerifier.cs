@@ -323,10 +323,20 @@ internal sealed class DeepIdV2RouteContext
             throw new CryptographicException("The reachability predecessor is issued after current trusted time.");
     }
 
-    private void RequireAdvertisementScope(ContactRecord xra)
+    internal void RequireRetainedAdvertisementFacts(ContactRecord xra, ContactRecord originalPmt)
+    {
+        RequireAdvertisementScope(xra, ContactCodec.ArtifactReference(ProtocolMagic.PMT2, originalPmt).CanonicalBytes.Span);
+        VerifyAdvertisementSignature(xra);
+        if (U64(xra.FieldSpan(12)) > Lower)
+            throw new CryptographicException("Retained reachability is issued after current trusted time.");
+    }
+
+    private void RequireAdvertisementScope(ContactRecord xra) => RequireAdvertisementScope(xra, PmtReference.Span);
+
+    private void RequireAdvertisementScope(ContactRecord xra, ReadOnlySpan<byte> pmtReference)
     {
         if (xra.Magic != ProtocolMagic.XRA1 || !Fixed(xra.FieldSpan(1), Network.NetworkId.Span) ||
-            !Fixed(xra.FieldSpan(5), PmtReference.Span) ||
+            !Fixed(xra.FieldSpan(5), pmtReference) ||
             !Fixed(xra.FieldSpan(14), Device.Certificate.DeviceId.Span) ||
             !Fixed(xra.FieldSpan(15), DeviceReference.Span) ||
             Fixed(xra.FieldSpan(11), Device.Certificate.DeviceX25519PublicKey.Span) ||

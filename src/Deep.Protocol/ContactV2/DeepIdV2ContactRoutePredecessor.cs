@@ -117,9 +117,50 @@ public static partial class DeepIdV2ContactRouteVerifier
         if (!DeepIdV2RouteContext.Fixed(route.Projection.CanonicalBytes.Span, current.Pmt.CanonicalBytes.Span))
             throw new CryptographicException("Historical route rollover requires a separately authorized PMT transition.");
         current.RequireAdvertisementPredecessor(route.Authorization);
+        RequireHistoricalRouteBindings(invite, route, current, current.PmtReference.Span);
+    }
+
+    /// <summary>Original route facts for independently native-committed contact
+    /// events only. Requires the exact original PMT in the current protected
+    /// lineage; returns no renewal predecessor, route, grant or dispatch authority.</summary>
+    public static async ValueTask RequireRetainedEventRouteFactsAsync(
+        DeepIdV2CurrentContactAuthorization recipient, VerifiedOnionNetworkContext network,
+        VerifiedXPointNetworkAuthority authority, ReadOnlyMemory<byte> exactXir1V2,
+        ReadOnlyMemory<byte> exactSixRecordClosure, OnionTrustedTimeAuthority trustedTime,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (exactXir1V2.Length != DeepIdV2InviteRendezvousCodec.CanonicalLength ||
+            exactSixRecordClosure.Length is < ContactRouteClosureCodec.MinimumEncodedBytes or > ContactRouteClosureCodec.MaximumEncodedBytes)
+            throw new CryptographicException("Retained event route sizes are outside their exact bounds.");
+        var invite = DeepIdV2InviteRendezvousCodec.Decode(exactXir1V2.Span);
+        var route = ContactRouteClosureCodec.Decode(exactSixRecordClosure.Span);
+        var first = await DeepIdV2RouteContext.ReadAsync(recipient, network, authority, trustedTime, cancellationToken).ConfigureAwait(false);
+        Require(first);
+        Require(await first.RecheckAsync(cancellationToken).ConfigureAwait(false));
+        cancellationToken.ThrowIfCancellationRequested();
+
+        void Require(DeepIdV2RouteContext current)
+        {
+            if (current.Network.ProtectedLkg is not { } floor ||
+                !DeepIdV2RouteContext.Fixed(floor.AuthorityCoreReference.Span, current.Authority.AuthorityCoreReference.Span) ||
+                !current.Network.Closure!.RetainedPmts.Any(pmt => DeepIdV2RouteContext.Fixed(pmt.CanonicalBytes.Span, route.Projection.CanonicalBytes.Span)))
+                throw new CryptographicException("Retained event projection is absent from the exact protected authority lineage.");
+            try { XPointOnionCapabilityProducer.VerifyContactThreshold(route.Projection, current.Authority); }
+            catch (OnionBoundaryException error) { throw new CryptographicException("Retained event projection threshold is invalid.", error); }
+            current.RequireRetainedAdvertisementFacts(route.Authorization, route.Projection);
+            RequireHistoricalRouteBindings(invite, route, current,
+                ContactCodec.ArtifactReference(ProtocolMagic.PMT2, route.Projection).CanonicalBytes.Span);
+        }
+    }
+
+    private static void RequireHistoricalRouteBindings(ParsedXir1V2 invite,
+        ParsedContactRouteClosure route, DeepIdV2RouteContext current, ReadOnlySpan<byte> originalPmtReference)
+    {
         if (!DeepIdV2RouteContext.Fixed(route.Route.Field(19).Span, route.Successor.Field(12).Span))
             throw new CryptographicException("Historical threshold records disagree on their directory issuance anchor.");
-        RequireIdentityBindings(invite, route, current);
+        RequireIdentityBindings(invite, route, current.Network.NetworkId.Span,
+            originalPmtReference, current.DeviceReference.Span, current.DcaReference.Span);
         // Decoding independently validates the exact six-record graph. These
         // signatures authenticate history, not a current route's expired window.
         DeepIdV2RouteContext.VerifyWitnesses(route.Selection, 11, current.Authority);

@@ -55,6 +55,27 @@ public static class DeepIdV2ContactUpdateRendezvousVerifier
     internal static void RequireCurrentIssuer(ContactRecord record,
         VerifiedDeepIdV2DirectoryFreshness freshness, OnionMonotonicReading reading)
     {
+        RequireIssuerBinding(record, freshness, reading);
+        ulong lower, upper;
+        try
+        {
+            var elapsed = checked(reading.SampleSeconds - freshness.MonotonicSample);
+            lower = checked(freshness.TrustedLowerUnixSeconds + elapsed);
+            upper = checked(freshness.TrustedUpperUnixSeconds + elapsed);
+        }
+        catch (OverflowException exception)
+        {
+            throw new CryptographicException("The rendezvous trusted-time interval overflowed.", exception);
+        }
+        if (U64(record.FieldSpan(11)) > lower || U64(record.FieldSpan(12)) <= upper)
+            throw new CryptographicException("The inbound rendezvous does not cover the entire authenticated time interval.");
+    }
+
+    // Issuer facts only. The retained application-event reader independently
+    // checks validity at event creation; this never returns a live rendezvous.
+    internal static void RequireIssuerBinding(ContactRecord record,
+        VerifiedDeepIdV2DirectoryFreshness freshness, OnionMonotonicReading reading)
+    {
         if (freshness.ResultKind != AccountDirectoryAdp1ResultKind.CurrentValue ||
             !freshness.IsCurrentAtMonotonic(reading.BootId.Span, reading.SampleSeconds))
             throw new CryptographicException("A fresh current DID2 directory checkpoint is required for the rendezvous.");
@@ -75,19 +96,6 @@ public static class DeepIdV2ContactUpdateRendezvousVerifier
             U64(record.FieldSpan(4)) != 0 || record.FieldSpan(5).IndexOfAnyExcept((byte)0) >= 0 ||
             BinaryPrimitives.ReadUInt16BigEndian(record.FieldSpan(10)) != 0x0007)
             throw new CryptographicException("The inbound rendezvous differs from its current DID2 device authority.");
-        ulong lower, upper;
-        try
-        {
-            var elapsed = checked(reading.SampleSeconds - freshness.MonotonicSample);
-            lower = checked(freshness.TrustedLowerUnixSeconds + elapsed);
-            upper = checked(freshness.TrustedUpperUnixSeconds + elapsed);
-        }
-        catch (OverflowException exception)
-        {
-            throw new CryptographicException("The rendezvous trusted-time interval overflowed.", exception);
-        }
-        if (U64(record.FieldSpan(11)) > lower || U64(record.FieldSpan(12)) <= upper)
-            throw new CryptographicException("The inbound rendezvous does not cover the entire authenticated time interval.");
         try { ContactCodec.VerifyDeviceSignature(record, device.Certificate.DeviceEd25519PublicKey.Span); }
         catch (ContactFormatException exception)
         {

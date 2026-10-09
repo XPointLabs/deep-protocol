@@ -159,7 +159,75 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
             method => method.Name is "RequireContactHelloEndpointBindings" or "ComputeContactSafetyNumber");
     }
 
-    private static byte[] ContactControlXur(VerifiedDeepIdV2DirectoryFreshness freshness)
+    [Fact]
+    public async Task Did2ContactControl_RetainedEndpointFactsDoNotRestoreExpiredRendezvous()
+    {
+        var sender = await RendezvousCurrentProof();
+        var responder = await RendezvousCurrentProof(sender.NetworkId.ToArray(), Dnp1IdentityAuthoringV1Tests.OtherMnemonic);
+        var senderXur = ContactControlXur(sender, sender.TrustedUpperUnixSeconds + 4);
+        var responderXur = ContactControlXur(responder, responder.TrustedUpperUnixSeconds + 4);
+        var senderRendezvous = await DeepIdV2ContactUpdateRendezvousVerifier.VerifyAsync(senderXur, sender,
+            new OnionTrustedTimeAuthority(new RendezvousClock()));
+        var responderRendezvous = await DeepIdV2ContactUpdateRendezvousVerifier.VerifyAsync(responderXur, responder,
+            new OnionTrustedTimeAuthority(new RendezvousClock()));
+        var senderRoute = DeepIdV2ContactMailboxRouteCodec.Decode(DeepIdV2ContactMailboxRouteTests.Package(false, sender));
+        var responderRoute = DeepIdV2ContactMailboxRouteCodec.Decode(DeepIdV2ContactMailboxRouteTests.Package(false, responder));
+        var relationship = Bytes(32, 0xe1);
+        var conversation = ApplicationCoreVerifier.ComputeContactConversationId(sender.NetworkId.Span, relationship,
+            sender.CurrentCheckpoint!.Binding.Record.DeepAccountId.Span, responder.CurrentCheckpoint!.Binding.Record.DeepAccountId.Span);
+        var created = (sender.TrustedUpperUnixSeconds + 1) * 1000;
+        var hello = (await ApplicationCoreCodec.AuthorVerifiedContactHelloAsync(senderRendezvous, senderRoute, responder,
+            relationship, Bytes(32, 0xe2), conversation, created, created + 60_000,
+            new OnionTrustedTimeAuthority(new RendezvousClock()))).Record;
+        var accept = (await ApplicationCoreCodec.AuthorVerifiedContactAcceptAsync(hello, sender, responderRendezvous,
+            responderRoute, Bytes(32, 0xe3), 3, created + 1000, created + 61_000,
+            new OnionTrustedTimeAuthority(new RendezvousClock()))).Record;
+        var later = sender.MonotonicSample + sender.TrustedUpperUnixSeconds - sender.TrustedLowerUnixSeconds + 20;
+        OnionTrustedTimeAuthority Time() => new(new RendezvousClock(first: later, final: later));
+        await ApplicationCoreVerifier.RequireRetainedContactHelloEndpointBindingsAsync(hello, sender, responder, Time());
+        await ApplicationCoreVerifier.RequireRetainedContactAcceptEndpointBindingsAsync(accept, hello, sender, responder, Time());
+        await Assert.ThrowsAsync<CryptographicException>(async () => await
+            ApplicationCoreVerifier.RequireContactHelloEndpointBindingsAsync(hello, sender, responder, Time()));
+        await Assert.ThrowsAsync<CryptographicException>(async () => await
+            ApplicationCoreVerifier.RequireContactAcceptEndpointBindingsAsync(accept, hello, sender, responder, Time()));
+        await Assert.ThrowsAsync<CryptographicException>(async () => await
+            DeepIdV2ContactUpdateRendezvousVerifier.VerifyAsync(senderXur, sender, Time()));
+        await Assert.ThrowsAsync<CryptographicException>(async () => await
+            ApplicationCoreVerifier.RequireRetainedContactHelloEndpointBindingsAsync(hello, responder, sender, Time()));
+        var future = ContactCodecValidation.AuthorDmc2(hello.NetworkId.Span, hello.LogicalMessageId.Span, hello.ConversationId.Span,
+            hello.SenderAccountId.Span, hello.SenderDeviceId.Span, 2, created + 1000, created + 61_000,
+            Dmc2Flags.None, [], hello.ParsedPayload);
+        await Assert.ThrowsAsync<CryptographicException>(async () => await
+            ApplicationCoreVerifier.RequireRetainedContactHelloEndpointBindingsAsync(future, sender, responder,
+                new(new RendezvousClock())));
+        var response = (ContactAcceptDmc2Payload)accept.ParsedPayload;
+        ParsedDmc2 ChangedAccept(bool signature)
+        {
+            var original = ContactCodec.Decode(ProtocolMagic.XUR1, responderXur);
+            var fields = Enumerable.Range(1, 15).Select(tag => (ReadOnlyMemory<byte>)original.Field(tag).ToArray()).ToArray();
+            var badSignature = fields[14].ToArray(); badSignature[0] ^= 1; fields[14] = badSignature;
+            var xur = signature ? ContactCodec.AuthorForValidation(ProtocolMagic.XUR1, fields).CanonicalBytes : responderXur;
+            var payload = ContactCodecValidation.CreateContactAcceptPayload(response.RelationshipId.Span, response.ContactHelloHash.Span,
+                response.ResponderDab2Reference.Span, response.ResponderDmd1Hash.Span, response.Policy, xur.Span, response.MailboxRoute.ExactBytes.Span);
+            return ContactCodecValidation.AuthorDmc2(accept.NetworkId.Span, accept.LogicalMessageId.Span, accept.ConversationId.Span,
+                accept.SenderAccountId.Span, accept.SenderDeviceId.Span, 3, signature ? created + 1000 : created + 10_000,
+                created + 61_000, Dmc2Flags.None, [], payload);
+        }
+        foreach (var changed in new[] { ChangedAccept(true), ChangedAccept(false) })
+            await Assert.ThrowsAsync<CryptographicException>(async () => await
+                ApplicationCoreVerifier.RequireRetainedContactAcceptEndpointBindingsAsync(changed, hello, sender, responder, Time()));
+        foreach (var clock in new[] { new RendezvousClock(first: later, final: later - 1),
+            new RendezvousClock(first: later, final: later, finalBoot: Bytes(16, 0xe4)),
+            new RendezvousClock(first: sender.FreshnessDeadlineMonotonicSeconds, final: sender.FreshnessDeadlineMonotonicSeconds) })
+            await Assert.ThrowsAsync<CryptographicException>(async () => await
+                ApplicationCoreVerifier.RequireRetainedContactHelloEndpointBindingsAsync(hello, sender, responder, new(clock)));
+        using var canceled = new CancellationTokenSource();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await
+            ApplicationCoreVerifier.RequireRetainedContactHelloEndpointBindingsAsync(hello, sender, responder,
+                new(new RendezvousClock(first: later, final: later, onRead: canceled.Cancel)), canceled.Token));
+    }
+
+    private static byte[] ContactControlXur(VerifiedDeepIdV2DirectoryFreshness freshness, ulong? expiry = null)
     {
         var device = Assert.Single(freshness.CurrentCheckpoint!.Directory.Identity.ActiveDevices).Certificate;
         var key = PublicKeyAuth.GenerateKeyPair(Enumerable.Range(1, 32).Select(value => (byte)value).ToArray());
@@ -170,7 +238,7 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
                 RendezvousU64(0), new byte[32],
                 new ContactArtifactReference(ProtocolMagic.PMT2, 1, Bytes(32, 0x83)).CanonicalBytes,
                 Bytes(32, 0x84), Bytes(32, 0x85), Bytes(32, 0x86), new byte[] { 0, 7 },
-                RendezvousU64(freshness.TrustedLowerUnixSeconds - 1), RendezvousU64(freshness.TrustedUpperUnixSeconds + 30),
+                RendezvousU64(freshness.TrustedLowerUnixSeconds - 1), RendezvousU64(expiry ?? freshness.TrustedUpperUnixSeconds + 30),
                 device.DeviceId, new ContactArtifactReference(ProtocolMagic.DPD1, 1, device.CanonicalHash.Span).CanonicalBytes,
                 Bytes(64, 0x87)];
             var provisional = ContactCodec.AuthorForValidation(ProtocolMagic.XUR1, fields);

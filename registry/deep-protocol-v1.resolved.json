@@ -3,7 +3,7 @@
   "schemaVersion": "1.0.0",
   "registryGeneration": 1,
   "registryId": "deep-protocol-v1-resolved",
-  "sourceRegistrySha256": "058479051b868e9927ca1e919b7d6219b4fc4dbe356c8851bbf2634d87689600",
+  "sourceRegistrySha256": "e19c4059f732ee6cc7bcaacc45643547dda6eb14c22e6fff06da56819438d688",
   "dnp1ApprovedCommit": "a8456987efe031388ca2eb9006886fb78f31e06c",
   "dnp1RegistrySha256": "e036a0b6acb260e05e18ac536a723b0b8561d2ba1d813429304505b0e7a7da7b",
   "records": [
@@ -346,6 +346,8 @@
         "src/Deep.Protocol/ContactV1/ContactRouteClosureCodec.cs",
         "src/Deep.Protocol/ContactV1/ContactServiceWireCodec.cs",
         "src/Deep.Protocol/ContactV1/MailboxGrantAcquisition.cs",
+        "src/Deep.Protocol/ContactV2/DeepIdV2ContactRoutePredecessor.cs",
+        "src/Deep.Protocol/ContactV2/DeepIdV2ContactRouteVerifier.cs",
         "src/Deep.Protocol/ContactV2/DeepIdV2InviteRendezvousCodec.cs",
         "src/Deep.Protocol/ContactV2/DeepIdV2MailboxGrantIssuanceVerifier.cs",
         "src/Deep.Protocol/ContactV2/DeepIdV2MailboxGrantRequestAuthor.cs",
@@ -1846,6 +1848,7 @@
       "implementationPaths": [
         "src/Deep.Protocol/ApplicationCore/ApplicationMessageCodec.cs",
         "src/Deep.Protocol/ApplicationCore/DeepIdV2ContactControl.cs",
+        "src/Deep.Protocol/ApplicationCore/DeepIdV2RetainedContactControl.cs",
         "src/Deep.Protocol/ContactV1/ContactCodec.cs",
         "src/Deep.Protocol/ContactV2/DeepIdV2ContactUpdateRendezvousAuthor.cs",
         "src/Deep.Protocol/ContactV2/DeepIdV2ContactUpdateRendezvousVerifier.cs",

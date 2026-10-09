@@ -400,3 +400,21 @@ Normal current restore/commit verifies matching nonzero generations; genesis
 authors remain strict. No historical fact exposes signing, dispatch, currentness
 or a server reservation. Shared protected CAS, Registry per-generation issuance,
 consumer API/package repins and physical recovery remain activation gates.
+
+For DR-0072 native-committed contact reconstruction, the additive bounded
+`ApplicationCoreVerifier.RequireRetainedContactHelloEndpointBindingsAsync` and
+`RequireRetainedContactAcceptEndpointBindingsAsync` verify original signed XUR1
+endpoint metadata and creation validity under two independently current DID2
+proofs and continuous protected time. They return no capability or admission,
+route, consent or ACK authority. Exact native event/pending custody and original
+route verification remain independently owned by Shared. Current authoring,
+first-admission and rendezvous APIs are unchanged and reject expired XUR1.
+The normative owner is CONTACT-AND-GROUP; no record/domain/layout/reset changes.
+Matching source/API/package/consumer qualification remains separately required.
+
+`DeepIdV2ContactRouteVerifier.RequireRetainedEventRouteFactsAsync` independently
+checks original signed route facts against its exact PMT in the current verified
+protected lineage and unchanged root authority. It returns no typed renewal
+predecessor or live route. `VerifyPredecessorAsync` remains current-PMT-only,
+so reconstructing native-committed consent cannot activate PMT route rollover.
+The same CONTACT-AND-GROUP owner and consumer/API/package gates apply.
