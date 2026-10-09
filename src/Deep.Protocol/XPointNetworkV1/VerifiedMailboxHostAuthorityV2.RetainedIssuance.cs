@@ -41,7 +41,11 @@ public sealed class VerifiedMailboxRetainedReadIssuanceV2
         var issuer = first.Policy.ResolveIssuer(MailboxCapabilityDomain.Retrieve);
         if (!Equal(publicKey, issuer.PublicKey.Span))
             throw new CryptographicException("Retained read signer is not the actual current Retrieve issuer.");
-        var expiry = host.MaximumRetainedGrantExpiry(first.Policy, first.Window.LowerUnixSeconds, readUntil);
+        // Use the same bounded signed-request interval as current issuance;
+        // independently uncertain service/client clocks need not have equal
+        // lower bounds. This is not historical time or a renewed request.
+        var start = Math.Max(U64(request.Field(9).Span), issuer.ValidFromUnixSeconds);
+        var expiry = host.MaximumRetainedGrantExpiry(first.Policy, start, readUntil);
         if (first.Window.UpperUnixSeconds >= expiry)
             throw new CryptographicException("Retained read issuer has no remaining complete grant interval.");
         var serial = new byte[16];
@@ -51,7 +55,7 @@ public sealed class VerifiedMailboxRetainedReadIssuanceV2
             Domain = MailboxCapabilityDomain.Retrieve, Lifecycle = MailboxCapabilityLifecycle.Active,
             NetworkId = host.NetworkId, Epoch = U64(route.Selection.Field(4).Span),
             Generation = Math.Max(1UL, first.Policy.MinimumGrantGeneration), Serial = serial,
-            NotBeforeUnixSeconds = first.Window.LowerUnixSeconds, ExpiresAtUnixSeconds = expiry,
+            NotBeforeUnixSeconds = start, ExpiresAtUnixSeconds = expiry,
             OverlapUntilUnixSeconds = 0,
             PlacementCommitment = MailboxPlacementCommitment.Compute(new(route.Reachability.Field(10).Span)),
             MembershipCommitment = route.Projection.ArtifactHash.ToArray(),

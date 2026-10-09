@@ -470,6 +470,40 @@ public static class DeepIdV2DirectoryCurrentProofVerifier
             Fail("InvalidForwardTail", "DID2 successor tail does not preserve the anchored append log.");
     }
 
+    // Historical facts only. No DTT1, monotonic window, protected directory
+    // floor advancement or current freshness capability is produced here.
+    internal static VerifiedAdc1V2 VerifyOriginalCheckpoint(
+        VerifiedXPointNetworkAuthority authority, ReadOnlySpan<byte> exactAdp1,
+        ParsedDid2 pinnedDid2, ulong originalUnixSeconds, ushort profile,
+        ushort supportedReader, IDeepMlDsa65Verifier verifier)
+    {
+        ArgumentNullException.ThrowIfNull(authority);
+        ArgumentNullException.ThrowIfNull(pinnedDid2);
+        ArgumentNullException.ThrowIfNull(verifier);
+        var proof = DeepIdV2Adp1Codec.Decode(exactAdp1);
+        if (proof.ResultKind != AccountDirectoryAdp1ResultKind.CurrentValue ||
+            proof.Head.MinimumReader < 2 || proof.Head.MinimumReader > supportedReader ||
+            !Fixed(proof.ExactDid2.Span, pinnedDid2.CanonicalBytes.Span))
+            Fail("OriginalIdentityMismatch", "Original Store does not bind the protected peer credential.");
+        // Decode has verified the exact ADC/transition sparse-map and append
+        // inclusion joins. Authenticate that head in the current XNA lineage.
+        AccountDirectoryCurrentProofVerifier.VerifyAdhAuthorityAndWitnessClosure(
+            authority, proof.Head, requireCurrentAuthority: false);
+        AccountDirectoryCurrentProofVerifier.VerifyCurrentHeadTime(
+            proof.Head, originalUnixSeconds, originalUnixSeconds);
+        var admission = new DeepIdV2GenesisAdmissionRequest(
+            proof.ExactField(19).Span, proof.ExactField(20).Span,
+            ExactDevices(proof), proof.ExactDid2.Span, proof.ExactDab2.Span,
+            proof.ExactField(21).Span, proof.ExactCurrentAdc1V2.Span,
+            proof.RevokedDcaAuthorizationIds);
+        var checkpoint = DeepIdV2GenesisAdmissionVerifier.Verify(admission,
+            originalUnixSeconds, profile, supportedReader, verifier);
+        if (!Fixed(checkpoint.Checkpoint.DirectoryLeafKey.Span,
+                proof.QueriedDirectoryLeafKey.Span))
+            Fail("OriginalIdentityMismatch", "Original checkpoint differs from its signed map leaf.");
+        return checkpoint;
+    }
+
     private static ReadOnlyMemory<byte>[] ExactDevices(ParsedAdp1V2 proof)
     {
         var count = proof.ExactField(22).Span[0];

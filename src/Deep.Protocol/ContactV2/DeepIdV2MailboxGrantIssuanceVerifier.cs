@@ -119,7 +119,12 @@ public sealed class VerifiedDeepIdV2MailboxGrantIssuance
         var issuer = first.Policy.ResolveIssuer(Domain);
         if (!DeepIdV2RouteContext.Fixed(publicKey, issuer.PublicKey.Span))
             throw new CryptographicException("Mailbox signer is not the current PMA2 role issuer.");
-        var start = first.Window.LowerUnixSeconds;
+        // The holder signed the full client interval, which can be wider than
+        // the issuer's network-only uncertainty interval. Starting at the later
+        // issuer lower bound can mint a grant the still-current client cannot
+        // use. Preserve the bounded original request start, never before the
+        // independently signed issuer validity; all current checks still apply.
+        var start = Math.Max(DeepIdV2RouteContext.U64(request.Field(9).Span), issuer.ValidFromUnixSeconds);
         var expiry = Math.Min(DeepIdV2MailboxGrantIssuanceVerifier.MaximumExpiry(network, route, effectiveExpiry),
             Math.Min(first.Policy.ExpiresAtUnixSeconds, checked(start + first.Policy.MaximumGrantLifetimeSeconds)));
         if (first.Window.UpperUnixSeconds >= expiry)

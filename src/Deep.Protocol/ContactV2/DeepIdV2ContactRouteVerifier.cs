@@ -167,10 +167,17 @@ public static partial class DeepIdV2ContactRouteVerifier
 
     internal static void RequireIdentityBindings(ParsedXir1V2 invite,
         ParsedContactRouteClosure route, DeepIdV2RouteContext current)
+        => RequireIdentityBindings(invite, route, current.Network.NetworkId.Span,
+            current.PmtReference.Span, current.DeviceReference.Span, current.DcaReference.Span);
+
+    internal static void RequireIdentityBindings(ParsedXir1V2 invite,
+        ParsedContactRouteClosure route, ReadOnlySpan<byte> network,
+        ReadOnlySpan<byte> pmtReference, ReadOnlySpan<byte> deviceReference,
+        ReadOnlySpan<byte> dcaReference)
     {
         var xra = route.Authorization; var xrr = route.Reachability;
-        if (!DeepIdV2RouteContext.Fixed(invite.FieldSpan(1), current.Network.NetworkId.Span) ||
-            !DeepIdV2RouteContext.Fixed(invite.FieldSpan(5), current.PmtReference.Span) ||
+        if (!DeepIdV2RouteContext.Fixed(invite.FieldSpan(1), network) ||
+            !DeepIdV2RouteContext.Fixed(invite.FieldSpan(5), pmtReference) ||
             !DeepIdV2RouteContext.Fixed(invite.FieldSpan(18), ContactCodec.ArtifactReference(ProtocolMagic.XRA1, xra).CanonicalBytes.Span) ||
             !DeepIdV2RouteContext.Fixed(invite.FieldSpan(6), xra.FieldSpan(6)) ||
             !DeepIdV2RouteContext.Fixed(invite.FieldSpan(7), xra.FieldSpan(10)) ||
@@ -178,9 +185,9 @@ public static partial class DeepIdV2ContactRouteVerifier
             !DeepIdV2RouteContext.Fixed(invite.FieldSpan(12), xra.FieldSpan(9)) ||
             !DeepIdV2RouteContext.Fixed(invite.FieldSpan(13), xra.FieldSpan(12)) ||
             !DeepIdV2RouteContext.Fixed(invite.FieldSpan(14), xra.FieldSpan(13)) ||
-            !DeepIdV2RouteContext.Fixed(invite.FieldSpan(15), current.DeviceReference.Span) ||
-            !DeepIdV2RouteContext.Fixed(invite.FieldSpan(16), current.DcaReference.Span) ||
-            !DeepIdV2RouteContext.Fixed(xrr.FieldSpan(18), current.DeviceReference.Span) ||
+            !DeepIdV2RouteContext.Fixed(invite.FieldSpan(15), deviceReference) ||
+            !DeepIdV2RouteContext.Fixed(invite.FieldSpan(16), dcaReference) ||
+            !DeepIdV2RouteContext.Fixed(xrr.FieldSpan(18), deviceReference) ||
             !DeepIdV2RouteContext.Fixed(xrr.FieldSpan(10), route.Route.FieldSpan(10)) ||
             !DeepIdV2RouteContext.Fixed(xrr.FieldSpan(11), xra.FieldSpan(9)) ||
             !DeepIdV2RouteContext.Fixed(xrr.FieldSpan(13), xra.FieldSpan(8)))

@@ -15,6 +15,24 @@ namespace Deep.Protocol.Tests.XPointNetworkV1;
 
 public sealed class MailboxRetainedReadIssuanceV2Tests
 {
+    [Theory]
+    [InlineData(0UL)] [InlineData(1UL)] [InlineData(5UL)]
+    public async Task DelayedIssuerPreservesOriginalSignedRequestStart(ulong elapsed)
+    {
+        var state = await State.Create();
+        var request = ContactCodec.Decode("XMG2", state.Request);
+        var originalStart = BinaryPrimitives.ReadUInt64BigEndian(request.Field(9).Span);
+        state.Clock.Sample = checked(state.Clock.Sample + elapsed);
+        var issuance = await state.Issuance();
+        var response = await issuance.AuthorSuccessAsync(new Issuer());
+        await issuance.VerifySuccessAsync(response);
+        var verified = await state.Host.VerifyRetainedReadSuccessAsync(state.Route.ExactBytes, state.Request, response);
+        var grant = MailboxAuthenticatedCapabilityCodec.DecodeGrant(verified.ExactGrant.Span);
+        Assert.Equal(originalStart, grant.NotBeforeUnixSeconds);
+        Assert.True(grant.ExpiresAtUnixSeconds <= state.Horizon);
+        await verified.EnsureCurrentAsync();
+    }
+
     [Fact]
     public void FrozenTupleMatchesIndependentExactBytesAndRealSignature()
     {

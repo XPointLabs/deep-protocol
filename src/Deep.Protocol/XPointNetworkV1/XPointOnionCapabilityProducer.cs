@@ -187,6 +187,7 @@ internal sealed class VerifiedOnionNetworkClosure
     internal required byte[] NetworkId { get; init; }
     internal required Xvp1Record Policy { get; init; }
     internal required Xnv1Record View { get; init; }
+    internal Xnd1Record[] Descriptors { get; init; } = [];
     internal required Xnh1Record Head { get; init; }
     internal required ContactRecord Pmt { get; init; }
     // Verified lineage facts, not current routing or grant authority. They are
@@ -353,6 +354,7 @@ internal static class XPointOnionCapabilityProducer
                 NetworkId = authority.NetworkId.ToArray(),
                 Policy = xvp,
                 View = xnv,
+                Descriptors = nodes.ToArray(),
                 Head = xnh,
                 Pmt = pmt,
                 RetainedPmts = retainedPmts,
