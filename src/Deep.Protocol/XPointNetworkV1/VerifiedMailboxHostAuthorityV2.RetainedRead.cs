@@ -8,6 +8,35 @@ namespace Deep.Protocol.XPointNetworkV1;
 
 public sealed partial class VerifiedMailboxHostAuthorityV2
 {
+    /// <summary>Authenticates the exact original PMA2/PMT2 namespace in this
+    /// current verified history. No current issuer, expired grant, non-issuance,
+    /// epoch-exclusion or deletion authority is returned.</summary>
+    public async ValueTask RequireOriginalNamespaceAsync(ReadOnlyMemory<byte> exactPma2,
+        ReadOnlyMemory<byte> exactPmt2, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var originalPolicy = ContactCodec.Decode(ProtocolMagic.PMA2, exactPma2.Span);
+        var projection = ContactCodec.Decode(ProtocolMagic.PMT2, exactPmt2.Span);
+        _ = await ReadAsync(cancellationToken).ConfigureAwait(false);
+        Require();
+        _ = await ReadAsync(cancellationToken).ConfigureAwait(false);
+        Require();
+        cancellationToken.ThrowIfCancellationRequested();
+
+        void Require()
+        {
+            var ancestor = XPointOnionCapabilityProducer.RequireRetainedProjectionAuthority(network, root, projection);
+            if (BinaryPrimitives.ReadUInt16BigEndian(originalPolicy.FieldSpan(9)) != 2 ||
+                !Fixed(originalPolicy.FieldSpan(1), network.NetworkId.Span) ||
+                !Fixed(projection.FieldSpan(4), XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.PMA2, originalPolicy.CoreHash.Span)) ||
+                !Fixed(originalPolicy.FieldSpan(13), XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XNA1, ancestor.CoreHash.Span)))
+                throw new CryptographicException("The original mailbox namespace changes its verified projection or authority.");
+            var issue = BinaryPrimitives.ReadUInt64BigEndian(originalPolicy.FieldSpan(11));
+            MailboxAuthorityV2Verifier.VerifyHistoricalLineage(root, originalPolicy.CanonicalBytes.Span, issue, issue);
+            XPointOnionCapabilityProducer.VerifyContactThreshold(projection, ancestor);
+        }
+    }
+
     /// <summary>Copied selected current-node facts for a still-current Retrieve
     /// grant naming a verified retained PMT2. Not holder, replay, revocation,
     /// object availability, mutation, dispatch or expired-grant authority.</summary>

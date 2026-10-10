@@ -372,6 +372,14 @@ internal sealed class DeepIdV2RouteContext
         VerifyWitnesses(pms, 11, Authority); VerifyWitnesses(xrc, 21, Authority); VerifyWitnesses(xss, 14, Authority);
     }
     internal static void VerifyWitnesses(ContactRecord record, int tag, VerifiedXPointNetworkAuthority authority)
+        => VerifyWitnesses(record, tag, authority.WitnessKeys, authority.WitnessThreshold);
+
+    internal static void VerifyWitnesses(ContactRecord record, int tag, Xna1Record ancestor)
+        => VerifyWitnesses(record, tag, ancestor.Witnesses.Select(static key =>
+            new XPointNetworkWitnessKey(key.Id.Span, key.Generation, key.PublicKey.Span, key.FailureDomainHash.Span)).ToArray(), ancestor.WitnessThreshold);
+
+    private static void VerifyWitnesses(ContactRecord record, int tag,
+        IReadOnlyList<XPointNetworkWitnessKey> witnessKeys, byte threshold)
     {
         var receipts = record.FieldSpan(tag);
         var domains = new HashSet<string>(StringComparer.Ordinal);
@@ -380,14 +388,14 @@ internal sealed class DeepIdV2RouteContext
         {
             var row = receipts.Slice(offset, 96);
             var id = row[..32].ToArray();
-            var key = authority.WitnessKeys.SingleOrDefault(candidate => Fixed(candidate.Id.Span, id));
+            var key = witnessKeys.SingleOrDefault(candidate => Fixed(candidate.Id.Span, id));
             if (key is null || !ids.Add(Convert.ToHexString(row[..32])) ||
                 !domains.Add(Convert.ToHexString(key.FailureDomainHash.Span)) ||
                 !PublicKeyAuth.VerifyDetached(row[32..].ToArray(), record.SignatureInput.ToArray(), key.Ed25519PublicKey.ToArray()))
                 throw new CryptographicException("The route witness signature, identity or failure domain is invalid.");
         }
-        if (ids.Count < authority.WitnessThreshold)
-            throw new CryptographicException("The route has fewer current witnesses than the required threshold.");
+        if (ids.Count < threshold)
+            throw new CryptographicException("The route has fewer witnesses than its exact authority threshold.");
     }
     internal static bool Fixed(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b) =>
         a.Length == b.Length && CryptographicOperations.FixedTimeEquals(a, b);

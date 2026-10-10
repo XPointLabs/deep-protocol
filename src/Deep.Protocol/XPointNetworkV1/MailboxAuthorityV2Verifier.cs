@@ -104,36 +104,50 @@ public static class MailboxAuthorityV2Verifier
     {
         ArgumentNullException.ThrowIfNull(networkAuthority);
         var record = ContactCodec.Decode(ProtocolMagic.PMA2, exactPma2);
-        VerifyRecord(networkAuthority, record, trustedLowerUnixSeconds, trustedUpperUnixSeconds);
+        var ancestor = XPointOnionCapabilityProducer.RequireHistoricalAuthority(networkAuthority, record.FieldSpan(13));
+        VerifyBindings(record, ancestor.NetworkId.Span,
+            XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XNA1, ancestor.CoreHash.Span),
+            ancestor.DirectoryWitnessPolicyHash.Span, ancestor.NotBefore, ancestor.ExpiresAt,
+            trustedLowerUnixSeconds, trustedUpperUnixSeconds);
+        VerifyRootThreshold(record, ancestor.RootThreshold, ancestor.RootKeys.Select(static key =>
+            new XPointNetworkRootKey(key.Id.Span, key.Generation, key.PublicKey.Span)).ToArray());
     }
 
     private static void VerifyRecord(VerifiedXPointNetworkAuthority networkAuthority,
         ContactRecord record, ulong trustedLowerUnixSeconds, ulong trustedUpperUnixSeconds)
     {
+        VerifyBindings(record, networkAuthority.NetworkId.Span, networkAuthority.AuthorityCoreReference.Span,
+            networkAuthority.DirectoryWitnessPolicyHash.Span, networkAuthority.NotBefore, networkAuthority.ExpiresAt,
+            trustedLowerUnixSeconds, trustedUpperUnixSeconds);
+        VerifyRootThreshold(record, networkAuthority.RootThreshold, networkAuthority.RootKeys);
+    }
+
+    private static void VerifyBindings(ContactRecord record, ReadOnlySpan<byte> networkId,
+        ReadOnlySpan<byte> authorityReference, ReadOnlySpan<byte> witnessPolicyHash, ulong notBefore, ulong expiresAt,
+        ulong trustedLowerUnixSeconds, ulong trustedUpperUnixSeconds)
+    {
         if (trustedLowerUnixSeconds > trustedUpperUnixSeconds)
             throw new CryptographicException("The PMA2 trusted-time interval is invalid.");
-        if (!Fixed(record.Field(1).Span, networkAuthority.NetworkId.Span) ||
-            !Fixed(record.Field(13).Span, networkAuthority.AuthorityCoreReference.Span) ||
-            !Fixed(record.Field(14).Span, networkAuthority.DirectoryWitnessPolicyHash.Span) ||
+        if (!Fixed(record.Field(1).Span, networkId) ||
+            !Fixed(record.Field(13).Span, authorityReference) ||
+            !Fixed(record.Field(14).Span, witnessPolicyHash) ||
             BinaryPrimitives.ReadUInt64BigEndian(record.Field(11).Span) > trustedLowerUnixSeconds ||
             trustedUpperUnixSeconds >= BinaryPrimitives.ReadUInt64BigEndian(record.Field(12).Span) ||
-            BinaryPrimitives.ReadUInt64BigEndian(record.Field(11).Span) < networkAuthority.NotBefore ||
-            BinaryPrimitives.ReadUInt64BigEndian(record.Field(12).Span) > networkAuthority.ExpiresAt)
+            BinaryPrimitives.ReadUInt64BigEndian(record.Field(11).Span) < notBefore ||
+            BinaryPrimitives.ReadUInt64BigEndian(record.Field(12).Span) > expiresAt)
             throw new CryptographicException(
-                "PMA2 is outside the exact current XNA1 authority and trusted-time interval.");
-
-        VerifyRootThreshold(record, networkAuthority);
+                "PMA2 is outside its exact XNA1 authority and authenticated interval.");
     }
 
     private static void VerifyRootThreshold(
         ContactRecord record,
-        VerifiedXPointNetworkAuthority authority)
+        byte threshold, IReadOnlyList<XPointNetworkRootKey> rootKeys)
     {
         var rows = record.Field(16).Span;
         var count = record.Field(15).Span[0];
-        if (rows.Length != count * 96 || count < authority.RootThreshold)
+        if (rows.Length != count * 96 || count < threshold)
             throw new CryptographicException("PMA2 does not meet the XNA1 root threshold.");
-        var keys = authority.RootKeys.ToDictionary(
+        var keys = rootKeys.ToDictionary(
             static key => Convert.ToHexString(key.Id.Span),
             StringComparer.Ordinal);
         var valid = 0;
@@ -146,7 +160,7 @@ public static class MailboxAuthorityV2Verifier
                 throw new CryptographicException("PMA2 contains an unknown or invalid root receipt.");
             valid++;
         }
-        if (valid < authority.RootThreshold)
+        if (valid < threshold)
             throw new CryptographicException("PMA2 does not meet the XNA1 root threshold.");
     }
 

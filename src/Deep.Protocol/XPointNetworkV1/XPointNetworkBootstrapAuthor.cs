@@ -11,6 +11,7 @@ public enum XPointNetworkRootSignaturePurpose : byte
     DirectoryTimeSourcePolicy = 2,
     NetworkPolicy = 3,
     MailboxAuthority = 4,
+    AuthorityRenewal = 5,
 }
 
 public sealed class XPointNetworkBootstrapAuthoringException : CryptographicException
@@ -268,7 +269,7 @@ public sealed class VerifiedXPointNetworkBootstrap
     public VerifiedXPointNetworkAuthority Authority { get; }
 }
 
-public static class XPointNetworkBootstrapAuthor
+public static partial class XPointNetworkBootstrapAuthor
 {
     /// <summary>
     /// Restores an immutable, already-authored generation-zero bootstrap only after the same

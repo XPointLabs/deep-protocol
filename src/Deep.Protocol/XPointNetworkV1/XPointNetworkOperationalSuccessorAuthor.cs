@@ -46,7 +46,8 @@ public sealed class XPointNetworkOperationalNodeRollover
 
 /// <summary>
 /// Exact, protected predecessor and signer inputs for a one-generation operational
-/// renewal. The release-pinned XNA1/DTS1 are reused; no genesis record is authored.
+/// renewal. The complete genesis-pinned XNA1/DTS1 lineage is already verified;
+/// no genesis or authority record is authored by this producer.
 /// </summary>
 public sealed class XPointNetworkOperationalSuccessorRequest
 {
@@ -57,7 +58,7 @@ public sealed class XPointNetworkOperationalSuccessorRequest
 
     public XPointNetworkOperationalSuccessorRequest(
         ReadOnlySpan<byte> ceremonyId,
-        VerifiedXPointNetworkBootstrap bootstrap,
+        VerifiedXPointNetworkAuthority authority,
         IReadOnlyList<IXPointNetworkBootstrapRootSigner> rootSigners,
         IReadOnlyList<IXPointNetworkWitnessSigner> witnessSigners,
         IReadOnlyList<XPointNetworkOperationalNodeRollover> nodeRollovers,
@@ -75,7 +76,7 @@ public sealed class XPointNetworkOperationalSuccessorRequest
         ulong expiresAtUnixSeconds)
     {
         this.ceremonyId = Required(ceremonyId, 32, nameof(ceremonyId));
-        Bootstrap = bootstrap ?? throw new ArgumentNullException(nameof(bootstrap));
+        Authority = authority ?? throw new ArgumentNullException(nameof(authority));
         RootSigners = Copy(rootSigners, nameof(rootSigners));
         WitnessSigners = Copy(witnessSigners, nameof(witnessSigners));
         NodeRollovers = Copy(nodeRollovers, nameof(nodeRollovers));
@@ -99,8 +100,8 @@ public sealed class XPointNetworkOperationalSuccessorRequest
         if (issuedAtUnixSeconds == 0 || issuedAtUnixSeconds > notBeforeUnixSeconds ||
             notBeforeUnixSeconds >= expiresAtUnixSeconds ||
             expiresAtUnixSeconds - notBeforeUnixSeconds > 86_400 ||
-            Bootstrap.Authority.NotBefore > issuedAtUnixSeconds ||
-            expiresAtUnixSeconds > Bootstrap.Authority.ExpiresAt)
+            Authority.NotBefore > issuedAtUnixSeconds ||
+            expiresAtUnixSeconds > Authority.ExpiresAt)
             throw new ArgumentException("The successor interval is outside the live authority or 24-hour profile.");
         IssuedAtUnixSeconds = issuedAtUnixSeconds;
         NotBeforeUnixSeconds = notBeforeUnixSeconds;
@@ -108,7 +109,7 @@ public sealed class XPointNetworkOperationalSuccessorRequest
     }
 
     public ReadOnlyMemory<byte> CeremonyId => ceremonyId.ToArray();
-    public VerifiedXPointNetworkBootstrap Bootstrap { get; }
+    public VerifiedXPointNetworkAuthority Authority { get; }
     public IReadOnlyList<IXPointNetworkBootstrapRootSigner> RootSigners { get; }
     public IReadOnlyList<IXPointNetworkWitnessSigner> WitnessSigners { get; }
     public IReadOnlyList<XPointNetworkOperationalNodeRollover> NodeRollovers { get; }
@@ -203,7 +204,7 @@ public static class XPointNetworkOperationalSuccessorAuthor
     {
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
-        var authority = request.Bootstrap.Authority;
+        var authority = request.Authority;
         if (delegated && request.RootSigners.Count != 0)
             throw new ArgumentException("Delegated renewal must not load offline root custody.");
         var roots = delegated ? [] : ValidateRoots(authority, request.RootSigners);
@@ -217,13 +218,15 @@ public static class XPointNetworkOperationalSuccessorAuthor
         var priorPma = ContactCodec.Decode(ProtocolMagic.PMA2, request.ExactPreviousPma2.Span);
         var priorPmt = ContactCodec.Decode(ProtocolMagic.PMT2, request.ExactProtectedPmt2.Span);
         ValidateProtectedPredecessor(request, authority, priorPolicy, priorNodes, priorView, priorHead, priorPma, priorPmt);
-        XPointNetworkViewLogAuthor.RequireProtectedPrefix(request.ExactOrderedXnv1History, request.ExactProtectedXnh1.Span);
+        XPointNetworkViewLogAuthor.RequireProtectedPrefix(request.ExactOrderedXnv1History, request.ExactProtectedXnh1.Span, authority);
         var nodeRollovers = ValidateNodeRollovers(priorNodes, request.NodeRollovers, delegated);
 
         var nextPmtGeneration = checked(BinaryPrimitives.ReadUInt64BigEndian(priorPmt.FieldSpan(2)) + 1);
         if (delegated)
         {
-            if (priorPolicy.NotBefore > request.IssuedAtUnixSeconds ||
+            if (!Fixed(priorPolicy.FieldSpan(18), authority.AuthorityCoreReference.Span) ||
+                !Fixed(priorPma.FieldSpan(13), authority.AuthorityCoreReference.Span) ||
+                priorPolicy.NotBefore > request.IssuedAtUnixSeconds ||
                 priorPolicy.ExpiresAt < request.ExpiresAtUnixSeconds ||
                 nextPmtGeneration < priorPolicy.UInt64(12))
                 throw new CryptographicException("Operational renewal is outside its live root policy delegation.");
@@ -251,7 +254,7 @@ public static class XPointNetworkOperationalSuccessorAuthor
         var view = await AuthorViewAsync(request, priorView, policy, nodes, witnesses, cancellationToken)
             .ConfigureAwait(false);
         var proof = XPointNetworkViewLogAuthor.BuildAppendProof(
-            request.ExactOrderedXnv1History, request.ExactProtectedXnh1.Span, view);
+            request.ExactOrderedXnv1History, request.ExactProtectedXnh1.Span, view, authority);
         var head = await AuthorHeadAsync(request, priorHead, view, proof, witnesses, cancellationToken)
             .ConfigureAwait(false);
         var pma = delegated ? request.ExactPreviousPma2.ToArray() :
@@ -280,24 +283,30 @@ public static class XPointNetworkOperationalSuccessorAuthor
         ContactRecord pma,
         ContactRecord pmt)
     {
+        var priorAuthority = XPointOnionCapabilityProducer.RequireHistoricalAuthority(authority, view.FieldSpan(7));
         if (!Fixed(head.CoreHash.Span, request.ProtectedHeadCoreHash.Span) ||
             !Fixed(pmt.ArtifactHash.Span, request.ProtectedPmtArtifactHash.Span) ||
             !Fixed(view.NetworkId.Span, authority.NetworkId.Span) ||
             !Fixed(head.NetworkId.Span, authority.NetworkId.Span) ||
             !Fixed(policy.NetworkId.Span, authority.NetworkId.Span) ||
-            !Fixed(policy.FieldSpan(18), authority.AuthorityCoreReference.Span) ||
-            !Fixed(view.FieldSpan(7), authority.AuthorityCoreReference.Span) ||
-            !Fixed(head.FieldSpan(8), authority.AuthorityCoreReference.Span) ||
-            !Fixed(view.FieldSpan(8), authority.DirectoryWitnessPolicyHash.Span) ||
-            !Fixed(head.FieldSpan(9), authority.DirectoryWitnessPolicyHash.Span) ||
+            !Fixed(policy.FieldSpan(18), view.FieldSpan(7)) ||
+            !Fixed(head.FieldSpan(8), view.FieldSpan(7)) ||
+            !Fixed(view.FieldSpan(8), priorAuthority.DirectoryWitnessPolicyHash.Span) ||
+            !Fixed(head.FieldSpan(9), priorAuthority.DirectoryWitnessPolicyHash.Span) ||
+            priorAuthority.NotBefore > policy.IssuedAt || policy.ExpiresAt > priorAuthority.ExpiresAt ||
+            priorAuthority.NotBefore > view.UInt64(19) || view.ExpiresAt > priorAuthority.ExpiresAt ||
+            priorAuthority.NotBefore > head.ValidFrom || head.ValidUntil > priorAuthority.ExpiresAt ||
             !Fixed(view.FieldSpan(9), XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XVP1, policy.CoreHash.Span)) ||
             !head.LatestView.Equals(view.CoreReferenceValue) ||
             head.LatestViewGeneration != view.ViewGeneration ||
             head.TreeSize != checked(view.ViewGeneration + 1) ||
             !Fixed(pma.FieldSpan(1), authority.NetworkId.Span) ||
+            !Fixed(pma.FieldSpan(13), view.FieldSpan(7)) ||
             !Fixed(pmt.FieldSpan(1), authority.NetworkId.Span) ||
             !Fixed(pmt.FieldSpan(4), XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.PMA2, pma.CoreHash.Span)) ||
             !Fixed(pmt.FieldSpan(5), XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XNV1, view.CoreHash.Span)) ||
+            priorAuthority.NotBefore > BinaryPrimitives.ReadUInt64BigEndian(pmt.FieldSpan(10)) ||
+            BinaryPrimitives.ReadUInt64BigEndian(pmt.FieldSpan(12)) > priorAuthority.ExpiresAt ||
             BinaryPrimitives.ReadUInt64BigEndian(pmt.FieldSpan(2)) < policy.UInt64(12) ||
             nodes.Count != view.UInt16(11) ||
             nodes.Select(static node => Convert.ToHexString(node.NodeId.Span)).Distinct(StringComparer.Ordinal).Count() != nodes.Count)
@@ -310,20 +319,26 @@ public static class XPointNetworkOperationalSuccessorAuthor
         MailboxAuthorityV2Verifier.VerifyHistoricalLineage(authority, pma.CanonicalBytes.Span,
             validHistoricalTime, validHistoricalTime);
         XPointOnionCapabilityProducer.VerifyPolicy(authority, policy);
+        ulong? previousAuthorityGeneration = null;
         foreach (var exact in request.ExactOrderedXnv1History)
         {
             var historical = XPointNetworkCodec.Parse<Xnv1Record>(exact.Span);
-            if (!Fixed(historical.FieldSpan(7), authority.AuthorityCoreReference.Span) ||
-                !Fixed(historical.FieldSpan(8), authority.DirectoryWitnessPolicyHash.Span))
-                throw new CryptographicException("Protected view history changed authority.");
-            XPointOnionCapabilityProducer.VerifyThreshold(historical.WitnessSignatures, authority,
+            var historicalAuthority = XPointOnionCapabilityProducer.RequireHistoricalAuthority(authority, historical.FieldSpan(7));
+            if (!Fixed(historical.NetworkId.Span, authority.NetworkId.Span) ||
+                !Fixed(historical.FieldSpan(8), historicalAuthority.DirectoryWitnessPolicyHash.Span) ||
+                historicalAuthority.NotBefore > historical.UInt64(19) || historical.ExpiresAt > historicalAuthority.ExpiresAt ||
+                previousAuthorityGeneration is { } previous && historicalAuthority.AuthorityGeneration < previous)
+                throw new CryptographicException("Protected view history changes its exact authority or rolls it back.");
+            XPointOnionCapabilityProducer.VerifyThreshold(historical.WitnessSignatures, historicalAuthority,
                 XPointNetworkCrypto.ComputeSigningInput(historical), "view-threshold-invalid");
+            previousAuthorityGeneration = historicalAuthority.AuthorityGeneration;
         }
-        XPointOnionCapabilityProducer.VerifyThreshold(head.WitnessSignatures, authority,
+        XPointOnionCapabilityProducer.VerifyThreshold(head.WitnessSignatures, priorAuthority,
             XPointNetworkCrypto.ComputeSigningInput(head), "head-threshold-invalid");
-        XPointOnionCapabilityProducer.VerifyContactThreshold(pmt, authority);
+        XPointOnionCapabilityProducer.VerifyContactThreshold(pmt, priorAuthority);
         foreach (var node in nodes)
-            if (!PublicKeyAuth.VerifyDetached(node.Signature.Span.ToArray(),
+            if (!Fixed(node.NetworkId.Span, authority.NetworkId.Span) ||
+                !PublicKeyAuth.VerifyDetached(node.Signature.Span.ToArray(),
                     XPointNetworkCrypto.ComputeSigningInput(node), node.IdentityPublicKey.Span.ToArray()))
                 throw new CryptographicException("Protected node descriptor signature is invalid.");
     }
@@ -342,6 +357,7 @@ public static class XPointNetworkOperationalSuccessorAuthor
         fields[14] = U64(request.IssuedAtUnixSeconds);
         fields[15] = U64(request.NotBeforeUnixSeconds);
         fields[16] = U64(request.ExpiresAtUnixSeconds);
+        fields[17] = request.Authority.AuthorityCoreReference;
         fields[18] = new[] { checked((byte)roots.Length) };
         fields[19] = SignatureRows(roots.Select(static signer =>
             (signer.RootKeyId.ToArray(), Placeholder64())).ToArray());
@@ -412,6 +428,8 @@ public static class XPointNetworkOperationalSuccessorAuthor
         var fields = Fields(previous, 24);
         fields[1] = U64(checked(previous.Generation + 1));
         fields[2] = previous.CoreHash.ToArray();
+        fields[6] = request.Authority.AuthorityCoreReference;
+        fields[7] = request.Authority.DirectoryWitnessPolicyHash;
         fields[8] = XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XVP1, policy.CoreHash.Span);
         fields[10] = U16(checked((ushort)nodes.Count));
         fields[11] = nodes.Select(static node => ArtifactReference(
@@ -445,6 +463,8 @@ public static class XPointNetworkOperationalSuccessorAuthor
         fields[4] = proof.Root;
         fields[5] = XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XNV1, view.CoreHash.Span);
         fields[6] = U64(view.ViewGeneration);
+        fields[7] = request.Authority.AuthorityCoreReference;
+        fields[8] = request.Authority.DirectoryWitnessPolicyHash;
         fields[9] = U64(request.NotBeforeUnixSeconds);
         fields[10] = U64(request.ExpiresAtUnixSeconds);
         fields[12] = new[] { checked((byte)proof.ConsistencyNodes.Count) };
@@ -472,6 +492,8 @@ public static class XPointNetworkOperationalSuccessorAuthor
         fields[9] = U64(request.IssuedAtUnixSeconds);
         fields[10] = U64(request.NotBeforeUnixSeconds);
         fields[11] = U64(request.ExpiresAtUnixSeconds);
+        fields[12] = request.Authority.AuthorityCoreReference;
+        fields[13] = request.Authority.DirectoryWitnessPolicyHash;
         fields[14] = new[] { checked((byte)roots.Length) };
         fields[15] = SignatureRows(roots.Select(static signer =>
             (signer.RootKeyId.ToArray(), Placeholder64())).ToArray());
@@ -565,7 +587,7 @@ public static class XPointNetworkOperationalSuccessorAuthor
         {
             var signature = new byte[64];
             var signingRequest = new XPointNetworkRootSigningRequest(
-                request.CeremonyId.Span, purpose, request.Bootstrap.Authority.NetworkId.Span,
+                request.CeremonyId.Span, purpose, request.Authority.NetworkId.Span,
                 generation, signer.RootKeyId.Span, signer.KeyGeneration,
                 signer.Ed25519PublicKey.Span, signer.CustodyDomainHash.Span, input);
             try
@@ -594,7 +616,7 @@ public static class XPointNetworkOperationalSuccessorAuthor
     {
         var signature = new byte[64];
         var signingRequest = new XPointNetworkOperationalSigningRequest(
-            request.CeremonyId.Span, purpose, request.Bootstrap.Authority.NetworkId.Span,
+            request.CeremonyId.Span, purpose, request.Authority.NetworkId.Span,
             generation, signer.SignerId.Span, signer.KeyGeneration,
             signer.Ed25519PublicKey.Span, input);
         try

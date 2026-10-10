@@ -27,7 +27,8 @@ internal static class XPointNetworkViewLogAuthor
     internal static XPointNetworkViewAppendProof BuildAppendProof(
         IReadOnlyList<ReadOnlyMemory<byte>> exactAcceptedViews,
         ReadOnlySpan<byte> exactProtectedHead,
-        ReadOnlySpan<byte> exactSuccessorView)
+        ReadOnlySpan<byte> exactSuccessorView,
+        VerifiedXPointNetworkAuthority? verifiedAuthority = null)
     {
         ArgumentNullException.ThrowIfNull(exactAcceptedViews);
         if (exactAcceptedViews.Count is < 1 or > MaximumHistoryViews)
@@ -35,11 +36,15 @@ internal static class XPointNetworkViewLogAuthor
 
         var head = XPointNetworkCodec.Parse<Xnh1Record>(exactProtectedHead);
         var successor = XPointNetworkCodec.Parse<Xnv1Record>(exactSuccessorView);
-        var (previous, leaves) = RestoreProtectedPrefix(exactAcceptedViews, head);
+        var (previous, leaves) = RestoreProtectedPrefix(exactAcceptedViews, head, verifiedAuthority);
         XPointNetworkVerifier.RequireSuccessor(previous, successor);
         if (!successor.NetworkId.Equals(head.NetworkId) ||
-            !successor.AuthorizingXna.Equals(head.AuthorizingXna) ||
-            !successor.DirectoryWitnessPolicyHash.Equals(head.DirectoryWitnessPolicyHash))
+            (verifiedAuthority is null
+                ? !successor.AuthorizingXna.Equals(head.AuthorizingXna) ||
+                  !successor.DirectoryWitnessPolicyHash.Equals(head.DirectoryWitnessPolicyHash)
+                : !successor.FieldSpan(7).SequenceEqual(verifiedAuthority.AuthorityCoreReference.Span) ||
+                  !successor.FieldSpan(8).SequenceEqual(verifiedAuthority.DirectoryWitnessPolicyHash.Span) ||
+                  !successor.NetworkId.Span.SequenceEqual(verifiedAuthority.NetworkId.Span)))
             throw new CryptographicException("The successor view changes the protected network authority.");
         var appendedLeaf = ViewLeaf(successor);
         leaves.Add(appendedLeaf);
@@ -55,11 +60,12 @@ internal static class XPointNetworkViewLogAuthor
     }
 
     internal static void RequireProtectedPrefix(IReadOnlyList<ReadOnlyMemory<byte>> exactAcceptedViews,
-        ReadOnlySpan<byte> exactProtectedHead) =>
-        _ = RestoreProtectedPrefix(exactAcceptedViews, XPointNetworkCodec.Parse<Xnh1Record>(exactProtectedHead));
+        ReadOnlySpan<byte> exactProtectedHead, VerifiedXPointNetworkAuthority? verifiedAuthority = null) =>
+        _ = RestoreProtectedPrefix(exactAcceptedViews, XPointNetworkCodec.Parse<Xnh1Record>(exactProtectedHead), verifiedAuthority);
 
     private static (Xnv1Record Previous, List<byte[]> Leaves) RestoreProtectedPrefix(
-        IReadOnlyList<ReadOnlyMemory<byte>> exactAcceptedViews, Xnh1Record head)
+        IReadOnlyList<ReadOnlyMemory<byte>> exactAcceptedViews, Xnh1Record head,
+        VerifiedXPointNetworkAuthority? verifiedAuthority)
     {
         if (exactAcceptedViews.Count is < 1 or > MaximumHistoryViews)
             throw new ArgumentException("The bounded accepted view history is empty or too long.");
@@ -68,15 +74,25 @@ internal static class XPointNetworkViewLogAuthor
 
         var accepted = new Xnv1Record[exactAcceptedViews.Count];
         var leaves = new List<byte[]>(exactAcceptedViews.Count + 1);
+        ulong? previousAuthorityGeneration = null;
         for (var index = 0; index < exactAcceptedViews.Count; index++)
         {
             var view = XPointNetworkCodec.Parse<Xnv1Record>(exactAcceptedViews[index].Span);
             if (view.ViewGeneration != checked((ulong)index) ||
                 !view.NetworkId.Equals(head.NetworkId) ||
-                !view.AuthorizingXna.Equals(head.AuthorizingXna) ||
-                !view.DirectoryWitnessPolicyHash.Equals(head.DirectoryWitnessPolicyHash) ||
+                (verifiedAuthority is null && (!view.AuthorizingXna.Equals(head.AuthorizingXna) ||
+                    !view.DirectoryWitnessPolicyHash.Equals(head.DirectoryWitnessPolicyHash))) ||
                 (index == 0 && view.FieldSpan(3).IndexOfAnyExcept((byte)0) >= 0))
                 throw new CryptographicException("The accepted view history is not a canonical network lineage.");
+            if (verifiedAuthority is not null)
+            {
+                var ancestor = XPointOnionCapabilityProducer.RequireHistoricalAuthority(verifiedAuthority, view.FieldSpan(7));
+                if (!view.NetworkId.Span.SequenceEqual(verifiedAuthority.NetworkId.Span) ||
+                    !view.FieldSpan(8).SequenceEqual(ancestor.DirectoryWitnessPolicyHash.Span) ||
+                    previousAuthorityGeneration is { } generation && ancestor.AuthorityGeneration < generation)
+                    throw new CryptographicException("The protected view prefix changes or regresses its verified authority.");
+                previousAuthorityGeneration = ancestor.AuthorityGeneration;
+            }
             if (index > 0)
                 XPointNetworkVerifier.RequireSuccessor(accepted[index - 1], view);
             accepted[index] = view;
@@ -85,6 +101,8 @@ internal static class XPointNetworkViewLogAuthor
 
         var previous = accepted[^1];
         if (head.LogGeneration != previous.ViewGeneration ||
+            !previous.AuthorizingXna.Equals(head.AuthorizingXna) ||
+            !previous.DirectoryWitnessPolicyHash.Equals(head.DirectoryWitnessPolicyHash) ||
             !head.LatestView.Equals(previous.CoreReferenceValue) ||
             head.LatestViewGeneration != previous.ViewGeneration ||
             !CryptographicOperations.FixedTimeEquals(

@@ -11,7 +11,7 @@ using Sodium;
 namespace Deep.Protocol.Tests.XPointNetworkV1;
 
 [Collection("Production artifact build")]
-public sealed class XPointNetworkAuthorityVerifierTests
+public sealed partial class XPointNetworkAuthorityVerifierTests
 {
     [Fact]
     public void Verify_CreatesDefensiveCapabilityFromCompleteCryptoValidChains()
@@ -322,10 +322,12 @@ public sealed class XPointNetworkAuthorityVerifierTests
 
     private sealed class AuthorityFixture
     {
-        private AuthorityFixture(byte[] network, SigningRoot[] genesisRoots, SigningRoot[] successorRoots)
+        private AuthorityFixture(byte[] network, SigningRoot[] genesisRoots, SigningRoot[] successorRoots,
+            AuthorityWindow? genesisWindow = null)
         {
             Network = network;
-            Genesis = BuildPair(0, new byte[32], 0, new byte[32], genesisRoots, genesisRoots, rootAuthorityGeneration: 0);
+            Genesis = BuildPair(0, new byte[32], 0, new byte[32], genesisRoots, genesisRoots,
+                rootAuthorityGeneration: 0, window: genesisWindow);
             Successor = BuildPair(1, Genesis.CoreHash, 1, Genesis.PolicyHash, successorRoots, genesisRoots, rootAuthorityGeneration: 1);
             Pin = new XPointNetworkGenesisPin(Network, Genesis.CoreHash);
         }
@@ -348,6 +350,10 @@ public sealed class XPointNetworkAuthorityVerifierTests
         internal SigningRoot[] CreateRoots(byte idSeed, byte keySeed, ulong generation) =>
             CreateRootSet(idSeed, keySeed, generation);
 
+        internal static AuthorityFixture CreateForObjectHorizon() => new(
+            Bytes(16, 0x11), CreateRootSet(0x10, 0x30, 0), CreateRootSet(0x50, 0x60, 1),
+            new(900, 900, 3_100_000, 900, 9_000));
+
         internal AuthorityPair BuildPair(
             ulong authorityGeneration,
             byte[] authorityPredecessor,
@@ -360,7 +366,9 @@ public sealed class XPointNetworkAuthorityVerifierTests
             ulong? rootAuthorityGeneration = null,
             byte[]? network = null,
             byte[]? xnaPolicyHash = null,
-            byte[]? xnaReferenceHash = null)
+            byte[]? xnaReferenceHash = null,
+            AuthorityWindow? window = null,
+            ulong? witnessPolicyGeneration = null)
         {
             var selectedNetwork = network ?? Network;
             var dts = BuildDts(
@@ -368,7 +376,7 @@ public sealed class XPointNetworkAuthorityVerifierTests
                 policyGeneration,
                 policyPredecessor,
                 rootAuthorityGeneration ?? authorityGeneration,
-                dtsReceiptSigners ?? currentRoots.Select(ReceiptSigner.Valid).ToArray());
+                dtsReceiptSigners ?? currentRoots.Select(ReceiptSigner.Valid).ToArray(), window);
             var dtsRecord = AccountDirectoryDts1Codec.Decode(dts);
             var policyHash = AccountDirectoryCrypto.ComputeDts1PolicyHash(dtsRecord);
             var xna = BuildXna(
@@ -379,7 +387,8 @@ public sealed class XPointNetworkAuthorityVerifierTests
                 rootThreshold: 2,
                 xnaReferenceHash ?? policyHash,
                 xnaPolicyHash ?? policyHash,
-                xnaReceiptSigners ?? xnaSigners.Select(ReceiptSigner.Valid).ToArray());
+                xnaReceiptSigners ?? xnaSigners.Select(ReceiptSigner.Valid).ToArray(), window,
+                witnessPolicyGeneration ?? authorityGeneration);
             var xnaRecord = XPointNetworkCodec.Parse<Xna1Record>(xna);
             return new AuthorityPair(xna, dts, xnaRecord.CoreHash.ToArray(), policyHash, currentRoots);
         }
@@ -389,7 +398,8 @@ public sealed class XPointNetworkAuthorityVerifierTests
             ulong policyGeneration,
             byte[] predecessorPolicyHash,
             ulong rootAuthorityGeneration,
-            IReadOnlyList<ReceiptSigner> signers)
+            IReadOnlyList<ReceiptSigner> signers,
+            AuthorityWindow? window)
         {
             var sources = new[]
             {
@@ -404,7 +414,8 @@ public sealed class XPointNetworkAuthorityVerifierTests
                 .ToArray();
             var unsigned = new AccountDirectoryDts1(
                 network, policyGeneration, predecessorPolicyHash, sources,
-                2, 2, 30, 5, 100, 900, 1, rootAuthorityGeneration, placeholders);
+                2, 2, 30, 5, window?.DtsNotBefore ?? 100, window?.DtsExpiresAt ?? 900,
+                1, rootAuthorityGeneration, placeholders);
             var signingInput = AccountDirectoryCrypto.ComputeDts1SigningInput(unsigned);
             var receipts = signers
                 .OrderBy(static signer => signer.Id, ByteArrayComparer.Instance)
@@ -413,7 +424,8 @@ public sealed class XPointNetworkAuthorityVerifierTests
                 .ToArray();
             return AccountDirectoryDts1Codec.Encode(new AccountDirectoryDts1(
                 network, policyGeneration, predecessorPolicyHash, sources,
-                2, 2, 30, 5, 100, 900, 1, rootAuthorityGeneration, receipts));
+                2, 2, 30, 5, window?.DtsNotBefore ?? 100, window?.DtsExpiresAt ?? 900,
+                1, rootAuthorityGeneration, receipts));
         }
 
         private static byte[] BuildXna(
@@ -424,7 +436,9 @@ public sealed class XPointNetworkAuthorityVerifierTests
             byte rootThreshold,
             byte[] dtsReferenceHash,
             byte[] policyHash,
-            IReadOnlyList<ReceiptSigner> signers)
+            IReadOnlyList<ReceiptSigner> signers,
+            AuthorityWindow? window,
+            ulong witnessPolicyGeneration)
         {
             ReadOnlyMemory<byte>[] fields = new ReadOnlyMemory<byte>[20];
             fields[0] = network;
@@ -433,18 +447,18 @@ public sealed class XPointNetworkAuthorityVerifierTests
             fields[3] = new byte[] { checked((byte)currentRoots.Length) };
             fields[4] = RootEntries(currentRoots);
             fields[5] = new byte[] { rootThreshold };
-            fields[6] = U64(generation);
+            fields[6] = U64(witnessPolicyGeneration);
             fields[7] = U16(1);
             fields[8] = new byte[] { 3 };
-            fields[9] = WitnessEntries(generation);
+            fields[9] = WitnessEntries(witnessPolicyGeneration);
             fields[10] = new byte[] { 2 };
             fields[11] = XPointNetworkCodec.EncodeCoreReference("DTS1", dtsReferenceHash);
             fields[12] = policyHash;
             fields[13] = U32(10);
             fields[14] = U64(1);
-            fields[15] = U64(generation == 0 ? 100UL : 200UL);
-            fields[16] = U64(generation == 0 ? 100UL : 200UL);
-            fields[17] = U64(generation == 0 ? 1_000UL : 900UL);
+            fields[15] = U64(window?.IssuedAt ?? (generation == 0 ? 100UL : 200UL));
+            fields[16] = U64(window?.NotBefore ?? (generation == 0 ? 100UL : 200UL));
+            fields[17] = U64(window?.ExpiresAt ?? (generation == 0 ? 1_000UL : 900UL));
             var orderedSigners = signers.OrderBy(static signer => signer.Id, ByteArrayComparer.Instance).ToArray();
             fields[18] = new byte[] { checked((byte)orderedSigners.Length) };
             fields[19] = SignatureEntries(orderedSigners.Select(static (signer, index) =>

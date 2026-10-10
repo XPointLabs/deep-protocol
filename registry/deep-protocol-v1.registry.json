@@ -80,13 +80,13 @@
       "id": "account-directory-v1",
       "kind": "normative-document",
       "path": "docs/architecture/ACCOUNT-DIRECTORY-TRANSPARENCY-V1.md",
-      "normalizedSha256": "3dc687e55e52d3928d6d0e757a3ea7fa2dc64e3522538819a1818159e775d3f0"
+      "normalizedSha256": "b8730585a29eafc709e97442e10de93ac986e9731265e18e5535308f6a98453d"
     },
     {
       "id": "xpoint-network-v1",
       "kind": "normative-document",
       "path": "docs/architecture/XPOINT-NETWORK-V1.md",
-      "normalizedSha256": "37fceb646bb65dd4db438a915d474898269df0b159c71da145012a51cce6696d"
+      "normalizedSha256": "ecfbe8cfd137c1502de6df54585dccfa25b34ee8d090795fd3e9f061cc34f18f"
     },
     {
       "id": "contact-resolver-v1",
@@ -164,13 +164,13 @@
       "id": "transport-neutral-v1",
       "kind": "normative-document",
       "path": "docs/architecture/TRANSPORT-NEUTRAL-MESSAGING.md",
-      "normalizedSha256": "f65aee942a20a84cbf6647b2693ea2c5cc5a9403468248c2689dd84840bd0749"
+      "normalizedSha256": "94129e809fe10967f771b5ed18315d968c59cdc53b1020fd784c1f3bfeaf9bc7"
     },
     {
       "id": "production-wire-source",
       "kind": "production-source-scan",
       "path": "deep-protocol/src",
-      "normalizedSha256": "c66dd6b365d27765a211cde194a6f118a146335fba94089a5947cf7ce3f61cfb"
+      "normalizedSha256": "359a97728a75cf1c4fd4b63d9f180be54d84fb452bdf06d2077d63fe61651ad4"
     }
   ],
   "productionInventory": {

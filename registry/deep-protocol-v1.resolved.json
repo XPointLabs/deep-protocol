@@ -3,7 +3,7 @@
   "schemaVersion": "1.0.0",
   "registryGeneration": 1,
   "registryId": "deep-protocol-v1-resolved",
-  "sourceRegistrySha256": "e19c4059f732ee6cc7bcaacc45643547dda6eb14c22e6fff06da56819438d688",
+  "sourceRegistrySha256": "8cbe788ef59a4b49eabcf3a3fc001c19d8f6693ab67a5964f57cd5d8b3664d94",
   "dnp1ApprovedCommit": "a8456987efe031388ca2eb9006886fb78f31e06c",
   "dnp1RegistrySha256": "e036a0b6acb260e05e18ac536a723b0b8561d2ba1d813429304505b0e7a7da7b",
   "records": [
@@ -189,6 +189,7 @@
         "src/Deep.Protocol/XPointNetworkV1/MailboxGrantRevocationV1Codec.cs",
         "src/Deep.Protocol/XPointNetworkV1/MailboxGrantRevocationV1Verifier.cs",
         "src/Deep.Protocol/XPointNetworkV1/MailboxHostAuthorityV2Verifier.cs",
+        "src/Deep.Protocol/XPointNetworkV1/VerifiedMailboxHostAuthorityV2.RetainedRead.cs",
         "src/Deep.Protocol/XPointNetworkV1/XPointNetworkClosureWireCodec.cs",
         "src/Deep.Protocol/XPointNetworkV1/XPointNetworkOperationalGenesisAuthor.cs",
         "src/Deep.Protocol/XPointNetworkV1/XPointNetworkOperationalSuccessorAuthor.cs"
@@ -1945,11 +1946,14 @@
         "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryFreshnessVerification.cs",
         "src/Deep.Protocol/ContactV1/ContactCodec.cs",
         "src/Deep.Protocol/ContactV2/DeepIdV2RouteTimeCoverage.cs",
+        "src/Deep.Protocol/XPointNetworkV1/MailboxAuthorityV2Verifier.cs",
         "src/Deep.Protocol/XPointNetworkV1/MailboxStoreReplicaEvidence.cs",
+        "src/Deep.Protocol/XPointNetworkV1/VerifiedMailboxHostAuthorityV2.RetainedRead.cs",
         "src/Deep.Protocol/XPointNetworkV1/XPointNetworkAuthorityVerifier.cs",
         "src/Deep.Protocol/XPointNetworkV1/XPointNetworkClosureWireCodec.cs",
         "src/Deep.Protocol/XPointNetworkV1/XPointNetworkForwardCheckpointVerifier.cs",
-        "src/Deep.Protocol/XPointNetworkV1/XPointNetworkSemantics.cs"
+        "src/Deep.Protocol/XPointNetworkV1/XPointNetworkSemantics.cs",
+        "src/Deep.Protocol/XPointNetworkV1/XPointOnionCapabilityProducer.cs"
       ],
       "contractBlocker": "Allocation has no frozen machine schema/vectors; the owning codec package must replace this allocation-only row before activation."
     },
@@ -4077,6 +4081,7 @@
         "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryDts1Codec.cs",
         "src/Deep.Protocol/XPointNetworkV1/XPointNetworkAuthorityVerifier.cs",
         "src/Deep.Protocol/XPointNetworkV1/XPointNetworkBootstrapAuthor.cs",
+        "src/Deep.Protocol/XPointNetworkV1/XPointNetworkBootstrapAuthor.Renewal.cs",
         "src/Deep.Protocol/XPointNetworkV1/XPointNetworkClosureWireCodec.cs",
         "src/Deep.Protocol/XPointNetworkV1/XPointNetworkForwardCheckpointVerifier.cs",
         "src/Deep.Protocol/XPointNetworkV1/XPointNetworkVerification.cs"

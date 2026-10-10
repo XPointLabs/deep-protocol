@@ -79,14 +79,15 @@ public static class OnionNetworkProtectedHistoryCodec
     }
 
     internal static VerifiedOnionNetworkContext BindVerifiedHistory(
-        VerifiedOnionNetworkContext candidate, ReadOnlySpan<byte> capsule,
+        VerifiedXPointNetworkAuthority authority, VerifiedOnionNetworkContext candidate, ReadOnlySpan<byte> capsule,
         IReadOnlyList<ReadOnlyMemory<byte>> policies, IReadOnlyList<ReadOnlyMemory<byte>> views,
         IReadOnlyList<ReadOnlyMemory<byte>> heads, IReadOnlyList<ReadOnlyMemory<byte>> pmts)
     {
         var (prior, policy, pmt) = Decode(capsule);
         var next = candidate.ProtectedLkg ?? throw Invalid();
+        _ = XPointOnionCapabilityProducer.RequireHistoricalAuthority(authority, prior.AuthorityCoreReference.Span);
         if (!Fixed(prior.NetworkId.Span, next.NetworkId.Span) ||
-            !Fixed(prior.AuthorityCoreReference.Span, next.AuthorityCoreReference.Span) ||
+            !Fixed(next.AuthorityCoreReference.Span, authority.AuthorityCoreReference.Span) ||
             prior.ViewGeneration > next.ViewGeneration || prior.HeadTreeSize > next.HeadTreeSize)
             throw Mismatch();
         var index = -1;
@@ -97,6 +98,9 @@ public static class OnionNetworkProtectedHistoryCodec
             var head = XPointNetworkCodec.Parse<Xnh1Record>(heads[i].Span);
             if (!Fixed(XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XNV1, view.CoreHash.Span), prior.ViewCoreReference.Span) ||
                 !Fixed(XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XNH1, head.CoreHash.Span), prior.HeadCoreReference.Span) ||
+                !Fixed(view.FieldSpan(7), prior.AuthorityCoreReference.Span) ||
+                !Fixed(head.FieldSpan(8), prior.AuthorityCoreReference.Span) ||
+                !Fixed(policy.FieldSpan(18), prior.AuthorityCoreReference.Span) ||
                 head.TreeSize != prior.HeadTreeSize || !Fixed(head.Root.Span, prior.HeadRoot.Span) ||
                 !Fixed(view.ActivePolicy.Hash.Span, policy.CoreHash.Span))
                 throw Mismatch();

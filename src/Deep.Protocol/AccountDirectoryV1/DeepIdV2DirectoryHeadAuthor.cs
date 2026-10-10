@@ -252,12 +252,12 @@ public static class DeepIdV2DirectoryHeadAuthor
         var head = predecessor.Head;
         if (head.MinimumReader < 2 || request.MinimumReader < head.MinimumReader)
             Fail("ReaderRollback", "The DID2 directory requires a protected reader floor of at least two.");
-        if (!Fixed(authority.NetworkId.Span, head.NetworkId.Span) ||
-            !Fixed(authority.AuthorityCoreReference.Span,
-                head.ExactXnaAuthorityCoreReference.Span) ||
-            !Fixed(authority.DirectoryWitnessPolicyHash.Span,
-                head.WitnessPolicyHash.Span))
-            Fail("AuthorityMismatch", "The protected head is outside the exact current XPoint authority.");
+        // The predecessor is a historical rollback floor, not permission to
+        // sign under its expired authority. Re-authenticate its exact envelope
+        // with its own member of the verified XNA1 chain; the new head below
+        // still binds the terminal current authority and current witness set.
+        AccountDirectoryCurrentProofVerifier.VerifyAdhAuthorityAndWitnessClosure(
+            authority, head, requireCurrentAuthority: false);
         if (request.ValidFromUnixSeconds < authority.NotBefore ||
             request.ValidUntilUnixSeconds > authority.ExpiresAt)
             Fail("TimeOutsideAuthority", "The candidate ADH1 interval is outside the current authority.");

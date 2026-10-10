@@ -391,6 +391,9 @@ public sealed partial class DeepIdV2PreKeyClaimReceiptVerifierTests
         var closure = new VerifiedOnionNetworkClosure
         {
             NetworkId = network, Policy = policy, View = view, Head = head, Pmt = pmt, RetainedPmts = [pmt],
+            // This binding-only seam never verified any historical authority;
+            // it must not grant original-namespace verification permission.
+            RetainedPmtAuthorities = new Dictionary<string, Xna1Record>(StringComparer.Ordinal),
             ViewCoreHash = view.CoreHash.ToArray(), ViewCoreReference = viewRef,
             PmtArtifactReference = ContactCodec.ArtifactReference("PMT2", pmt).CanonicalBytes.ToArray(),
             PmtNodeIds = nodeIds, SelectionEpoch = 1, ReplicaCount = 2, HardUpperUnixSeconds = 20,

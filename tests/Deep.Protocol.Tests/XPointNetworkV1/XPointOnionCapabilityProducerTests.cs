@@ -15,7 +15,7 @@ using Sodium;
 
 namespace Deep.Protocol.Tests.XPointNetworkV1;
 
-public sealed class XPointOnionCapabilityProducerTests
+public sealed partial class XPointOnionCapabilityProducerTests
 {
     [Fact]
     public async Task TrustedTimeLeaseSubtractsElapsedTimeFromNetworkHardExpiry()
@@ -1244,7 +1244,7 @@ public sealed class XPointOnionCapabilityProducerTests
 
     private sealed record SigningKey(byte[] Id, KeyPair Pair, byte[] FailureDomain);
 
-    internal sealed class Fixture
+    internal sealed partial class Fixture
     {
         private readonly byte _networkMarker;
         private readonly ulong _selectionEpoch;

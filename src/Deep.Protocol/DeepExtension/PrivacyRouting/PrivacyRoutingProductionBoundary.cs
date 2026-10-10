@@ -572,7 +572,7 @@ public static class OnionNetworkContextVerifier
             chains[0], chains[1], chains[2], chains[3], chains[4], null, trustedTimeAuthority, cancellationToken)
             .ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
-        return OnionNetworkProtectedHistoryCodec.BindVerifiedHistory(candidate, history,
+        return OnionNetworkProtectedHistoryCodec.BindVerifiedHistory(authority, candidate, history,
             chains[0], chains[1], chains[2], chains[4]);
     }
 

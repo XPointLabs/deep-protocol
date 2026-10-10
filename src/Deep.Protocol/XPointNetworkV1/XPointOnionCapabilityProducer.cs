@@ -193,6 +193,9 @@ internal sealed class VerifiedOnionNetworkClosure
     // Verified lineage facts, not current routing or grant authority. They are
     // never populated from an unsigned cache or terminal-only rehydration.
     internal required ContactRecord[] RetainedPmts { get; init; }
+    // Exact PMT artifact -> its actual signed view's verified XNA1. Keeping the
+    // signature-key fact avoids borrowing terminal keys after authority renewal.
+    internal required IReadOnlyDictionary<string, Xna1Record> RetainedPmtAuthorities { get; init; }
     internal required byte[] ViewCoreHash { get; init; }
     internal required byte[] ViewCoreReference { get; init; }
     internal required byte[] PmtArtifactReference { get; init; }
@@ -274,6 +277,8 @@ internal static class XPointOnionCapabilityProducer
             {
                 var policy = policies[index];
                 VerifyPolicyBinding(authority, policy);
+                if (policyCursor is not null)
+                    RequireNondecreasingAuthority(authority, policyCursor.FieldSpan(18), policy.FieldSpan(18));
                 if (forwardCheckpoint is null)
                     VerifyOrderedLineage(policyCursor, policy, "policy", policies.Length == 1 && index == 0);
                 VerifyPolicy(authority, policy);
@@ -289,13 +294,16 @@ internal static class XPointOnionCapabilityProducer
                 var head = heads[index];
                 var activePolicy = FindPolicy(knownPolicies, view.ActivePolicy.Hash.Span);
                 VerifyViewAndHeadBinding(authority, activePolicy, view, head);
+                if (viewCursor is not null)
+                    RequireNondecreasingAuthority(authority, viewCursor.FieldSpan(7), view.FieldSpan(7));
                 if (forwardCheckpoint is null)
                 {
                     VerifyOrderedLineage(viewCursor, view, "view", views.Length == 1 && index == 0);
                     VerifyOrderedLineage(headCursor, head, "head", heads.Length == 1 && index == 0);
                 }
-                VerifyThreshold(view.WitnessSignatures, authority, XPointNetworkCrypto.ComputeSigningInput(view), "view-threshold-invalid");
-                VerifyThreshold(head.WitnessSignatures, authority, XPointNetworkCrypto.ComputeSigningInput(head), "head-threshold-invalid");
+                var stepAuthority = RequireHistoricalAuthority(authority, view.FieldSpan(7));
+                VerifyThreshold(view.WitnessSignatures, stepAuthority, XPointNetworkCrypto.ComputeSigningInput(view), "view-threshold-invalid");
+                VerifyThreshold(head.WitnessSignatures, stepAuthority, XPointNetworkCrypto.ComputeSigningInput(head), "head-threshold-invalid");
                 if (forwardCheckpoint is null) VerifyHead(view, head, viewCursor, headCursor);
                 viewCursor = view;
                 headCursor = head;
@@ -303,6 +311,9 @@ internal static class XPointOnionCapabilityProducer
 
             Xnv1Record[] knownViews = previous is null ? views : [previous.View, .. views];
             ContactRecord? pmtCursor = previous?.Pmt;
+            var retainedPmtAuthorities = forwardCheckpoint is null && previous is not null
+                ? new Dictionary<string, Xna1Record>(previous.RetainedPmtAuthorities, StringComparer.Ordinal)
+                : new Dictionary<string, Xna1Record>(StringComparer.Ordinal);
             for (var index = 0; index < pmts.Length; index++)
             {
                 var candidate = pmts[index];
@@ -310,6 +321,8 @@ internal static class XPointOnionCapabilityProducer
                 var candidatePolicy = FindPolicy(knownPolicies, candidateView.ActivePolicy.Hash.Span);
                 VerifyPmtAuthenticated(authority, candidatePolicy, candidateView, candidate, pmtCursor,
                     pmts.Length == 1 && index == 0, forwardCheckpoint is not null);
+                retainedPmtAuthorities[Convert.ToHexString(candidate.ArtifactHash.Span)] =
+                    RequireHistoricalAuthority(authority, candidateView.FieldSpan(7));
                 pmtCursor = candidate;
             }
 
@@ -358,6 +371,7 @@ internal static class XPointOnionCapabilityProducer
                 Head = xnh,
                 Pmt = pmt,
                 RetainedPmts = retainedPmts,
+                RetainedPmtAuthorities = retainedPmtAuthorities,
                 ViewCoreHash = xnv.CoreHash.ToArray(),
                 ViewCoreReference = viewReference,
                 PmtArtifactReference = pmtReference,
@@ -396,8 +410,9 @@ internal static class XPointOnionCapabilityProducer
         VerifiedXPointNetworkAuthority authority,
         Xvp1Record policy)
     {
+        var authorizing = RequireHistoricalAuthority(authority, policy.FieldSpan(18));
         if (!Fixed(authority.NetworkId.Span, policy.NetworkId.Span) ||
-            !Fixed(authority.AuthorityCoreReference.Span, policy.FieldSpan(18)))
+            authorizing.NotBefore > policy.IssuedAt || policy.ExpiresAt > authorizing.ExpiresAt)
             Fail("network-binding-invalid", "An XVP1 successor is outside the pinned XPoint authority.");
     }
 
@@ -407,15 +422,51 @@ internal static class XPointOnionCapabilityProducer
         Xnv1Record view,
         Xnh1Record head)
     {
+        var authorizing = RequireHistoricalAuthority(authority, view.FieldSpan(7));
         if (!Fixed(authority.NetworkId.Span, view.NetworkId.Span) ||
             !Fixed(authority.NetworkId.Span, head.NetworkId.Span) ||
-            !Fixed(authority.AuthorityCoreReference.Span, view.FieldSpan(7)) ||
-            !Fixed(authority.AuthorityCoreReference.Span, head.FieldSpan(8)) ||
-            !Fixed(authority.DirectoryWitnessPolicyHash.Span, view.FieldSpan(8)) ||
-            !Fixed(authority.DirectoryWitnessPolicyHash.Span, head.FieldSpan(9)) ||
+            !Fixed(policy.FieldSpan(18), view.FieldSpan(7)) ||
+            !Fixed(view.FieldSpan(7), head.FieldSpan(8)) ||
+            !Fixed(authorizing.DirectoryWitnessPolicyHash.Span, view.FieldSpan(8)) ||
+            !Fixed(authorizing.DirectoryWitnessPolicyHash.Span, head.FieldSpan(9)) ||
+            authorizing.NotBefore > view.UInt64(19) || view.ExpiresAt > authorizing.ExpiresAt ||
+            authorizing.NotBefore > head.ValidFrom || head.ValidUntil > authorizing.ExpiresAt ||
             view.ActivePolicy.Magic != ProtocolMagic.XVP1 || !Fixed(policy.CoreHash.Span, view.ActivePolicy.Hash.Span) ||
             !head.LatestView.Equals(view.CoreReferenceValue) || head.LatestViewGeneration != view.ViewGeneration)
             Fail("network-binding-invalid", "An ordered XNV1/XNH1 pair does not bind one verified policy and authority.");
+    }
+
+    // A historical signature-key fact only, never a renewed time or operation
+    // capability. The terminal closure remains bound to current authority by
+    // VerifyCommonBindings/VerifyDtt after every exact lineage step verifies.
+    internal static Xna1Record RequireHistoricalAuthority(VerifiedXPointNetworkAuthority authority,
+        ReadOnlySpan<byte> exactCoreReference)
+    {
+        foreach (var candidate in authority.AuthorityChain)
+            if (Fixed(XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XNA1, candidate.CoreHash.Span), exactCoreReference))
+                return candidate;
+        Fail("network-binding-invalid", "A historical record names an authority outside the verified XNA1 lineage.");
+        return null!;
+    }
+
+    internal static Xna1Record RequireRetainedProjectionAuthority(VerifiedOnionNetworkContext network,
+        VerifiedXPointNetworkAuthority authority, ContactRecord projection)
+    {
+        network.EnsureCurrent();
+        var closure = network.Closure!;
+        if (!closure.RetainedPmts.Any(candidate => Fixed(candidate.CanonicalBytes.Span, projection.CanonicalBytes.Span)) ||
+            !closure.RetainedPmtAuthorities.TryGetValue(Convert.ToHexString(projection.ArtifactHash.Span), out var original))
+            throw new CryptographicException("The exact original projection and signature authority are absent from verified history.");
+        return RequireHistoricalAuthority(authority,
+            XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XNA1, original.CoreHash.Span));
+    }
+
+    private static void RequireNondecreasingAuthority(VerifiedXPointNetworkAuthority authority,
+        ReadOnlySpan<byte> previousReference, ReadOnlySpan<byte> candidateReference)
+    {
+        if (RequireHistoricalAuthority(authority, candidateReference).AuthorityGeneration <
+            RequireHistoricalAuthority(authority, previousReference).AuthorityGeneration)
+            Fail("network-authority-rollback", "An exact signed network successor returns to an earlier XNA1 authority.");
     }
 
     private static Xvp1Record FindPolicy(IEnumerable<Xvp1Record> policies, ReadOnlySpan<byte> coreHash)
@@ -466,7 +517,9 @@ internal static class XPointOnionCapabilityProducer
 
     internal static void VerifyPolicy(VerifiedXPointNetworkAuthority authority, Xvp1Record policy)
     {
-        VerifyRootThreshold(policy.Signatures, authority, XPointNetworkCrypto.ComputeSigningInput(policy));
+        VerifyPolicyBinding(authority, policy);
+        VerifyRootThreshold(policy.Signatures, RequireHistoricalAuthority(authority, policy.FieldSpan(18)),
+            XPointNetworkCrypto.ComputeSigningInput(policy));
         if (policy.UInt8(5) != OnionLimits.RouteHopCount || (policy.UInt16(7) & 0x000f) != 0x000f)
             Fail("network-policy-invalid", "The active policy does not require the exact V1 route constraints.");
     }
@@ -566,7 +619,9 @@ internal static class XPointOnionCapabilityProducer
             BinaryPrimitives.ReadUInt64BigEndian(pmt.FieldSpan(2)) < policy.UInt64(12) ||
             pmt.FieldSpan(7)[0] != policy.MailboxReplicaCount)
             Fail("pmt-binding-invalid", "A PMT2 successor is not the exact projection required by its verified XVP1/XNV1 pair.");
-        VerifyContactThreshold(pmt, authority);
+        var stepAuthority = RequireHistoricalAuthority(authority, view.FieldSpan(7));
+        VerifyWitnessRows(Rows(pmt.FieldSpan(16), 96).Select(static row => (row[..32].ToArray(), row[32..].ToArray())),
+            stepAuthority, pmt.SignatureInput.Span, "pmt-threshold-invalid");
         // A signed, append-only PMT generation is not permission to revive an
         // older replay epoch. Routine projection renewal may retain the epoch;
         // once advanced, every retained step must preserve that floor.
@@ -691,7 +746,7 @@ internal static class XPointOnionCapabilityProducer
 
     private static void VerifyRootThreshold(
         IReadOnlyList<XPointSignatureEntry> signatures,
-        VerifiedXPointNetworkAuthority authority,
+        Xna1Record authority,
         ReadOnlySpan<byte> message)
     {
         var keys = authority.RootKeys.ToDictionary(static key => Convert.ToHexString(key.Id.Span), StringComparer.Ordinal);
@@ -699,7 +754,7 @@ internal static class XPointOnionCapabilityProducer
         foreach (var signature in signatures)
         {
             if (!keys.TryGetValue(Convert.ToHexString(signature.Id.Span), out var key) ||
-                !VerifyEd25519(key.Ed25519PublicKey.Span, message, signature.Signature.Span))
+                !VerifyEd25519(key.PublicKey.Span, message, signature.Signature.Span))
                 Fail("policy-threshold-invalid", "An XVP1 root receipt is unknown or invalid.");
             valid++;
         }
@@ -715,6 +770,17 @@ internal static class XPointOnionCapabilityProducer
         VerifyWitnessRows(signatures.Select(static value => (value.Id.Span.ToArray(), value.Signature.Span.ToArray())), authority, message, code);
     }
 
+    internal static void VerifyThreshold(IReadOnlyList<XPointSignatureEntry> signatures, Xna1Record authority,
+        ReadOnlySpan<byte> message, string code) =>
+        VerifyWitnessRows(signatures.Select(static value => (value.Id.Span.ToArray(), value.Signature.Span.ToArray())),
+            authority, message, code);
+
+    private static void VerifyWitnessRows(IEnumerable<(byte[] Id, byte[] Signature)> signatures,
+        Xna1Record authority, ReadOnlySpan<byte> message, string code) =>
+        VerifyWitnessRows(signatures, authority.Witnesses.Select(static key =>
+            new XPointNetworkWitnessKey(key.Id.Span, key.Generation, key.PublicKey.Span, key.FailureDomainHash.Span)).ToArray(),
+            authority.WitnessThreshold, message, code);
+
     private static void VerifyDttThreshold(
         IReadOnlyList<AccountDirectoryDtt1WitnessReceipt> signatures,
         VerifiedXPointNetworkAuthority authority,
@@ -729,13 +795,23 @@ internal static class XPointOnionCapabilityProducer
         VerifyWitnessRows(rows, authority, record.SignatureInput.Span, "pmt-threshold-invalid");
     }
 
+    // Historical signature authentication only; callers must separately bind
+    // this ancestor to the exact signed view naming the PMT. Never a current grant.
+    internal static void VerifyContactThreshold(ContactRecord record, Xna1Record authority) =>
+        VerifyWitnessRows(Rows(record.FieldSpan(16), 96).Select(static row => (row[..32].ToArray(), row[32..].ToArray())),
+            authority, record.SignatureInput.Span, "pmt-threshold-invalid");
+
     private static void VerifyWitnessRows(
         IEnumerable<(byte[] Id, byte[] Signature)> signatures,
         VerifiedXPointNetworkAuthority authority,
         ReadOnlySpan<byte> message,
         string code)
+        => VerifyWitnessRows(signatures, authority.WitnessKeys, authority.WitnessThreshold, message, code);
+
+    private static void VerifyWitnessRows(IEnumerable<(byte[] Id, byte[] Signature)> signatures,
+        IReadOnlyList<XPointNetworkWitnessKey> witnessKeys, byte threshold, ReadOnlySpan<byte> message, string code)
     {
-        var keys = authority.WitnessKeys.ToDictionary(static key => Convert.ToHexString(key.Id.Span), StringComparer.Ordinal);
+        var keys = witnessKeys.ToDictionary(static key => Convert.ToHexString(key.Id.Span), StringComparer.Ordinal);
         var domains = new HashSet<string>(StringComparer.Ordinal);
         var valid = 0;
         foreach (var signature in signatures)
@@ -746,7 +822,7 @@ internal static class XPointOnionCapabilityProducer
                 Fail(code, "A witness receipt is unknown, invalid or repeats a physical failure domain.");
             valid++;
         }
-        if (valid < authority.WitnessThreshold) Fail(code, "The exact witness threshold is incomplete.");
+        if (valid < threshold) Fail(code, "The exact witness threshold is incomplete.");
     }
 
     private static (ulong Epoch, byte[] Key, ulong Until) SelectOnionKey(Xnd1Record node, ulong low, ulong high)
