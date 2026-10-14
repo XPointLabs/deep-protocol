@@ -165,7 +165,13 @@ public static partial class DeepIdV2PublicationCommitVerifier
             BinaryPrimitives.ReadUInt64BigEndian(result.Field(16).Span) != request.Generation ||
             !Fixed(result.Field(17).Span, request.ObjectCiphertextHash.Span) ||
             BinaryPrimitives.ReadUInt64BigEndian(result.Field(18).Span) != checked(request.Generation + 1))
-            throw new CryptographicException("Publication response is not the exact durable commit.");
+        {
+            var error = new CryptographicException("Publication response is not the exact durable commit.");
+            // Closed decoded categories only: no request, locator or receipt bytes.
+            error.Data["Deep.ContactPublication.Status"] = (ushort)result.Status;
+            error.Data["Deep.ContactPublication.MutationOutcome"] = (byte)result.MutationOutcome;
+            throw error;
+        }
     }
 
     private static void VerifyReceipts(Xpu1Request request, Xpo1Result result, VerifiedContactServicePlacement placement)

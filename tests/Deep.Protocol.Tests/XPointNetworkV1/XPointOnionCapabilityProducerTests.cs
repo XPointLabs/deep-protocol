@@ -18,6 +18,60 @@ namespace Deep.Protocol.Tests.XPointNetworkV1;
 public sealed partial class XPointOnionCapabilityProducerTests
 {
     [Fact]
+    public void PreKeyPublicationPlacement_ExactFixedWidthDomainVector()
+    {
+        var network = Bytes(16, 0x11);
+        var shard = Bytes(32, 0x22);
+        var input = XPointNetworkCrypto.Sha256Domain("Deep/ContactResolver/V1/service-placement-input",
+            Join(network, [2], shard));
+        Assert.Equal("8362e7fb5e7e57f228c90291fb8d0a3c59fcb8a6827f0db0c76e92ce8f892710", Convert.ToHexStringLower(input));
+        var payload = Join(network, U64(7), [2], shard, input, [2], Bytes(32, 0x33), Bytes(32, 0x44));
+        var expected = XPointNetworkCrypto.Sha256Domain("Deep/ContactResolver/V2/prekey-publication-placement", payload);
+        Assert.Equal("6b3607a11fb73219e10002c6381f6038a556283d44c290a44f8f661933a7c249", Convert.ToHexStringLower(expected));
+        Assert.NotEqual(expected, XPointNetworkCrypto.Sha256Domain("Deep/ContactResolver/V1/service-placement", payload));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PreKeyPublicationPlacement_SurvivesSignedOperationalRenewalButNotEpochChange(bool coldRestore)
+    {
+        var fixture = Fixture.Create(selectionEpoch: 7);
+        var previous = await fixture.VerifyDid2Async();
+        var shard = Bytes(32, 0x91);
+        var published = ContactServicePlacementFactory.Create(previous,
+            ContactServiceRequestKind.PublishPreKeyInventory, shard);
+        var input = XPointNetworkCrypto.Sha256Domain("Deep/ContactResolver/V1/service-placement-input",
+            Join(previous.NetworkId.ToArray(), [2], shard));
+        var payload = Join(previous.NetworkId.ToArray(), U64(7), [2], shard, input, [2],
+            Join(published.RankedReplicaNodeIds.Select(x => x.ToArray()).ToArray()));
+        Assert.Equal(XPointNetworkCrypto.Sha256Domain("Deep/ContactResolver/V2/prekey-publication-placement", payload),
+            published.PlacementHash.ToArray());
+        var oldClaim = ContactServicePlacementFactory.Create(previous,
+            ContactServiceRequestKind.ClaimPreKey, shard);
+        var chain = fixture.BuildSuccessorChain(7, 7);
+        var current = coldRestore
+            ? await fixture.VerifyHistoryAsync(OnionNetworkProtectedHistoryCodec.Encode(previous), chain)
+            : await chain.VerifyAsync(previous);
+        var renewed = ContactServicePlacementFactory.Create(current,
+            ContactServiceRequestKind.PublishPreKeyInventory, shard);
+        var claim = ContactServicePlacementFactory.Create(current,
+            ContactServiceRequestKind.ClaimPreKey, shard);
+        Assert.NotEqual(published.ViewHash.ToArray(), renewed.ViewHash.ToArray());
+        Assert.Equal(published.PlacementHash.ToArray(), renewed.PlacementHash.ToArray());
+        Assert.Equal(published.RankedReplicaNodeIds.Select(x => Convert.ToHexString(x.Span)),
+            renewed.RankedReplicaNodeIds.Select(x => Convert.ToHexString(x.Span)));
+        Assert.NotEqual(oldClaim.PlacementHash.ToArray(), claim.PlacementHash.ToArray());
+        Assert.NotEqual(renewed.PlacementHash.ToArray(), claim.PlacementHash.ToArray());
+        var otherShard = ContactServicePlacementFactory.Create(current,
+            ContactServiceRequestKind.PublishPreKeyInventory, Bytes(32, 0x92));
+        Assert.NotEqual(renewed.PlacementHash.ToArray(), otherShard.PlacementHash.ToArray());
+        var advanced = await fixture.BuildSuccessorChain(8, 9).VerifyAsync(previous);
+        Assert.NotEqual(renewed.PlacementHash.ToArray(), ContactServicePlacementFactory.Create(advanced,
+            ContactServiceRequestKind.PublishPreKeyInventory, shard).PlacementHash.ToArray());
+    }
+
+    [Fact]
     public async Task TrustedTimeLeaseSubtractsElapsedTimeFromNetworkHardExpiry()
     {
         var freshness = Fixture.Create().Did2TimeEvidence();
@@ -496,7 +550,7 @@ public sealed partial class XPointOnionCapabilityProducerTests
     public async Task Did2Xic1Pair_RequiresBothCurrentSelectedReplicaSignatures()
     {
         var fixture = Fixture.Create(networkMarker: 0x01);
-        var context = await fixture.VerifyAsync();
+        var context = await fixture.VerifyDid2Async();
         var oneTime = Deep.Protocol.Tests.ContactV2
             .DeepIdV2PreKeyClaimCommitmentTests.Build(Dpk2PrekeyKind.OneTime);
         var lastResort = Deep.Protocol.Tests.ContactV2
@@ -574,6 +628,19 @@ public sealed partial class XPointOnionCapabilityProducerTests
         Assert.False(DeepIdV2PreKeyCommitReceiptVerifier.RuntimeActivation);
         DeepIdV2PreKeyCommitReceiptVerifier.VerifyPair(
             publication, placement, first, second);
+        var renewedNetwork = await fixture.BuildSuccessorChain(placement.SelectionEpoch, placement.SelectionEpoch).VerifyAsync(context);
+        var renewedPlacement = ContactServicePlacementFactory.Create(renewedNetwork,
+            ContactServiceRequestKind.PublishPreKeyInventory, manifest.Field(2));
+        Assert.NotEqual(placement.ViewHash.ToArray(), renewedPlacement.ViewHash.ToArray());
+        // These are the original exact signed receipts, not newly authored
+        // receipts or a rewritten inventory after the carriage view changes.
+        DeepIdV2PreKeyCommitReceiptVerifier.VerifyPair(publication, renewedPlacement, first, second);
+        var oldViewBound = DeepIdV2PreKeyPublicationCodec.Decode(DeepIdV2PreKeyPublicationCodec.Encode(
+            publication.NetworkId.Span, publication.PublicationOperationId.Span,
+            ContactServicePlacementFactory.Create(context, ContactServiceRequestKind.ClaimPreKey, manifest.Field(2)).PlacementHash.Span,
+            manifest, Enumerable.Repeat(member, 32).ToArray(), last));
+        Assert.Throws<ApplicationCoreFormatException>(() =>
+            DeepIdV2PreKeyCommitReceiptVerifier.VerifyPair(oldViewBound, renewedPlacement, first, second));
         DeepIdV2PreKeyCommitReceiptVerifier.VerifyPair(
             publication, placement, second, first);
         Assert.Throws<Deep.Protocol.ApplicationCore.ApplicationCoreFormatException>(() =>

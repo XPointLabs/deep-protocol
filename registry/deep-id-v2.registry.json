@@ -68,6 +68,26 @@
     "mustFetchAndVerifyExactDid2BeforeTrust": true,
     "mustVerifyReadCapabilityCommitment": true
   },
+  "preKeyPublicationPlacement": {
+    "decision": "DR-0121",
+    "requestKind": "PublishPreKeyInventory",
+    "hashDomain": "Deep/ContactResolver/V2/prekey-publication-placement",
+    "construction": "SHA256-D",
+    "payload": "networkId16 || selectionEpoch:u64be || serviceClass:u8(2) || shardKey32 || servicePlacementInput32 || replicaCount:u8 || rankedReplicaNodeIds[32 * replicaCount]",
+    "fragmentCurrentViewTag": 4,
+    "logicalReplayExcludedTags": [4],
+    "oldViewBoundPublicationAuthority": false,
+    "vector": {
+      "networkHexOctetRepeated16": "11",
+      "selectionEpoch": 7,
+      "serviceClass": 2,
+      "shardHexOctetRepeated32": "22",
+      "orderedReplicaHexOctetsRepeated32": ["33", "44"],
+      "placementInputHex": "8362e7fb5e7e57f228c90291fb8d0a3c59fcb8a6827f0db0c76e92ce8f892710",
+      "placementHashHex": "6b3607a11fb73219e10002c6381f6038a556283d44c290a44f8f661933a7c249"
+    },
+    "runtimeActivation": false
+  },
   "retiredReject": ["DID1", "DAB1", "artifactType:0x1001"],
   "dependentReFreezeRequired": [
     "DCA1", "XIR1", "DCB1", "DCR1", "DPH2", "DAO1", "ADP1",

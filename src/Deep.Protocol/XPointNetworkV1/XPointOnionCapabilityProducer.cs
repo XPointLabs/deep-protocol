@@ -119,10 +119,12 @@ public static class ContactServicePlacementFactory
             .Take(closure.ReplicaCount)
             .Select(static value => value.NodeId.ToArray())
             .ToArray();
+        // DR-0121: an immutable inventory/receipt outlives a carriage view.
+        // Current view authority remains in the fragment and verified network;
+        // only publication commits the stable selected assignment here.
+        var publication = requestKind == ContactServiceRequestKind.PublishPreKeyInventory;
         var placementPayload = Join(
-            closure.NetworkId,
-            closure.ViewCoreReference,
-            closure.PmtArtifactReference,
+            publication ? closure.NetworkId : Join(closure.NetworkId, closure.ViewCoreReference, closure.PmtArtifactReference),
             U64(closure.SelectionEpoch),
             [(byte)serviceClass],
             shardKey.ToArray(),
@@ -130,7 +132,8 @@ public static class ContactServicePlacementFactory
             [closure.ReplicaCount],
             Join(ranked));
         var placementHash = XPointNetworkCrypto.Sha256Domain(
-            "Deep/ContactResolver/V1/service-placement", placementPayload);
+            publication ? "Deep/ContactResolver/V2/prekey-publication-placement" :
+                "Deep/ContactResolver/V1/service-placement", placementPayload);
         return new VerifiedContactServicePlacement(
             network, requestKind, serviceClass, closure.ViewCoreHash, placementHash,
             shardKey.Span, closure.SelectionEpoch, closure.HardUpperUnixSeconds, ranked,
