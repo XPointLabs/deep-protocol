@@ -18,7 +18,8 @@ public sealed class XPointNetworkOperationalNodeRollover
         ReadOnlySpan<byte> currentOriginSpkiSha256,
         ReadOnlySpan<byte> nextOriginSpkiSha256,
         ReadOnlySpan<byte> currentOnionX25519PublicKey,
-        ReadOnlySpan<byte> nextOnionX25519PublicKey)
+        ReadOnlySpan<byte> nextOnionX25519PublicKey,
+        IReadOnlyList<XPointNetworkOperationalOriginRelocation>? originRelocations = null)
     {
         IdentitySigner = identitySigner ?? throw new ArgumentNullException(nameof(identitySigner));
         this.currentOriginSpkiSha256 = Required(currentOriginSpkiSha256, nameof(currentOriginSpkiSha256));
@@ -28,6 +29,17 @@ public sealed class XPointNetworkOperationalNodeRollover
         if (this.currentOriginSpkiSha256.AsSpan().SequenceEqual(this.nextOriginSpkiSha256) ||
             this.currentOnionX25519PublicKey.AsSpan().SequenceEqual(this.nextOnionX25519PublicKey))
             throw new ArgumentException("Current and next operational keys must be distinct.");
+        var originCount = originRelocations?.Count ?? 0;
+        if (originCount is < 0 or > 16)
+            throw new ArgumentException("At most16 origin relocations are supported.", nameof(originRelocations));
+        var captured = new XPointNetworkOperationalOriginRelocation[originCount];
+        for (var index = 0; index < captured.Length; index++) captured[index] = originRelocations![index];
+        if (originRelocations is not null && originRelocations.Count != originCount)
+            throw new ArgumentException("Origin relocation count changed during capture.", nameof(originRelocations));
+        if (captured.Any(static origin => origin is null) ||
+            captured.Select(static origin => Convert.ToHexString(origin.OriginId.Span)).Distinct(StringComparer.Ordinal).Count() != captured.Length)
+            throw new ArgumentException("Origin relocations must be unique and non-null.", nameof(originRelocations));
+        OriginRelocations = Array.AsReadOnly(captured);
     }
 
     public IXPointNetworkOperationalSigner IdentitySigner { get; }
@@ -35,6 +47,7 @@ public sealed class XPointNetworkOperationalNodeRollover
     public ReadOnlyMemory<byte> NextOriginSpkiSha256 => nextOriginSpkiSha256.ToArray();
     public ReadOnlyMemory<byte> CurrentOnionX25519PublicKey => currentOnionX25519PublicKey.ToArray();
     public ReadOnlyMemory<byte> NextOnionX25519PublicKey => nextOnionX25519PublicKey.ToArray();
+    public IReadOnlyList<XPointNetworkOperationalOriginRelocation> OriginRelocations { get; }
 
     private static byte[] Required(ReadOnlySpan<byte> value, string name)
     {
@@ -419,6 +432,14 @@ public static class XPointNetworkOperationalSuccessorAuthor
         var origins = fields[19].ToArray();
         for (var offset = 0; offset < origins.Length; offset += 148)
         {
+            var relocation = rollover.OriginRelocations.SingleOrDefault(origin =>
+                origin.OriginId.Span.SequenceEqual(origins.AsSpan(offset, 32)));
+            if (relocation is not null)
+            {
+                origins[offset + 33] = relocation.AddressFamily;
+                relocation.Address.Span.CopyTo(origins.AsSpan(offset + 34, 16));
+                U16(relocation.Port).CopyTo(origins, offset + 50);
+            }
             rollover.CurrentOriginSpkiSha256.Span.CopyTo(origins.AsSpan(offset + 52, 32));
             U64(request.NotBeforeUnixSeconds).CopyTo(origins, offset + 84);
             U64(request.ExpiresAtUnixSeconds).CopyTo(origins, offset + 92);
@@ -730,6 +751,7 @@ public static class XPointNetworkOperationalSuccessorAuthor
             throw new CryptographicException("The renewal node identity signer set is incomplete.");
         var trafficKeys = new HashSet<string>(StringComparer.Ordinal);
         var originPins = new HashSet<string>(StringComparer.Ordinal);
+        var originEndpoints = new HashSet<string>(StringComparer.Ordinal);
         var previousKeys = nodes.SelectMany(node => new[]
             { Convert.ToHexString(node.FieldSpan(22)), Convert.ToHexString(node.FieldSpan(26)) })
             .ToHashSet(StringComparer.Ordinal);
@@ -741,6 +763,17 @@ public static class XPointNetworkOperationalSuccessorAuthor
             if (!byId.TryGetValue(Convert.ToHexString(node.NodeId.Span), out var rollover) ||
                 !Fixed(rollover.IdentitySigner.Ed25519PublicKey.Span, node.IdentityPublicKey.Span))
                 throw new CryptographicException("A renewal node signer changes a registered node identity.");
+            if (rollover.OriginRelocations.Any(relocation => !node.Origins.Any(origin => Fixed(origin.Id.Span, relocation.OriginId.Span))))
+                throw new CryptographicException("A relocation names an unknown predecessor origin.");
+            foreach (var origin in node.Origins)
+            {
+                var relocation = rollover.OriginRelocations.SingleOrDefault(value => Fixed(value.OriginId.Span, origin.Id.Span));
+                var family = relocation?.AddressFamily ?? origin.AddressFamily;
+                ReadOnlySpan<byte> address = relocation is null ? origin.Address.Span : relocation.Address.Span;
+                var port = relocation?.Port ?? origin.Port;
+                if (!originEndpoints.Add($"{origin.Transport}:{family}:{Convert.ToHexString(address)}:{port}"))
+                    throw new CryptographicException("Operational origin endpoints must be unique across nodes.");
+            }
             var currentOnion = rollover.CurrentOnionX25519PublicKey.Span;
             var nextOnion = rollover.NextOnionX25519PublicKey.Span;
             if ((!delegated && previousKeys.Contains(Convert.ToHexString(currentOnion))) ||

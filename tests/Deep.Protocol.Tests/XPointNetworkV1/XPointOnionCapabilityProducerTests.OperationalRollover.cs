@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Net;
 using System.Security.Cryptography;
 using Deep.Protocol.AccountDirectoryV1;
 using Deep.Protocol.ContactV1;
@@ -92,6 +93,89 @@ public sealed partial class XPointOnionCapabilityProducerTests
     public async Task OperationalRollover_ExistingPmaLifetimeBoundRejectsBeforeAnySignerCallback() =>
         await Fixture.Create().CheckPmaLifetimeBoundAsync();
 
+    [Theory]
+    [InlineData(false, false, false)] [InlineData(true, false, false)]
+    [InlineData(false, true, false)] [InlineData(true, true, false)]
+    [InlineData(false, false, true)] [InlineData(true, false, true)]
+    [InlineData(false, true, true)] [InlineData(true, true, true)]
+    public async Task OperationalRollover_OriginRelocationPreservesSignedLineageAndColdNamespace(bool cold, bool delegated, bool ipv6) =>
+        await Fixture.Create().CheckOperationalRolloverAsync(cold, relocateOrigins: true, delegatedRelocation: delegated, ipv6Origins: ipv6);
+
+    [Theory]
+    [InlineData("unknown-origin")] [InlineData("colliding-origin")]
+    public async Task OperationalRollover_HostileOriginRelocationRejectsBeforeAllSigners(string fault) =>
+        await Fixture.Create().CheckOperationalRolloverAsync(false, fault);
+
+    [Fact]
+    public async Task OperationalRollover_OriginCallerArraysChangedByRootCallbackCannotChangeSignedEndpoints() =>
+        await Fixture.Create().CheckOperationalRolloverAsync(true, relocateOrigins: true, mutateOriginCollections: true);
+
+    [Theory]
+    [InlineData(-1, false)] [InlineData(17, false)] [InlineData(1, true)]
+    public void OperationalRollover_HostileOriginCollectionIsBoundedBeforeEnumeration(int count, bool changeCount)
+    {
+        using var signer = OperationalTestSigner.Create(0x11, 0x12, 0x13);
+        var intent = new XPointNetworkOperationalOriginRelocation(Bytes(32, 0x33), IPAddress.Loopback, 443);
+        var list = new HostileOriginList(intent, count, changeCount);
+        Assert.Throws<ArgumentException>(() => new XPointNetworkOperationalNodeRollover(signer,
+            Bytes(32, 0x31), Bytes(32, 0x32), Bytes(32, 0x41), Bytes(32, 0x42), list));
+        Assert.Equal(changeCount ? 1 : 0, list.IndexReads);
+        Assert.Equal(0, signer.Calls);
+    }
+
+    private sealed class HostileOriginList(XPointNetworkOperationalOriginRelocation value, int count, bool changeCount)
+        : IReadOnlyList<XPointNetworkOperationalOriginRelocation>
+    {
+        internal int IndexReads;
+        public int Count => count + (changeCount && IndexReads != 0 ? 1 : 0);
+        public XPointNetworkOperationalOriginRelocation this[int index] { get { IndexReads++; return value; } }
+        public IEnumerator<XPointNetworkOperationalOriginRelocation> GetEnumerator() => throw new InvalidOperationException("Enumeration forbidden.");
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+    }
+
+    [Fact]
+    public void OperationalRollover_OriginIntentAndCollectionAreCopiedBoundedAndCanonical()
+    {
+        var id = Bytes(32, 0x33);
+        var address = IPAddress.Parse("2001:db8::1");
+        var intent = new XPointNetworkOperationalOriginRelocation(id, address, 8443);
+        id[0] ^= 1; address.ScopeId = 8;
+        Assert.Equal(Bytes(32, 0x33), intent.OriginId.ToArray());
+        Assert.Equal(IPAddress.Parse("2001:db8::1").GetAddressBytes(), intent.Address.ToArray());
+        Assert.Equal(6, intent.AddressFamily); Assert.Equal(8443, intent.Port);
+        var exposed = intent.Address;
+        Assert.True(System.Runtime.InteropServices.MemoryMarshal.TryGetArray(exposed, out var array));
+        array.Array![array.Offset] ^= 1;
+        Assert.Equal(IPAddress.Parse("2001:db8::1").GetAddressBytes(), intent.Address.ToArray());
+        using var signer = OperationalTestSigner.Create(0x11, 0x12, 0x13);
+        XPointNetworkOperationalNodeRollover Capture(IReadOnlyList<XPointNetworkOperationalOriginRelocation> origins) =>
+            new(signer, Bytes(32, 0x31), Bytes(32, 0x32), Bytes(32, 0x41), Bytes(32, 0x42), origins);
+        var list = new List<XPointNetworkOperationalOriginRelocation> { intent };
+        var captured = Capture(list); list.Clear();
+        Assert.Same(intent, Assert.Single(captured.OriginRelocations));
+        var maximum = Enumerable.Range(1, 16).Select(index =>
+        {
+            var unique = Bytes(32, 0x33); unique[^1] = checked((byte)index);
+            return new XPointNetworkOperationalOriginRelocation(unique, IPAddress.Loopback, checked((ushort)(443 + index)));
+        }).ToArray();
+        Assert.Equal(16, Capture(maximum).OriginRelocations.Count);
+        Assert.Throws<ArgumentException>(() => Capture(Enumerable.Repeat(intent, 17).ToArray()));
+        Assert.Throws<ArgumentException>(() => Capture([intent, intent]));
+        Assert.Throws<ArgumentException>(() => Capture([null!]));
+        Assert.Throws<ArgumentException>(() => new XPointNetworkOperationalOriginRelocation(new byte[32], IPAddress.Loopback, 443));
+        Assert.Throws<ArgumentException>(() => new XPointNetworkOperationalOriginRelocation(new byte[31], IPAddress.Loopback, 443));
+        Assert.Throws<ArgumentNullException>(() => new XPointNetworkOperationalOriginRelocation(id, null!, 443));
+        Assert.Throws<ArgumentException>(() => new XPointNetworkOperationalOriginRelocation(id, IPAddress.Any, 443));
+        Assert.Throws<ArgumentException>(() => new XPointNetworkOperationalOriginRelocation(id, IPAddress.IPv6Any, 443));
+        Assert.Throws<ArgumentException>(() => new XPointNetworkOperationalOriginRelocation(id, address, 443));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new XPointNetworkOperationalOriginRelocation(id, IPAddress.Loopback, 0));
+        var v4 = new XPointNetworkOperationalOriginRelocation(id, IPAddress.Parse("192.0.2.1"), 443);
+        Assert.Equal(4, v4.AddressFamily); Assert.Equal(new byte[12], v4.Address.ToArray()[4..]);
+        var constructor = Assert.Single(typeof(XPointNetworkOperationalNodeRollover).GetConstructors());
+        Assert.Equal(6, constructor.GetParameters().Length);
+        Assert.True(constructor.GetParameters()[5].IsOptional);
+    }
+
     internal sealed partial class Fixture
     {
         internal async Task CheckPmaLifetimeBoundAsync()
@@ -172,7 +256,8 @@ public sealed partial class XPointOnionCapabilityProducerTests
             }
         }
 
-        internal async Task CheckOperationalRolloverAsync(bool cold, string? fault = null, bool extendRootPolicy = false, bool rotateMailbox = false)
+        internal async Task CheckOperationalRolloverAsync(bool cold, string? fault = null, bool extendRootPolicy = false, bool rotateMailbox = false,
+            bool relocateOrigins = false, bool delegatedRelocation = false, bool ipv6Origins = false, bool mutateOriginCollections = false)
         {
             var original = await VerifyMailboxAsync();
             var renewed = BuildAuthorityRollover();
@@ -183,6 +268,8 @@ public sealed partial class XPointOnionCapabilityProducerTests
                 checked((byte)(0x10 + index)), checked((byte)(0x90 + index * 8)), 0x7d)).ToArray();
             using var oldRoot = new OperationalTestSigner(_root);
             var oldWitnesses = _witnesses.Select(key => new OperationalTestSigner(key)).ToArray();
+            var callerOriginArrays = new List<XPointNetworkOperationalOriginRelocation[]>();
+            if (mutateOriginCollections) root.BeforeSign = () => callerOriginArrays.ForEach(static values => Array.Clear(values));
             try
             {
                 var pma = original.Pma.ToArray();
@@ -215,7 +302,8 @@ public sealed partial class XPointOnionCapabilityProducerTests
                 XPointNetworkOperationalSuccessorRequest Request() => new(Bytes(32, 0x13), renewed.Authority,
                     fault is "delegated-cross-root" or "delegated-policy-extension" or "mailbox-delegated" ? [] : new IXPointNetworkBootstrapRootSigner[] { fault == "old-root-signer" ? oldRoot : root },
                     fault == "old-witness-signers" ? oldWitnesses : witnesses,
-                    NewRollovers(identities, _nodes, delegated: false), policy,
+                    NewRollovers(identities, _nodes, delegated: false, relocate: relocateOrigins && !delegatedRelocation,
+                        ipv6: ipv6Origins, originFault: fault, callerOriginArrays: mutateOriginCollections ? callerOriginArrays : null), policy,
                     _nodes.Select(bytes => (ReadOnlyMemory<byte>)bytes).ToArray(), prefix,
                     head, pma, pmt, headHash, pmtHash, ContactCodec.Decode("PMT2", _pmt).Field(14).ToArray(), 180, 185, 280,
                     rootPolicyExpiresAtUnixSeconds: fault == "policy-under-operational" ? 279UL
@@ -240,6 +328,11 @@ public sealed partial class XPointOnionCapabilityProducerTests
                 MailboxAuthorityV2Verifier.VerifyHistoricalLineage(renewed.Authority, original.Pma, 100, 101);
                 Assert.Throws<CryptographicException>(() => MailboxAuthorityV2Verifier.Verify(renewed.Authority, original.Pma, 200, 201));
                 var first = await XPointNetworkOperationalSuccessorAuthor.AuthorAsync(Request());
+                if (mutateOriginCollections)
+                {
+                    Assert.True(root.Calls > 0); Assert.Equal(3, callerOriginArrays.Count);
+                    Assert.All(callerOriginArrays, static values => Assert.All(values, static value => Assert.Null(value)));
+                }
                 if (rotateMailbox)
                 {
                     var issuer = MailboxAuthorityV2Verifier.Verify(renewed.Authority, first.ExactPma2.Span, 200, 201);
@@ -257,7 +350,8 @@ public sealed partial class XPointOnionCapabilityProducerTests
                     Assert.Equal(280UL, XPointNetworkCodec.Parse<Xnv1Record>(first.ExactXnv1.Span).ExpiresAt);
                 }
                 var delegated = await XPointNetworkOperationalSuccessorAuthor.AuthorDelegatedAsync(new(
-                    Bytes(32, 0x14), renewed.Authority, [], witnesses, NewRollovers(identities, first.ExactXnd1.Select(b => b.ToArray()).ToArray(), true),
+                    Bytes(32, 0x14), renewed.Authority, [], witnesses, NewRollovers(identities, first.ExactXnd1.Select(b => b.ToArray()).ToArray(), true,
+                        relocate: relocateOrigins && delegatedRelocation, ipv6: ipv6Origins, retainTrafficKeys: relocateOrigins),
                     first.ExactXvp1, first.ExactXnd1, [_xnv, first.ExactXnv1], first.ExactXnh1,
                     first.ExactPma2, first.ExactPmt2,
                     XPointNetworkOperationalSuccessorAuthor.ComputeXnh1CoreHash(first.ExactXnh1.Span),
@@ -265,6 +359,31 @@ public sealed partial class XPointOnionCapabilityProducerTests
                     ContactCodec.Decode("PMT2", first.ExactPmt2.Span).Field(14).ToArray(), 190, 190, extendRootPolicy ? 400UL : 270UL));
                 Assert.Equal(first.ExactXvp1.ToArray(), delegated.ExactXvp1.ToArray());
                 Assert.Equal(first.ExactPma2.ToArray(), delegated.ExactPma2.ToArray());
+                if (relocateOrigins)
+                {
+                    for (var index = 0; index < _nodes.Length; index++)
+                    {
+                        var before = XPointNetworkCodec.Parse<Xnd1Record>(_nodes[index]);
+                        var installed = XPointNetworkCodec.Parse<Xnd1Record>(first.ExactXnd1[index].Span);
+                        var after = XPointNetworkCodec.Parse<Xnd1Record>(delegated.ExactXnd1[index].Span);
+                        Assert.Equal(before.NodeId, after.NodeId); Assert.Equal(before.IdentityPublicKey, after.IdentityPublicKey);
+                        Assert.Equal(before.StakingIdentityHash, after.StakingIdentityHash);
+                        Assert.Equal(before.Origins[0].Id, after.Origins[0].Id);
+                        Assert.Equal(before.Origins[0].Transport, after.Origins[0].Transport);
+                        var expected = new byte[16]; RelocationAddress(index, ipv6Origins).GetAddressBytes().CopyTo(expected, 0);
+                        Assert.Equal(expected, after.Origins[0].Address.ToArray());
+                        Assert.Equal(ipv6Origins ? 6 : 4, after.Origins[0].AddressFamily);
+                        Assert.Equal(8443 + index, after.Origins[0].Port);
+                        Assert.Equal(installed.FieldSpan(22).ToArray(), after.FieldSpan(22).ToArray());
+                        Assert.Equal(installed.FieldSpan(26).ToArray(), after.FieldSpan(26).ToArray());
+                        Assert.Equal(installed.Origins[0].CurrentSpki, after.Origins[0].CurrentSpki);
+                        Assert.Equal(installed.Origins[0].NextSpki, after.Origins[0].NextSpki);
+                        if (!delegatedRelocation) Assert.Equal(installed.Origins[0].Address, after.Origins[0].Address);
+                        XPointNetworkVerifier.RequireSuccessor(installed, after);
+                        Assert.True(PublicKeyAuth.VerifyDetached(after.FieldSpan(37).ToArray(),
+                            XPointNetworkCrypto.ComputeSigningInput(after), after.IdentityPublicKey.ToArray()));
+                    }
+                }
                 if (extendRootPolicy)
                     Assert.Equal(400UL, XPointNetworkCodec.Parse<Xnv1Record>(delegated.ExactXnv1.Span).ExpiresAt);
                 var currentPma = MailboxAuthorityV2Verifier.Verify(renewed.Authority, delegated.ExactPma2.Span, 195, 205);
@@ -302,15 +421,26 @@ public sealed partial class XPointOnionCapabilityProducerTests
             finally { foreach (var signer in witnesses.Concat(oldWitnesses).Concat(identities)) signer.Dispose(); }
         }
 
-        private static XPointNetworkOperationalNodeRollover[] NewRollovers(OperationalTestSigner[] identities, byte[][] nodes, bool delegated) =>
+        private static IPAddress RelocationAddress(int index, bool ipv6) =>
+            IPAddress.Parse(ipv6 ? $"2001:db8::{index + 1}" : $"192.0.2.{51 + index}");
+
+        private static XPointNetworkOperationalNodeRollover[] NewRollovers(OperationalTestSigner[] identities, byte[][] nodes, bool delegated,
+            bool relocate = false, bool ipv6 = false, string? originFault = null, bool retainTrafficKeys = false,
+            List<XPointNetworkOperationalOriginRelocation[]>? callerOriginArrays = null) =>
             nodes.Select((bytes, index) =>
             {
                 var previous = XPointNetworkCodec.Parse<Xnd1Record>(bytes);
+                XPointNetworkOperationalOriginRelocation[] origins = [];
+                if (relocate || originFault is "unknown-origin" or "colliding-origin")
+                    origins = [new(originFault == "unknown-origin" && index == 0 ? Bytes(32, 0x99) : previous.Origins[0].Id.Span,
+                        RelocationAddress(originFault == "colliding-origin" ? 0 : index, ipv6),
+                        checked((ushort)(8443 + (originFault == "colliding-origin" ? 0 : index))))];
+                callerOriginArrays?.Add(origins);
                 return new XPointNetworkOperationalNodeRollover(identities[index],
-                    delegated ? previous.Origins[0].NextSpki.Span : Bytes(32, checked((byte)(0xc0 + index))),
-                    Bytes(32, checked((byte)((delegated ? 0xd8 : 0xc8) + index))),
-                    delegated ? previous.FieldSpan(26) : ScalarMult.Base(Bytes(32, checked((byte)(0xd0 + index)))),
-                    ScalarMult.Base(Bytes(32, checked((byte)((delegated ? 0xe8 : 0xe0) + index)))));
+                    delegated ? retainTrafficKeys ? previous.Origins[0].CurrentSpki.Span : previous.Origins[0].NextSpki.Span : Bytes(32, checked((byte)(0xc0 + index))),
+                    retainTrafficKeys ? previous.Origins[0].NextSpki.Span : Bytes(32, checked((byte)((delegated ? 0xd8 : 0xc8) + index))),
+                    delegated ? previous.FieldSpan(retainTrafficKeys ? 22 : 26) : ScalarMult.Base(Bytes(32, checked((byte)(0xd0 + index)))),
+                    retainTrafficKeys ? previous.FieldSpan(26) : ScalarMult.Base(Bytes(32, checked((byte)((delegated ? 0xe8 : 0xe0) + index)))), origins);
             }).ToArray();
 
         private static byte[] ResignContact(ContactRecord record, SigningKey[] signers)
@@ -336,6 +466,7 @@ public sealed partial class XPointOnionCapabilityProducerTests
         }
         internal SigningKey Key { get; }
         internal int Calls { get; private set; }
+        internal Action? BeforeSign;
         public ReadOnlyMemory<byte> RootKeyId => Key.Id;
         public ReadOnlyMemory<byte> SignerId => Key.Id;
         public ReadOnlyMemory<byte> WitnessId => Key.Id;
@@ -346,7 +477,7 @@ public sealed partial class XPointOnionCapabilityProducerTests
         public ValueTask<int> SignAsync(XPointNetworkRootSigningRequest request, Memory<byte> destination, CancellationToken ct) => Sign(request.SigningInput, destination, ct);
         public ValueTask<int> SignAsync(XPointNetworkOperationalSigningRequest request, Memory<byte> destination, CancellationToken ct) => Sign(request.SigningInput, destination, ct);
         private ValueTask<int> Sign(ReadOnlyMemory<byte> input, Memory<byte> destination, CancellationToken ct)
-        { ct.ThrowIfCancellationRequested(); Calls++; PublicKeyAuth.SignDetached(input.ToArray(), Key.Pair.PrivateKey).CopyTo(destination); return ValueTask.FromResult(64); }
+        { ct.ThrowIfCancellationRequested(); Calls++; BeforeSign?.Invoke(); PublicKeyAuth.SignDetached(input.ToArray(), Key.Pair.PrivateKey).CopyTo(destination); return ValueTask.FromResult(64); }
         public ValueTask<ReadOnlyMemory<byte>> SignDtt1Async(ReadOnlyMemory<byte> input, CancellationToken ct)
         { ct.ThrowIfCancellationRequested(); Calls++; return ValueTask.FromResult<ReadOnlyMemory<byte>>(PublicKeyAuth.SignDetached(input.ToArray(), Key.Pair.PrivateKey)); }
         public void Dispose() => CryptographicOperations.ZeroMemory(Key.Pair.PrivateKey);
