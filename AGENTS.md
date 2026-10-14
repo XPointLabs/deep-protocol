@@ -46,6 +46,7 @@ classification preserves native exit1 and `FullAccepted=false`. It never
 waives the graph/package gate above. Runtime theory rows may share a method
 definition or display name; use the root mapping implementation, not counts
 or a per-run parser. Windows local gates explicitly use PowerShell5.1.
-The nested executable witnesses require PowerShell7.5.4 separately: use an
+The nested executable witnesses require PowerShell7.6.5/.NET10 separately
+(DR-0117), compatible with the selected SDK architecture: use an
 available `pwsh` or explicit `-WitnessPowerShellPath`. Missing/wrong interpreter
 fails before full; installing it is not an implicit runner action.

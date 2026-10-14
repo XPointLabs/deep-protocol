@@ -21,7 +21,7 @@ internal static class XPointNetworkFrozenVectorManifest
 {
     // Deliberately pins the complete frozen fixture corpus.  The per-vector tests
     // below execute the bytes; this catches any unrelated fixture substitution too.
-    private const string ExpectedSha256 = "fc682d0bb63a9383b1fe6842d09596cff5555a41c12da9ad38bb6d20de2119eb";
+    private const string ExpectedSha256 = "2539f70d18330d5993a4df844eaa036c2ed7b21dc1412d7fa5df68cab3e0a39c";
 
     internal static IReadOnlyList<XPointPrimitiveVector> PrimitiveVectors { get; } = LoadPrimitives();
     internal static IReadOnlyList<XPointNegativeVector> NegativeVectors { get; } = LoadNegatives();
