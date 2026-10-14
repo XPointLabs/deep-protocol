@@ -92,7 +92,7 @@
       "id": "xpoint-network-v1",
       "kind": "normative-document",
       "path": "docs/architecture/XPOINT-NETWORK-V1.md",
-      "normalizedSha256": "c35c201dca7e506af13720e4f21feba187089d292c1bbe080177af6ea3529956"
+      "normalizedSha256": "3cd2df8545f95106d1e9b1a921f808c743364987fcf821a76239925cdc4df961"
     },
     {
       "id": "contact-resolver-v1",

@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using Deep.Protocol.AccountDirectoryV1;
 using Deep.Protocol.ContactV1;
 using Deep.Protocol.DeepExtension.PrivacyRouting;
+using Deep.Protocol.DeepExtension.MailboxCapabilities;
 using Deep.Protocol.XPointNetworkV1;
 using Sodium;
 
@@ -58,8 +59,66 @@ public sealed partial class XPointOnionCapabilityProducerTests
     public async Task OperationalRollover_OfflinePolicyDelegatesBeyondInitialOperationalView() =>
         await Fixture.Create().CheckOperationalRolloverAsync(true, extendRootPolicy: true);
 
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task OperationalRollover_OfflineMailboxKeysPreserveNamespaceAndDelegatedPolicy(bool cold) =>
+        await Fixture.Create().CheckOperationalRolloverAsync(cold, rotateMailbox: true);
+
+    [Theory]
+    [InlineData("mailbox-old-deposit")] [InlineData("mailbox-old-retrieve")]
+    [InlineData("mailbox-cross-old")] [InlineData("mailbox-floor")]
+    [InlineData("mailbox-root-key")] [InlineData("mailbox-witness-key")]
+    [InlineData("mailbox-node-key")] [InlineData("mailbox-delegated")]
+    public async Task OperationalRollover_InvalidMailboxRolloverRejectsBeforeSigning(string fault) =>
+        await Fixture.Create().CheckOperationalRolloverAsync(false, fault, rotateMailbox: true);
+
+    [Fact]
+    public void OperationalRollover_MailboxInputIsBoundedCopiedAndRoleSeparated()
+    {
+        var deposit = Bytes(32, 0x31); var retrieve = Bytes(32, 0x32);
+        var input = new XPointNetworkMailboxIssuerRollover(deposit, retrieve, 2);
+        deposit[0] ^= 1; retrieve[0] ^= 1;
+        Assert.Equal(Bytes(32, 0x31), input.DepositIssuerPublicKey.ToArray());
+        Assert.Equal(Bytes(32, 0x32), input.RetrieveIssuerPublicKey.ToArray());
+        var copy = input.DepositIssuerPublicKey.ToArray(); copy[0] ^= 1;
+        Assert.Equal(Bytes(32, 0x31), input.DepositIssuerPublicKey.ToArray());
+        Assert.Throws<ArgumentException>(() => new XPointNetworkMailboxIssuerRollover(new byte[32], retrieve, 2));
+        Assert.Throws<ArgumentException>(() => new XPointNetworkMailboxIssuerRollover(deposit, new byte[31], 2));
+        Assert.Throws<ArgumentException>(() => new XPointNetworkMailboxIssuerRollover(deposit, deposit, 2));
+        Assert.Throws<ArgumentException>(() => new XPointNetworkMailboxIssuerRollover(deposit, retrieve, 0));
+    }
+
+    [Fact]
+    public async Task OperationalRollover_ExistingPmaLifetimeBoundRejectsBeforeAnySignerCallback() =>
+        await Fixture.Create().CheckPmaLifetimeBoundAsync();
+
     internal sealed partial class Fixture
     {
+        internal async Task CheckPmaLifetimeBoundAsync()
+        {
+            var original = await VerifyMailboxAsync();
+            using var root = new OperationalTestSigner(_root);
+            var renewal = await XPointNetworkBootstrapAuthor.AuthorSameKeyRenewalAsync(Bytes(32, 0x38), _authority,
+                [_dts], 850, 850, 2_000_000, 850, 1_500_000, [root]);
+            var authority = XPointNetworkAuthorityVerifier.Verify(new(_authority.NetworkId.Span, _authority.AuthorityCoreHash.Span),
+                [_xna, renewal.ExactXna1], [_dts, renewal.ExactDts1]);
+            var witnesses = _witnesses.Select(key => new OperationalTestSigner(key)).ToArray();
+            var identities = Enumerable.Range(0, 3).Select(index => OperationalTestSigner.Create(
+                checked((byte)(0x10 + index)), checked((byte)(0x90 + index * 8)), 0x7d)).ToArray();
+            try
+            {
+                var before = root.Calls;
+                var request = new XPointNetworkOperationalSuccessorRequest(Bytes(32, 0x39), authority, [root], witnesses,
+                    NewRollovers(identities, _nodes, false), _xvp, _nodes.Select(b => (ReadOnlyMemory<byte>)b).ToArray(),
+                    [_xnv], _xnh, original.Pma, original.Network.Closure!.Pmt.CanonicalBytes,
+                    XPointNetworkOperationalSuccessorAuthor.ComputeXnh1CoreHash(_xnh), original.Network.Closure.Pmt.ArtifactHash.Span,
+                    ContactCodec.Decode("PMT2", _pmt).Field(14).Span, 850, 850, 900, rootPolicyExpiresAtUnixSeconds: 850 + 1_209_601UL);
+                await Assert.ThrowsAsync<ArgumentException>(() => XPointNetworkOperationalSuccessorAuthor.AuthorAsync(request).AsTask());
+                Assert.Equal(before, root.Calls);
+                Assert.All(witnesses.Concat(identities), signer => Assert.Equal(0, signer.Calls));
+            }
+            finally { foreach (var signer in witnesses.Concat(identities)) signer.Dispose(); }
+        }
         internal async Task CheckSameKeyRenewalAsync(string? fault = null, ulong renewalFrom = 850)
         {
             using var root = new OperationalTestSigner(_root);
@@ -113,7 +172,7 @@ public sealed partial class XPointOnionCapabilityProducerTests
             }
         }
 
-        internal async Task CheckOperationalRolloverAsync(bool cold, string? fault = null, bool extendRootPolicy = false)
+        internal async Task CheckOperationalRolloverAsync(bool cold, string? fault = null, bool extendRootPolicy = false, bool rotateMailbox = false)
         {
             var original = await VerifyMailboxAsync();
             var renewed = BuildAuthorityRollover();
@@ -140,24 +199,38 @@ public sealed partial class XPointOnionCapabilityProducerTests
                 if (fault == "protected-pmt") pmtHash[0] ^= 1;
                 var prefix = fault == "missing-prefix" ? Array.Empty<ReadOnlyMemory<byte>>() : new ReadOnlyMemory<byte>[] { view };
                 if (fault == "forked-prefix") prefix = [XPointNetworkTestRecords.MutateField(view, 6, bytes => bytes[0] ^= 1)];
+                var oldMailbox = ContactCodec.Decode("PMA2", original.Pma);
+                var deposit = PublicKeyAuth.GenerateKeyPair(Bytes(32, 0x35)).PublicKey;
+                var retrieve = PublicKeyAuth.GenerateKeyPair(Bytes(32, 0x36)).PublicKey;
+                if (fault == "mailbox-old-deposit") deposit = oldMailbox.Field(5).ToArray();
+                if (fault == "mailbox-old-retrieve") retrieve = oldMailbox.Field(6).ToArray();
+                if (fault == "mailbox-cross-old") deposit = oldMailbox.Field(6).ToArray();
+                if (fault == "mailbox-root-key") deposit = root.Ed25519PublicKey.ToArray();
+                if (fault == "mailbox-witness-key") deposit = witnesses[0].Ed25519PublicKey.ToArray();
+                if (fault == "mailbox-node-key") deposit = identities[0].Ed25519PublicKey.ToArray();
+                var minimum = BinaryPrimitives.ReadUInt64BigEndian(oldMailbox.Field(7).Span);
+                Assert.Equal(checked(minimum + 1), XPointNetworkOperationalSuccessorAuthor.ComputeNextMailboxGrantFloor(renewed.Authority, original.Pma));
+                var invalidFloorSource = original.Pma.ToArray(); invalidFloorSource[^1] ^= 1;
+                Assert.Throws<CryptographicException>(() => XPointNetworkOperationalSuccessorAuthor.ComputeNextMailboxGrantFloor(renewed.Authority, invalidFloorSource));
                 XPointNetworkOperationalSuccessorRequest Request() => new(Bytes(32, 0x13), renewed.Authority,
-                    fault is "delegated-cross-root" or "delegated-policy-extension" ? [] : new IXPointNetworkBootstrapRootSigner[] { fault == "old-root-signer" ? oldRoot : root },
+                    fault is "delegated-cross-root" or "delegated-policy-extension" or "mailbox-delegated" ? [] : new IXPointNetworkBootstrapRootSigner[] { fault == "old-root-signer" ? oldRoot : root },
                     fault == "old-witness-signers" ? oldWitnesses : witnesses,
                     NewRollovers(identities, _nodes, delegated: false), policy,
                     _nodes.Select(bytes => (ReadOnlyMemory<byte>)bytes).ToArray(), prefix,
                     head, pma, pmt, headHash, pmtHash, ContactCodec.Decode("PMT2", _pmt).Field(14).ToArray(), 180, 185, 280,
                     rootPolicyExpiresAtUnixSeconds: fault == "policy-under-operational" ? 279UL
                         : fault == "policy-over-authority" ? checked(renewed.Authority.ExpiresAt + 1)
-                        : extendRootPolicy || fault == "delegated-policy-extension" ? 600UL : 0UL);
+                        : extendRootPolicy || fault == "delegated-policy-extension" ? 600UL : 0UL,
+                    mailboxIssuerRollover: rotateMailbox ? new(deposit, retrieve, fault == "mailbox-floor" ? minimum : checked(minimum + 1)) : null);
                 if (fault is not null)
                 {
                     var rejected = await Record.ExceptionAsync(async () =>
                     {
-                        if (fault is "delegated-cross-root" or "delegated-policy-extension") await XPointNetworkOperationalSuccessorAuthor.AuthorDelegatedAsync(Request());
+                        if (fault is "delegated-cross-root" or "delegated-policy-extension" or "mailbox-delegated") await XPointNetworkOperationalSuccessorAuthor.AuthorDelegatedAsync(Request());
                         else await XPointNetworkOperationalSuccessorAuthor.AuthorAsync(Request());
                     });
                     Assert.NotNull(rejected);
-                    Assert.True(fault is "missing-prefix" or "policy-under-operational" or "policy-over-authority" or "delegated-policy-extension" ? rejected is ArgumentException
+                    Assert.True(fault is "missing-prefix" or "policy-under-operational" or "policy-over-authority" or "delegated-policy-extension" or "mailbox-delegated" ? rejected is ArgumentException
                         : rejected is CryptographicException or OnionBoundaryException, rejected.ToString());
                     Assert.Equal(0, root.Calls + oldRoot.Calls + witnesses.Concat(oldWitnesses).Concat(identities).Sum(s => s.Calls));
                     Assert.Equal(original.Network.Closure.Pmt.CanonicalBytes.ToArray(), original.Network.Closure.RetainedPmts[0].CanonicalBytes.ToArray());
@@ -167,6 +240,16 @@ public sealed partial class XPointOnionCapabilityProducerTests
                 MailboxAuthorityV2Verifier.VerifyHistoricalLineage(renewed.Authority, original.Pma, 100, 101);
                 Assert.Throws<CryptographicException>(() => MailboxAuthorityV2Verifier.Verify(renewed.Authority, original.Pma, 200, 201));
                 var first = await XPointNetworkOperationalSuccessorAuthor.AuthorAsync(Request());
+                if (rotateMailbox)
+                {
+                    var issuer = MailboxAuthorityV2Verifier.Verify(renewed.Authority, first.ExactPma2.Span, 200, 201);
+                    Assert.Equal(deposit, issuer.ResolveIssuer(MailboxCapabilityDomain.Deposit).PublicKey.ToArray());
+                    Assert.Equal(retrieve, issuer.ResolveIssuer(MailboxCapabilityDomain.Retrieve).PublicKey.ToArray());
+                    Assert.Equal(minimum + 1, issuer.MinimumGrantGeneration);
+                    Assert.True(issuer.BindsProjection(first.ExactPmt2.Span));
+                    Assert.Equal(oldMailbox.Field(4).ToArray(), ContactCodec.Decode("PMA2", first.ExactPma2.Span).Field(4).ToArray());
+                    Assert.Equal(oldMailbox.CoreHash.ToArray(), ContactCodec.Decode("PMA2", first.ExactPma2.Span).Field(3).ToArray());
+                }
                 if (extendRootPolicy)
                 {
                     Assert.Equal(600UL, XPointNetworkCodec.Parse<Xvp1Record>(first.ExactXvp1.Span).ExpiresAt);

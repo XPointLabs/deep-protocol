@@ -74,7 +74,8 @@ public sealed class XPointNetworkOperationalSuccessorRequest
         ulong issuedAtUnixSeconds,
         ulong notBeforeUnixSeconds,
         ulong expiresAtUnixSeconds,
-        ulong rootPolicyExpiresAtUnixSeconds = 0)
+        ulong rootPolicyExpiresAtUnixSeconds = 0,
+        XPointNetworkMailboxIssuerRollover? mailboxIssuerRollover = null)
     {
         this.ceremonyId = Required(ceremonyId, 32, nameof(ceremonyId));
         Authority = authority ?? throw new ArgumentNullException(nameof(authority));
@@ -108,6 +109,7 @@ public sealed class XPointNetworkOperationalSuccessorRequest
         NotBeforeUnixSeconds = notBeforeUnixSeconds;
         ExpiresAtUnixSeconds = expiresAtUnixSeconds;
         RootPolicyExpiresAtUnixSeconds = rootPolicyExpiresAtUnixSeconds == 0 ? expiresAtUnixSeconds : rootPolicyExpiresAtUnixSeconds;
+        MailboxIssuerRollover = mailboxIssuerRollover;
         if (RootPolicyExpiresAtUnixSeconds < expiresAtUnixSeconds ||
             RootPolicyExpiresAtUnixSeconds > Authority.ExpiresAt ||
             RootPolicyExpiresAtUnixSeconds - notBeforeUnixSeconds > 2_592_000)
@@ -132,6 +134,7 @@ public sealed class XPointNetworkOperationalSuccessorRequest
     public ulong NotBeforeUnixSeconds { get; }
     public ulong ExpiresAtUnixSeconds { get; }
     public ulong RootPolicyExpiresAtUnixSeconds { get; }
+    public XPointNetworkMailboxIssuerRollover? MailboxIssuerRollover { get; }
 
     private static byte[] Required(ReadOnlySpan<byte> value, int size, string name)
     {
@@ -197,6 +200,16 @@ public static class XPointNetworkOperationalSuccessorAuthor
     public static byte[] ComputeXnh1CoreHash(ReadOnlySpan<byte> exactXnh1) =>
         XPointNetworkCodec.Parse<Xnh1Record>(exactXnh1).CoreHash.ToArray();
 
+    /// <summary>Authenticated historical scalar for offline preparation only; no current grant or issuer authority.</summary>
+    public static ulong ComputeNextMailboxGrantFloor(VerifiedXPointNetworkAuthority authority, ReadOnlySpan<byte> exactPma2)
+    {
+        ArgumentNullException.ThrowIfNull(authority);
+        var record = ContactCodec.Decode(ProtocolMagic.PMA2, exactPma2);
+        var originalTime = BinaryPrimitives.ReadUInt64BigEndian(record.FieldSpan(11));
+        MailboxAuthorityV2Verifier.VerifyHistoricalLineage(authority, exactPma2, originalTime, originalTime);
+        return checked(BinaryPrimitives.ReadUInt64BigEndian(record.FieldSpan(7)) + 1);
+    }
+
     public static ValueTask<AuthoredXPointNetworkOperationalSuccessor> AuthorAsync(
         XPointNetworkOperationalSuccessorRequest request,
         CancellationToken cancellationToken = default) => AuthorCoreAsync(request, false, cancellationToken);
@@ -216,6 +229,10 @@ public static class XPointNetworkOperationalSuccessorAuthor
             throw new ArgumentException("Delegated renewal must not load offline root custody.");
         if (delegated && request.RootPolicyExpiresAtUnixSeconds != request.ExpiresAtUnixSeconds)
             throw new ArgumentException("Delegated renewal cannot choose a new offline root-policy horizon.");
+        if (delegated && request.MailboxIssuerRollover is not null)
+            throw new ArgumentException("Delegated renewal cannot replace mailbox issuer keys.");
+        if (!delegated && request.RootPolicyExpiresAtUnixSeconds - request.NotBeforeUnixSeconds > 1_209_600)
+            throw new ArgumentException("Coupled offline policy renewal must obey the existing14-day PMA2 wire bound.");
         var roots = delegated ? [] : ValidateRoots(authority, request.RootSigners);
         var witnesses = ValidateWitnesses(authority, request.WitnessSigners);
         var priorPolicy = XPointNetworkCodec.Parse<Xvp1Record>(request.ExactPreviousXvp1.Span);
@@ -229,6 +246,16 @@ public static class XPointNetworkOperationalSuccessorAuthor
         ValidateProtectedPredecessor(request, authority, priorPolicy, priorNodes, priorView, priorHead, priorPma, priorPmt);
         XPointNetworkViewLogAuthor.RequireProtectedPrefix(request.ExactOrderedXnv1History, request.ExactProtectedXnh1.Span, authority);
         var nodeRollovers = ValidateNodeRollovers(priorNodes, request.NodeRollovers, delegated);
+        if (request.MailboxIssuerRollover is { } rollover)
+        {
+            var forbidden = new[] { priorPma.Field(5), priorPma.Field(6) }
+                .Concat(authority.RootKeys.Select(key => key.Ed25519PublicKey))
+                .Concat(authority.WitnessKeys.Select(key => key.Ed25519PublicKey))
+                .Concat(request.NodeRollovers.Select(node => node.IdentitySigner.Ed25519PublicKey)).ToArray();
+            if (rollover.MinimumGrantGeneration <= BinaryPrimitives.ReadUInt64BigEndian(priorPma.FieldSpan(7)) ||
+                forbidden.Any(key => Fixed(key.Span, rollover.DepositIssuerPublicKey.Span) || Fixed(key.Span, rollover.RetrieveIssuerPublicKey.Span)))
+                throw new CryptographicException("Offline mailbox rollover requires fresh independent role keys and a strictly greater grant floor.");
+        }
 
         var nextPmtGeneration = checked(BinaryPrimitives.ReadUInt64BigEndian(priorPmt.FieldSpan(2)) + 1);
         if (delegated)
@@ -497,6 +524,12 @@ public static class XPointNetworkOperationalSuccessorAuthor
         var generation = checked(BinaryPrimitives.ReadUInt64BigEndian(previous.FieldSpan(2)) + 1);
         fields[1] = U64(generation);
         fields[2] = previous.CoreHash.ToArray();
+        if (request.MailboxIssuerRollover is { } rollover)
+        {
+            fields[4] = rollover.DepositIssuerPublicKey;
+            fields[5] = rollover.RetrieveIssuerPublicKey;
+            fields[6] = U64(rollover.MinimumGrantGeneration);
+        }
         fields[8] = U16(2); // A root-signed successor activates the current profile; never edit its predecessor.
         fields[9] = U64(request.IssuedAtUnixSeconds);
         fields[10] = U64(request.NotBeforeUnixSeconds);
