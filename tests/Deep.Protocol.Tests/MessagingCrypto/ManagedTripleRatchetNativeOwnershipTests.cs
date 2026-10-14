@@ -7,7 +7,7 @@ using Sodium;
 
 namespace Deep.Protocol.Tests.MessagingCrypto;
 
-public sealed class ManagedTripleRatchetNativeOwnershipTests
+public sealed partial class ManagedTripleRatchetNativeOwnershipTests
 {
     [Fact]
     [Trait("RequiresApprovedMlKemRuntime", "true")]
@@ -82,6 +82,114 @@ public sealed class ManagedTripleRatchetNativeOwnershipTests
         var exact = opened.TakeAuthenticatedDmc2();
         try { Assert.Equal(message.CanonicalBytes.ToArray(), exact); }
         finally { CryptographicOperations.ZeroMemory(exact); }
+    }
+
+    [Fact]
+    [Trait("RequiresApprovedMlKemRuntime", "true")]
+    public async Task NativeDpe2_UnansweredPqLimitRejectsWithoutMutationOrInventedFreshness()
+    {
+        // Isolated native crypto boundary, NOT account/network/device evidence.
+        // In particular an old-epoch reply is not a completed fresh KEM exchange.
+        using var aliceProvider = ManagedTripleRatchetComponentProvider.CreateApproved(
+            DeepMlKemBraidNativeProvider.LoadApprovedForCurrentProcess());
+        using var bobProvider = ManagedTripleRatchetComponentProvider.CreateApproved(
+            DeepMlKemBraidNativeProvider.LoadApprovedForCurrentProcess());
+        using var ec = SecretBuffer.ImportExact(Bytes(32, 1), 32, "fixture EC root");
+        using var pq = SecretBuffer.ImportExact(Bytes(32, 2), 32, "fixture PQ root");
+        var alicePrivate = Bytes(32, 3); var bobPrivate = Bytes(32, 4);
+        using var aliceSeed = VerifiedTripleRatchetSeedCapability.CreateFromVerifiedRoots(Binding(true), ec, pq);
+        using var bobSeed = VerifiedTripleRatchetSeedCapability.CreateFromVerifiedRoots(Binding(false), ec, pq);
+        var ciphertexts = new List<byte[]>();
+        try
+        {
+            using var aliceState = aliceProvider.InitializeAlice(aliceSeed, alicePrivate, ScalarMult.Base(alicePrivate),
+                ScalarMult.Base(bobPrivate), 1, 32);
+            using var bobState = bobProvider.InitializeBob(bobSeed, bobPrivate, ScalarMult.Base(bobPrivate),
+                ScalarMult.Base(alicePrivate), 1, 32);
+            using var alice = new IsolatedAtomicMemory(aliceState);
+            using var bob = new IsolatedAtomicMemory(bobState);
+            ParsedDmc2 Message(bool fromAlice, byte id) => ApplicationCoreCodec.AuthorDmc2(Bytes(16, 5),
+                Bytes(32, id), Bytes(32, 25), Bytes(32, fromAlice ? (byte)22 : (byte)23),
+                Bytes(32, fromAlice ? (byte)8 : (byte)9), id, 1_100_000UL + id, 0, Dmc2Flags.None, [],
+                ApplicationCoreCodec.CreateMessageCreatePayload("native PQ boundary " + id));
+            for (byte id = 1; id <= 32; id++) ciphertexts.Add(await alice.Send(Message(true, id)));
+            Assert.Equal(33UL, alice.Generation);
+            async Task AssertDeniedWithoutMutation()
+            {
+                var before = alice.CommittedDigest();
+                try
+                {
+                    var error = await Assert.ThrowsAsync<MessagingCryptoException>(() => alice.Send(Message(true, 33)));
+                    Assert.Equal(MessagingCryptoError.PqInjectionRequired, error.Error);
+                    var after = alice.CommittedDigest();
+                    try { Assert.Equal(before, after); }
+                    finally { CryptographicOperations.ZeroMemory(after); }
+                }
+                finally { CryptographicOperations.ZeroMemory(before); }
+            }
+            await AssertDeniedWithoutMutation();
+            for (byte id = 1; id <= 32; id++) await Verify(bob, ciphertexts[id - 1], Message(true, id));
+            var reply = Message(false, 40);
+            var replyCipher = await bob.Send(reply); ciphertexts.Add(replyCipher);
+            Assert.Equal(0UL, Dpe2Codec.Decode(replyCipher).RatchetHeader.SckaSendingEpoch);
+            await Verify(alice, replyCipher, reply);
+            await AssertDeniedWithoutMutation(); // A reply alone must not reset the PQ fence.
+        }
+        finally
+        {
+            foreach (var cipher in ciphertexts) CryptographicOperations.ZeroMemory(cipher);
+            CryptographicOperations.ZeroMemory(alicePrivate); CryptographicOperations.ZeroMemory(bobPrivate);
+        }
+    }
+
+    [Fact]
+    [Trait("RequiresApprovedMlKemRuntime", "true")]
+    public async Task NativeDpe2_FourMessageBatchesCompleteActualBidirectionalPqRollover()
+    {
+        // Same asymmetric Braid cadence as the SQLCipher compaction fixture,
+        // isolated here so a crypto defect need not wait for dozens of Store calls.
+        using var aliceProvider = ManagedTripleRatchetComponentProvider.CreateApproved(
+            DeepMlKemBraidNativeProvider.LoadApprovedForCurrentProcess());
+        using var bobProvider = ManagedTripleRatchetComponentProvider.CreateApproved(
+            DeepMlKemBraidNativeProvider.LoadApprovedForCurrentProcess());
+        using var ec = SecretBuffer.ImportExact(Bytes(32, 1), 32, "fixture EC root");
+        using var pq = SecretBuffer.ImportExact(Bytes(32, 2), 32, "fixture PQ root");
+        var alicePrivate = Bytes(32, 3); var bobPrivate = Bytes(32, 4);
+        using var aliceSeed = VerifiedTripleRatchetSeedCapability.CreateFromVerifiedRoots(Binding(true), ec, pq);
+        using var bobSeed = VerifiedTripleRatchetSeedCapability.CreateFromVerifiedRoots(Binding(false), ec, pq);
+        try
+        {
+            using var aliceState = aliceProvider.InitializeAlice(aliceSeed, alicePrivate, ScalarMult.Base(alicePrivate),
+                ScalarMult.Base(bobPrivate), 1, 32);
+            using var bobState = bobProvider.InitializeBob(bobSeed, bobPrivate, ScalarMult.Base(bobPrivate),
+                ScalarMult.Base(alicePrivate), 1, 32);
+            using var alice = new IsolatedAtomicMemory(aliceState);
+            using var bob = new IsolatedAtomicMemory(bobState);
+            ParsedDmc2 Message(bool fromAlice, byte id) => ApplicationCoreCodec.AuthorDmc2(Bytes(16, 5),
+                Bytes(32, id), Bytes(32, 25), Bytes(32, fromAlice ? (byte)22 : (byte)23),
+                Bytes(32, fromAlice ? (byte)8 : (byte)9), id, 1_100_000UL + id, 0, Dmc2Flags.None, [],
+                ApplicationCoreCodec.CreateMessageCreatePayload("native asymmetric batch " + id));
+            ulong lastSendingEpoch = 0;
+            for (byte id = 1; id <= 66; id++)
+            {
+                var message = Message(true, id);
+                var cipher = await alice.Send(message);
+                try
+                {
+                    lastSendingEpoch = Dpe2Codec.Decode(cipher).RatchetHeader.SckaSendingEpoch;
+                    await Verify(bob, cipher, message);
+                }
+                finally { CryptographicOperations.ZeroMemory(cipher); }
+                if (id % 4 != 0) continue;
+                var reply = Message(false, checked((byte)(80 + id / 4)));
+                var replyCipher = await bob.Send(reply);
+                try { await Verify(alice, replyCipher, reply); }
+                finally { CryptographicOperations.ZeroMemory(replyCipher); }
+            }
+            Assert.True(lastSendingEpoch > 0);
+            Assert.Equal(83UL, alice.Generation); Assert.Equal(83UL, bob.Generation);
+        }
+        finally { CryptographicOperations.ZeroMemory(alicePrivate); CryptographicOperations.ZeroMemory(bobPrivate); }
     }
 
     [Fact]
@@ -175,7 +283,7 @@ public sealed class ManagedTripleRatchetNativeOwnershipTests
 
     // Trusted authority implementation only for this in-memory component test.
     // Production still requires SQLCipher, independent floor, retirement/inbox.
-    private sealed class IsolatedAtomicMemory : IExactDpe2DurableTransactionAuthority, IDisposable
+    private sealed partial class IsolatedAtomicMemory : IExactDpe2DurableTransactionAuthority, IDisposable
     {
         private byte[] state, journal;
         private ulong journalGeneration;
@@ -184,6 +292,12 @@ public sealed class ManagedTripleRatchetNativeOwnershipTests
         { state = TripleRatchetDurableStateCodec.Encode(initial); journal = SHA256.HashData(state); }
         internal ulong Generation { get { using var current = TripleRatchetDurableStateCodec.Decode(state); return current.StorageGeneration; } }
         internal int ReceiveMessagesSincePqInjection { get { using var current = TripleRatchetDurableStateCodec.Decode(state); return current.ReceiveMessagesSincePqInjection; } }
+        internal byte[] CommittedDigest()
+        {
+            using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            hash.AppendData(state); hash.AppendData(journal);
+            return hash.GetHashAndReset();
+        }
         internal void RejectUnrelatedSameEpochBraid(ManagedTripleRatchetComponentProvider provider, TripleRatchetState initial)
         {
             using var current = TripleRatchetDurableStateCodec.Decode(state);
@@ -192,10 +306,10 @@ public sealed class ManagedTripleRatchetNativeOwnershipTests
             {
                 // At this fixture step Bob has installed output1 in Ct2Sampled.
                 Assert.Equal(1UL, BinaryPrimitives.ReadUInt64BigEndian(malformed.AsSpan(360)));
-                Assert.Equal((byte)ManagedMlKemBraidState.Ct2Sampled, malformed[596 + 7]);
+                Assert.Equal((byte)ManagedMlKemBraidState.Ct2Sampled, malformed[1060 + 7]);
                 // A valid but unrelated NoHeaderReceived epoch1 is not an
                 // allowed exception to the epoch relation.
-                old.AsSpan(596).CopyTo(malformed.AsSpan(596));
+                old.AsSpan(1060).CopyTo(malformed.AsSpan(1060));
                 var error = Assert.Throws<MessagingCryptoException>(() =>
                     provider.PrepareSend(malformed, new(current.SendEcChain, current.NextSendEcN), Bytes(16, 5), new(0, 32)));
                 Assert.Equal(MessagingCryptoError.InvalidInput, error.Error);
@@ -253,6 +367,13 @@ public sealed class ManagedTripleRatchetNativeOwnershipTests
             CryptographicOperations.ZeroMemory(state); CryptographicOperations.ZeroMemory(journal);
             foreach (var hash in receives.Values) CryptographicOperations.ZeroMemory(hash);
             receives.Clear();
+            foreach (var row in controls.Values)
+            {
+                CryptographicOperations.ZeroMemory(row.Frame);
+                CryptographicOperations.ZeroMemory(row.PriorStateHash);
+                CryptographicOperations.ZeroMemory(row.NextStateHash);
+            }
+            controls.Clear();
         }
     }
 }

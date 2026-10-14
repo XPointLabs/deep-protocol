@@ -106,7 +106,7 @@ internal sealed class VerifiedTripleRatchetSeedData(
 /// chains, and the pinned ML-KEM Braid state machine. Its opaque state is
 /// plaintext only inside the caller-sealed TRS1 record.
 /// </summary>
-internal sealed class ManagedTripleRatchetComponentProvider :
+internal sealed partial class ManagedTripleRatchetComponentProvider :
     ITripleRatchetComponentProvider, IDisposable
 {
     private readonly DeepMlKemBraidNativeProvider _braidProvider;
@@ -268,9 +268,6 @@ internal sealed class ManagedTripleRatchetComponentProvider :
         try
         {
             freshOutput = state.Braid.Receive(header.BraidEpoch, header.BraidMessage);
-            if (freshOutput is not null)
-                freshOutput.Use(value => state.AddSpqrEpoch(header.BraidEpoch, value));
-
             ec = state.ReceiveEc(
                 receiveCursor,
                 target,
@@ -282,6 +279,13 @@ internal sealed class ManagedTripleRatchetComponentProvider :
                 ec.Count);
             if (ec.Count != pq.Count)
                 throw Transition("The EC and SPQR receive sequences have different lengths.");
+
+            // The completion travels under the preceding SPQR link. Derive
+            // its data key and any old skipped keys before installing the
+            // output that could retire that link. This is still one cloned
+            // candidate; none of these steps commits before authentication.
+            if (freshOutput is not null)
+                freshOutput.Use(value => state.AddSpqrEpoch(header.BraidEpoch, value));
 
             materials = new RatchetComponentKeyMaterial[ec.Count];
             for (var index = 0; index < materials.Length; index++)
@@ -368,11 +372,11 @@ internal sealed class ManagedTripleRatchetComponentProvider :
         if (value is not null) CryptographicOperations.ZeroMemory(value);
     }
 
-    private sealed class ComponentState : IDisposable
+    private sealed partial class ComponentState : IDisposable
     {
-        private const int PrefixBytes = 596;
-        private const int LinkBytes = 96;
-        private const byte Version = 1;
+        private const int PrefixBytes = 1060;
+        private const int LinkBytes = 328;
+        private const byte Version = 2;
         private const byte HasSendEc = 1;
         private const byte HasReceiveEc = 2;
         private const byte PendingSendEc = 4;
@@ -587,7 +591,8 @@ internal sealed class ManagedTripleRatchetComponentProvider :
                     receiveEvidence,
                     spqrRoot.ToArray(),
                     0, 0, 0, 0, 0, 0, 0, false,
-                    [new SpqrLink(0, send.ToArray(), 1, receive.ToArray(), 1, false)],
+                    [new SpqrLink(0, send.ToArray(), 1, receive.ToArray(), 1, false,
+                        ManagedBraidControlProfile.DeriveRoot(spqrRoot, 0))],
                     braid);
                 braid = null!;
                 return state;
@@ -722,6 +727,9 @@ internal sealed class ManagedTripleRatchetComponentProvider :
         {
             if (CurrentSpqrEpoch == ulong.MaxValue || epoch != CurrentSpqrEpoch + 1)
                 throw Transition("A fresh Braid output must advance SPQR by exactly one epoch.");
+            if (_links.Count == 2 &&
+                (_links[0].Epoch == SendSpqrEpoch || _links[0].Epoch == ReceiveSpqrEpoch))
+                throw Transition("A fresh SPQR link cannot retire a still-current data frontier.");
             using var step = ManagedTripleRatchetKdfProfile.AdvanceSpqrEpoch(_spqrRoot, braidOutputKey, epoch);
             var root = Copy(step.UseRoot);
             var aToB = Copy(step.UseAliceToBob);
@@ -730,7 +738,8 @@ internal sealed class ManagedTripleRatchetComponentProvider :
             {
                 var send = Role == TripleRatchetPartyRole.Alice ? aToB : bToA;
                 var receive = Role == TripleRatchetPartyRole.Alice ? bToA : aToB;
-                _links.Add(new SpqrLink(epoch, send.ToArray(), 1, receive.ToArray(), 1, true));
+                _links.Add(new SpqrLink(epoch, send.ToArray(), 1, receive.ToArray(), 1, true,
+                    ManagedBraidControlProfile.DeriveRoot(root, epoch)));
                 ReplaceRequired(ref _spqrRoot, root!); root = null;
                 CurrentSpqrEpoch = epoch;
                 while (_links.Count > 2)
@@ -897,7 +906,7 @@ internal sealed class ManagedTripleRatchetComponentProvider :
                 output[392] = checked((byte)_links.Count);
                 for (var index = 0; index < _links.Count; index++)
                     _links[index].Write(output.AsSpan(400 + index * LinkBytes, LinkBytes));
-                BinaryPrimitives.WriteUInt32BigEndian(output.AsSpan(592), checked((uint)braid.Length));
+                BinaryPrimitives.WriteUInt32BigEndian(output.AsSpan(1056), checked((uint)braid.Length));
                 braid.CopyTo(output, PrefixBytes);
                 return output;
             }
@@ -920,7 +929,7 @@ internal sealed class ManagedTripleRatchetComponentProvider :
                 !MessagingCryptoValidation.IsZero(encoded.Slice(9, 7)) ||
                 !MessagingCryptoValidation.IsZero(encoded.Slice(393, 7)))
                 throw InvalidStateEncoding();
-            var braidLength = checked((int)BinaryPrimitives.ReadUInt32BigEndian(encoded[592..]));
+            var braidLength = checked((int)BinaryPrimitives.ReadUInt32BigEndian(encoded[1056..]));
             if (braidLength < 1 || encoded.Length != PrefixBytes + braidLength)
                 throw InvalidStateEncoding();
             var flags = encoded[8];
@@ -997,11 +1006,12 @@ internal sealed class ManagedTripleRatchetComponentProvider :
             MessagingCryptoValidation.NonZeroExact(_spqrRoot, 32, nameof(_spqrRoot));
             MessagingCryptoValidation.NonZeroExact(_sendEvidence, 32, nameof(_sendEvidence));
             MessagingCryptoValidation.NonZeroExact(_receiveEvidence, 32, nameof(_receiveEvidence));
+            ValidateControlOperations();
             if (_pendingSendEc && MessagingCryptoValidation.FixedEquals(_advertisedSendPublic, _localPublic))
                 throw InvalidStateEncoding();
         }
 
-        private SpqrLink FindLink(ulong epoch) => _links.FirstOrDefault(link => link.Epoch == epoch) ??
+        internal SpqrLink FindLink(ulong epoch) => _links.FirstOrDefault(link => link.Epoch == epoch) ??
             throw Transition("The requested SPQR epoch is outside the two-epoch retention window.");
 
         public void Dispose()
@@ -1056,7 +1066,7 @@ internal sealed class ManagedTripleRatchetComponentProvider :
             return value.ToArray();
         }
 
-        private static MessagingCryptoException InvalidStateEncoding() => new(
+        internal static MessagingCryptoException InvalidStateEncoding() => new(
             MessagingCryptoError.InvalidInput,
             "The managed Triple-Ratchet component state is not one canonical TRC1 value.");
 
@@ -1078,7 +1088,7 @@ internal sealed class ManagedTripleRatchetComponentProvider :
         }
     }
 
-    private sealed class SpqrLink : IDisposable
+    private sealed partial class SpqrLink : IDisposable
     {
         private byte[]? _sendChain;
         private byte[]? _receiveChain;
@@ -1090,7 +1100,8 @@ internal sealed class ManagedTripleRatchetComponentProvider :
             ulong sendNext,
             byte[]? receiveChain,
             ulong receiveNext,
-            bool sendFresh)
+            bool sendFresh,
+            byte[] controlRoot)
         {
             Epoch = epoch;
             _sendChain = sendChain;
@@ -1098,6 +1109,8 @@ internal sealed class ManagedTripleRatchetComponentProvider :
             _receiveChain = receiveChain;
             ReceiveNext = receiveNext;
             _sendFresh = sendFresh;
+            _controlRoot = controlRoot;
+            MessagingCryptoValidation.NonZeroExact(controlRoot, 32, nameof(controlRoot));
             if (sendNext == 0 || receiveNext == 0 ||
                 sendChain is not null && (sendChain.Length != 32 || MessagingCryptoValidation.IsZero(sendChain)) ||
                 receiveChain is not null && (receiveChain.Length != 32 || MessagingCryptoValidation.IsZero(receiveChain)))
@@ -1153,23 +1166,28 @@ internal sealed class ManagedTripleRatchetComponentProvider :
             BinaryPrimitives.WriteUInt64BigEndian(output[48..], SendNext);
             _receiveChain?.CopyTo(output[56..88]);
             BinaryPrimitives.WriteUInt64BigEndian(output[88..], ReceiveNext);
+            WriteControl(output);
         }
 
         internal static SpqrLink Read(ReadOnlySpan<byte> input)
         {
-            if (input.Length != 96 || !MessagingCryptoValidation.IsZero(input.Slice(9, 7)) ||
+            if (input.Length != 328 || !MessagingCryptoValidation.IsZero(input.Slice(9, 7)) ||
                 (input[8] & ~7) != 0)
                 throw new MessagingCryptoException(MessagingCryptoError.InvalidInput, "Invalid TRC1 SPQR link.");
             var flags = input[8];
             ComponentState.ValidateOptional((flags & 1) != 0, input.Slice(16, 32));
             ComponentState.ValidateOptional((flags & 2) != 0, input.Slice(56, 32));
-            return new SpqrLink(
+            ValidateControlEncoding(input);
+            var link = new SpqrLink(
                 BinaryPrimitives.ReadUInt64BigEndian(input),
                 (flags & 1) == 0 ? null : input.Slice(16, 32).ToArray(),
                 BinaryPrimitives.ReadUInt64BigEndian(input[48..]),
                 (flags & 2) == 0 ? null : input.Slice(56, 32).ToArray(),
                 BinaryPrimitives.ReadUInt64BigEndian(input[88..]),
-                (flags & 4) != 0);
+                (flags & 4) != 0,
+                input.Slice(96, 32).ToArray());
+            link.ReadControl(input);
+            return link;
         }
 
         public void Dispose()
@@ -1178,6 +1196,7 @@ internal sealed class ManagedTripleRatchetComponentProvider :
             Zero(_receiveChain);
             _sendChain = null;
             _receiveChain = null;
+            DisposeControl();
         }
 
         private static byte[] Copy(Func<MessagingSecretFunc<byte[]>, byte[]> accessor) =>

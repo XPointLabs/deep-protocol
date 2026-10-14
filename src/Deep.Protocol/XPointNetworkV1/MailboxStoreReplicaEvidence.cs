@@ -46,7 +46,7 @@ public sealed class VerifiedMailboxStoreReplicaEvidence
 public static class MailboxStoreReplicaEvidenceVerifier
 {
     public static async ValueTask<MailboxStoreReplicaEvidence> CaptureAsync(
-        VerifiedDeepIdV2ContactRouteClosure route, CancellationToken cancellationToken = default)
+        VerifiedDeepIdV2MailboxRouteClosure route, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(route);
         await route.EnsureCurrentAsync(cancellationToken).ConfigureAwait(false);
@@ -78,24 +78,28 @@ public static class MailboxStoreReplicaEvidenceVerifier
         if (!closure.RetainedPmts.Any(pmt => Fixed(pmt.CanonicalBytes.Span, original.Projection.CanonicalBytes.Span)))
             throw new CryptographicException("Original Store projection is absent from the independently verified retained lineage.");
         ContactCodec.ValidatePmsSelection(original.Selection, original.Projection);
-        try { XPointOnionCapabilityProducer.VerifyContactThreshold(original.Projection, authority); }
+        // Current lineage authenticates retention; exact original PMT selects
+        // its already-verified ancestor for historical signatures and bindings.
+        // This never turns the old view into current admission authority.
+        var ancestor = XPointOnionCapabilityProducer.RequireRetainedProjectionAuthority(network, authority, original.Projection);
+        try { XPointOnionCapabilityProducer.VerifyContactThreshold(original.Projection, ancestor); }
         catch (OnionBoundaryException error) { throw new CryptographicException("Original Store projection threshold is invalid.", error); }
-        DeepIdV2RouteContext.VerifyWitnesses(original.Selection, 11, authority);
-        DeepIdV2RouteContext.VerifyWitnesses(original.Route, 21, authority);
-        DeepIdV2RouteContext.VerifyWitnesses(original.Successor, 14, authority);
+        DeepIdV2RouteContext.VerifyWitnesses(original.Selection, 11, ancestor);
+        DeepIdV2RouteContext.VerifyWitnesses(original.Route, 21, ancestor);
+        DeepIdV2RouteContext.VerifyWitnesses(original.Successor, 14, ancestor);
         var ids = original.Selection.Field(6);
         if (ids.Length != 64 || Fixed(ids.Span[..32], ids.Span[32..]))
             throw new CryptographicException("Original Store evidence requires two distinct selected nodes.");
         var view = XPointNetworkCodec.Parse<Xnv1Record>(evidence.ExactXnv1.Span);
         if (!Fixed(view.NetworkId.Span, authority.NetworkId.Span) ||
-            !Fixed(XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XNA1, view.AuthorizingXna.Hash.Span), authority.AuthorityCoreReference.Span) ||
-            !Fixed(view.DirectoryWitnessPolicyHash.Span, authority.DirectoryWitnessPolicyHash.Span) ||
+            !Fixed(XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XNA1, view.AuthorizingXna.Hash.Span), XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XNA1, ancestor.CoreHash.Span)) ||
+            !Fixed(view.DirectoryWitnessPolicyHash.Span, ancestor.DirectoryWitnessPolicyHash.Span) ||
             !Fixed(XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XNV1, view.CoreHash.Span), original.Projection.Field(5).Span) ||
-            view.NotBefore < authority.NotBefore || view.ExpiresAt > authority.ExpiresAt)
+            view.NotBefore < ancestor.NotBefore || view.ExpiresAt > ancestor.ExpiresAt)
             throw new CryptographicException("Original Store view is not bound to its signed original projection/authority.");
         try
         {
-            XPointOnionCapabilityProducer.VerifyThreshold(view.WitnessSignatures, authority,
+            XPointOnionCapabilityProducer.VerifyThreshold(view.WitnessSignatures, ancestor,
                 XPointNetworkCrypto.ComputeSigningInput(view), "store-view-threshold-invalid");
         }
         catch (OnionBoundaryException error) { throw new CryptographicException("Original Store view threshold is invalid.", error); }

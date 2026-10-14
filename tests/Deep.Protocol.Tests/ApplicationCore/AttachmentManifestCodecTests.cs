@@ -86,6 +86,69 @@ public sealed class AttachmentManifestCodecTests
             flags: Dmc2Flags.None));
     }
 
+    [Fact]
+    public void Dam1DisposalErasesOwnedOfferContainersAndRejectsSecretGetters()
+    {
+        // Codec-owned buffers only; these parsed bytes authenticate no message.
+        using var manifest = Manifest(1, 1, "owned.txt", "text/plain");
+        var exported = manifest.CanonicalBytes.ToArray();
+        var borrowed = ApplicationCoreCodec.CreateAttachmentOfferPayload(manifest);
+        var payloadBuffer = borrowed.CanonicalBytes.ToArray();
+        var ownedPayload = new AttachmentOfferDmc2Payload(payloadBuffer, manifest);
+        var independent = ApplicationCoreFixture.Message(ownedPayload);
+        var canonicalBuffer = independent.CanonicalBytes.ToArray();
+        var parent = new ParsedDmc2(canonicalBuffer, independent.NetworkId.Span, independent.LogicalMessageId.Span,
+            independent.ConversationId.Span, independent.SenderAccountId.Span, independent.SenderDeviceId.Span,
+            independent.SenderClientSequence, independent.CreatedAtUnixMilliseconds, independent.ExpiresAtUnixMilliseconds,
+            independent.Flags, independent.ReplyToLogicalMessageId.Span, ownedPayload);
+        try
+        {
+            Assert.Equal(canonicalBuffer, parent.CanonicalBytes.ToArray());
+            manifest.Dispose(); manifest.Dispose();
+            Assert.All(payloadBuffer, value => Assert.Equal(0, value));
+            Assert.All(canonicalBuffer, value => Assert.Equal(0, value));
+            Assert.Throws<ObjectDisposedException>(() => borrowed.CanonicalBytes);
+            Assert.Throws<ObjectDisposedException>(() => parent.CanonicalBytes);
+            Assert.Throws<ObjectDisposedException>(() => parent.PayloadBytes);
+            Assert.Throws<ObjectDisposedException>(() => parent.RecordHash);
+            Assert.Contains(exported, value => value != 0); // Already exported copy belongs to its caller.
+            using var independentManifest = Assert.IsType<AttachmentOfferDmc2Payload>(independent.ParsedPayload).Manifest;
+            Assert.True(independent.CanonicalBytes.Span.IndexOf(independentManifest.ObjectKey.Span) >= 0);
+            independentManifest.Dispose();
+            Assert.Throws<ObjectDisposedException>(() => independent.CanonicalBytes);
+            Assert.Throws<ObjectDisposedException>(() => independent.PayloadBytes);
+            var text = ApplicationCoreFixture.Message(ApplicationCoreCodec.CreateMessageCreatePayload("unrelated"));
+            Assert.NotEmpty(text.CanonicalBytes.ToArray());
+        }
+        finally { CryptographicOperations.ZeroMemory(exported); }
+    }
+
+    [Fact]
+    public void DisposedManifestRejectsAndErasesLateOwnedCopyRegistration()
+    {
+        using var manifest = Manifest(1, 1, "late.txt", "text/plain"); manifest.Dispose();
+        var copy = Enumerable.Repeat((byte)0x7f, 128).ToArray();
+        Assert.Throws<ObjectDisposedException>(() => manifest.RegisterOwnedSecretCopy(copy));
+        Assert.All(copy, value => Assert.Equal(0, value));
+    }
+
+    [Fact]
+    public async Task OwnedCopyRegistrationRacingDisposalCannotLeaveSecretBuffers()
+    {
+        using var manifest = Manifest(1, 1, "race.txt", "text/plain");
+        using var start = new ManualResetEventSlim(false);
+        var copies = Enumerable.Range(0, 8).Select(_ => Enumerable.Repeat((byte)0x7f, 128).ToArray()).ToArray();
+        var registrations = copies.Select(copy => Task.Run(() =>
+        {
+            start.Wait();
+            try { manifest.RegisterOwnedSecretCopy(copy); }
+            catch (ObjectDisposedException) { }
+        })).ToArray();
+        var disposal = Task.Run(() => { start.Wait(); manifest.Dispose(); });
+        start.Set(); await Task.WhenAll(registrations.Append(disposal));
+        Assert.All(copies, copy => Assert.All(copy, value => Assert.Equal(0, value)));
+    }
+
     private static ParsedDam1 Manifest(
         ulong total,
         int count,

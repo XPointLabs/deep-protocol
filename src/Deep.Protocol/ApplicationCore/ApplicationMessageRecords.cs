@@ -19,8 +19,8 @@ public enum Dmc2ContentKind : ushort
     Typing = 11,
     DeviceListUpdate = 12,
     DeviceRevocation = 13,
-    // The numeric allocation is frozen, but route emission remains fail-closed
-    // until the conflicting XRA1/DMC2 closure sizes are corrected in the root SoT.
+    // Numeric allocation is frozen. Generic raw emission remains closed;
+    // the current typed author does not prove native custody or peer consent.
     ContactRouteUpdate = 14,
     GroupProposal = 15,
     GroupCommit = 16,
@@ -111,8 +111,17 @@ public abstract class Dmc2Payload
     }
 
     public Dmc2ContentKind Kind { get; }
-    public ReadOnlyMemory<byte> CanonicalBytes => canonical.ToArray();
-    internal ReadOnlySpan<byte> CanonicalSpan => canonical;
+    public ReadOnlyMemory<byte> CanonicalBytes
+    {
+        get
+        {
+            RequireReadable(); var copy = canonical.ToArray();
+            try { RequireReadable(); return copy; }
+            catch { System.Security.Cryptography.CryptographicOperations.ZeroMemory(copy); throw; }
+        }
+    }
+    internal ReadOnlySpan<byte> CanonicalSpan { get { RequireReadable(); return canonical; } }
+    internal virtual void RequireReadable() { }
 }
 
 public sealed class SessionInitDmc2Payload : Dmc2Payload
@@ -295,9 +304,14 @@ public sealed class DeviceRevocationDmc2Payload : Dmc2Payload
 public sealed class AttachmentOfferDmc2Payload : Dmc2Payload
 {
     internal AttachmentOfferDmc2Payload(byte[] canonical, ParsedDam1 manifest)
-        : base(Dmc2ContentKind.AttachmentOffer, canonical) => Manifest = manifest;
+        : base(Dmc2ContentKind.AttachmentOffer, canonical)
+    {
+        Manifest = manifest;
+        manifest.RegisterOwnedSecretCopy(canonical);
+    }
 
     public ParsedDam1 Manifest { get; }
+    internal override void RequireReadable() => Manifest.RequireReadable();
 }
 
 public sealed class AttachmentCancelDmc2Payload : Dmc2Payload
@@ -422,7 +436,7 @@ public sealed class ParsedDmc2 : ParsedApplicationCoreRecord
     private readonly byte[] senderAccountId;
     private readonly byte[] senderDeviceId;
     private readonly byte[] replyToLogicalMessageId;
-    private readonly byte[] payloadBytes;
+    private readonly byte[] payloadBytes = [];
 
     internal ParsedDmc2(
         byte[] canonical,
@@ -450,7 +464,21 @@ public sealed class ParsedDmc2 : ParsedApplicationCoreRecord
         Flags = flags;
         this.replyToLogicalMessageId = replyToLogicalMessageId.ToArray();
         ParsedPayload = payload;
-        payloadBytes = payload.CanonicalSpan.ToArray();
+        try
+        {
+            payloadBytes = payload.CanonicalSpan.ToArray();
+            if (payload is AttachmentOfferDmc2Payload offer)
+            {
+                offer.Manifest.RegisterOwnedSecretCopy(canonical);
+                offer.Manifest.RegisterOwnedSecretCopy(payloadBytes);
+            }
+        }
+        catch
+        {
+            EraseOwnedSecretRecord();
+            System.Security.Cryptography.CryptographicOperations.ZeroMemory(payloadBytes);
+            throw;
+        }
     }
 
     public ReadOnlyMemory<byte> NetworkId => networkId.ToArray();
@@ -464,8 +492,17 @@ public sealed class ParsedDmc2 : ParsedApplicationCoreRecord
     public Dmc2ContentKind ContentKind => ParsedPayload.Kind;
     public Dmc2Flags Flags { get; }
     public ReadOnlyMemory<byte> ReplyToLogicalMessageId => replyToLogicalMessageId.ToArray();
-    public ReadOnlyMemory<byte> PayloadBytes => payloadBytes.ToArray();
+    public ReadOnlyMemory<byte> PayloadBytes
+    {
+        get
+        {
+            RequireReadable(); var copy = payloadBytes.ToArray();
+            try { RequireReadable(); return copy; }
+            catch { System.Security.Cryptography.CryptographicOperations.ZeroMemory(copy); throw; }
+        }
+    }
     /// <summary>Immutable typed parsed plaintext only. Does not authenticate
     /// origin, current endpoints, session custody, semantic application or ACK.</summary>
     public Dmc2Payload ParsedPayload { get; }
+    internal override void RequireReadable() => ParsedPayload.RequireReadable();
 }

@@ -32,6 +32,8 @@ public sealed class ParsedDam1 : ParsedApplicationCoreRecord, IDisposable
     private readonly byte[] manifestHash;
     private readonly Dam1ChunkEntry[] chunks;
     private int disposed;
+    private readonly object secretCopiesGate = new();
+    private readonly List<byte[]> ownedSecretCopies = [];
 
     internal ParsedDam1(
         byte[] canonical,
@@ -80,11 +82,30 @@ public sealed class ParsedDam1 : ParsedApplicationCoreRecord, IDisposable
     public string MediaType { get; }
     public ReadOnlyMemory<byte> ManifestHash { get { RequireReadable(); return manifestHash.ToArray(); } }
     internal override void RequireReadable() => ObjectDisposedException.ThrowIf(Volatile.Read(ref disposed) != 0, this);
+    // Only codec-owned containers register here; caller-owned defensive copies
+    // retain independent ownership. Registration after disposal erases its input.
+    internal void RegisterOwnedSecretCopy(byte[] copy)
+    {
+        lock (secretCopiesGate)
+        {
+            if (disposed != 0)
+            {
+                CryptographicOperations.ZeroMemory(copy);
+                throw new ObjectDisposedException(nameof(ParsedDam1));
+            }
+            ownedSecretCopies.Add(copy);
+        }
+    }
     public void Dispose()
     {
-        if (Interlocked.Exchange(ref disposed, 1) != 0) return;
-        EraseOwnedSecretRecord();
-        CryptographicOperations.ZeroMemory(objectKey); CryptographicOperations.ZeroMemory(blobCapability);
+        lock (secretCopiesGate)
+        {
+            if (Interlocked.Exchange(ref disposed, 1) != 0) return;
+            EraseOwnedSecretRecord();
+            CryptographicOperations.ZeroMemory(objectKey); CryptographicOperations.ZeroMemory(blobCapability);
+            foreach (var copy in ownedSecretCopies) CryptographicOperations.ZeroMemory(copy);
+            ownedSecretCopies.Clear();
+        }
         GC.SuppressFinalize(this);
     }
     ~ParsedDam1() => Dispose();
@@ -169,7 +190,8 @@ public static partial class ApplicationCoreCodec
         writer.Write(13, filenameBytes);
         writer.Write(14, mediaTypeBytes);
         writer.Complete();
-        return DecodeDam1(canonical);
+        try { return DecodeDam1(canonical); }
+        finally { CryptographicOperations.ZeroMemory(canonical); }
     }
 
     public static ParsedDam1 DecodeDam1(ReadOnlySpan<byte> canonical)

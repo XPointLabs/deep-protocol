@@ -40,7 +40,7 @@ public sealed class DeepIdV2ContactRouteTimeWindow
 
 /// <summary>DID2-only exact current route, not publication, consent, a grant,
 /// semantic ACK or delivery. No public/caller-key construction path.</summary>
-public sealed class VerifiedDeepIdV2ContactRouteClosure
+public sealed class VerifiedDeepIdV2ContactRouteClosure : VerifiedDeepIdV2MailboxRouteClosure
 {
     private readonly OnionTrustedTimeAuthority time;
     internal VerifiedDeepIdV2ContactRouteClosure(ParsedXir1V2 invite,
@@ -50,12 +50,11 @@ public sealed class VerifiedDeepIdV2ContactRouteClosure
     { Invite = invite; Route = route; Recipient = recipient; Network = network; NetworkAuthority = authority; this.time = time; }
 
     public ParsedXir1V2 Invite { get; }
-    public ParsedContactRouteClosure Route { get; }
-    public DeepIdV2CurrentContactAuthorization Recipient { get; }
-    public VerifiedOnionNetworkContext Network { get; }
-    public VerifiedXPointNetworkAuthority NetworkAuthority { get; }
+    public override ParsedContactRouteClosure Route { get; }
+    public override DeepIdV2CurrentContactAuthorization Recipient { get; }
+    public override VerifiedOnionNetworkContext Network { get; }
+    public override VerifiedXPointNetworkAuthority NetworkAuthority { get; }
     public ReadOnlyMemory<byte> ExactXir1V2 => Invite.CanonicalBytes;
-    public ReadOnlyMemory<byte> ExactRouteClosure => Route.ExactBytes;
 
     internal ValueTask<OnionMonotonicReading> ReadPublicationClockAsync(CancellationToken ct) =>
         time.ReadCurrentAsync(ct);
@@ -75,10 +74,7 @@ public sealed class VerifiedDeepIdV2ContactRouteClosure
         return new(current.Lower, current.Upper, current.Reading);
     }
 
-    public async ValueTask EnsureCurrentAsync(CancellationToken cancellationToken = default)
-    { _ = await ReadCurrentTimeAsync(cancellationToken).ConfigureAwait(false); }
-
-    public async ValueTask<DeepIdV2ContactRouteTimeWindow> ReadCurrentTimeAsync(
+    public override async ValueTask<DeepIdV2ContactRouteTimeWindow> ReadCurrentTimeAsync(
         CancellationToken cancellationToken = default)
     {
         var current = await DeepIdV2RouteContext.ReadAsync(Recipient, Network,

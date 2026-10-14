@@ -6,6 +6,17 @@ namespace Deep.Protocol.Tests.Registry;
 public sealed class DeepProtocolRegistryTests
 {
     [Fact]
+    public void BraidRecoveryIsAllocatedButInactiveWithoutASecondMagicAuthor()
+    {
+        Assert.Equal("DBR2", DeepProtocolIdentifiers.Magic.DBR2);
+        Assert.True(DeepProtocolIdentifiers.MagicBytes.DBR2.SequenceEqual("DBR2"u8));
+        Assert.Equal(ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE,
+            Assert.Single(DeepProtocolRegistryGenerated.Identifiers,
+                value => value.Namespace == "magic" && value.CanonicalName == "DBR2").Lifecycle);
+        Assert.False(Deep.Protocol.MessagingWire.Dbr2Codec.ProductionActive);
+    }
+
+    [Fact]
     public void RetiredIdentityCannotBeAuthoredDecodedOrPromotedFromTheAssembly()
     {
         var codec = typeof(Deep.Protocol.ApplicationCore.ApplicationCoreCodec);

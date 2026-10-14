@@ -217,6 +217,47 @@ internal sealed class ManagedMlKemBraidStateMachine : IDisposable
         }
     }
 
+    // Called only after the owned component verifies the whole DBR2 MAC/scope.
+    // Unlike ordinary data piggybacking, first recovery controls cannot silently
+    // ignore an incompatible flight and then be mistaken for useful progress.
+    internal SecretBuffer? ReceiveRecoveryControl(ulong epoch, Dtr2BraidMessage message)
+    {
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            if (epoch != _epoch) throw ReplayConflict("First recovery control is not in the current Braid epoch.");
+            if (message.Kind == Dtr2BraidMessageKind.Header &&
+                _state is ManagedMlKemBraidState.HeaderReceived or ManagedMlKemBraidState.Ct1Sampled)
+            {
+                _authenticator.VerifyHeaderAuthenticator(message, epoch);
+                Span<byte> seed = stackalloc byte[32]; Span<byte> hash = stackalloc byte[32]; Span<byte> mac = stackalloc byte[32];
+                message.CopyHeaderTo(seed, hash, mac);
+                if (!MessagingCryptoValidation.FixedEquals(seed, Required(_seed)) ||
+                    !MessagingCryptoValidation.FixedEquals(hash, Required(_hash)))
+                    throw ReplayConflict("Recovery Header differs from the current public Braid material.");
+                return null;
+            }
+            if (message.Kind == Dtr2BraidMessageKind.Ciphertext1 && _state == ManagedMlKemBraidState.Ct1Received)
+            {
+                Span<byte> ciphertext = stackalloc byte[Ciphertext1Bytes]; message.CopyCiphertext1To(ciphertext);
+                if (!MessagingCryptoValidation.FixedEquals(ciphertext, Required(_ciphertext1)))
+                    throw ReplayConflict("Recovery Ct1 differs from the current public Braid material.");
+                return null;
+            }
+            var permitted = message.Kind switch
+            {
+                Dtr2BraidMessageKind.Header => _state == ManagedMlKemBraidState.NoHeaderReceived,
+                Dtr2BraidMessageKind.Ciphertext1 => _state is ManagedMlKemBraidState.KeysSampled or ManagedMlKemBraidState.HeaderSent,
+                Dtr2BraidMessageKind.EncapsulationKeyWithCiphertext1Ack => _state is ManagedMlKemBraidState.Ct1Sampled or
+                    ManagedMlKemBraidState.EkReceivedCt1Sampled or ManagedMlKemBraidState.Ct1Acknowledged,
+                Dtr2BraidMessageKind.Ciphertext2 => _state is ManagedMlKemBraidState.Ct1Received or ManagedMlKemBraidState.EkSentCt1Received,
+                _ => false,
+            };
+            if (!permitted) throw ReplayConflict("Recovery flight is incompatible with current Braid progress.");
+            return Receive(epoch, message);
+        }
+    }
+
     internal byte[] ExportLocalPlaintextState()
     {
         lock (_gate)
@@ -335,30 +376,30 @@ internal sealed class ManagedMlKemBraidStateMachine : IDisposable
     {
         OwnedDeepMlKemBraidKeyPair? generated = null;
         SecretBuffer? decapsulationKey = null;
-        byte[]? seed = null;
+        byte[]? publicSeed = null;
         byte[]? hash = null;
         byte[]? vector = null;
         byte[]? computedHash = null;
         try
         {
             generated = _provider.GenerateKeyPair();
-            seed = generated.EncapsulationKeySeed.ToArray();
+            publicSeed = generated.EncapsulationKeySeed.ToArray();
             hash = generated.EncapsulationKeyHash.ToArray();
             vector = generated.EncapsulationKeyVector.ToArray();
             generated.UseDecapsulationKey(key =>
                 decapsulationKey = SecretBuffer.ImportExact(key, DecapsulationKeyBytes, "decapsulationKey"));
-            computedHash = ManagedMlKemBraidAuthenticator.ComputeEncapsulationKeyHash(seed, vector);
+            computedHash = ManagedMlKemBraidAuthenticator.ComputeEncapsulationKeyHash(publicSeed, vector);
             if (!MessagingCryptoValidation.FixedEquals(hash, computedHash))
                 throw new MessagingCryptoException(
                     MessagingCryptoError.ProviderFailure,
                     "The native Braid key pair returned an inconsistent public-key commitment.");
-            var message = _authenticator.CreateHeaderMessage(seed, vector);
+            var message = _authenticator.CreateHeaderMessage(publicSeed, vector);
             CommitTransition(ManagedMlKemBraidState.KeysSampled);
-            _seed = seed;
+            _seed = publicSeed;
             _hash = hash;
             _vector = vector;
             _decapsulationKey = decapsulationKey;
-            seed = null;
+            publicSeed = null;
             hash = null;
             vector = null;
             decapsulationKey = null;
@@ -368,7 +409,7 @@ internal sealed class ManagedMlKemBraidStateMachine : IDisposable
         {
             generated?.Dispose();
             decapsulationKey?.Dispose();
-            Zero(seed);
+            Zero(publicSeed);
             Zero(hash);
             Zero(vector);
             Zero(computedHash);

@@ -48,6 +48,7 @@ public static class DeepProtocolIdentifiers
         public const string DAM1 = "DAM1";
         public const string DAO1 = "DAO1";
         public const string DBG1 = "DBG1";
+        public const string DBR2 = "DBR2";
         public const string DCA1 = "DCA1";
         public const string DCB1 = "DCB1";
         public const string DCL1 = "DCL1";
@@ -259,6 +260,7 @@ public static class DeepProtocolIdentifiers
         public static System.ReadOnlySpan<byte> DAM1 => "DAM1"u8;
         public static System.ReadOnlySpan<byte> DAO1 => "DAO1"u8;
         public static System.ReadOnlySpan<byte> DBG1 => "DBG1"u8;
+        public static System.ReadOnlySpan<byte> DBR2 => "DBR2"u8;
         public static System.ReadOnlySpan<byte> DCA1 => "DCA1"u8;
         public static System.ReadOnlySpan<byte> DCB1 => "DCB1"u8;
         public static System.ReadOnlySpan<byte> DCL1 => "DCL1"u8;
@@ -506,7 +508,7 @@ internal readonly record struct GeneratedRegistryIdentifier(
 
 internal static class DeepProtocolRegistryGenerated
 {
-    internal const string RegistrySha256 = "8cbe788ef59a4b49eabcf3a3fc001c19d8f6693ab67a5964f57cd5d8b3664d94";
+    internal const string RegistrySha256 = "b694fd76f9e0808dcdae8cf6dec90e2194b1cbbbb3a1ede2c7ccb13998297392";
     internal const string Dnp1RegistrySha256 = "e036a0b6acb260e05e18ac536a723b0b8561d2ba1d813429304505b0e7a7da7b";
     internal const string Dnp1ApprovedCommit = "a8456987efe031388ca2eb9006886fb78f31e06c";
 
@@ -536,6 +538,7 @@ internal static class DeepProtocolRegistryGenerated
         new("magic", "DAM1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "DAO1", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "DBG1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
+        new("magic", "DBR2", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "DCA1", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "DCB1", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "DCL1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),

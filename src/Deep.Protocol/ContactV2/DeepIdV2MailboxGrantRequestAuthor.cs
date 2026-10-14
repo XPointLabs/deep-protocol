@@ -13,7 +13,7 @@ public static class DeepIdV2MailboxGrantRequestAuthor
     /// <summary>Restores only an exact still-current pending request. Never
     /// signs, changes its operation/route/window or establishes protected custody.</summary>
     public static ValueTask<AuthoredMailboxGrantRequest> RestoreDepositAsync(
-        VerifiedDeepIdV2ContactRouteClosure route, ReadOnlyMemory<byte> locatorHash,
+        VerifiedDeepIdV2MailboxRouteClosure route, ReadOnlyMemory<byte> locatorHash,
         ReadOnlyMemory<byte> holderPublicKey, ReadOnlyMemory<byte> exactXmg2,
         CancellationToken cancellationToken = default)
     {
@@ -23,14 +23,14 @@ public static class DeepIdV2MailboxGrantRequestAuthor
     }
 
     public static ValueTask<AuthoredMailboxGrantRequest> RestoreRetrieveAsync(
-        VerifiedDeepIdV2ContactRouteClosure route, ReadOnlyMemory<byte> locatorHash,
+        VerifiedDeepIdV2MailboxRouteClosure route, ReadOnlyMemory<byte> locatorHash,
         ReadOnlyMemory<byte> ownerRetrieveCapability, ReadOnlyMemory<byte> holderPublicKey,
         ReadOnlyMemory<byte> exactXmg2, CancellationToken cancellationToken = default) =>
         RestoreAsync(route, locatorHash, ownerRetrieveCapability, holderPublicKey,
             MailboxCapabilityDomain.Retrieve, exactXmg2, cancellationToken);
 
     private static async ValueTask<AuthoredMailboxGrantRequest> RestoreAsync(
-        VerifiedDeepIdV2ContactRouteClosure route, ReadOnlyMemory<byte> locatorHash,
+        VerifiedDeepIdV2MailboxRouteClosure route, ReadOnlyMemory<byte> locatorHash,
         ReadOnlyMemory<byte> capability, ReadOnlyMemory<byte> holderPublicKey,
         MailboxCapabilityDomain domain, ReadOnlyMemory<byte> exactXmg2, CancellationToken ct)
     {
@@ -56,7 +56,7 @@ public static class DeepIdV2MailboxGrantRequestAuthor
     }
 
     public static ValueTask<AuthoredMailboxGrantRequest> AuthorDepositAsync(
-        VerifiedDeepIdV2ContactRouteClosure route, ReadOnlyMemory<byte> locatorHash,
+        VerifiedDeepIdV2MailboxRouteClosure route, ReadOnlyMemory<byte> locatorHash,
         IReachabilityMailboxHolderSigner signer, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(route);
@@ -65,14 +65,14 @@ public static class DeepIdV2MailboxGrantRequestAuthor
     }
 
     public static ValueTask<AuthoredMailboxGrantRequest> AuthorRetrieveAsync(
-        VerifiedDeepIdV2ContactRouteClosure ownedRoute, ReadOnlyMemory<byte> locatorHash,
+        VerifiedDeepIdV2MailboxRouteClosure ownedRoute, ReadOnlyMemory<byte> locatorHash,
         ReadOnlyMemory<byte> ownerRetrieveCapability, IReachabilityMailboxHolderSigner signer,
         CancellationToken cancellationToken = default) =>
         AuthorAsync(ownedRoute, locatorHash, ownerRetrieveCapability,
             MailboxCapabilityDomain.Retrieve, signer, cancellationToken);
 
     private static async ValueTask<AuthoredMailboxGrantRequest> AuthorAsync(
-        VerifiedDeepIdV2ContactRouteClosure route, ReadOnlyMemory<byte> locatorHash,
+        VerifiedDeepIdV2MailboxRouteClosure route, ReadOnlyMemory<byte> locatorHash,
         ReadOnlyMemory<byte> capability, MailboxCapabilityDomain domain,
         IReachabilityMailboxHolderSigner signer, CancellationToken ct)
     {

@@ -64,13 +64,23 @@ public static partial class ApplicationCoreCodec
         ValidateCommonKindRules(kind, flags, reply, createdAt, expiresAt);
 
         var owned = canonical.ToArray();
-        var ownedNetwork = Field(owned, fields, 1);
-        var ownedSenderAccount = Field(owned, fields, 4);
-        var ownedSenderDevice = Field(owned, fields, 5);
-        var payload = DecodePayload(kind, Field(owned, fields, 12), ownedNetwork, ownedSenderAccount, ownedSenderDevice);
-        return new ParsedDmc2(owned, ownedNetwork, Field(owned, fields, 2), Field(owned, fields, 3),
-            ownedSenderAccount, ownedSenderDevice, sequence, createdAt, expiresAt, flags,
-            Field(owned, fields, 11), payload);
+        Dmc2Payload? payload = null;
+        try
+        {
+            var ownedNetwork = Field(owned, fields, 1);
+            var ownedSenderAccount = Field(owned, fields, 4);
+            var ownedSenderDevice = Field(owned, fields, 5);
+            payload = DecodePayload(kind, Field(owned, fields, 12), ownedNetwork, ownedSenderAccount, ownedSenderDevice);
+            return new ParsedDmc2(owned, ownedNetwork, Field(owned, fields, 2), Field(owned, fields, 3),
+                ownedSenderAccount, ownedSenderDevice, sequence, createdAt, expiresAt, flags,
+                Field(owned, fields, 11), payload);
+        }
+        catch
+        {
+            if (kind == Dmc2ContentKind.AttachmentOffer) CryptographicOperations.ZeroMemory(owned);
+            if (payload is AttachmentOfferDmc2Payload offer) offer.Manifest.Dispose();
+            throw;
+        }
     }
 
     public static ParsedDmc2 AuthorDmc2(
@@ -146,21 +156,28 @@ public static partial class ApplicationCoreCodec
             conversationId32.Length + senderAccountId32.Length + senderDeviceId32.Length +
             sequenceBytes.Length + createdAtBytes.Length + expiresAtBytes.Length + kindBytes.Length +
             flagsBytes.Length + replyToLogicalMessageId.Length + payload.CanonicalSpan.Length);
-        var writer = new ApplicationRecordWriter(canonical, DmcMagic, 12);
-        writer.Write(1, networkId16);
-        writer.Write(2, logicalMessageId32);
-        writer.Write(3, conversationId32);
-        writer.Write(4, senderAccountId32);
-        writer.Write(5, senderDeviceId32);
-        writer.Write(6, sequenceBytes);
-        writer.Write(7, createdAtBytes);
-        writer.Write(8, expiresAtBytes);
-        writer.Write(9, kindBytes);
-        writer.Write(10, flagsBytes);
-        writer.Write(11, replyToLogicalMessageId);
-        writer.Write(12, payload.CanonicalSpan);
-        writer.Complete();
-        return DecodeDmc2(canonical);
+        try
+        {
+            var writer = new ApplicationRecordWriter(canonical, DmcMagic, 12);
+            writer.Write(1, networkId16);
+            writer.Write(2, logicalMessageId32);
+            writer.Write(3, conversationId32);
+            writer.Write(4, senderAccountId32);
+            writer.Write(5, senderDeviceId32);
+            writer.Write(6, sequenceBytes);
+            writer.Write(7, createdAtBytes);
+            writer.Write(8, expiresAtBytes);
+            writer.Write(9, kindBytes);
+            writer.Write(10, flagsBytes);
+            writer.Write(11, replyToLogicalMessageId);
+            writer.Write(12, payload.CanonicalSpan);
+            writer.Complete();
+            return DecodeDmc2(canonical);
+        }
+        finally
+        {
+            if (payload.Kind == Dmc2ContentKind.AttachmentOffer) CryptographicOperations.ZeroMemory(canonical);
+        }
     }
 
     public static SessionInitDmc2Payload CreateSessionInitPayload(

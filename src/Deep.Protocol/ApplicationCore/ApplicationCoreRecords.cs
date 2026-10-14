@@ -17,7 +17,15 @@ public abstract class ParsedApplicationCoreRecord
     }
 
     public string Magic { get; }
-    public ReadOnlyMemory<byte> CanonicalBytes { get { RequireReadable(); return _canonical.ToArray(); } }
+    public ReadOnlyMemory<byte> CanonicalBytes
+    {
+        get
+        {
+            RequireReadable(); var copy = _canonical.ToArray();
+            try { RequireReadable(); return copy; }
+            catch { System.Security.Cryptography.CryptographicOperations.ZeroMemory(copy); throw; }
+        }
+    }
     public ReadOnlyMemory<byte> RecordHash { get { RequireReadable(); return _recordHash.ToArray(); } }
     internal ReadOnlySpan<byte> CanonicalSpan { get { RequireReadable(); return _canonical; } }
     internal ReadOnlySpan<byte> RecordHashSpan { get { RequireReadable(); return _recordHash; } }

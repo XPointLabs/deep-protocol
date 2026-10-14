@@ -17,6 +17,16 @@ public sealed class MessagingCryptoSurfaceTests
         Assert.Equal(
             new[]
             {
+                // Closed allocations frozen independently in DR-0113/0114.
+                nameof(ExactBraidRecoveryDurableDirection),
+                nameof(ExactBraidRecoveryPersistencePlan),
+                nameof(ExactBraidRecoveryPreparedTransition),
+                nameof(IExactBraidRecoveryDurableTransactionAuthority),
+                nameof(ExactBraidRecoveryCommitCompletion),
+                nameof(ExactBraidRecoveryCommitReceipt),
+                nameof(ExactBraidRecoverySuccessCapability),
+                nameof(ExactBraidRecoveryDurableTransactionProducer),
+                nameof(VerifiedBraidRecoveryObsoleteControl),
                 nameof(ExactDpe2DurableCommitDisposition),
                 nameof(ExactDpe2DurableCommitCompletion),
                 nameof(ExactDpe2DurableCommitReceipt),
@@ -97,6 +107,20 @@ public sealed class MessagingCryptoSurfaceTests
         Assert.Empty(typeof(ExactDpe2PreparedReceive).GetConstructors());
         Assert.Empty(typeof(ExactDpe2SendSuccessCapability).GetConstructors());
         Assert.Empty(typeof(ExactDpe2ReceiveSuccessCapability).GetConstructors());
+        foreach (var type in new[] { typeof(ExactBraidRecoveryPersistencePlan), typeof(ExactBraidRecoveryPreparedTransition),
+                     typeof(ExactBraidRecoveryCommitCompletion), typeof(ExactBraidRecoveryCommitReceipt),
+                     typeof(ExactBraidRecoverySuccessCapability), typeof(VerifiedBraidRecoveryObsoleteControl) })
+        {
+            Assert.True(type.IsSealed); Assert.Empty(type.GetConstructors());
+            Assert.All(type.GetProperties(), property => Assert.Null(property.SetMethod));
+        }
+        Assert.Equal(new[] { "BraidEpoch", "ExactControlHash", "StateCommitment", "StateGeneration" },
+            typeof(VerifiedBraidRecoveryObsoleteControl).GetProperties().Select(property => property.Name).Order(StringComparer.Ordinal));
+        Assert.All(typeof(VerifiedBraidRecoveryObsoleteControl).GetProperties(), property =>
+            Assert.True(property.PropertyType == typeof(ulong) || property.PropertyType == typeof(ReadOnlyMemory<byte>)));
+        Assert.Equal(new[] { "PrepareReceive", "PrepareSend", "TryVerifyObsoleteControl" },
+            typeof(ExactBraidRecoveryDurableTransactionProducer).GetMethods(BindingFlags.Public | BindingFlags.Static)
+                .Select(method => method.Name).Order(StringComparer.Ordinal));
         Assert.Empty(typeof(AuthoredDpk2Offering).GetConstructors());
         Assert.Empty(typeof(AuthoredDpk2InventoryV2).GetConstructors());
         Assert.Empty(typeof(AuthoredDeepIdV2PreKeyService).GetConstructors());

@@ -11,13 +11,13 @@ namespace Deep.Protocol.ContactV2;
 /// custody, installation, dispatch, delivery or ACK authority.</summary>
 public sealed class VerifiedDeepIdV2MailboxGrant
 {
-    private readonly VerifiedDeepIdV2ContactRouteClosure route;
+    private readonly VerifiedDeepIdV2MailboxRouteClosure route;
     private readonly ContactRecord pma;
     private readonly ContactRecord request;
     private readonly ContactRecord response;
     private readonly DeepIdV2ContactRouteTimeWindow verifiedAt;
 
-    internal VerifiedDeepIdV2MailboxGrant(VerifiedDeepIdV2ContactRouteClosure route,
+    internal VerifiedDeepIdV2MailboxGrant(VerifiedDeepIdV2MailboxRouteClosure route,
         ContactRecord pma, ContactRecord request, ContactRecord response,
         DeepIdV2ContactRouteTimeWindow verifiedAt)
     { this.route = route; this.pma = pma; this.request = request; this.response = response; this.verifiedAt = verifiedAt; }
@@ -48,7 +48,7 @@ public static class DeepIdV2MailboxGrantResultVerifier
     /// authority. Historical envelope expiry is not current grant expiry;
     /// this does not restore holder custody or authorize dispatch.</summary>
     public static async ValueTask<VerifiedDeepIdV2MailboxGrant> VerifyRetainedSuccessAsync(
-        VerifiedDeepIdV2ContactRouteClosure route, ReadOnlyMemory<byte> exactXmg2,
+        VerifiedDeepIdV2MailboxRouteClosure route, ReadOnlyMemory<byte> exactXmg2,
         ReadOnlyMemory<byte> exactXmc2, ReadOnlyMemory<byte> exactPma2,
         CancellationToken cancellationToken = default)
     {
@@ -74,7 +74,7 @@ public static class DeepIdV2MailboxGrantResultVerifier
     }
 
     public static async ValueTask<VerifiedDeepIdV2MailboxGrant> VerifySuccessAsync(
-        VerifiedDeepIdV2ContactRouteClosure route, AuthoredMailboxGrantRequest authoredRequest,
+        VerifiedDeepIdV2MailboxRouteClosure route, AuthoredMailboxGrantRequest authoredRequest,
         ReadOnlyMemory<byte> exactXmc2, ReadOnlyMemory<byte> exactPma2,
         CancellationToken cancellationToken = default)
     {
@@ -100,7 +100,7 @@ public static class DeepIdV2MailboxGrantResultVerifier
         return new(route, pma, request, response, final);
     }
 
-    private static void RequireAcquisition(VerifiedDeepIdV2ContactRouteClosure route,
+    private static void RequireAcquisition(VerifiedDeepIdV2MailboxRouteClosure route,
         ContactRecord request, ContactRecord response, DeepIdV2ContactRouteTimeWindow current)
     {
         RequireRequestScope(route, request);
@@ -113,7 +113,7 @@ public static class DeepIdV2MailboxGrantResultVerifier
             throw new CryptographicException("Mailbox acquisition response is future-dated or expired.");
     }
 
-    internal static void RequireRequestScope(VerifiedDeepIdV2ContactRouteClosure route, ContactRecord request)
+    internal static void RequireRequestScope(VerifiedDeepIdV2MailboxRouteClosure route, ContactRecord request)
     {
         var records = route.Route;
         var domain = (MailboxCapabilityDomain)request.Field(6).Span[0];
@@ -142,7 +142,7 @@ public static class DeepIdV2MailboxGrantResultVerifier
             throw new CryptographicException("Mailbox response time is outside its request envelope.");
     }
 
-    internal static void RequireGrant(VerifiedDeepIdV2ContactRouteClosure route,
+    internal static void RequireGrant(VerifiedDeepIdV2MailboxRouteClosure route,
         ContactRecord pma, ContactRecord response, DeepIdV2ContactRouteTimeWindow current)
     {
         var policy = MailboxAuthorityV2Verifier.Verify(route.NetworkAuthority, pma.CanonicalBytes.Span,
