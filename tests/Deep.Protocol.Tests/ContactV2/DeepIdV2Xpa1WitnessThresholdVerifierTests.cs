@@ -224,7 +224,7 @@ public sealed class DeepIdV2Xpa1WitnessThresholdVerifierTests
             root.PrivateKey));
         var xna = XPointNetworkCodec.Parse<Xna1Record>(
             XPointNetworkCodec.Write(XPointNetworkRegistry.Xna1, fields));
-        return new VerifiedXPointNetworkAuthority(xna, dts, [xna]);
+        return new VerifiedXPointNetworkAuthority(xna, dts, [xna], [dts]);
     }
 
     private sealed record Signer(byte[] Id, KeyPair Key, byte[] FailureDomain);

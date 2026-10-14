@@ -132,7 +132,7 @@ public sealed class MailboxAuthorityV2VerifierTests
             network,
             root,
             rootId,
-            new VerifiedXPointNetworkAuthority(xna, dts, [xna]),
+            new VerifiedXPointNetworkAuthority(xna, dts, [xna], [dts]),
             Bytes(32, 0x81),
             Bytes(32, 0x91));
     }

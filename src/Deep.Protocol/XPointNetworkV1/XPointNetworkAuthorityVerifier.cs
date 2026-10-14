@@ -87,11 +87,13 @@ public sealed class VerifiedXPointNetworkAuthority
     private readonly XPointNetworkRootKey[] rootKeys;
     private readonly XPointNetworkWitnessKey[] witnessKeys;
     private readonly Xna1Record[] authorityChain;
+    private readonly AccountDirectoryDts1[] timePolicyChain;
 
     internal VerifiedXPointNetworkAuthority(
         Xna1Record authority,
         AccountDirectoryDts1 dts1,
-        IReadOnlyList<Xna1Record> verifiedAuthorityChain)
+        IReadOnlyList<Xna1Record> verifiedAuthorityChain,
+        IReadOnlyList<AccountDirectoryDts1> verifiedTimePolicyChain)
     {
         networkId = authority.NetworkId.ToArray();
         AuthorityGeneration = authority.AuthorityGeneration;
@@ -119,6 +121,7 @@ public sealed class VerifiedXPointNetworkAuthority
         Dts1NotBefore = dts1.NotBefore;
         Dts1ExpiresAt = dts1.ExpiresAt;
         authorityChain = verifiedAuthorityChain.ToArray();
+        timePolicyChain = verifiedTimePolicyChain.ToArray();
     }
 
     public ReadOnlyMemory<byte> NetworkId => networkId.ToArray();
@@ -143,6 +146,7 @@ public sealed class VerifiedXPointNetworkAuthority
     public ulong Dts1ExpiresAt { get; }
 
     internal IReadOnlyList<Xna1Record> AuthorityChain => authorityChain;
+    internal IReadOnlyList<AccountDirectoryDts1> TimePolicyChain => timePolicyChain;
 }
 
 public static class XPointNetworkAuthorityVerifier
@@ -168,6 +172,7 @@ public static class XPointNetworkAuthorityVerifier
             Xna1Record? current = null;
             AccountDirectoryDts1? currentDts = null;
             var verifiedAuthorities = new List<Xna1Record>(xnaBytes.Length);
+            var verifiedTimePolicies = new List<AccountDirectoryDts1>(dtsBytes.Length);
             var signatures = SodiumVerifier.Instance;
 
             for (var index = 0; index < xnaBytes.Length; index++)
@@ -204,9 +209,10 @@ public static class XPointNetworkAuthorityVerifier
                 predecessorDts = currentDts;
                 predecessorPolicyHash = policyHash;
                 verifiedAuthorities.Add(current);
+                verifiedTimePolicies.Add(currentDts);
             }
 
-            return new VerifiedXPointNetworkAuthority(current!, currentDts!, verifiedAuthorities);
+            return new VerifiedXPointNetworkAuthority(current!, currentDts!, verifiedAuthorities, verifiedTimePolicies);
         }
         catch (XPointNetworkAuthorityVerificationException)
         {

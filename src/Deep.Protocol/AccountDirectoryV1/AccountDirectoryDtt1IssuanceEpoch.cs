@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using Deep.Protocol.XPointNetworkV1;
+using Deep.Protocol.ApplicationCore;
 
 namespace Deep.Protocol.AccountDirectoryV1;
 
@@ -17,6 +18,7 @@ public sealed class AccountDirectoryDtt1IssuanceEpoch
     private readonly byte[] authorityCoreReference;
     private readonly byte[] timeSourcePolicyCoreReference;
     private readonly byte[] id;
+    private readonly byte[][] replayNamespaceIds;
 
     private AccountDirectoryDtt1IssuanceEpoch(
         ReadOnlySpan<byte> networkId,
@@ -25,7 +27,8 @@ public sealed class AccountDirectoryDtt1IssuanceEpoch
         ulong number,
         ulong validFrom,
         ulong validUntil,
-        ReadOnlySpan<byte> id)
+        ReadOnlySpan<byte> id,
+        byte[][] replayNamespaceIds)
     {
         this.networkId = networkId.ToArray();
         this.authorityCoreReference = authorityCoreReference.ToArray();
@@ -34,12 +37,20 @@ public sealed class AccountDirectoryDtt1IssuanceEpoch
         ValidFrom = validFrom;
         ValidUntil = validUntil;
         this.id = id.ToArray();
+        this.replayNamespaceIds = replayNamespaceIds;
     }
 
     public ulong Number { get; }
     public ulong ValidFrom { get; }
     public ulong ValidUntil { get; }
     public ReadOnlyMemory<byte> Id => id.ToArray();
+
+    /// <summary>
+    /// Negative anti-replay namespaces from the verified paired lineage for this
+    /// UTC day, ancestor-to-current. Never authority to issue an ancestor proof.
+    /// </summary>
+    public IReadOnlyList<ReadOnlyMemory<byte>> ReplayNamespaceIds => Array.AsReadOnly(
+        replayNamespaceIds.Select(value => (ReadOnlyMemory<byte>)value.ToArray()).ToArray());
 
     public static AccountDirectoryDtt1IssuanceEpoch Derive(
         VerifiedXPointNetworkAuthority authority,
@@ -69,6 +80,21 @@ public sealed class AccountDirectoryDtt1IssuanceEpoch
         var epochId = AccountDirectoryCrypto.Sha256Domain(Domain, payload);
         try
         {
+            var namespaces = new List<byte[]>();
+            for (var index = 0; index < authority.AuthorityChain.Count; index++)
+            {
+                var ancestor = authority.AuthorityChain[index];
+                var policy = authority.TimePolicyChain[index];
+                if (ancestor.NotBefore > validUntil || ancestor.ExpiresAt <= validFrom ||
+                    policy.NotBefore > validUntil || policy.ExpiresAt <= validFrom) continue;
+                if (namespaces.Count == 64) throw new CryptographicException("Too many same-day replay namespaces.");
+                var ancestorReference = XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XNA1, ancestor.CoreHash.Span);
+                ancestorReference.CopyTo(payload);
+                ancestor.FieldSpan(12).CopyTo(payload[38..]);
+                namespaces.Add(AccountDirectoryCrypto.Sha256Domain(Domain, payload));
+            }
+            if (namespaces.Count == 0 || !CryptographicOperations.FixedTimeEquals(namespaces[^1], epochId))
+                throw new CryptographicException("The current authority does not close its replay namespace.");
             return new AccountDirectoryDtt1IssuanceEpoch(
                 authority.NetworkId.Span,
                 authority.AuthorityCoreReference.Span,
@@ -76,7 +102,7 @@ public sealed class AccountDirectoryDtt1IssuanceEpoch
                 number,
                 validFrom,
                 validUntil,
-                epochId);
+                epochId, namespaces.ToArray());
         }
         finally
         {

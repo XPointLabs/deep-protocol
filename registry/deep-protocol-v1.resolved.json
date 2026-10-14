@@ -3,7 +3,7 @@
   "schemaVersion": "1.0.0",
   "registryGeneration": 1,
   "registryId": "deep-protocol-v1-resolved",
-  "sourceRegistrySha256": "d99129fc3b39179b8e7447a037064affefb0545d23c1eb475b3867c4b20f9594",
+  "sourceRegistrySha256": "92b1980f2fe7fc76feab30d960bc03425455784069e556c6e2f98671fe20a3c2",
   "dnp1ApprovedCommit": "a8456987efe031388ca2eb9006886fb78f31e06c",
   "dnp1RegistrySha256": "e036a0b6acb260e05e18ac536a723b0b8561d2ba1d813429304505b0e7a7da7b",
   "records": [
@@ -1943,6 +1943,7 @@
         "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAdp1Codec.cs",
         "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryAfp1Codec.cs",
         "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryDtt1Codec.cs",
+        "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryDtt1IssuanceEpoch.cs",
         "src/Deep.Protocol/AccountDirectoryV1/AccountDirectoryFreshnessVerification.cs",
         "src/Deep.Protocol/ContactV1/ContactCodec.cs",
         "src/Deep.Protocol/ContactV2/DeepIdV2RouteTimeCoverage.cs",
