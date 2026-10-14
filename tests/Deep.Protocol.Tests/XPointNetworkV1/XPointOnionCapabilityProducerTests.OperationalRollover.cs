@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
+using Deep.Protocol.AccountDirectoryV1;
 using Deep.Protocol.ContactV1;
 using Deep.Protocol.DeepExtension.PrivacyRouting;
 using Deep.Protocol.XPointNetworkV1;
@@ -21,6 +22,8 @@ public sealed partial class XPointOnionCapabilityProducerTests
     [InlineData("protected-pmt")] [InlineData("old-root-signer")]
     [InlineData("old-witness-signers")] [InlineData("delegated-cross-root")]
     [InlineData("missing-prefix")] [InlineData("forked-prefix")]
+    [InlineData("policy-under-operational")] [InlineData("policy-over-authority")]
+    [InlineData("delegated-policy-extension")]
     public async Task OperationalRollover_HostilePredecessorOrSignerRejectsBeforeSigning(string fault) =>
         await Fixture.Create().CheckOperationalRolloverAsync(false, fault);
 
@@ -39,25 +42,34 @@ public sealed partial class XPointOnionCapabilityProducerTests
         await Fixture.Create().CheckSameKeyRenewalAsync();
 
     [Theory]
-    [InlineData("short-root")] [InlineData("root-gap")] [InlineData("dts-gap")]
+    [InlineData("short-root")] [InlineData("root-time-rollback")] [InlineData("dts-before-root")]
     [InlineData("oversized-dts")] [InlineData("invalid-predecessor-signature")]
     [InlineData("unknown-signer")] [InlineData("empty-roots")]
     [InlineData("duplicate-root")] [InlineData("canceled")]
     public async Task OperationalRollover_SameKeyRenewalRejectsHostileInputsBeforeSigning(string fault) =>
         await Fixture.Create().CheckSameKeyRenewalAsync(fault);
 
+    [Theory]
+    [InlineData(1_000UL)] [InlineData(1_001UL)] [InlineData(10_001UL)]
+    public async Task OperationalRollover_OfflineRootContinuityAcrossExpiryDoesNotReviveOldPolicy(ulong issuedAt) =>
+        await Fixture.Create().CheckSameKeyRenewalAsync(renewalFrom: issuedAt);
+
+    [Fact]
+    public async Task OperationalRollover_OfflinePolicyDelegatesBeyondInitialOperationalView() =>
+        await Fixture.Create().CheckOperationalRolloverAsync(true, extendRootPolicy: true);
+
     internal sealed partial class Fixture
     {
-        internal async Task CheckSameKeyRenewalAsync(string? fault = null)
+        internal async Task CheckSameKeyRenewalAsync(string? fault = null, ulong renewalFrom = 850)
         {
             using var root = new OperationalTestSigner(_root);
             using var unknown = OperationalTestSigner.Create(0x24, 0x25, 0x26);
             var dts = _dts.ToArray();
             if (fault == "invalid-predecessor-signature") dts[^1] ^= 1;
-            var rootFrom = fault == "root-gap" ? 1_001UL : 850UL;
-            var rootUntil = fault == "short-root" ? 999UL : fault == "oversized-dts" ? 3_100_000UL : 1_500UL;
-            var dtsFrom = fault == "dts-gap" ? 900UL : rootFrom;
-            var dtsUntil = fault == "oversized-dts" ? dtsFrom + 2_592_001UL : 1_400UL;
+            var rootFrom = fault == "root-time-rollback" ? _authority.NotBefore - 1 : renewalFrom;
+            var rootUntil = fault == "short-root" ? 999UL : fault == "oversized-dts" ? 3_100_000UL : checked(renewalFrom + 650);
+            var dtsFrom = fault == "dts-before-root" ? rootFrom - 1 : rootFrom;
+            var dtsUntil = fault == "oversized-dts" ? dtsFrom + 2_592_001UL : checked(renewalFrom + 550);
             var signers = fault == "unknown-signer" ? new[] { unknown } : fault == "empty-roots" ? [] : fault == "duplicate-root" ? [root, root] : new[] { root };
             using var cancellation = new CancellationTokenSource();
             if (fault == "canceled") cancellation.Cancel();
@@ -74,7 +86,8 @@ public sealed partial class XPointOnionCapabilityProducerTests
             var pin = new XPointNetworkGenesisPin(_authority.NetworkId.Span, _authority.AuthorityCoreHash.Span);
             var firstAuthority = XPointNetworkAuthorityVerifier.Verify(pin, [_xna, first.ExactXna1], [_dts, first.ExactDts1]);
             var second = await XPointNetworkBootstrapAuthor.AuthorSameKeyRenewalAsync(Bytes(32, 0x1a), firstAuthority,
-                [_dts, first.ExactDts1], 1_350, 1_350, 2_100, 1_350, 2_000, [root]);
+                [_dts, first.ExactDts1], checked(renewalFrom + 500), checked(renewalFrom + 500),
+                checked(renewalFrom + 1_250), checked(renewalFrom + 500), checked(renewalFrom + 1_150), [root]);
             var current = XPointNetworkAuthorityVerifier.Verify(pin, [_xna, first.ExactXna1, second.ExactXna1], [_dts, first.ExactDts1, second.ExactDts1]);
             Assert.Equal(4, root.Calls); Assert.Equal(2UL, current.AuthorityGeneration); Assert.Equal(2UL, current.Dts1PolicyGeneration);
             Assert.Equal(_authority.DirectoryWitnessPolicyGeneration, current.DirectoryWitnessPolicyGeneration);
@@ -86,9 +99,21 @@ public sealed partial class XPointOnionCapabilityProducerTests
             Assert.False(firstAuthority.DirectoryWitnessPolicyHash.Span.SequenceEqual(current.DirectoryWitnessPolicyHash.Span));
             Assert.Equal(_authority.AuthorityCoreHash.ToArray(), pin.AuthorityCoreHash.ToArray());
             Assert.Equal(_authority.RootKeys.Select(k => k.Id.ToArray()), current.RootKeys.Select(k => k.Id.ToArray()));
+            if (renewalFrom >= _authority.ExpiresAt)
+            {
+                Assert.Equal(renewalFrom, firstAuthority.IssuedAt);
+                Assert.Equal(renewalFrom, firstAuthority.NotBefore);
+                Assert.True(AccountDirectoryDts1Codec.Decode(_dts).ExpiresAt < renewalFrom);
+                Assert.Equal(_authority.ExpiresAt, current.AuthorityChain[0].ExpiresAt);
+                var original = await VerifyMailboxAsync();
+                Assert.Throws<CryptographicException>(() => MailboxAuthorityV2Verifier.Verify(
+                    _authority, original.Pma.AsSpan(), renewalFrom, renewalFrom + 1));
+                Assert.Throws<CryptographicException>(() => MailboxAuthorityV2Verifier.Verify(
+                    current, original.Pma.AsSpan(), current.NotBefore, current.NotBefore + 1));
+            }
         }
 
-        internal async Task CheckOperationalRolloverAsync(bool cold, string? fault = null)
+        internal async Task CheckOperationalRolloverAsync(bool cold, string? fault = null, bool extendRootPolicy = false)
         {
             var original = await VerifyMailboxAsync();
             var renewed = BuildAuthorityRollover();
@@ -116,20 +141,23 @@ public sealed partial class XPointOnionCapabilityProducerTests
                 var prefix = fault == "missing-prefix" ? Array.Empty<ReadOnlyMemory<byte>>() : new ReadOnlyMemory<byte>[] { view };
                 if (fault == "forked-prefix") prefix = [XPointNetworkTestRecords.MutateField(view, 6, bytes => bytes[0] ^= 1)];
                 XPointNetworkOperationalSuccessorRequest Request() => new(Bytes(32, 0x13), renewed.Authority,
-                    fault == "delegated-cross-root" ? [] : new IXPointNetworkBootstrapRootSigner[] { fault == "old-root-signer" ? oldRoot : root },
+                    fault is "delegated-cross-root" or "delegated-policy-extension" ? [] : new IXPointNetworkBootstrapRootSigner[] { fault == "old-root-signer" ? oldRoot : root },
                     fault == "old-witness-signers" ? oldWitnesses : witnesses,
                     NewRollovers(identities, _nodes, delegated: false), policy,
                     _nodes.Select(bytes => (ReadOnlyMemory<byte>)bytes).ToArray(), prefix,
-                    head, pma, pmt, headHash, pmtHash, ContactCodec.Decode("PMT2", _pmt).Field(14).ToArray(), 180, 185, 280);
+                    head, pma, pmt, headHash, pmtHash, ContactCodec.Decode("PMT2", _pmt).Field(14).ToArray(), 180, 185, 280,
+                    rootPolicyExpiresAtUnixSeconds: fault == "policy-under-operational" ? 279UL
+                        : fault == "policy-over-authority" ? checked(renewed.Authority.ExpiresAt + 1)
+                        : extendRootPolicy || fault == "delegated-policy-extension" ? 600UL : 0UL);
                 if (fault is not null)
                 {
                     var rejected = await Record.ExceptionAsync(async () =>
                     {
-                        if (fault == "delegated-cross-root") await XPointNetworkOperationalSuccessorAuthor.AuthorDelegatedAsync(Request());
+                        if (fault is "delegated-cross-root" or "delegated-policy-extension") await XPointNetworkOperationalSuccessorAuthor.AuthorDelegatedAsync(Request());
                         else await XPointNetworkOperationalSuccessorAuthor.AuthorAsync(Request());
                     });
                     Assert.NotNull(rejected);
-                    Assert.True(fault == "missing-prefix" ? rejected is ArgumentException
+                    Assert.True(fault is "missing-prefix" or "policy-under-operational" or "policy-over-authority" or "delegated-policy-extension" ? rejected is ArgumentException
                         : rejected is CryptographicException or OnionBoundaryException, rejected.ToString());
                     Assert.Equal(0, root.Calls + oldRoot.Calls + witnesses.Concat(oldWitnesses).Concat(identities).Sum(s => s.Calls));
                     Assert.Equal(original.Network.Closure.Pmt.CanonicalBytes.ToArray(), original.Network.Closure.RetainedPmts[0].CanonicalBytes.ToArray());
@@ -139,15 +167,23 @@ public sealed partial class XPointOnionCapabilityProducerTests
                 MailboxAuthorityV2Verifier.VerifyHistoricalLineage(renewed.Authority, original.Pma, 100, 101);
                 Assert.Throws<CryptographicException>(() => MailboxAuthorityV2Verifier.Verify(renewed.Authority, original.Pma, 200, 201));
                 var first = await XPointNetworkOperationalSuccessorAuthor.AuthorAsync(Request());
+                if (extendRootPolicy)
+                {
+                    Assert.Equal(600UL, XPointNetworkCodec.Parse<Xvp1Record>(first.ExactXvp1.Span).ExpiresAt);
+                    Assert.Equal(600UL, MailboxAuthorityV2Verifier.Verify(renewed.Authority, first.ExactPma2.Span, 200, 201).ExpiresAtUnixSeconds);
+                    Assert.Equal(280UL, XPointNetworkCodec.Parse<Xnv1Record>(first.ExactXnv1.Span).ExpiresAt);
+                }
                 var delegated = await XPointNetworkOperationalSuccessorAuthor.AuthorDelegatedAsync(new(
                     Bytes(32, 0x14), renewed.Authority, [], witnesses, NewRollovers(identities, first.ExactXnd1.Select(b => b.ToArray()).ToArray(), true),
                     first.ExactXvp1, first.ExactXnd1, [_xnv, first.ExactXnv1], first.ExactXnh1,
                     first.ExactPma2, first.ExactPmt2,
                     XPointNetworkOperationalSuccessorAuthor.ComputeXnh1CoreHash(first.ExactXnh1.Span),
                     ContactCodec.Decode("PMT2", first.ExactPmt2.Span).ArtifactHash.Span,
-                    ContactCodec.Decode("PMT2", first.ExactPmt2.Span).Field(14).ToArray(), 190, 190, 270));
+                    ContactCodec.Decode("PMT2", first.ExactPmt2.Span).Field(14).ToArray(), 190, 190, extendRootPolicy ? 400UL : 270UL));
                 Assert.Equal(first.ExactXvp1.ToArray(), delegated.ExactXvp1.ToArray());
                 Assert.Equal(first.ExactPma2.ToArray(), delegated.ExactPma2.ToArray());
+                if (extendRootPolicy)
+                    Assert.Equal(400UL, XPointNetworkCodec.Parse<Xnv1Record>(delegated.ExactXnv1.Span).ExpiresAt);
                 var currentPma = MailboxAuthorityV2Verifier.Verify(renewed.Authority, delegated.ExactPma2.Span, 195, 205);
                 Assert.True(currentPma.BindsProjection(delegated.ExactPmt2.Span));
                 Assert.Equal(renewed.Authority.AuthorityCoreReference.ToArray(), ContactCodec.Decode("PMA2", first.ExactPma2.Span).Field(13).ToArray());

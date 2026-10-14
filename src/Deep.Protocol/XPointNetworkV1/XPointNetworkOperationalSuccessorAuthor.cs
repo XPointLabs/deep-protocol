@@ -73,7 +73,8 @@ public sealed class XPointNetworkOperationalSuccessorRequest
         ReadOnlySpan<byte> currentAdh1CoreReference,
         ulong issuedAtUnixSeconds,
         ulong notBeforeUnixSeconds,
-        ulong expiresAtUnixSeconds)
+        ulong expiresAtUnixSeconds,
+        ulong rootPolicyExpiresAtUnixSeconds = 0)
     {
         this.ceremonyId = Required(ceremonyId, 32, nameof(ceremonyId));
         Authority = authority ?? throw new ArgumentNullException(nameof(authority));
@@ -106,6 +107,11 @@ public sealed class XPointNetworkOperationalSuccessorRequest
         IssuedAtUnixSeconds = issuedAtUnixSeconds;
         NotBeforeUnixSeconds = notBeforeUnixSeconds;
         ExpiresAtUnixSeconds = expiresAtUnixSeconds;
+        RootPolicyExpiresAtUnixSeconds = rootPolicyExpiresAtUnixSeconds == 0 ? expiresAtUnixSeconds : rootPolicyExpiresAtUnixSeconds;
+        if (RootPolicyExpiresAtUnixSeconds < expiresAtUnixSeconds ||
+            RootPolicyExpiresAtUnixSeconds > Authority.ExpiresAt ||
+            RootPolicyExpiresAtUnixSeconds - notBeforeUnixSeconds > 2_592_000)
+            throw new ArgumentException("The root policy must cover the operational interval within current authority and the 30-day bound.");
     }
 
     public ReadOnlyMemory<byte> CeremonyId => ceremonyId.ToArray();
@@ -125,6 +131,7 @@ public sealed class XPointNetworkOperationalSuccessorRequest
     public ulong IssuedAtUnixSeconds { get; }
     public ulong NotBeforeUnixSeconds { get; }
     public ulong ExpiresAtUnixSeconds { get; }
+    public ulong RootPolicyExpiresAtUnixSeconds { get; }
 
     private static byte[] Required(ReadOnlySpan<byte> value, int size, string name)
     {
@@ -207,6 +214,8 @@ public static class XPointNetworkOperationalSuccessorAuthor
         var authority = request.Authority;
         if (delegated && request.RootSigners.Count != 0)
             throw new ArgumentException("Delegated renewal must not load offline root custody.");
+        if (delegated && request.RootPolicyExpiresAtUnixSeconds != request.ExpiresAtUnixSeconds)
+            throw new ArgumentException("Delegated renewal cannot choose a new offline root-policy horizon.");
         var roots = delegated ? [] : ValidateRoots(authority, request.RootSigners);
         var witnesses = ValidateWitnesses(authority, request.WitnessSigners);
         var priorPolicy = XPointNetworkCodec.Parse<Xvp1Record>(request.ExactPreviousXvp1.Span);
@@ -356,7 +365,7 @@ public static class XPointNetworkOperationalSuccessorAuthor
         fields[11] = U64(requiredPmtGeneration);
         fields[14] = U64(request.IssuedAtUnixSeconds);
         fields[15] = U64(request.NotBeforeUnixSeconds);
-        fields[16] = U64(request.ExpiresAtUnixSeconds);
+        fields[16] = U64(request.RootPolicyExpiresAtUnixSeconds);
         fields[17] = request.Authority.AuthorityCoreReference;
         fields[18] = new[] { checked((byte)roots.Length) };
         fields[19] = SignatureRows(roots.Select(static signer =>
@@ -491,7 +500,7 @@ public static class XPointNetworkOperationalSuccessorAuthor
         fields[8] = U16(2); // A root-signed successor activates the current profile; never edit its predecessor.
         fields[9] = U64(request.IssuedAtUnixSeconds);
         fields[10] = U64(request.NotBeforeUnixSeconds);
-        fields[11] = U64(request.ExpiresAtUnixSeconds);
+        fields[11] = U64(request.RootPolicyExpiresAtUnixSeconds);
         fields[12] = request.Authority.AuthorityCoreReference;
         fields[13] = request.Authority.DirectoryWitnessPolicyHash;
         fields[14] = new[] { checked((byte)roots.Length) };

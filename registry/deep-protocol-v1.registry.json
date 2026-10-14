@@ -86,13 +86,13 @@
       "id": "account-directory-v1",
       "kind": "normative-document",
       "path": "docs/architecture/ACCOUNT-DIRECTORY-TRANSPARENCY-V1.md",
-      "normalizedSha256": "b8730585a29eafc709e97442e10de93ac986e9731265e18e5535308f6a98453d"
+      "normalizedSha256": "e957dcc438051032d931a070467b41c5b223e55c007a19d0daffe5f7a6991ab6"
     },
     {
       "id": "xpoint-network-v1",
       "kind": "normative-document",
       "path": "docs/architecture/XPOINT-NETWORK-V1.md",
-      "normalizedSha256": "ecfbe8cfd137c1502de6df54585dccfa25b34ee8d090795fd3e9f061cc34f18f"
+      "normalizedSha256": "c35c201dca7e506af13720e4f21feba187089d292c1bbe080177af6ea3529956"
     },
     {
       "id": "contact-resolver-v1",

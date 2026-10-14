@@ -44,16 +44,16 @@ public static partial class XPointNetworkBootstrapAuthor
         _ = XPointNetworkAuthorityVerifier.Verify(pin, xnaChain, dtsChain);
         var prior = predecessor.AuthorityChain[^1];
         var priorDts = AccountDirectoryDts1Codec.Decode(dtsChain[^1].Span);
-        if (authorityIssuedAtUnixSeconds < predecessor.NotBefore || authorityIssuedAtUnixSeconds >= predecessor.ExpiresAt ||
+        if (authorityIssuedAtUnixSeconds < predecessor.NotBefore || authorityIssuedAtUnixSeconds < predecessor.IssuedAt ||
             authorityIssuedAtUnixSeconds > authorityNotBeforeUnixSeconds || authorityNotBeforeUnixSeconds < predecessor.NotBefore ||
-            authorityNotBeforeUnixSeconds >= predecessor.ExpiresAt || authorityNotBeforeUnixSeconds >= authorityExpiresAtUnixSeconds ||
+            authorityNotBeforeUnixSeconds >= authorityExpiresAtUnixSeconds ||
             authorityExpiresAtUnixSeconds - authorityNotBeforeUnixSeconds > 34_560_000 ||
             authorityExpiresAtUnixSeconds < predecessor.ExpiresAt ||
             timePolicyNotBeforeUnixSeconds < authorityNotBeforeUnixSeconds || timePolicyNotBeforeUnixSeconds < priorDts.NotBefore ||
-            timePolicyNotBeforeUnixSeconds >= priorDts.ExpiresAt || timePolicyNotBeforeUnixSeconds >= timePolicyExpiresAtUnixSeconds ||
+            timePolicyNotBeforeUnixSeconds >= timePolicyExpiresAtUnixSeconds ||
             timePolicyExpiresAtUnixSeconds - timePolicyNotBeforeUnixSeconds > 2_592_000 ||
             timePolicyExpiresAtUnixSeconds <= priorDts.ExpiresAt || timePolicyExpiresAtUnixSeconds > authorityExpiresAtUnixSeconds)
-            throw new ArgumentException("Renewal requires overlapping bounded authority/DTS intervals and a strictly later DTS horizon.");
+            throw new ArgumentException("Renewal requires non-regressing bounded authority/DTS intervals and a strictly later DTS horizon.");
         var known = predecessor.RootKeys.ToDictionary(key => Convert.ToHexString(key.Id.Span), StringComparer.Ordinal);
         var ids = new HashSet<string>(StringComparer.Ordinal);
         var domains = new HashSet<string>(StringComparer.Ordinal);

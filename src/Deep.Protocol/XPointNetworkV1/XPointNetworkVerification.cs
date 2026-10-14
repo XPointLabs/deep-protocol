@@ -130,9 +130,12 @@ internal static class XPointNetworkVerifier
                 Fail(XPointValidationStage.Transition, "PredecessorMismatch", "XNA successor does not name the exact accepted predecessor.");
             var predecessor = (Xna1Record)c.AcceptedPredecessor;
             RequireSuccessor(predecessor, r);
+            // Offline root continuity is not current operational authority.
+            // Expired roots may authenticate only an exact signed successor;
+            // current proof/role/time checks still reject expired authorities.
             if (!predecessor.NetworkId.Equals(r.NetworkId) || predecessor.NotBefore > r.IssuedAt ||
-                r.IssuedAt > predecessor.ExpiresAt || r.NotBefore > predecessor.ExpiresAt)
-                Fail(XPointValidationStage.Closure, "InvalidEffectiveTimeClosure", "XNA successor is outside predecessor authority time.");
+                predecessor.IssuedAt > r.IssuedAt || predecessor.NotBefore > r.NotBefore)
+                Fail(XPointValidationStage.Closure, "InvalidEffectiveTimeClosure", "XNA successor regresses predecessor authority time.");
             keys = predecessor.RootKeys;
             threshold = predecessor.RootThreshold;
         }
