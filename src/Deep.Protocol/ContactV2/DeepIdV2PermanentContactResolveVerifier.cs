@@ -135,12 +135,24 @@ public static class DeepIdV2PermanentContactResolveVerifier
     private static void RequireTime(ParsedDeepIdV2PermanentContactCandidate candidate, ulong lower, ulong upper)
     {
         var request = candidate.Request; var bundle = candidate.Contact.Bundle;
-        if (lower > upper || request.IssuedAtUnixSeconds > lower || upper >= request.ExpiresAtUnixSeconds ||
-            request.ExpiresAtUnixSeconds - request.IssuedAtUnixSeconds > 120 ||
-            U64(bundle.Field(17).Span) > lower || upper >= U64(bundle.Field(18).Span))
-            throw new CryptographicException("Permanent read/object does not cover the complete current trusted interval.");
+        RequireTimeBounds(request.IssuedAtUnixSeconds, request.ExpiresAtUnixSeconds,
+            U64(bundle.Field(17).Span), U64(bundle.Field(18).Span), lower, upper);
         // XIS serverTime is unsigned by the neutral read transcript. Never use
         // it to mint/extend identity or freshness, even when it looks plausible.
+    }
+
+    // Pure boundary check, not a freshness/identity capability. Keep the same
+    // predicate/order; closed messages distinguish request and object failures
+    // without disclosing their values or changing any admission window.
+    internal static void RequireTimeBounds(ulong issued, ulong expires,
+        ulong objectNotBefore, ulong objectExpires, ulong lower, ulong upper)
+    {
+        if (lower > upper) throw new CryptographicException("Permanent contact trusted interval is inverted.");
+        if (issued > lower) throw new CryptographicException("Permanent read issuance exceeds trusted lower time.");
+        if (upper >= expires) throw new CryptographicException("Permanent read expiry does not cover trusted upper time.");
+        if (expires - issued > 120) throw new CryptographicException("Permanent read lifetime exceeds 120 seconds.");
+        if (objectNotBefore > lower) throw new CryptographicException("Permanent contact object begins after trusted lower time.");
+        if (upper >= objectExpires) throw new CryptographicException("Permanent contact object expiry does not cover trusted upper time.");
     }
 
     private static void VerifyReceipts(ParsedDeepIdV2PermanentContactCandidate candidate, VerifiedContactServicePlacement placement)

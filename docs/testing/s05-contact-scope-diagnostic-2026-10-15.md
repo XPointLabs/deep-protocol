@@ -45,3 +45,19 @@ Private PostgreSQL winner lookup evidence belongs to
 [Registry](../../../deep-registry-api/docs/testing/s05-publication-intent-2026-10-15.md).
 Connected same-intent reauthorization, two-peer reconciliation and retained owner
 adoption remain open; no expired XPU is dispatched by this API increment.
+
+## Permanent-contact time failure classification
+
+The existing permanent resolve time predicate is unchanged, including strict
+upper expiry and the request lifetime bound. Its six rejecting branches now
+throw distinct fixed CryptographicException messages, with no caller values.
+An internal pure bounds helper enables a 7-case focused suite, including a 4802
+boundary-grid comparison with the current predicate and unsigned edges. This is
+predicate coverage, not signed authority, native state or device evidence.
+Receipt: `artifacts/s05-current-publication-20261015/permanent-time-guard-focused-01/`,
+7/0/0/native0, Windows PowerShell5.1/SDK10.0.301.
+
+No public API, wire/domain, signature suite, journal, expiry, consumer reset or
+normative hash repin changes. Consumers must use the new compiled source to
+observe the finer reasons; previous full receipts do not qualify these inputs.
+The current canonical package/full blockers and physical acceptance remain open.
