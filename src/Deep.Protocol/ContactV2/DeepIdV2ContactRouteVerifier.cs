@@ -340,7 +340,12 @@ internal sealed class DeepIdV2RouteContext
             U64(xra.FieldSpan(12)) < Recipient.Authorization.Record.NotBeforeUnixSeconds ||
             U64(xra.FieldSpan(13)) > Device.Certificate.ExpiresAtUnixSeconds ||
             U64(xra.FieldSpan(13)) > Recipient.Authorization.Record.ExpiresAtUnixSeconds)
-            throw new CryptographicException("The XRA1 proposal differs from current DID2 device/delegation scope.");
+        {
+            var error = new CryptographicException("The XRA1 proposal differs from current DID2 device/delegation scope.");
+            error.Data["Deep.ContactRoute.Scope"] = !Fixed(xra.FieldSpan(5), pmtReference)
+                ? "pmt-reference" : "device-or-delegation";
+            throw error;
+        }
     }
 
     private void VerifyAdvertisementSignature(ContactRecord xra)
