@@ -55,6 +55,7 @@ public sealed class VerifiedDeepIdV2ContactRouteClosure : VerifiedDeepIdV2Mailbo
     public override VerifiedOnionNetworkContext Network { get; }
     public override VerifiedXPointNetworkAuthority NetworkAuthority { get; }
     public ReadOnlyMemory<byte> ExactXir1V2 => Invite.CanonicalBytes;
+    internal OnionTrustedTimeAuthority TrustedPublicationTime => time;
 
     internal ValueTask<OnionMonotonicReading> ReadPublicationClockAsync(CancellationToken ct) =>
         time.ReadCurrentAsync(ct);

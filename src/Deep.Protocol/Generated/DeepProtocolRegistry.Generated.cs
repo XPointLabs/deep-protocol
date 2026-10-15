@@ -222,6 +222,7 @@ public static class DeepProtocolIdentifiers
         public const string XPC1 = "XPC1";
         public const string XPI1 = "XPI1";
         public const string XPK1 = "XPK1";
+        public const string XPL1 = "XPL1";
         public const string XPO1 = "XPO1";
         public const string XPP1 = "XPP1";
         public const string XPR1 = "XPR1";
@@ -434,6 +435,7 @@ public static class DeepProtocolIdentifiers
         public static System.ReadOnlySpan<byte> XPC1 => "XPC1"u8;
         public static System.ReadOnlySpan<byte> XPI1 => "XPI1"u8;
         public static System.ReadOnlySpan<byte> XPK1 => "XPK1"u8;
+        public static System.ReadOnlySpan<byte> XPL1 => "XPL1"u8;
         public static System.ReadOnlySpan<byte> XPO1 => "XPO1"u8;
         public static System.ReadOnlySpan<byte> XPP1 => "XPP1"u8;
         public static System.ReadOnlySpan<byte> XPR1 => "XPR1"u8;
@@ -508,7 +510,7 @@ internal readonly record struct GeneratedRegistryIdentifier(
 
 internal static class DeepProtocolRegistryGenerated
 {
-    internal const string RegistrySha256 = "966167265debb3af64951fcc2dc3c9ca67b40dbc8b404388bf86543188e38034";
+    internal const string RegistrySha256 = "65dd70597d358da0f54460bb0b950c97783dcdaf0e0aa5d583201ba2a4f78796";
     internal const string Dnp1RegistrySha256 = "e036a0b6acb260e05e18ac536a723b0b8561d2ba1d813429304505b0e7a7da7b";
     internal const string Dnp1ApprovedCommit = "a8456987efe031388ca2eb9006886fb78f31e06c";
 
@@ -712,6 +714,7 @@ internal static class DeepProtocolRegistryGenerated
         new("magic", "XPC1", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "XPI1", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "XPK1", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
+        new("magic", "XPL1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "XPO1", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "XPP1", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "XPR1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),

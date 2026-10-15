@@ -452,6 +452,14 @@ internal static class PrivacyRoutingPayloadVerifier
 
         try
         {
+            if (request[..4].SequenceEqual(ProtocolMagicBytes.XPL1))
+            {
+                var lease = DeepIdV2PublicationLeaseCodec.Decode(request);
+                if (!CryptographicOperations.FixedTimeEquals(lease.NetworkId.Span, networkId))
+                    throw PrivacyRoutingWire.Error(PrivacyRoutingProtocolError.InvalidKeyBinding,
+                        "Publication lease belongs to another network.");
+                return;
+            }
             if (request[..4].SequenceEqual(ProtocolMagicBytes.XCA2))
             {
                 var coordination = Deep.Protocol.ContactV2.ContactCoordinationOnionCodec.DecodeRequest(request);
@@ -501,6 +509,9 @@ internal static class PrivacyRoutingPayloadVerifier
                 ProtocolMagic.XUQ1 => Xuq1Codec.Decode(request),
                 _ => throw PrivacyRoutingWire.Error(PrivacyRoutingProtocolError.InvalidOperation, "ContactResolve accepts only current ContactV1 request records.")
             };
+            if (decoded is Xpu1Request publication && publication.UsageLimit != 1)
+                throw PrivacyRoutingWire.Error(PrivacyRoutingProtocolError.InvalidOperation,
+                    "Reusable publication requires a fresh publication lease.");
             if (!CryptographicOperations.FixedTimeEquals(decoded.NetworkId.Span, networkId) ||
                 !decoded.CanonicalBytes.Span.SequenceEqual(request))
                 throw PrivacyRoutingWire.Error(PrivacyRoutingProtocolError.InvalidKeyBinding, "Contact Resolver request is not bound to the ONION-01 network or exact canonical bytes.");
@@ -606,6 +617,15 @@ internal static class PrivacyRoutingPayloadVerifier
 
         try
         {
+            if (exactRequest[..4].SequenceEqual(ProtocolMagicBytes.XPL1))
+            {
+                var lease = DeepIdV2PublicationLeaseCodec.Decode(exactRequest);
+                var publication = Xpo1Codec.Decode(body, lease.OriginalRequest.CanonicalBytes.Span);
+                if (!publication.WireBytes.Span.SequenceEqual(body))
+                    throw PrivacyRoutingWire.Error(PrivacyRoutingProtocolError.InvalidOperation,
+                        "Publication response has noncanonical trailing bytes.");
+                return;
+            }
             if (exactRequest[..4].SequenceEqual(ProtocolMagicBytes.XCA2))
             {
                 _ = Deep.Protocol.ContactV2.ContactCoordinationOnionCodec.DecodeResponse(

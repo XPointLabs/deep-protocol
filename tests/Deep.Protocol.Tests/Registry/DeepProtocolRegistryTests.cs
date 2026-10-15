@@ -42,10 +42,12 @@ public sealed class DeepProtocolRegistryTests
         Assert.Equal("IPK2", DeepProtocolIdentifiers.Magic.IPK2);
         Assert.Equal("XCA2", DeepProtocolIdentifiers.Magic.XCA2);
         Assert.Equal("XCS2", DeepProtocolIdentifiers.Magic.XCS2);
+        Assert.Equal("XPL1", DeepProtocolIdentifiers.Magic.XPL1);
         Assert.True(DeepProtocolIdentifiers.MagicBytes.IPK2.SequenceEqual("IPK2"u8));
         Assert.True(DeepProtocolIdentifiers.MagicBytes.XCA2.SequenceEqual("XCA2"u8));
         Assert.True(DeepProtocolIdentifiers.MagicBytes.XCS2.SequenceEqual("XCS2"u8));
-        foreach (var magic in new[] { "IPK2", "XCA2", "XCS2" })
+        Assert.True(DeepProtocolIdentifiers.MagicBytes.XPL1.SequenceEqual("XPL1"u8));
+        foreach (var magic in new[] { "IPK2", "XCA2", "XCS2", "XPL1" })
             Assert.Equal(ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE,
                 Assert.Single(DeepProtocolRegistryGenerated.Identifiers,
                     value => value.Namespace == "magic" && value.CanonicalName == magic).Lifecycle);

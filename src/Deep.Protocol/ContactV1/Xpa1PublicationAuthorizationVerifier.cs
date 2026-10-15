@@ -52,6 +52,7 @@ public sealed class VerifiedXpa1PublicationAuthorization
     private readonly VerifiedDeepIdV2DirectoryFreshness _freshness;
     private readonly VerifiedContactServicePlacement _placement;
     private readonly OnionTrustedTimeAuthority _time;
+    private readonly ParsedDeepIdV2PublicationLease? _lease;
 
     internal VerifiedXpa1PublicationAuthorization(
         Xpu1Request request,
@@ -60,10 +61,12 @@ public sealed class VerifiedXpa1PublicationAuthorization
         VerifiedDeepIdV2DirectoryFreshness freshness,
         VerifiedContactServicePlacement placement,
         OnionTrustedTimeAuthority time,
-        OnionMonotonicReading currentMonotonic)
+        OnionMonotonicReading currentMonotonic,
+        ParsedDeepIdV2PublicationLease? lease = null)
     {
         _request = request; _authority = authority; _freshness = freshness;
         _placement = placement; _time = time;
+        _lease = lease;
         _exactXpa1 = xpa1.Canonical.ToArray();
         _networkId = xpa1[1].ToArray();
         _authorizationId = xpa1[2].ToArray();
@@ -95,6 +98,8 @@ public sealed class VerifiedXpa1PublicationAuthorization
     }
 
     public ReadOnlyMemory<byte> ExactXpa1 => _exactXpa1.ToArray();
+    /// <summary>Exact current dispatch envelope; original replay identity remains RequestHash.</summary>
+    public ReadOnlyMemory<byte> ExactDispatchRequest => _lease?.CanonicalBytes ?? _request.CanonicalBytes;
     public ReadOnlyMemory<byte> NetworkId => _networkId.ToArray();
     public ReadOnlyMemory<byte> AuthorizationId => _authorizationId.ToArray();
     public ReadOnlyMemory<byte> OperationId => _operationId.ToArray();
@@ -125,8 +130,11 @@ public sealed class VerifiedXpa1PublicationAuthorization
 
     public async ValueTask EnsureCurrentAsync(CancellationToken cancellationToken = default)
     {
-        var current = await Xpa1PublicationAuthorizationVerifier.VerifyAsync(_request,
-            _authority, _freshness, _placement, _time, cancellationToken).ConfigureAwait(false);
+        var current = _lease is null
+            ? await Xpa1PublicationAuthorizationVerifier.VerifyAsync(_request,
+                _authority, _freshness, _placement, _time, cancellationToken).ConfigureAwait(false)
+            : await DeepIdV2PublicationLeaseVerifier.VerifyAsync(_lease,
+                _authority, _freshness, _placement, _time, cancellationToken).ConfigureAwait(false);
         if (current.VerifiedAtMonotonicSeconds < VerifiedAtMonotonicSeconds ||
             !CryptographicOperations.FixedTimeEquals(current.BootId.Span, _bootId))
             throw new Xpa1PublicationAuthorizationException("TrustedTimeInvalid",

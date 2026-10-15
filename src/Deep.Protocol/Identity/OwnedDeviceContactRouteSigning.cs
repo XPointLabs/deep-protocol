@@ -82,6 +82,26 @@ public sealed partial class OwnedGenesisDeviceSecrets
         }
     }
 
+    internal byte[] SignCurrentPublicationLeaseRequest(PublicationLeaseWireRequest request,
+        VerifiedDeepIdV2OwnedPublicationIntent intent)
+    {
+        lock (sync)
+        {
+            ThrowIfDisposed();
+            var authorization = intent.Route.Recipient.Authorization;
+            _ = RequireCurrentRouteDevice(authorization);
+            if (!request.NetworkId.Span.SequenceEqual(authorization.Record.NetworkId.Span) ||
+                !request.DirectoryLookupKey.Span.SequenceEqual(intent.OwnedRequest.DirectoryLookupKey.Span) ||
+                !request.OriginalCoordinationNonce.Span.SequenceEqual(intent.OwnedRequest.RequestNonce.Span) ||
+                !request.OriginalRequestHash.Span.SequenceEqual(intent.RequestHash.Span) ||
+                !intent.OwnedRequest.ExactDca1.Span.SequenceEqual(authorization.Record.CanonicalBytes.Span))
+                throw new CryptographicException("Publication lease signing differs from current owned original intent.");
+            var input = request.SigningInput.ToArray();
+            try { return SignRouteIntent(input); }
+            finally { CryptographicOperations.ZeroMemory(input); }
+        }
+    }
+
     private byte[] SignRouteIntent(ReadOnlySpan<byte> input)
     {
         var signature = new byte[OwnedSodiumEd25519.SignatureSize];
