@@ -391,6 +391,44 @@ foreach ($pair in @(@('mailbox-retained-read-v2', 'mailbox-retained-read-v2-sche
     }
 }
 
+# DR-0124 is a private read operation, not another public record magic.
+$winnerReadInputs = @{
+    'publication-winner-read-v1' = 'contact-publication-winner-read-v1.registry.json'
+    'publication-winner-read-v1-schema' = 'contact-publication-winner-read-v1.registry.schema.json'
+    'publication-winner-read-v1-vectors' = 'contact-publication-winner-read-v1.vectors.json'
+    'publication-winner-read-v1-vectors-schema' = 'contact-publication-winner-read-v1.vectors.schema.json'
+    'contact-coordination-v2' = 'contact-coordination-v2.registry.json'
+}
+foreach ($inputId in $winnerReadInputs.Keys) {
+    $expectedPath = "docs/survival-program/releases/v3.0.0/specs/$($winnerReadInputs[$inputId])"
+    if (-not $sources.ContainsKey($inputId) -or $sources[$inputId].kind -cne 'normative-document' -or
+        $sources[$inputId].path -cne $expectedPath) { throw "DR-0124 frozen source binding is missing/changed: $inputId" }
+}
+if (-not $sources.ContainsKey('publication-winner-read-decision') -or
+    $sources['publication-winner-read-decision'].path -cne 'docs/survival-program/decisions/DR-0124-publication-winner-readback.md' -or
+    $sources['publication-winner-read-decision'].kind -cne 'normative-document') { throw 'DR-0124 decision binding is missing/changed.' }
+foreach ($pair in @(@('publication-winner-read-v1', 'publication-winner-read-v1-schema'),
+    @('publication-winner-read-v1-vectors', 'publication-winner-read-v1-vectors-schema'))) {
+    if (-not (Test-Json -LiteralPath (Join-Path $normativeRoot $winnerReadInputs[$pair[0]]) `
+        -SchemaFile (Join-Path $normativeRoot $winnerReadInputs[$pair[1]]))) { throw 'DR-0124 registry/vectors violate their closed schemas.' }
+}
+$winnerReadContract = Get-Content -Raw -LiteralPath (Join-Path $normativeRoot $winnerReadInputs['publication-winner-read-v1']) | ConvertFrom-Json
+$coordination = Get-Content -Raw -LiteralPath (Join-Path $normativeRoot $winnerReadInputs['contact-coordination-v2']) | ConvertFrom-Json
+$winnerTarget = @($coordination.targets | Where-Object id -EQ $winnerReadContract.coordinationTarget)
+if ($winnerTarget.Count -ne 1 -or $winnerTarget[0].name -cne 'PublicationWinnerRead' -or
+    $winnerTarget[0].decision -cne 'DR-0124' -or $winnerTarget[0].requestBodyVersion -ne $winnerReadContract.requestVersion -or
+    $winnerTarget[0].responseBodyVersion -ne $winnerReadContract.responseVersion -or
+    $winnerTarget[0].minimumRequestBodyBytes -ne $winnerReadContract.requestBytes -or
+    $winnerTarget[0].maximumRequestBodyBytes -ne $winnerReadContract.requestBytes -or
+    $winnerTarget[0].minimumResponseBodyBytes -ne $winnerReadContract.responseMinimumBytes -or
+    $winnerTarget[0].maximumResponseBodyBytes -ne $winnerReadContract.responseMaximumBytes -or
+    $coordination.outerOnionOperation -ne $winnerReadContract.outerOnionOperation -or
+    $coordination.placementRequestKind -ne $winnerReadContract.placementRequestKind -or
+    $coordination.placementServiceClass -ne $winnerReadContract.placementServiceClass -or
+    $coordination.header.bytes + $winnerReadContract.responseMaximumBytes -gt $coordination.contactMaximumSuccessBytes) {
+    throw 'DR-0124 differs from its exact coordination target or exceeds the existing network bound.'
+}
+
 $resolvedRecords = [Collections.Generic.List[object]]::new()
 foreach ($record in $dnp.records | Sort-Object magic) {
     $className = $null

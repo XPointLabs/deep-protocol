@@ -102,6 +102,24 @@ public sealed partial class OwnedGenesisDeviceSecrets
         }
     }
 
+    internal byte[] SignCurrentPublicationWinnerReadRequest(PublicationWinnerReadWireRequest request,
+        VerifiedDca1V2 authorization, ContactPublicationAuthorityWireRequest original)
+    {
+        lock (sync)
+        {
+            ThrowIfDisposed(); _ = RequireCurrentRouteDevice(authorization);
+            if (!request.NetworkId.Span.SequenceEqual(authorization.Record.NetworkId.Span) ||
+                !request.DirectoryLookupKey.Span.SequenceEqual(original.DirectoryLookupKey.Span) ||
+                !request.OriginalCoordinationNonce.Span.SequenceEqual(original.RequestNonce.Span) ||
+                !request.OriginalCoordinationRequestHash.Span.SequenceEqual(DeepIdV2PublicationWinnerReadWireCodec.HashOriginalRequest(original)) ||
+                !original.ExactDca1.Span.SequenceEqual(authorization.Record.CanonicalBytes.Span))
+                throw new CryptographicException("Publication winner read signing differs from current owned request.");
+            var input = request.SigningInput.ToArray();
+            try { return SignRouteIntent(input); }
+            finally { CryptographicOperations.ZeroMemory(input); }
+        }
+    }
+
     private byte[] SignRouteIntent(ReadOnlySpan<byte> input)
     {
         var signature = new byte[OwnedSodiumEd25519.SignatureSize];
