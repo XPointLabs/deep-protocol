@@ -78,6 +78,8 @@ public static class DeepIdV2PublicationLeaseVerifier
         // becomes a current issuer/head/lease after expiry or key rotation.
         var oldPlacement = ContactServicePlacementFactory.RequireOriginalPublicationPlacement(network, authority, original);
         var parsed = DeepIdV2ContactPublicationCodec.DecodeXpu1(original.CanonicalBytes.Span);
+        if (U64(parsed.Authorization.Field(15).Span) > lower)
+            throw new CryptographicException("Publication lease cannot activate an original approval from the future.");
         DeepIdV2Xpa1WitnessThresholdVerifier.RequireOriginalThreshold(parsed.Authorization, oldPlacement.Issuer);
         _ = VerifiedLogicalMailboxAssignment.Verify(network, authority, records.Projection);
         var currentPair = placement.RankedReplicaNodeIds;

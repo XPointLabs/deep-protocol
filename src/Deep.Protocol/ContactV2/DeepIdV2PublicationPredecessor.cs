@@ -144,6 +144,8 @@ public static partial class DeepIdV2PublicationCommitVerifier
         }
         finally { CryptographicOperations.ZeroMemory(input); }
         var parsed = DeepIdV2ContactPublicationCodec.DecodeXpu1(request.CanonicalBytes.Span);
+        if (BinaryPrimitives.ReadUInt64BigEndian(parsed.Authorization.Field(15).Span) > current.Lower)
+            throw new CryptographicException("Historical publication approval is not yet valid throughout current trusted time.");
         RequireResult(request, result);
         var placement = ContactServicePlacementFactory.RequireOriginalPublicationPlacement(current.Network, current.Authority, request);
         DeepIdV2Xpa1WitnessThresholdVerifier.RequireOriginalThreshold(parsed.Authorization, placement.Issuer);

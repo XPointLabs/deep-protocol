@@ -100,6 +100,8 @@ public sealed class VerifiedXpa1PublicationAuthorization
     public ReadOnlyMemory<byte> ExactXpa1 => _exactXpa1.ToArray();
     /// <summary>Exact current dispatch envelope; original replay identity remains RequestHash.</summary>
     public ReadOnlyMemory<byte> ExactDispatchRequest => _lease?.CanonicalBytes ?? _request.CanonicalBytes;
+    /// <summary>Immutable original effect identity/body, never a reusable dispatch envelope.</summary>
+    public ReadOnlyMemory<byte> ExactOriginalXpu1 => _request.CanonicalBytes;
     public ReadOnlyMemory<byte> NetworkId => _networkId.ToArray();
     public ReadOnlyMemory<byte> AuthorizationId => _authorizationId.ToArray();
     public ReadOnlyMemory<byte> OperationId => _operationId.ToArray();

@@ -161,14 +161,20 @@ $usedSources = @(
     'mailbox-retained-read-v2-schema'
     'mailbox-retained-read-v2-vectors'
     'mailbox-retained-read-v2-vectors-schema'
-    # Generate -Check validates exact DR-0124 paths/hashes, closed schemas and
-    # target4 pairing without introducing a public record/magic allocation.
-    'publication-winner-read-decision'
-    'publication-winner-read-v1'
-    'publication-winner-read-v1-schema'
-    'publication-winner-read-v1-vectors'
-    'publication-winner-read-v1-vectors-schema'
+    # Generate -Check validates DR-0125 current submission/XPL schemas, exact
+    # target5/one-time bindings, retired3/4 and derived ONION bounds.
+    'publication-current-decision'
+    'publication-current-v1'
+    'publication-current-v1-schema'
+    'publication-current-v1-vectors'
+    'publication-current-v1-vectors-schema'
     'contact-coordination-v2'
+    'publication-lease-v1'
+    'publication-lease-v1-schema'
+    'publication-lease-v1-vectors'
+    'publication-lease-v1-vectors-schema'
+    'publication-current-onion-vectors'
+    'publication-current-onion-vectors-schema'
 )
 foreach ($sourceId in $usedSources) {
     Assert-True ($sourceIds.Contains($sourceId)) "Unknown sourceId: $sourceId"

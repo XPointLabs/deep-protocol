@@ -11,24 +11,28 @@ namespace Deep.Protocol.Tests.ContactV2;
 public sealed class PublicationStoreAuthoritySurfaceTests
 {
     [Fact]
-    public void PublicationWinnerReadCannotExposeSigningMutationOrCallerTimeAuthority()
+    public void PublicationCurrentRequiresClosedAuthorityWithoutCallerTimeOrMutationFactory()
     {
-        Assert.Empty(typeof(PublicationWinnerReadWireRequest).GetConstructors());
-        Assert.All(typeof(PublicationWinnerReadWireRequest).GetProperties(), property => Assert.False(property.CanWrite));
-        var methods = typeof(DeepIdV2PublicationWinnerReadAuthor).GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
-        Assert.Equal(new[] { "AuthorRequestAsync", "VerifyIssuerRequestAsync", "VerifyOwnedResponseAsync" },
+        Assert.Empty(typeof(PublicationCurrentWireRequest).GetConstructors());
+        Assert.Empty(typeof(VerifiedDeepIdV2PublicationSubmission).GetConstructors());
+        Assert.All(typeof(PublicationCurrentWireRequest).GetProperties(), property => Assert.False(property.CanWrite));
+        var methods = typeof(DeepIdV2PublicationCurrentAuthor).GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
+        Assert.Equal(new[] { "AuthorApprovalAsync", "AuthorLeaseAsync", "AuthorOwnedRequestAsync", "VerifyIssuerRequestAsync", "VerifyOwnedResponseAsync" },
             methods.Select(method => method.Name).Order().ToArray());
         foreach (var method in methods)
             Assert.DoesNotContain(method.GetParameters(), parameter => typeof(Delegate).IsAssignableFrom(parameter.ParameterType) ||
                 parameter.ParameterType == typeof(bool) || parameter.ParameterType == typeof(ulong) || parameter.ParameterType == typeof(byte[]));
-        Assert.Equal(304, DeepIdV2PublicationWinnerReadWireCodec.RequestBytes);
-        Assert.Equal(240, DeepIdV2PublicationWinnerReadWireCodec.UnsignedRequestBytes);
-        Assert.Equal(14_742, DeepIdV2PublicationWinnerReadWireCodec.MinimumResponseBytes);
-        Assert.Equal(93_152, DeepIdV2PublicationWinnerReadWireCodec.MaximumResponseBytes);
-        Assert.Equal((byte)4, (byte)ContactCoordinationTarget.PublicationWinnerRead);
-        Assert.NotEqual(DeepIdV2PublicationLeaseWireCodec.PublisherSigningDomain, DeepIdV2PublicationWinnerReadWireCodec.PublisherSigningDomain);
-        Assert.NotEqual(DeepIdV2PublicationLeaseWireCodec.GatewayShardDomain, DeepIdV2PublicationWinnerReadWireCodec.GatewayShardDomain);
-        Assert.Equal(typeof(ValueTask<VerifiedDeepIdV2OwnedPublicationIntent>),
+        Assert.Equal(23_566, DeepIdV2PublicationCurrentWireCodec.MinimumRequestBytes);
+        Assert.Equal(171_858, DeepIdV2PublicationCurrentWireCodec.MaximumRequestBytes);
+        Assert.Equal(15_167, DeepIdV2PublicationCurrentWireCodec.MinimumResponseBytes);
+        Assert.Equal(96_457, DeepIdV2PublicationCurrentWireCodec.MaximumResponseBytes);
+        Assert.Equal((byte)5, (byte)ContactCoordinationTarget.PublicationCurrent);
+        Assert.Equal(new byte[] { 1, 2, 5 }, Enum.GetValues<ContactCoordinationTarget>().Select(value => (byte)value).ToArray());
+        foreach (var retired in new[] { "PublicationLeaseWireRequest", "PublicationWinnerReadWireRequest",
+            "DeepIdV2PublicationLeaseWireCodec", "DeepIdV2PublicationLeaseAuthor",
+            "DeepIdV2PublicationWinnerReadWireCodec", "DeepIdV2PublicationWinnerReadAuthor" })
+            Assert.Null(typeof(DeepIdV2PublicationCurrentAuthor).Assembly.GetType("Deep.Protocol.ContactV2." + retired));
+        Assert.Equal(typeof(ValueTask<VerifiedXpa1PublicationAuthorization>),
             Assert.Single(methods, method => method.Name == "VerifyOwnedResponseAsync").ReturnType);
     }
 
@@ -145,11 +149,11 @@ public sealed class PublicationStoreAuthoritySurfaceTests
         Assert.Equal(4, ContactPublicationAuthorityWireCodec.Version);
         Assert.Equal(23_322, ContactPublicationAuthorityWireCodec.MinimumRequestBytes);
         Assert.Equal(171_614, ContactPublicationAuthorityWireCodec.MaximumRequestBytes);
-        Assert.Equal(171_626, ContactCoordinationOnionCodec.MaximumRequestBytes);
+        Assert.Equal(171_870, ContactCoordinationOnionCodec.MaximumRequestBytes);
         Assert.Equal(96_469, ContactCoordinationOnionCodec.MaximumResponseBytes);
         Assert.Equal(ContactCoordinationOnionCodec.MaximumResponseBytes, ContactCoordinationOnionCodec.HeaderBytes + new[] {
             ContactRouteAuthorityWireCodec.MaximumResponseBytes, ContactPublicationAuthorityWireCodec.MaximumResponseBytes,
-            DeepIdV2PublicationLeaseWireCodec.MaximumResponseBytes, DeepIdV2PublicationWinnerReadWireCodec.MaximumResponseBytes
+            DeepIdV2PublicationCurrentWireCodec.MaximumResponseBytes
         }.Max());
     }
 

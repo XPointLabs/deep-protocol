@@ -391,42 +391,64 @@ foreach ($pair in @(@('mailbox-retained-read-v2', 'mailbox-retained-read-v2-sche
     }
 }
 
-# DR-0124 is a private read operation, not another public record magic.
-$winnerReadInputs = @{
-    'publication-winner-read-v1' = 'contact-publication-winner-read-v1.registry.json'
-    'publication-winner-read-v1-schema' = 'contact-publication-winner-read-v1.registry.schema.json'
-    'publication-winner-read-v1-vectors' = 'contact-publication-winner-read-v1.vectors.json'
-    'publication-winner-read-v1-vectors-schema' = 'contact-publication-winner-read-v1.vectors.schema.json'
+# DR-0125 is the one current reusable submission, not a new record magic.
+$publicationCurrentInputs = @{
+    'publication-current-v1' = 'contact-publication-current-v1.registry.json'
+    'publication-current-v1-schema' = 'contact-publication-current-v1.registry.schema.json'
+    'publication-current-v1-vectors' = 'contact-publication-current-v1.vectors.json'
+    'publication-current-v1-vectors-schema' = 'contact-publication-current-v1.vectors.schema.json'
     'contact-coordination-v2' = 'contact-coordination-v2.registry.json'
+    'publication-lease-v1' = 'contact-publication-lease-v1.registry.json'
+    'publication-lease-v1-schema' = 'contact-publication-lease-v1.registry.schema.json'
+    'publication-lease-v1-vectors' = 'contact-publication-lease-v1.vectors.json'
+    'publication-lease-v1-vectors-schema' = 'contact-publication-lease-v1.vectors.schema.json'
+    'publication-current-onion-vectors' = 'onion-01.vectors.json'
+    'publication-current-onion-vectors-schema' = 'onion-01.vectors.schema.json'
 }
-foreach ($inputId in $winnerReadInputs.Keys) {
-    $expectedPath = "docs/survival-program/releases/v3.0.0/specs/$($winnerReadInputs[$inputId])"
+foreach ($inputId in $publicationCurrentInputs.Keys) {
+    $expectedPath = "docs/survival-program/releases/v3.0.0/specs/$($publicationCurrentInputs[$inputId])"
     if (-not $sources.ContainsKey($inputId) -or $sources[$inputId].kind -cne 'normative-document' -or
-        $sources[$inputId].path -cne $expectedPath) { throw "DR-0124 frozen source binding is missing/changed: $inputId" }
+        $sources[$inputId].path -cne $expectedPath) { throw "DR-0125 frozen source binding is missing/changed: $inputId" }
 }
-if (-not $sources.ContainsKey('publication-winner-read-decision') -or
-    $sources['publication-winner-read-decision'].path -cne 'docs/survival-program/decisions/DR-0124-publication-winner-readback.md' -or
-    $sources['publication-winner-read-decision'].kind -cne 'normative-document') { throw 'DR-0124 decision binding is missing/changed.' }
-foreach ($pair in @(@('publication-winner-read-v1', 'publication-winner-read-v1-schema'),
-    @('publication-winner-read-v1-vectors', 'publication-winner-read-v1-vectors-schema'))) {
-    if (-not (Test-Json -LiteralPath (Join-Path $normativeRoot $winnerReadInputs[$pair[0]]) `
-        -SchemaFile (Join-Path $normativeRoot $winnerReadInputs[$pair[1]]))) { throw 'DR-0124 registry/vectors violate their closed schemas.' }
+if (-not $sources.ContainsKey('publication-current-decision') -or
+    $sources['publication-current-decision'].path -cne 'docs/survival-program/decisions/DR-0125-current-publication-submission.md' -or
+    $sources['publication-current-decision'].kind -cne 'normative-document') { throw 'DR-0125 decision binding is missing/changed.' }
+foreach ($pair in @(@('publication-current-v1', 'publication-current-v1-schema'),
+    @('publication-current-v1-vectors', 'publication-current-v1-vectors-schema'),
+    @('publication-lease-v1', 'publication-lease-v1-schema'),
+    @('publication-lease-v1-vectors', 'publication-lease-v1-vectors-schema'),
+    @('publication-current-onion-vectors', 'publication-current-onion-vectors-schema'))) {
+    if (-not (Test-Json -LiteralPath (Join-Path $normativeRoot $publicationCurrentInputs[$pair[0]]) `
+        -SchemaFile (Join-Path $normativeRoot $publicationCurrentInputs[$pair[1]]))) { throw 'DR-0125 registry/vectors violate their closed schemas.' }
 }
-$winnerReadContract = Get-Content -Raw -LiteralPath (Join-Path $normativeRoot $winnerReadInputs['publication-winner-read-v1']) | ConvertFrom-Json
-$coordination = Get-Content -Raw -LiteralPath (Join-Path $normativeRoot $winnerReadInputs['contact-coordination-v2']) | ConvertFrom-Json
-$winnerTarget = @($coordination.targets | Where-Object id -EQ $winnerReadContract.coordinationTarget)
-if ($winnerTarget.Count -ne 1 -or $winnerTarget[0].name -cne 'PublicationWinnerRead' -or
-    $winnerTarget[0].decision -cne 'DR-0124' -or $winnerTarget[0].requestBodyVersion -ne $winnerReadContract.requestVersion -or
-    $winnerTarget[0].responseBodyVersion -ne $winnerReadContract.responseVersion -or
-    $winnerTarget[0].minimumRequestBodyBytes -ne $winnerReadContract.requestBytes -or
-    $winnerTarget[0].maximumRequestBodyBytes -ne $winnerReadContract.requestBytes -or
-    $winnerTarget[0].minimumResponseBodyBytes -ne $winnerReadContract.responseMinimumBytes -or
-    $winnerTarget[0].maximumResponseBodyBytes -ne $winnerReadContract.responseMaximumBytes -or
-    $coordination.outerOnionOperation -ne $winnerReadContract.outerOnionOperation -or
-    $coordination.placementRequestKind -ne $winnerReadContract.placementRequestKind -or
-    $coordination.placementServiceClass -ne $winnerReadContract.placementServiceClass -or
-    $coordination.header.bytes + $winnerReadContract.responseMaximumBytes -gt $coordination.contactMaximumSuccessBytes) {
-    throw 'DR-0124 differs from its exact coordination target or exceeds the existing network bound.'
+$currentContract = Get-Content -Raw -LiteralPath (Join-Path $normativeRoot $publicationCurrentInputs['publication-current-v1']) | ConvertFrom-Json
+$coordination = Get-Content -Raw -LiteralPath (Join-Path $normativeRoot $publicationCurrentInputs['contact-coordination-v2']) | ConvertFrom-Json
+$leaseContract = Get-Content -Raw -LiteralPath (Join-Path $normativeRoot $publicationCurrentInputs['publication-lease-v1']) | ConvertFrom-Json
+$onionVectors = Get-Content -Raw -LiteralPath (Join-Path $normativeRoot $publicationCurrentInputs['publication-current-onion-vectors']) | ConvertFrom-Json
+$currentTarget = @($coordination.targets | Where-Object id -EQ $currentContract.coordinationTarget)
+$oneTimeTarget = @($coordination.targets | Where-Object id -EQ 2)
+$contactOperation = @($onionVectors.terminalOperations | Where-Object id -EQ 4)
+if ($currentTarget.Count -ne 1 -or $currentTarget[0].name -cne 'PublicationCurrent' -or
+    $currentTarget[0].decision -cne 'DR-0125' -or $currentTarget[0].requestBodyVersion -ne $currentContract.requestVersion -or
+    $currentTarget[0].responseBodyVersion -ne $currentContract.responseVersion -or
+    $currentTarget[0].minimumRequestBodyBytes -ne $currentContract.requestMinimumBytes -or
+    $currentTarget[0].maximumRequestBodyBytes -ne $currentContract.requestMaximumBytes -or
+    $currentTarget[0].minimumResponseBodyBytes -ne $currentContract.responseMinimumBytes -or
+    $currentTarget[0].maximumResponseBodyBytes -ne $currentContract.responseMaximumBytes -or
+    $coordination.outerOnionOperation -ne 4 -or $coordination.placementRequestKind -ne 8 -or $coordination.placementServiceClass -ne 1 -or
+    $oneTimeTarget.Count -ne 1 -or $oneTimeTarget[0].publicationKind -ne 2 -or
+    ($coordination.targets.id -join ',') -cne '1,2,5' -or ($coordination.retiredTargets -join ',') -cne '3,4' -or
+    $coordination.header.bytes + $currentContract.requestMaximumBytes -ne $currentContract.coordinationMaximumRequestBytes -or
+    $coordination.header.bytes + $currentContract.responseMaximumBytes -ne $currentContract.coordinationMaximumResponseBytes -or
+    $coordination.contactMaximumRequestBytes -ne $currentContract.coordinationMaximumRequestBytes -or
+    $coordination.contactMaximumSuccessBytes -ne $currentContract.contactMaximumSuccessBytes -or
+    $currentContract.responseOverheadBytes + $leaseContract.minimumBytes -ne $currentContract.responseMinimumBytes -or
+    $currentContract.responseOverheadBytes + $leaseContract.maximumBytes -ne $currentContract.responseMaximumBytes -or
+    $leaseContract.submissionContract -cne $publicationCurrentInputs['publication-current-v1'] -or
+    $contactOperation.Count -ne 1 -or $contactOperation[0].maxRequestBytes -ne $currentContract.coordinationMaximumRequestBytes -or
+    $contactOperation[0].maxSuccessBytes -ne $currentContract.contactMaximumSuccessBytes -or
+    $currentContract.coordinationMaximumResponseBytes -gt $currentContract.contactMaximumSuccessBytes) {
+    throw 'DR-0125 current submission, XPL, one-time/retired targets or exact network bounds disagree.'
 }
 
 $resolvedRecords = [Collections.Generic.List[object]]::new()

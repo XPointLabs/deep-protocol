@@ -408,10 +408,21 @@ public static class ContactPublicationAuthorityWireCodec
                 "Deep/ContactResolver/V2/publication-policy", request.ExactDca1.Span)) ||
             request.MinimumAdh1Generation != BinaryPrimitives.ReadUInt64BigEndian(bundle.Field(21).Span) ||
             !Fixed(request.MinimumAdh1CoreHash.Span, bundle.Field(21).Span[8..]) ||
-            BinaryPrimitives.ReadUInt64BigEndian(xpa.Field(15).Span) != request.IssuedAtUnixSeconds ||
-            BinaryPrimitives.ReadUInt64BigEndian(xpa.Field(16).Span) != request.IssuedAtUnixSeconds ||
-            BinaryPrimitives.ReadUInt64BigEndian(xpa.Field(17).Span) != request.ExpiresAtUnixSeconds)
+            !ApprovalWindowBinds(request, xpa))
             throw new CryptographicException("The exact DID2 publication body differs from its publisher request.");
+    }
+
+    private static bool ApprovalWindowBinds(ContactPublicationAuthorityWireRequest request, ParsedXpa1V2 xpa)
+    {
+        var issued = BinaryPrimitives.ReadUInt64BigEndian(xpa.Field(15).Span);
+        var notBefore = BinaryPrimitives.ReadUInt64BigEndian(xpa.Field(16).Span);
+        var expires = BinaryPrimitives.ReadUInt64BigEndian(xpa.Field(17).Span);
+        // Reusable intent time is immutable; actual approval is separately
+        // current under DR-0125. It never makes standalone reusable XPU current.
+        if (request.PublicationKind == 1)
+            return issued >= request.IssuedAtUnixSeconds && notBefore == issued &&
+                expires > issued && expires - issued <= 120 && expires <= request.EffectiveExpiresAtUnixSeconds;
+        return issued == request.IssuedAtUnixSeconds && notBefore == issued && expires == request.ExpiresAtUnixSeconds;
     }
 
     private static void WriteHeader(byte[] destination)

@@ -15,15 +15,9 @@ public sealed class ParsedContactCoordinationOnionRequest
         projection = advertisement.Field(5).ToArray(); shard = advertisement.Field(6).ToArray();
         ExpiresAtUnixSeconds = expiry;
     }
-    internal ParsedContactCoordinationOnionRequest(ReadOnlySpan<byte> canonical, PublicationLeaseWireRequest request)
+    internal ParsedContactCoordinationOnionRequest(ReadOnlySpan<byte> canonical, PublicationCurrentWireRequest request)
     {
-        this.canonical = canonical.ToArray(); Target = ContactCoordinationTarget.PublicationLease;
-        network = request.NetworkId.ToArray(); nonce = request.RequestNonce.ToArray();
-        projection = []; shard = request.GatewayShard.ToArray(); ExpiresAtUnixSeconds = request.ExpiresAtUnixSeconds;
-    }
-    internal ParsedContactCoordinationOnionRequest(ReadOnlySpan<byte> canonical, PublicationWinnerReadWireRequest request)
-    {
-        this.canonical = canonical.ToArray(); Target = ContactCoordinationTarget.PublicationWinnerRead;
+        this.canonical = canonical.ToArray(); Target = ContactCoordinationTarget.PublicationCurrent;
         network = request.NetworkId.ToArray(); nonce = request.RequestNonce.ToArray();
         projection = []; shard = request.GatewayShard.ToArray(); ExpiresAtUnixSeconds = request.ExpiresAtUnixSeconds;
     }
@@ -40,8 +34,8 @@ public sealed class ParsedContactCoordinationOnionRequest
 public static class ContactCoordinationOnionCodec
 {
     public const int HeaderBytes = 12;
-    public const int MaximumRequestBytes = HeaderBytes + ContactPublicationAuthorityWireCodec.MaximumRequestBytes;
-    public const int MaximumResponseBytes = HeaderBytes + DeepIdV2PublicationLeaseWireCodec.MaximumResponseBytes;
+    public const int MaximumRequestBytes = HeaderBytes + DeepIdV2PublicationCurrentWireCodec.MaximumRequestBytes;
+    public const int MaximumResponseBytes = HeaderBytes + DeepIdV2PublicationCurrentWireCodec.MaximumResponseBytes;
 
     public static byte[] EncodeRequest(ContactCoordinationTarget target, ReadOnlySpan<byte> exactBody)
     {
@@ -61,11 +55,11 @@ public static class ContactCoordinationOnionCodec
             return new(encoded, target, request.NetworkId.Span, request.RequestNonce.Span, advertisement,
                 BinaryPrimitives.ReadUInt64BigEndian(advertisement.Field(13).Span));
         }
-        if (target == ContactCoordinationTarget.PublicationLease)
-            return new(encoded, DeepIdV2PublicationLeaseWireCodec.DecodeRequest(body));
-        if (target == ContactCoordinationTarget.PublicationWinnerRead)
-            return new(encoded, DeepIdV2PublicationWinnerReadWireCodec.DecodeRequest(body));
+        if (target == ContactCoordinationTarget.PublicationCurrent)
+            return new(encoded, DeepIdV2PublicationCurrentWireCodec.DecodeRequest(body));
         var publication = ContactPublicationAuthorityWireCodec.DecodeRequest(body);
+        if (publication.PublicationKind != 2)
+            throw new FormatException("Reusable publication requires its independently current submission.");
         var route = ContactRouteClosureCodec.Decode(publication.ExactRouteClosure.Span);
         return new(encoded, target, publication.NetworkId.Span, publication.RequestNonce.Span, route.Authorization,
             publication.ExpiresAtUnixSeconds);
@@ -95,9 +89,9 @@ public static class ContactCoordinationOnionCodec
             _ = ContactRouteAuthorityWireCodec.DecodeResponse(ContactRouteAuthorityWireCodec.DecodeRequest(pending.Span), body);
         else if (request.Target == ContactCoordinationTarget.Publication)
             _ = ContactPublicationAuthorityWireCodec.DecodeResponse(ContactPublicationAuthorityWireCodec.DecodeRequest(pending.Span), body);
-        else if (request.Target == ContactCoordinationTarget.PublicationLease)
-            _ = DeepIdV2PublicationLeaseWireCodec.DecodeResponse(DeepIdV2PublicationLeaseWireCodec.DecodeRequest(pending.Span), body);
-        else _ = DeepIdV2PublicationWinnerReadWireCodec.DecodeResponse(DeepIdV2PublicationWinnerReadWireCodec.DecodeRequest(pending.Span), body);
+        else if (request.Target == ContactCoordinationTarget.PublicationCurrent)
+            _ = DeepIdV2PublicationCurrentWireCodec.DecodeResponse(DeepIdV2PublicationCurrentWireCodec.DecodeRequest(pending.Span), body);
+        else throw new FormatException("Unknown coordination target.");
     }
 
     private static ContactCoordinationTarget Header(ReadOnlySpan<byte> encoded, ReadOnlySpan<byte> magic, bool response)
@@ -119,10 +113,8 @@ public static class ContactCoordinationOnionCodec
             (ContactCoordinationTarget.Route, true) => (ContactRouteAuthorityWireCodec.MinimumResponseBytes, ContactRouteAuthorityWireCodec.MaximumResponseBytes),
             (ContactCoordinationTarget.Publication, false) => (ContactPublicationAuthorityWireCodec.MinimumRequestBytes, ContactPublicationAuthorityWireCodec.MaximumRequestBytes),
             (ContactCoordinationTarget.Publication, true) => (ContactPublicationAuthorityWireCodec.MinimumResponseBytes, ContactPublicationAuthorityWireCodec.MaximumResponseBytes),
-            (ContactCoordinationTarget.PublicationLease, false) => (DeepIdV2PublicationLeaseWireCodec.RequestBytes, DeepIdV2PublicationLeaseWireCodec.RequestBytes),
-            (ContactCoordinationTarget.PublicationLease, true) => (DeepIdV2PublicationLeaseWireCodec.MinimumResponseBytes, DeepIdV2PublicationLeaseWireCodec.MaximumResponseBytes),
-            (ContactCoordinationTarget.PublicationWinnerRead, false) => (DeepIdV2PublicationWinnerReadWireCodec.RequestBytes, DeepIdV2PublicationWinnerReadWireCodec.RequestBytes),
-            (ContactCoordinationTarget.PublicationWinnerRead, true) => (DeepIdV2PublicationWinnerReadWireCodec.MinimumResponseBytes, DeepIdV2PublicationWinnerReadWireCodec.MaximumResponseBytes),
+            (ContactCoordinationTarget.PublicationCurrent, false) => (DeepIdV2PublicationCurrentWireCodec.MinimumRequestBytes, DeepIdV2PublicationCurrentWireCodec.MaximumRequestBytes),
+            (ContactCoordinationTarget.PublicationCurrent, true) => (DeepIdV2PublicationCurrentWireCodec.MinimumResponseBytes, DeepIdV2PublicationCurrentWireCodec.MaximumResponseBytes),
             _ => throw new FormatException("Unknown coordination target."),
         };
         if (bytes < limits.Item1 || bytes > limits.Item2) throw new FormatException("Coordination body exceeds its target bound.");

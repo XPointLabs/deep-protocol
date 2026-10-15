@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Deep.Protocol.AccountDirectoryV1;
 using Deep.Protocol.ContactV1;
+using Deep.Protocol.ContactV2;
 using Deep.Protocol.DeepExtension.PrivacyRouting;
 using Sodium;
 
@@ -96,8 +97,9 @@ public static class ContactServicePlacementFactory
             CryptographicOperations.FixedTimeEquals(candidate.FieldSpan(5)[6..], request.ViewHash.Span)) ??
             throw new CryptographicException("Committed publication view is absent from verified retained history.");
         _ = VerifiedLogicalMailboxAssignment.Verify(network, authority, projection);
-        if (request.IssuedAtUnixSeconds < BinaryPrimitives.ReadUInt64BigEndian(projection.FieldSpan(11)) ||
-            request.ExpiresAtUnixSeconds > BinaryPrimitives.ReadUInt64BigEndian(projection.FieldSpan(12)))
+        var approval = DeepIdV2ContactPublicationCodec.DecodeXpu1(request.CanonicalBytes.Span).Authorization;
+        if (BinaryPrimitives.ReadUInt64BigEndian(approval.Field(15).Span) < BinaryPrimitives.ReadUInt64BigEndian(projection.FieldSpan(11)) ||
+            BinaryPrimitives.ReadUInt64BigEndian(approval.Field(17).Span) > BinaryPrimitives.ReadUInt64BigEndian(projection.FieldSpan(12)))
             throw new CryptographicException("Committed publication was outside its original carriage interval.");
         var issuer = XPointOnionCapabilityProducer.RequireRetainedProjectionAuthority(network, authority, projection);
         var epoch = BinaryPrimitives.ReadUInt64BigEndian(projection.FieldSpan(6));

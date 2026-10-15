@@ -38,9 +38,9 @@ public sealed class VerifiedDeepIdV2IssuerPublicationIntent
 
 public static partial class DeepIdV2PublicationCommitVerifier
 {
-    // Read precondition only. This cannot provide original XPA, commitment or
-    // dispatch authority before the independently authenticated winner returns.
-    internal static async ValueTask VerifyOwnedPendingRequestForReadAsync(
+    // Pending-intent precondition only. This provides no original XPA,
+    // permanent winner, commitment or dispatch authority.
+    internal static async ValueTask VerifyOwnedPendingRequestAsync(
         VerifiedDeepIdV2ContactRouteClosure route, AuthoredDeepIdV2ContactObject contact,
         ContactPublicationAuthorityWireRequest candidate, CancellationToken ct)
     {
@@ -55,8 +55,31 @@ public static partial class DeepIdV2PublicationCommitVerifier
         var final = await route.ReadCurrentTimeAsync(ct).ConfigureAwait(false);
         if (!Fixed(first.BootId.Span, final.BootId.Span) || final.MonotonicSample < first.MonotonicSample ||
             final.LowerUnixSeconds < first.LowerUnixSeconds || final.UpperUnixSeconds < first.UpperUnixSeconds)
-            throw new CryptographicException("Publication winner read crossed protected time continuity.");
+            throw new CryptographicException("Pending publication crossed protected time continuity.");
         RequireCurrentObject(route, captured, owned, final); ct.ThrowIfCancellationRequested();
+    }
+
+    internal static async ValueTask VerifyIssuerPendingRequestAsync(
+        VerifiedDeepIdV2ContactRouteClosure route, ContactPublicationAuthorityWireRequest candidate,
+        VerifiedDeepIdV2PublicationIssuerPredecessor? predecessor, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(route); ArgumentNullException.ThrowIfNull(candidate); ct.ThrowIfCancellationRequested();
+        var owned = CopyRetainedIntentRequest(candidate);
+        var contact = new PublicationObject(DeepIdV2ResolverClosureCodec.Decode(owned.ExactDcr1.Span),
+            owned.ObjectCiphertext, owned.LocatorHash, new byte[16], 1);
+        var first = await route.ReadCurrentTimeAsync(ct).ConfigureAwait(false);
+        RequirePendingOwnedRequest(route, contact, owned);
+        RequireCurrentObject(route, contact, owned, first);
+        if ((owned.Generation == 0) != (predecessor is null))
+            throw new CryptographicException("Current publication requires exact independently verified predecessor lineage.");
+        ((IVerifiedDeepIdV2PublicationLineage?)predecessor)?.RequireSuccessor(route, owned, first, ct);
+        var final = await route.ReadCurrentTimeAsync(ct).ConfigureAwait(false);
+        if (!Fixed(first.BootId.Span, final.BootId.Span) || final.MonotonicSample < first.MonotonicSample ||
+            final.LowerUnixSeconds < first.LowerUnixSeconds || final.UpperUnixSeconds < first.UpperUnixSeconds)
+            throw new CryptographicException("Pending publication crossed protected time continuity.");
+        RequireCurrentObject(route, contact, owned, final);
+        ((IVerifiedDeepIdV2PublicationLineage?)predecessor)?.RequireSuccessor(route, owned, final, ct);
+        ct.ThrowIfCancellationRequested();
     }
 
     private static void RequirePendingOwnedRequest(VerifiedDeepIdV2ContactRouteClosure route,
@@ -82,7 +105,7 @@ public static partial class DeepIdV2PublicationCommitVerifier
             owned.ExpiresAtUnixSeconds <= owned.IssuedAtUnixSeconds || owned.ExpiresAtUnixSeconds - owned.IssuedAtUnixSeconds > 120 ||
             owned.ExpiresAtUnixSeconds > owned.EffectiveExpiresAtUnixSeconds ||
             owned.ExpiresAtUnixSeconds > BinaryPrimitives.ReadUInt64BigEndian(bundle.Field(18).Span))
-            throw new CryptographicException("Publication winner read differs from exact owned reusable request custody.");
+            throw new CryptographicException("Pending publication differs from exact owned reusable request custody.");
         var device = dca.Binding.Identity.ActiveDevices.Single(value =>
             Fixed(value.Certificate.DeviceId.Span, dca.Record.PublisherDeviceId.Span));
         var input = ContactPublicationAuthorityWireCodec.CreatePublisherSigningInput(owned);
@@ -156,12 +179,14 @@ public static partial class DeepIdV2PublicationCommitVerifier
         if (owned.PublicationKind != 1 || request.UsageLimit != 0 ||
             request.IssuedAtUnixSeconds < BinaryPrimitives.ReadUInt64BigEndian(contact.Closure.Bundle.Field(17).Span) ||
             request.ExpiresAtUnixSeconds > BinaryPrimitives.ReadUInt64BigEndian(contact.Closure.Bundle.Field(18).Span) ||
-            BinaryPrimitives.ReadUInt64BigEndian(xpa.Field(15).Span) != request.IssuedAtUnixSeconds ||
-            BinaryPrimitives.ReadUInt64BigEndian(xpa.Field(16).Span) != request.IssuedAtUnixSeconds ||
-            BinaryPrimitives.ReadUInt64BigEndian(xpa.Field(17).Span) != request.ExpiresAtUnixSeconds)
+            BinaryPrimitives.ReadUInt64BigEndian(xpa.Field(15).Span) < request.IssuedAtUnixSeconds ||
+            BinaryPrimitives.ReadUInt64BigEndian(xpa.Field(16).Span) != BinaryPrimitives.ReadUInt64BigEndian(xpa.Field(15).Span) ||
+            BinaryPrimitives.ReadUInt64BigEndian(xpa.Field(17).Span) > request.EffectiveExpiresAtUnixSeconds)
             throw new CryptographicException("Retained reusable intent has inconsistent original signed windows.");
 
         var first = await route.ReadCurrentTimeAsync(ct).ConfigureAwait(false);
+        if (BinaryPrimitives.ReadUInt64BigEndian(xpa.Field(15).Span) > first.LowerUnixSeconds)
+            throw new CryptographicException("Original publication approval is not yet valid throughout current trusted time.");
         RequireCurrentObject(route, contact, owned, first);
         var placement = ContactServicePlacementFactory.RequireOriginalPublicationPlacement(
             route.Network, route.NetworkAuthority, request);

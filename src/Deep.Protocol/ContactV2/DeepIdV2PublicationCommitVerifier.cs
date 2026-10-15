@@ -78,6 +78,8 @@ public static partial class DeepIdV2PublicationCommitVerifier
         RequireResult(request, result);
         var first = await route.ReadPublicationClockAsync(ct).ConfigureAwait(false);
         var firstWindow = route.VerifyAtReading(first, ct);
+        if (BinaryPrimitives.ReadUInt64BigEndian(parsed.Authorization.Field(15).Span) > firstWindow.LowerUnixSeconds)
+            throw new CryptographicException("Publication commit cannot adopt an approval from the future.");
         RequireCurrentObject(route, contact, ownedRequest, firstWindow);
         var window = await route.ReadCurrentTimeAsync(ct).ConfigureAwait(false);
         if (window.MonotonicSample < first.SampleSeconds ||

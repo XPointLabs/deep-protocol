@@ -82,41 +82,26 @@ public sealed partial class OwnedGenesisDeviceSecrets
         }
     }
 
-    internal byte[] SignCurrentPublicationLeaseRequest(PublicationLeaseWireRequest request,
-        VerifiedDeepIdV2OwnedPublicationIntent intent)
-    {
-        lock (sync)
-        {
-            ThrowIfDisposed();
-            var authorization = intent.Route.Recipient.Authorization;
-            _ = RequireCurrentRouteDevice(authorization);
-            if (!request.NetworkId.Span.SequenceEqual(authorization.Record.NetworkId.Span) ||
-                !request.DirectoryLookupKey.Span.SequenceEqual(intent.OwnedRequest.DirectoryLookupKey.Span) ||
-                !request.OriginalCoordinationNonce.Span.SequenceEqual(intent.OwnedRequest.RequestNonce.Span) ||
-                !request.OriginalRequestHash.Span.SequenceEqual(intent.RequestHash.Span) ||
-                !intent.OwnedRequest.ExactDca1.Span.SequenceEqual(authorization.Record.CanonicalBytes.Span))
-                throw new CryptographicException("Publication lease signing differs from current owned original intent.");
-            var input = request.SigningInput.ToArray();
-            try { return SignRouteIntent(input); }
-            finally { CryptographicOperations.ZeroMemory(input); }
-        }
-    }
-
-    internal byte[] SignCurrentPublicationWinnerReadRequest(PublicationWinnerReadWireRequest request,
+    internal byte[] SignCurrentPublicationSubmission(PublicationCurrentWireRequest request,
         VerifiedDca1V2 authorization, ContactPublicationAuthorityWireRequest original)
     {
         lock (sync)
         {
             ThrowIfDisposed(); _ = RequireCurrentRouteDevice(authorization);
-            if (!request.NetworkId.Span.SequenceEqual(authorization.Record.NetworkId.Span) ||
-                !request.DirectoryLookupKey.Span.SequenceEqual(original.DirectoryLookupKey.Span) ||
-                !request.OriginalCoordinationNonce.Span.SequenceEqual(original.RequestNonce.Span) ||
-                !request.OriginalCoordinationRequestHash.Span.SequenceEqual(DeepIdV2PublicationWinnerReadWireCodec.HashOriginalRequest(original)) ||
-                !original.ExactDca1.Span.SequenceEqual(authorization.Record.CanonicalBytes.Span))
-                throw new CryptographicException("Publication winner read signing differs from current owned request.");
-            var input = request.SigningInput.ToArray();
-            try { return SignRouteIntent(input); }
-            finally { CryptographicOperations.ZeroMemory(input); }
+            var enclosed = ContactPublicationAuthorityWireCodec.EncodeRequest(request.OriginalRequest);
+            var expected = ContactPublicationAuthorityWireCodec.EncodeRequest(original);
+            try
+            {
+                if (!request.NetworkId.Span.SequenceEqual(authorization.Record.NetworkId.Span) ||
+                    !request.DirectoryLookupKey.Span.SequenceEqual(original.DirectoryLookupKey.Span) ||
+                    !original.ExactDca1.Span.SequenceEqual(authorization.Record.CanonicalBytes.Span) ||
+                    !CryptographicOperations.FixedTimeEquals(enclosed, expected))
+                    throw new CryptographicException("Current publication signing differs from exact owned original intent.");
+                var input = request.SigningInput.ToArray();
+                try { return SignRouteIntent(input); }
+                finally { CryptographicOperations.ZeroMemory(input); }
+            }
+            finally { CryptographicOperations.ZeroMemory(enclosed); CryptographicOperations.ZeroMemory(expected); }
         }
     }
 
