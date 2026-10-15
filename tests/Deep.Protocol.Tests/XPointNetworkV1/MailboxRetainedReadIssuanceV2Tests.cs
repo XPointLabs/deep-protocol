@@ -347,7 +347,9 @@ public sealed class MailboxRetainedReadIssuanceV2Tests
         var replicaRows=new byte[128];for(var i=0;i<2;i++){ranked.AsSpan(i*32,32).CopyTo(replicaRows.AsSpan(i*64));B(32,(byte)(0x80+i)).CopyTo(replicaRows,i*64+32);}
         var xrcFields=Fields(template.Xrc,21);xrcFields[0]=pmt.Field(1);xrcFields[4]=ContactCodec.ArtifactReference("XRA1",xra).CanonicalBytes;
         xrcFields[5]=ContactCodec.ArtifactReference("PMT2",pmt).CanonicalBytes;xrcFields[6]=pms.ArtifactHash;xrcFields[7]=pmt.Field(5);xrcFields[14]=replicaRows;
-        xrcFields[16]=U64(100);xrcFields[17]=U64(210);xrcFields[18]=pmt.Field(14);var xrc=ContactCodec.AuthorForOperationalAuthority("XRC1",xrcFields);
+        // Genesis issuance must occur inside this original PMT interval;
+        // the generic template's issuance time belongs to another fixture.
+        xrcFields[15]=U64(100);xrcFields[16]=U64(100);xrcFields[17]=U64(210);xrcFields[18]=pmt.Field(14);var xrc=ContactCodec.AuthorForOperationalAuthority("XRC1",xrcFields);
         var xssFields=Fields(template.Xss,14);xssFields[0]=pmt.Field(1);xssFields[3]=xrc.CoreHash;xssFields[4]=ContactCodec.ArtifactReference("XRC1",xrc).CanonicalBytes;
         xssFields[5]=xssFields[4];xssFields[6]=ContactCodec.ArtifactReference("PMT2",pmt).CanonicalBytes;xssFields[7]=pmt.Field(5);xssFields[8]=pms.ArtifactHash;
         xssFields[9]=U64(100);xssFields[10]=U64(210);xssFields[11]=pmt.Field(14);var xss=ContactCodec.AuthorForOperationalAuthority("XSS1",xssFields);

@@ -14,7 +14,22 @@ namespace Deep.Protocol.Tests.Identity;
 
 public sealed partial class Dnp1IdentityAuthoringV1Tests
 {
-    private const string Mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art";
+    // Public BIP39 zero-entropy vector, never an account/operator secret.
+    // Keep the fixture deterministic without embedding a recovery phrase literal.
+    private static readonly string Mnemonic = CreateZeroEntropyFixturePhrase();
+
+    private static string CreateZeroEntropyFixturePhrase()
+    {
+        using var phrase = new VerifiedDeepRecoveryPhrase(new byte[DeepRecoveryV1.EntropySize]);
+        var encoded = new byte[phrase.CanonicalUtf8Length];
+        try
+        {
+            var written = phrase.WriteCanonicalUtf8(encoded);
+            Assert.Equal(encoded.Length, written);
+            return Encoding.ASCII.GetString(encoded);
+        }
+        finally { CryptographicOperations.ZeroMemory(encoded); }
+    }
     private static readonly byte[] Network = Enumerable.Range(1, 16).Select(static value => (byte)value).ToArray();
 
     [Fact]
@@ -531,8 +546,14 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
         {
             "SignContactUpdateRendezvous", "SignCurrentContactBundle",
             "SignCurrentContactInvite", "SignCurrentContactPublicationRequest",
-            "SignCurrentContactRouteRecord", "SignGenesisDeviceCertificate"
+            "SignCurrentContactRouteRecord", "SignCurrentPublicationSubmission", "SignGenesisDeviceCertificate"
         }, friendCallableDeviceSigners.Select(method => method.Name).Order().ToArray());
+        var currentSubmissionSigner = Assert.Single(friendCallableDeviceSigners,
+            method => method.Name == "SignCurrentPublicationSubmission");
+        Assert.Equal(new[] { typeof(Deep.Protocol.ContactV2.PublicationCurrentWireRequest),
+            typeof(Deep.Protocol.ApplicationCore.VerifiedDca1V2),
+            typeof(Deep.Protocol.ContactV1.ContactPublicationAuthorityWireRequest) },
+            currentSubmissionSigner.GetParameters().Select(parameter => parameter.ParameterType).ToArray());
         var deviceSigner = Assert.Single(friendCallableDeviceSigners,
             method => method.Name == "SignGenesisDeviceCertificate");
         Assert.Contains(deviceSigner.GetParameters(), static parameter =>
