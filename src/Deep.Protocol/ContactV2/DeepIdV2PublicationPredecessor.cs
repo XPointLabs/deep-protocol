@@ -145,7 +145,7 @@ public static partial class DeepIdV2PublicationCommitVerifier
         finally { CryptographicOperations.ZeroMemory(input); }
         var parsed = DeepIdV2ContactPublicationCodec.DecodeXpu1(request.CanonicalBytes.Span);
         RequireResult(request, result);
-        var placement = ContactServicePlacementFactory.RequireCommittedPublicationPlacement(current.Network, current.Authority, request);
+        var placement = ContactServicePlacementFactory.RequireOriginalPublicationPlacement(current.Network, current.Authority, request);
         DeepIdV2Xpa1WitnessThresholdVerifier.RequireOriginalThreshold(parsed.Authorization, placement.Issuer);
         VerifyReceipts(request, result, current.Network, placement.Replicas);
     }

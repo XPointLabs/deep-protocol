@@ -85,7 +85,7 @@ public static partial class DeepIdV2PublicationCommitVerifier
             window.UpperUnixSeconds < firstWindow.UpperUnixSeconds)
             throw new CryptographicException("Publication commit reversed its initial protected interval.");
         RequireCurrentObject(route, contact, ownedRequest, window);
-        var placement = ContactServicePlacementFactory.RequireCommittedPublicationPlacement(route.Network, route.NetworkAuthority, request);
+        var placement = ContactServicePlacementFactory.RequireOriginalPublicationPlacement(route.Network, route.NetworkAuthority, request);
         DeepIdV2Xpa1WitnessThresholdVerifier.RequireOriginalThreshold(parsed.Authorization, placement.Issuer);
         VerifyReceipts(request, result, route.Network, placement.Replicas);
         var releaseWindow = await route.ReadCurrentTimeAsync(ct).ConfigureAwait(false);

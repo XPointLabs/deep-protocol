@@ -86,9 +86,9 @@ public sealed class VerifiedContactServicePlacement
 
 public static class ContactServicePlacementFactory
 {
-    // Read-only original commit facts. Never produces a current placement or
-    // permission to dispatch an old XPU; live writes still use Create below.
-    internal static (Xna1Record Issuer, IReadOnlyList<ReadOnlyMemory<byte>> Replicas) RequireCommittedPublicationPlacement(
+    // Read-only original placement facts, not durable commitment. Never produces
+    // a current placement or old-XPU dispatch permission; live writes use Create.
+    internal static (Xna1Record Issuer, IReadOnlyList<ReadOnlyMemory<byte>> Replicas) RequireOriginalPublicationPlacement(
         VerifiedOnionNetworkContext network, VerifiedXPointNetworkAuthority authority, Xpu1Request request)
     {
         network.EnsureCurrent();
