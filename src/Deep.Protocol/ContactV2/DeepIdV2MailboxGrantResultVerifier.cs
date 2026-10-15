@@ -129,7 +129,7 @@ public static class DeepIdV2MailboxGrantResultVerifier
         var maximumExpiry = new[] { route.Network.MaximumRecordExpiryUnixSeconds,
             U64(records.Reachability.Field(17).Span), U64(records.Authorization.Field(13).Span),
             U64(records.Route.Field(18).Span), U64(records.Successor.Field(11).Span),
-            U64(records.Projection.Field(12).Span), U64(records.Selection.Field(9).Span) }.Min();
+            U64(records.Selection.Field(9).Span) }.Min();
         if (expiry <= start || expiry - start > 120 || expiry > maximumExpiry)
             throw new CryptographicException("Retained mailbox request exceeds its original acquisition/route bounds.");
     }
@@ -148,14 +148,15 @@ public static class DeepIdV2MailboxGrantResultVerifier
         var policy = MailboxAuthorityV2Verifier.Verify(route.NetworkAuthority, pma.CanonicalBytes.Span,
             current.LowerUnixSeconds, current.UpperUnixSeconds);
         var records = route.Route;
-        if (!policy.BindsProjection(records.Projection.CanonicalBytes.Span))
+        _ = VerifiedLogicalMailboxAssignment.Verify(route.Network, route.NetworkAuthority, records.Projection);
+        if (!policy.BindsProjection(route.Network.Closure!.Pmt.CanonicalBytes.Span))
             throw new CryptographicException("Mailbox issuer is not bound by the exact current PMT2.");
         var grant = MailboxAuthenticatedCapabilityCodec.DecodeGrant(response.Field(8).Span);
         var issuer = policy.ResolveIssuer(grant.Domain);
         var maximumExpiry = new[] { route.Network.MaximumRecordExpiryUnixSeconds, policy.ExpiresAtUnixSeconds,
             U64(records.Reachability.Field(17).Span), U64(records.Authorization.Field(13).Span),
             U64(records.Route.Field(18).Span), U64(records.Successor.Field(11).Span),
-            U64(records.Projection.Field(12).Span), U64(records.Selection.Field(9).Span) }.Min();
+            U64(records.Selection.Field(9).Span) }.Min();
         if (grant.Lifecycle != MailboxCapabilityLifecycle.Active ||
             !Fixed(grant.NetworkId.Span, route.Network.NetworkId.Span) ||
             !Fixed(grant.MembershipCommitment.Span, records.Projection.ArtifactHash.Span) ||

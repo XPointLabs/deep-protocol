@@ -85,7 +85,10 @@ public static partial class DeepIdV2ContactRouteVerifier
         Require(await first.RecheckAsync(cancellationToken).ConfigureAwait(false));
         cancellationToken.ThrowIfCancellationRequested();
         void Require(DeepIdV2RouteContext current)
-        { predecessor.RequireAtCurrentContext(current); current.RequireAdvertisement(xra); }
+        {
+            current = current.BindCurrentAssignment(predecessor.Route.Projection);
+            predecessor.RequireAtCurrentContext(current); current.RequireAdvertisement(xra);
+        }
     }
 
     /// <summary>Authenticates exact historical route input against independently
@@ -105,19 +108,19 @@ public static partial class DeepIdV2ContactRouteVerifier
         var route = ContactRouteClosureCodec.Decode(exactSixRecordClosure.Span);
         var first = await DeepIdV2RouteContext.ReadAsync(recipient, network, authority,
             trustedTime, cancellationToken).ConfigureAwait(false);
-        RequirePredecessorBindings(invite, route, first);
+        first = RequirePredecessorBindings(invite, route, first);
         var final = await first.RecheckAsync(cancellationToken).ConfigureAwait(false);
         RequirePredecessorBindings(invite, route, final);
         cancellationToken.ThrowIfCancellationRequested(); return new(invite, route);
     }
 
-    internal static void RequirePredecessorBindings(ParsedXir1V2 invite,
+    internal static DeepIdV2RouteContext RequirePredecessorBindings(ParsedXir1V2 invite,
         ParsedContactRouteClosure route, DeepIdV2RouteContext current)
     {
-        if (!DeepIdV2RouteContext.Fixed(route.Projection.CanonicalBytes.Span, current.Pmt.CanonicalBytes.Span))
-            throw new CryptographicException("Historical route rollover requires a separately authorized PMT transition.");
+        current = current.BindCurrentAssignment(route.Projection);
         current.RequireAdvertisementPredecessor(route.Authorization);
         RequireHistoricalRouteBindings(invite, route, current, current.PmtReference.Span);
+        return current;
     }
 
     /// <summary>Original route facts for independently native-committed contact
@@ -151,13 +154,12 @@ public static partial class DeepIdV2ContactRouteVerifier
             catch (OnionBoundaryException error) { throw new CryptographicException("Retained event projection threshold is invalid.", error); }
             current.RequireRetainedAdvertisementFacts(route.Authorization, route.Projection);
             RequireHistoricalRouteBindings(invite, route, current,
-                ContactCodec.ArtifactReference(ProtocolMagic.PMT2, route.Projection).CanonicalBytes.Span, ancestor);
+                ContactCodec.ArtifactReference(ProtocolMagic.PMT2, route.Projection).CanonicalBytes.Span);
         }
     }
 
     private static void RequireHistoricalRouteBindings(ParsedXir1V2 invite,
-        ParsedContactRouteClosure route, DeepIdV2RouteContext current, ReadOnlySpan<byte> originalPmtReference,
-        Xna1Record? originalSignatureAuthority = null)
+        ParsedContactRouteClosure route, DeepIdV2RouteContext current, ReadOnlySpan<byte> originalPmtReference)
     {
         if (!DeepIdV2RouteContext.Fixed(route.Route.Field(19).Span, route.Successor.Field(12).Span))
             throw new CryptographicException("Historical threshold records disagree on their directory issuance anchor.");
@@ -165,21 +167,16 @@ public static partial class DeepIdV2ContactRouteVerifier
             originalPmtReference, current.DeviceReference.Span, current.DcaReference.Span);
         // Decoding independently validates the exact six-record graph. These
         // signatures authenticate history, not a current route's expired window.
-        if (originalSignatureAuthority is null)
+        var originalSignatureAuthority = XPointOnionCapabilityProducer.RequireRetainedIssuanceAuthority(
+            current.Network, current.Authority, route.Route.Field(8), route.Route.Field(9),
+            DeepIdV2RouteContext.U64(route.Route.Field(16).Span), DeepIdV2RouteContext.U64(route.Route.Field(18).Span));
+        foreach (var (record, signatureTag, issuedTag, expiryTag) in new[] {
+            (route.Selection, 11, 8, 9), (route.Route, 21, 16, 18), (route.Successor, 14, 10, 11) })
         {
-            DeepIdV2RouteContext.VerifyWitnesses(route.Selection, 11, current.Authority);
-            DeepIdV2RouteContext.VerifyWitnesses(route.Route, 21, current.Authority);
-            DeepIdV2RouteContext.VerifyWitnesses(route.Successor, 14, current.Authority);
-        }
-        else
-        {
-            DeepIdV2RouteContext.VerifyWitnesses(route.Selection, 11, originalSignatureAuthority);
-            DeepIdV2RouteContext.VerifyWitnesses(route.Route, 21, originalSignatureAuthority);
-            DeepIdV2RouteContext.VerifyWitnesses(route.Successor, 14, originalSignatureAuthority);
-            foreach (var (record, issuedTag, expiryTag) in new[] { (route.Selection, 8, 9), (route.Route, 16, 18), (route.Successor, 10, 11) })
-                if (DeepIdV2RouteContext.U64(record.Field(issuedTag).Span) < originalSignatureAuthority.NotBefore ||
-                    DeepIdV2RouteContext.U64(record.Field(expiryTag).Span) > originalSignatureAuthority.ExpiresAt)
-                    throw new CryptographicException("Historical threshold route is outside its original authority interval.");
+            DeepIdV2RouteContext.VerifyWitnesses(record, signatureTag, originalSignatureAuthority);
+            if (DeepIdV2RouteContext.U64(record.Field(issuedTag).Span) < originalSignatureAuthority.NotBefore ||
+                DeepIdV2RouteContext.U64(record.Field(expiryTag).Span) > originalSignatureAuthority.ExpiresAt)
+                throw new CryptographicException("Historical threshold route is outside its original authority interval.");
         }
         ContactCodec.VerifyDeviceSignature(route.Reachability, current.Device.Certificate.DeviceEd25519PublicKey.Span);
         foreach (var (record, issueTag) in new[] { (route.Selection, 8), (route.Route, 16),

@@ -221,44 +221,44 @@ public static class DeepIdV2MailboxGrantIssuanceVerifier
         Covers(current, closure.View.NotBefore, closure.View.ExpiresAt);
         Covers(current, closure.Head.ValidFrom, closure.Head.ValidUntil);
         var policy = MailboxAuthorityV2Verifier.Verify(root, pma.CanonicalBytes.Span, lower, upper);
+        _ = VerifiedLogicalMailboxAssignment.Verify(network, root, route.Projection);
+        var assignmentReference = ContactCodec.ArtifactReference(ProtocolMagic.PMT2, route.Projection).CanonicalBytes;
         if (!policy.BindsProjection(closure.Pmt.CanonicalBytes.Span) ||
-            !Fixed(route.Projection.CanonicalBytes.Span, closure.Pmt.CanonicalBytes.Span) ||
             !Fixed(request.Field(1).Span, network.NetworkId.Span) ||
             !Fixed(route.Reachability.Field(1).Span, network.NetworkId.Span) ||
-            !Fixed(request.Field(7).Span, closure.PmtArtifactReference) ||
+            !Fixed(request.Field(7).Span, assignmentReference.Span) ||
             !Fixed(request.Field(8).Span, route.Selection.ArtifactHash.Span) ||
             !Fixed(request.Field(11).Span, route.ExactHash.Span) ||
-            !Fixed(route.Route.Field(8).Span, closure.ViewCoreReference) ||
-            !Fixed(route.Route.Field(9).Span, XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XNH1, closure.Head.CoreHash.Span)) ||
             !Fixed(route.Route.Field(19).Span, route.Successor.Field(12).Span) ||
-            !Fixed(route.Successor.Field(8).Span, closure.ViewCoreReference))
-            throw new CryptographicException("Mailbox issuance route is not the exact current root/projection/view/head.");
+            !Fixed(route.Successor.Field(8).Span, route.Route.Field(8).Span))
+            throw new CryptographicException("Mailbox issuance differs from the eligible logical assignment or issuance anchors.");
         ContactCodec.ValidateThresholdRouteGraph(route.Authorization, route.Route, route.Successor, route.Projection, route.Selection);
-        foreach (var record in new[] { route.Reachability, route.Authorization, route.Route, route.Successor, route.Projection, route.Selection })
+        foreach (var record in new[] { route.Reachability, route.Authorization, route.Route, route.Successor, route.Selection })
         {
             var tags = record.Magic switch
             {
                 ProtocolMagic.XRR1 => (16, 17), ProtocolMagic.XRA1 => (12, 13),
                 ProtocolMagic.XRC1 => (17, 18), ProtocolMagic.XSS1 => (10, 11),
-                ProtocolMagic.PMT2 => (11, 12), _ => (8, 9),
+                _ => (8, 9),
             };
             Covers(current, U64(record.Field(tags.Item1).Span), U64(record.Field(tags.Item2).Span));
         }
-        var selected = route.Selection.Field(6).Span;
-        for (var offset = 0; offset < selected.Length; offset += 32)
-            if (network.ResolveNode(selected.Slice(offset, 32)).KeyEpoch != U64(route.Route.Field(13).Span))
-                throw new CryptographicException("Mailbox route traffic-key epoch differs from current nodes.");
-        DeepIdV2RouteContext.VerifyWitnesses(route.Selection, 11, root);
-        DeepIdV2RouteContext.VerifyWitnesses(route.Route, 21, root);
-        DeepIdV2RouteContext.VerifyWitnesses(route.Successor, 14, root);
+        var issuer = XPointOnionCapabilityProducer.RequireRetainedIssuanceAuthority(network, root,
+            route.Route.Field(8), route.Route.Field(9), U64(route.Route.Field(16).Span), U64(route.Route.Field(18).Span));
+        foreach (var (record, signatureTag, issuedTag, expiryTag) in new[] {
+            (route.Selection, 11, 8, 9), (route.Route, 21, 16, 18), (route.Successor, 14, 10, 11) })
+        {
+            if (U64(record.Field(issuedTag).Span) < issuer.NotBefore || U64(record.Field(expiryTag).Span) > issuer.ExpiresAt)
+                throw new CryptographicException("Mailbox route exceeds its original witness authority.");
+            DeepIdV2RouteContext.VerifyWitnesses(record, signatureTag, issuer);
+        }
         var start = U64(request.Field(9).Span); var expiry = U64(request.Field(10).Span);
         var domain = (MailboxCapabilityDomain)request.Field(6).Span[0];
         var isDeposit = Fixed(request.Field(4).Span, route.Reachability.Field(10).Span);
         if (expiry <= start || expiry - start > 120 ||
             expiry > MaximumExpiry(network, route, effectiveExpiry) ||
             effectiveExpiry == 0 || effectiveExpiry > U64(route.Reachability.Field(17).Span) ||
-            (domain == MailboxCapabilityDomain.Deposit ? !isDeposit : isDeposit) ||
-            U64(route.Route.Field(18).Span) > closure.HardUpperUnixSeconds)
+            (domain == MailboxCapabilityDomain.Deposit ? !isDeposit : isDeposit))
             throw new CryptographicException("Mailbox request exceeds its exact role/route/window scope.");
         Covers(current, start, expiry); Covers(current, 0, effectiveExpiry);
         var placement = ContactServicePlacementFactory.Create(network, ContactServiceRequestKind.ResolveInvite, request.Field(3));
@@ -281,7 +281,7 @@ public static class DeepIdV2MailboxGrantIssuanceVerifier
         new[] { network.MaximumRecordExpiryUnixSeconds, effectiveExpiry,
             U64(route.Reachability.Field(17).Span), U64(route.Authorization.Field(13).Span),
             U64(route.Route.Field(18).Span), U64(route.Successor.Field(11).Span),
-            U64(route.Projection.Field(12).Span), U64(route.Selection.Field(9).Span) }.Min();
+            U64(route.Selection.Field(9).Span) }.Min();
     internal static void Covers(DeepIdV2ContactRouteTimeWindow current, ulong start, ulong expiry)
     {
         if (current.LowerUnixSeconds > current.UpperUnixSeconds || start > current.LowerUnixSeconds || current.UpperUnixSeconds >= expiry)

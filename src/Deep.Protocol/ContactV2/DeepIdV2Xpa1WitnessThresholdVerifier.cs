@@ -37,12 +37,29 @@ internal static class DeepIdV2Xpa1WitnessThresholdVerifier
     {
         ArgumentNullException.ThrowIfNull(xpa1);
         ArgumentNullException.ThrowIfNull(authority);
-        if (!Fixed(xpa1.Field(1).Span, authority.NetworkId.Span) ||
-            xpa1.Field(20).Span[0] < authority.WitnessThreshold)
+        RequireThreshold(xpa1, authority.NetworkId.Span, authority.WitnessKeys, authority.WitnessThreshold);
+        return new VerifiedXpa1V2WitnessThreshold(xpa1, authority);
+    }
+
+    internal static void RequireOriginalThreshold(ParsedXpa1V2 xpa1, Xna1Record issuer)
+    {
+        if (DeepIdV2RouteContext.U64(xpa1.Field(15).Span) < issuer.NotBefore ||
+            DeepIdV2RouteContext.U64(xpa1.Field(17).Span) > issuer.ExpiresAt)
+            throw new CryptographicException("Committed publication exceeds its original witness authority.");
+        RequireThreshold(xpa1, issuer.NetworkId.Span, issuer.Witnesses.Select(static key =>
+            new XPointNetworkWitnessKey(key.Id.Span, key.Generation, key.PublicKey.Span, key.FailureDomainHash.Span)).ToArray(),
+            issuer.WitnessThreshold);
+    }
+
+    private static void RequireThreshold(ParsedXpa1V2 xpa1, ReadOnlySpan<byte> networkId,
+        IReadOnlyList<XPointNetworkWitnessKey> witnessKeys, byte threshold)
+    {
+        if (!Fixed(xpa1.Field(1).Span, networkId) ||
+            xpa1.Field(20).Span[0] < threshold)
             throw new CryptographicException(
                 "XPA1 V2 network or witness threshold differs from current XNA1.");
 
-        var keys = authority.WitnessKeys.ToDictionary(
+        var keys = witnessKeys.ToDictionary(
             static key => Convert.ToHexString(key.Id.Span),
             StringComparer.Ordinal);
         var rows = xpa1.Field(21).ToArray();
@@ -75,10 +92,9 @@ internal static class DeepIdV2Xpa1WitnessThresholdVerifier
                 failureDomains.Add(Convert.ToHexString(
                     key.FailureDomainHash.Span));
             }
-            if (failureDomains.Count < authority.WitnessThreshold)
+            if (failureDomains.Count < threshold)
                 throw new CryptographicException(
                     "XPA1 V2 lacks distinct witness failure domains.");
-            return new VerifiedXpa1V2WitnessThreshold(xpa1, authority);
         }
         finally
         {

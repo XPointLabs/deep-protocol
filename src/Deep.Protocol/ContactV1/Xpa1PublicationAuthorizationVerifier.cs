@@ -151,16 +151,15 @@ public static class Xpa1PublicationAuthorizationVerifier
             request = Xpu1Codec.Decode(request.CanonicalBytes.Span);
             var parsed = DeepIdV2ContactPublicationCodec.DecodeXpu1(request.CanonicalBytes.Span);
             var kind = (Xpa1PublicationKind)parsed.Authorization.Field(5).Span[0];
-            if (request.Generation != 0 ||
-                !(kind == Xpa1PublicationKind.PermanentAddress && request.UsageLimit == 0 ||
-                  kind == Xpa1PublicationKind.OneTimeInvite && request.UsageLimit == 1))
-                Fail("UnsupportedPublicationKind", "Only exact current DID2 reusable or one-time genesis publication is admitted.");
+            if (!(kind == Xpa1PublicationKind.PermanentAddress && request.UsageLimit == 0 ||
+                  kind == Xpa1PublicationKind.OneTimeInvite && request.UsageLimit == 1 && request.Generation == 0))
+                Fail("UnsupportedPublicationKind", "Only current reusable publication or one-time genesis is admitted.");
             if (request.ExpiresAtUnixSeconds <= request.IssuedAtUnixSeconds ||
                 request.ExpiresAtUnixSeconds - request.IssuedAtUnixSeconds > 120 ||
                 ServiceWire.U64(parsed.Authorization.Field(15).Span) != request.IssuedAtUnixSeconds ||
                 ServiceWire.U64(parsed.Authorization.Field(16).Span) != request.IssuedAtUnixSeconds ||
                 ServiceWire.U64(parsed.Authorization.Field(17).Span) != request.ExpiresAtUnixSeconds)
-                Fail("AuthorizationTimeInvalid", "DID2 genesis authorization must bind the exact bounded request lifetime.");
+                Fail("AuthorizationTimeInvalid", "DID2 publication authorization must bind the exact bounded request lifetime.");
             var first = await trustedTimeAuthority.ReadCurrentAsync(cancellationToken).ConfigureAwait(false);
             RequireCurrent(request, parsed, authority, freshness, placement, first);
             var final = await trustedTimeAuthority.ReadCurrentAsync(cancellationToken).ConfigureAwait(false);
@@ -211,10 +210,10 @@ public static class Xpa1PublicationAuthorizationVerifier
             Fail("AuthorizationTimeInvalid", "The full network trusted interval is not covered.");
         _ = DeepIdV2Xpa1CurrentDirectoryWitnessVerifier.Verify(parsed, authority, freshness,
             reading.BootId.Span, reading.SampleSeconds);
-        if (!Fixed(parsed.Field(25).Span, request.ExactRouteClosure.Span) ||
-            !Fixed(ContactRouteClosureCodec.Decode(request.ExactRouteClosure.Span).Projection.CanonicalBytes.Span,
-                closure.Pmt.CanonicalBytes.Span))
-            Fail("RouteProjectionMismatch", "Publication uses another exact verified PMT2 projection.");
+        if (!Fixed(parsed.Field(25).Span, request.ExactRouteClosure.Span))
+            Fail("RouteProjectionMismatch", "Publication differs from its exact authorized route closure.");
+        _ = VerifiedLogicalMailboxAssignment.Verify(placement.Network, authority,
+            ContactRouteClosureCodec.Decode(request.ExactRouteClosure.Span).Projection);
     }
 
     private static bool Fixed(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b) =>

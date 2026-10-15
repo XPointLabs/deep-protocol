@@ -48,10 +48,11 @@ public sealed class VerifiedDeepIdV2ContactRouteIssuance
             DeepIdV2RouteContext.U64(xss.Field(10).Span) >= head.ValidUntil)
             throw new CryptographicException("Retained threshold does not bind its authenticated issuance head/time.");
         var xra = ContactCodec.Decode(ProtocolMagic.XRA1, Request.ExactXra1.Span);
+        current = current.BindCurrentAssignment(xra.Field(5));
         if (predecessor is not null)
         { predecessor.RequireAtCurrentContext(current); predecessor.RequireThresholdSuccessor(xra, Threshold); }
         current.RequireAdvertisement(xra);
-        current.RequireThreshold(xra, Threshold.Selection, xrc, xss, requireCurrentDirectory: false);
+        current.RequireLiveThreshold(xra, Threshold.Selection, xrc, xss);
     }
 
     internal void RequireExactRoute(VerifiedDeepIdV2ContactRouteClosure route)

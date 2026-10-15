@@ -154,10 +154,9 @@ public static class DeepIdV2ContactRouteUpdateVerifier
 
     internal static void RequireCurrentRoute(ParsedContactRouteClosure route, DeepIdV2RouteContext current)
     {
-        if (!Fixed(route.Projection.CanonicalBytes.Span, current.Pmt.CanonicalBytes.Span))
-            throw new CryptographicException("Private delivery route changes the exact current projection.");
+        current = current.BindCurrentAssignment(route.Projection);
         current.RequireAdvertisement(route.Authorization);
-        current.RequireThreshold(route.Authorization, route.Selection, route.Route, route.Successor, requireCurrentDirectory: false);
+        current.RequireLiveThreshold(route.Authorization, route.Selection, route.Route, route.Successor);
         RequireDeviceRouteScope(route, current);
         current.Covers(U64(route.Reachability.Field(16).Span), U64(route.Reachability.Field(17).Span), DeepIdV2RouteTimeArtifact.Xrr1);
         ContactCodec.VerifyDeviceSignature(route.Reachability, current.Device.Certificate.DeviceEd25519PublicKey.Span);
@@ -169,6 +168,8 @@ public static class DeepIdV2ContactRouteUpdateVerifier
             throw new CryptographicException("Private route history lost its protected projection lineage.");
         var ancestor = XPointOnionCapabilityProducer.RequireRetainedProjectionAuthority(current.Network, current.Authority, route.Projection);
         XPointOnionCapabilityProducer.VerifyContactThreshold(route.Projection, ancestor);
+        var issuer = XPointOnionCapabilityProducer.RequireRetainedIssuanceAuthority(current.Network, current.Authority,
+            route.Route.Field(8), route.Route.Field(9), U64(route.Route.Field(16).Span), U64(route.Route.Field(18).Span));
         current.RequireRetainedAdvertisementFacts(route.Authorization, route.Projection);
         RequireDeviceRouteScope(route, current);
         if (!Fixed(route.Route.Field(19).Span, route.Successor.Field(12).Span))
@@ -177,9 +178,9 @@ public static class DeepIdV2ContactRouteUpdateVerifier
         foreach (var (record, signatureTag, issueTag, expiryTag) in new[] {
             (route.Selection, 11, 8, 9), (route.Route, 21, 16, 18), (route.Successor, 14, 10, 11) })
         {
-            DeepIdV2RouteContext.VerifyWitnesses(record, signatureTag, ancestor);
-            if (U64(record.Field(issueTag).Span) > current.Lower || U64(record.Field(issueTag).Span) < ancestor.NotBefore ||
-                U64(record.Field(expiryTag).Span) > ancestor.ExpiresAt)
+            DeepIdV2RouteContext.VerifyWitnesses(record, signatureTag, issuer);
+            if (U64(record.Field(issueTag).Span) > current.Lower || U64(record.Field(issueTag).Span) < issuer.NotBefore ||
+                U64(record.Field(expiryTag).Span) > issuer.ExpiresAt)
                 throw new CryptographicException("Private route history exceeds its original witness authority.");
         }
         if (U64(route.Reachability.Field(15).Span) > current.Lower)
@@ -226,7 +227,7 @@ public static class DeepIdV2ContactRouteUpdateVerifier
 
     private static bool CoversCreation(ParsedContactRouteClosure route, ulong created) =>
         new[] { (route.Authorization, 12, 13), (route.Reachability, 16, 17),
-            (route.Selection, 8, 9), (route.Route, 17, 18), (route.Successor, 10, 11), (route.Projection, 11, 12) }
+            (route.Selection, 8, 9), (route.Route, 17, 18), (route.Successor, 10, 11) }
         .All(part => U64(part.Item1.Field(part.Item2).Span) <= created && created < U64(part.Item1.Field(part.Item3).Span));
     private static ulong U64(ReadOnlySpan<byte> value) => DeepIdV2RouteContext.U64(value);
     private static bool Fixed(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b) => DeepIdV2RouteContext.Fixed(a, b);

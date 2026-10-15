@@ -306,7 +306,9 @@ public static class ContactCodec
 
         RequireReference(xrc1, 5, xra1); RequireReference(xrc1, 6, pmt2);
         RequireHash(xrc1, 7, pms2);
-        if (!xrc1.FieldSpan(8).SequenceEqual(pmt2.FieldSpan(5)) ||
+        if ((U64(xrc1.FieldSpan(3)) == 0 && (!xrc1.FieldSpan(8).SequenceEqual(pmt2.FieldSpan(5)) ||
+             U64(xrc1.FieldSpan(16)) < U64(pmt2.FieldSpan(11)) ||
+             U64(xrc1.FieldSpan(16)) >= U64(pmt2.FieldSpan(12)))) ||
             !xrc1.FieldSpan(11).SequenceEqual(xra1.FieldSpan(10)) ||
             !xrc1.FieldSpan(12).SequenceEqual(xra1.FieldSpan(11)))
             Reject(ContactValidationStage.Closure, "Xrc1AuthorityBindingMismatch");
@@ -327,8 +329,7 @@ public static class ContactCodec
 
         if (U64(xrc1.FieldSpan(17)) < U64(xra1.FieldSpan(12)) ||
             U64(xrc1.FieldSpan(18)) > U64(xra1.FieldSpan(13)) ||
-            U64(xrc1.FieldSpan(17)) < U64(pmt2.FieldSpan(11)) ||
-            U64(xrc1.FieldSpan(18)) > U64(pmt2.FieldSpan(12)))
+            U64(xrc1.FieldSpan(17)) < U64(pmt2.FieldSpan(11)))
             Reject(ContactValidationStage.Closure, "RouteValidityIntersectionMismatch");
     }
 
@@ -735,8 +736,7 @@ public static class ContactCodec
         RequireRecord(pms2, ProtocolMagic.PMS2); RequireRecord(pmt2, ProtocolMagic.PMT2);
         RequireReference(pms2, 2, pmt2);
         if (!pms2.FieldSpan(1).SequenceEqual(pmt2.FieldSpan(1)) ||
-            U64(pms2.FieldSpan(8)) < U64(pmt2.FieldSpan(10)) ||
-            U64(pms2.FieldSpan(9)) > U64(pmt2.FieldSpan(12)))
+            U64(pms2.FieldSpan(8)) < U64(pmt2.FieldSpan(10)))
             Reject(ContactValidationStage.Closure, "Pms2ProjectionWindowMismatch");
 
         var replicaCount = pms2.FieldSpan(5)[0];

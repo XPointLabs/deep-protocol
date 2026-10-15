@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using Deep.Protocol.ApplicationCore;
 using Deep.Protocol.ContactV1;
+using Deep.Protocol.DeepExtension.PrivacyRouting;
 using Deep.Protocol.XPointNetworkV1;
 using Sodium;
 
@@ -84,13 +85,9 @@ public static partial class DeepIdV2PublicationCommitVerifier
             window.UpperUnixSeconds < firstWindow.UpperUnixSeconds)
             throw new CryptographicException("Publication commit reversed its initial protected interval.");
         RequireCurrentObject(route, contact, ownedRequest, window);
-        _ = DeepIdV2Xpa1WitnessThresholdVerifier.Verify(parsed.Authorization, route.NetworkAuthority);
-        var placement = ContactServicePlacementFactory.Create(route.Network,
-            ContactServiceRequestKind.PublishInvite, request.LocatorHash);
-        if (!Fixed(placement.ViewHash.Span, request.ViewHash.Span) ||
-            !Fixed(placement.PlacementHash.Span, request.PlacementHash.Span))
-            throw new CryptographicException("Retained publication uses another current placement.");
-        VerifyReceipts(request, result, placement);
+        var placement = ContactServicePlacementFactory.RequireCommittedPublicationPlacement(route.Network, route.NetworkAuthority, request);
+        DeepIdV2Xpa1WitnessThresholdVerifier.RequireOriginalThreshold(parsed.Authorization, placement.Issuer);
+        VerifyReceipts(request, result, route.Network, placement.Replicas);
         var releaseWindow = await route.ReadCurrentTimeAsync(ct).ConfigureAwait(false);
         if (releaseWindow.MonotonicSample < window.MonotonicSample ||
             releaseWindow.LowerUnixSeconds < window.LowerUnixSeconds ||
@@ -174,7 +171,8 @@ public static partial class DeepIdV2PublicationCommitVerifier
         }
     }
 
-    private static void VerifyReceipts(Xpu1Request request, Xpo1Result result, VerifiedContactServicePlacement placement)
+    private static void VerifyReceipts(Xpu1Request request, Xpo1Result result, VerifiedOnionNetworkContext network,
+        IReadOnlyList<ReadOnlyMemory<byte>> replicas)
     {
         var tuple = new byte[72]; request.RequestHash.Span.CopyTo(tuple);
         request.ObjectCiphertextHash.Span.CopyTo(tuple.AsSpan(32)); result.Field(18).Span.CopyTo(tuple.AsSpan(64));
@@ -182,7 +180,7 @@ public static partial class DeepIdV2PublicationCommitVerifier
         var rows = result.Field(19).ToArray();
         try
         {
-            var selected = placement.RankedReplicaNodeIds.Select(value => Convert.ToHexString(value.Span))
+            var selected = replicas.Select(value => Convert.ToHexString(value.Span))
                 .ToHashSet(StringComparer.Ordinal);
             if (selected.Count != 2 || rows.Length != 193 || rows[0] != 2)
                 throw new CryptographicException("Publication commit requires both selected replicas.");
@@ -191,7 +189,7 @@ public static partial class DeepIdV2PublicationCommitVerifier
                 var id = rows.AsSpan(1 + i * 96, 32);
                 if (!selected.Remove(Convert.ToHexString(id)) ||
                     !PublicKeyAuth.VerifyDetached(rows.AsSpan(33 + i * 96, 64).ToArray(), input,
-                        placement.Network.ResolveNodeIdentityPublicKey(id.ToArray()).ToArray()))
+                        network.ResolveNodeIdentityPublicKey(id.ToArray()).ToArray()))
                     throw new CryptographicException("Publication commit replica selection or signature is invalid.");
             }
             if (selected.Count != 0) throw new CryptographicException("Publication commit lacks a selected replica.");

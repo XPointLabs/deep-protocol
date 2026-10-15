@@ -1019,7 +1019,8 @@ public sealed partial class XPointOnionCapabilityProducerTests
     [Fact]
     public async Task ForwardCheckpoint_AdvancesProtectedLkgWithoutGenerationZeroHistory()
     {
-        var package = Fixture.Create().BuildForwardPackage();
+        var fixture = Fixture.Create();
+        var package = fixture.BuildForwardPackage();
 
         var verified = await package.VerifyAsync();
 
@@ -1042,6 +1043,12 @@ public sealed partial class XPointOnionCapabilityProducerTests
             context.PriorProtectedLkg!.ViewCoreReference.ToArray());
         Assert.Equal(verified.NextProtectedLkg.LastForwardCheckpointCoreReference.ToArray(),
             context.ProtectedLkg!.LastForwardCheckpointCoreReference.ToArray());
+        context.RequireCurrentMailboxAssignment(package.Authority,
+            ContactCodec.ArtifactReference("PMT2", context.Closure.Pmt).CanonicalBytes);
+        // DR-0122: a valid forward checkpoint does not supply omitted original
+        // assignment history or make an arbitrary old snapshot current.
+        Assert.Throws<CryptographicException>(() => context.RequireCurrentMailboxAssignment(package.Authority,
+            ContactCodec.ArtifactReference("PMT2", ContactCodec.Decode("PMT2", fixture.Pmt)).CanonicalBytes));
 
         var nfpCopy = verified.ExactNfp1;
         var viewCopy = verified.ExactTargetXnv1;

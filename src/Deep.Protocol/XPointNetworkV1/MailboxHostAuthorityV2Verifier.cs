@@ -88,13 +88,13 @@ public sealed partial class VerifiedMailboxHostAuthorityV2
         var grant = MailboxAuthenticatedCapabilityCodec.DecodeGrant(exactMcg3.Span);
         var before = await ReadAsync(cancellationToken).ConfigureAwait(false);
         RequireGrant(grant, before);
-        var closure = network.Closure!;
-        if (closure.ReplicaCount != 2)
+        var projection = VerifiedLogicalMailboxAssignment.FromMembership(network, root, grant.MembershipCommitment).Projection;
+        if (projection.FieldSpan(7)[0] != 2)
             throw new CryptographicException("The current mailbox quorum profile requires exactly two replicas.");
         var ranked = ContactRouteThresholdAuthor.RankReplicas(network.NetworkId.Span,
-            closure.PmtArtifactReference, closure.Pmt.FieldSpan(6), grant.SelectionInput.Span,
-            closure.Pmt.FieldSpan(9), closure.ReplicaCount);
-        var replicas = Enumerable.Range(0, closure.ReplicaCount).Select(index =>
+            ContactCodec.ArtifactReference(ProtocolMagic.PMT2, projection).CanonicalBytes.Span,
+            projection.FieldSpan(6), grant.SelectionInput.Span, projection.FieldSpan(9), 2);
+        var replicas = Enumerable.Range(0, 2).Select(index =>
         {
             var id = ranked.AsSpan(index * 32, 32).ToArray();
             return new VerifiedMailboxReplicaV2(id, network.ResolveNodeIdentityPublicKey(id).Span,
@@ -168,7 +168,8 @@ public sealed partial class VerifiedMailboxHostAuthorityV2
     internal void RequireGrant(MailboxAuthenticatedGrant grant,
         (VerifiedMailboxAuthorityV2 Policy, ulong Lower, ulong Upper) current)
     {
-        if (!Fixed(grant.MembershipCommitment.Span, MembershipCommitment.Span) || grant.Epoch != SelectionEpoch)
+        var assignment = VerifiedLogicalMailboxAssignment.FromMembership(network, root, grant.MembershipCommitment);
+        if (grant.Epoch != SelectionEpoch || grant.Epoch != BinaryPrimitives.ReadUInt64BigEndian(assignment.Projection.FieldSpan(6)))
             throw new CryptographicException("Mailbox grant is outside the exact current selection.");
         RequireIssuerGrant(grant, current);
     }

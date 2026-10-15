@@ -63,14 +63,13 @@ public sealed class VerifiedDeepIdV2ContactRouteClosure : VerifiedDeepIdV2Mailbo
     {
         var context = DeepIdV2RouteContext.VerifyAtReading(Recipient, Network, NetworkAuthority, time,
             new(window.BootId.Span, window.MonotonicSample), ct);
-        DeepIdV2ContactRouteVerifier.RequireBindings(Invite, Route, context);
-        return context;
+        return DeepIdV2ContactRouteVerifier.RequireBindings(Invite, Route, context);
     }
 
     internal DeepIdV2ContactRouteTimeWindow VerifyAtReading(OnionMonotonicReading reading, CancellationToken ct)
     {
         var current = DeepIdV2RouteContext.VerifyAtReading(Recipient, Network, NetworkAuthority, time, reading, ct);
-        DeepIdV2ContactRouteVerifier.RequireBindings(Invite, Route, current);
+        current = DeepIdV2ContactRouteVerifier.RequireBindings(Invite, Route, current);
         return new(current.Lower, current.Upper, current.Reading);
     }
 
@@ -79,7 +78,7 @@ public sealed class VerifiedDeepIdV2ContactRouteClosure : VerifiedDeepIdV2Mailbo
     {
         var current = await DeepIdV2RouteContext.ReadAsync(Recipient, Network,
             NetworkAuthority, time, cancellationToken).ConfigureAwait(false);
-        DeepIdV2ContactRouteVerifier.RequireBindings(Invite, Route, current);
+        current = DeepIdV2ContactRouteVerifier.RequireBindings(Invite, Route, current);
         return new(current.Lower, current.Upper, current.Reading);
     }
 }
@@ -98,6 +97,7 @@ public static partial class DeepIdV2ContactRouteVerifier
         var xra = ContactCodec.Decode(ProtocolMagic.XRA1, exactXra1.Span);
         var first = await DeepIdV2RouteContext.ReadAsync(recipient, network, authority, trustedTime,
             cancellationToken).ConfigureAwait(false);
+        first = first.BindCurrentAssignment(xra.Field(5));
         first.RequireAdvertisement(xra);
         var final = await first.RecheckAsync(cancellationToken).ConfigureAwait(false);
         final.RequireAdvertisement(xra);
@@ -117,6 +117,7 @@ public static partial class DeepIdV2ContactRouteVerifier
         var xra = ContactCodec.Decode(ProtocolMagic.XRA1, exactXra1.Span);
         var first = await DeepIdV2RouteContext.ReadAsync(recipient, network, authority,
             trustedTime, cancellationToken).ConfigureAwait(false);
+        first = first.BindCurrentAssignment(xra.Field(5));
         first.RequireAdvertisement(xra);
         first.RequireThreshold(xra, threshold.Selection, threshold.LiveRoute, threshold.Successor);
         var final = await first.RecheckAsync(cancellationToken).ConfigureAwait(false);
@@ -139,26 +140,26 @@ public static partial class DeepIdV2ContactRouteVerifier
         var route = ContactRouteClosureCodec.Decode(exactSixRecordClosure.Span);
         var first = await DeepIdV2RouteContext.ReadAsync(recipient, network, authority,
             trustedTime, cancellationToken).ConfigureAwait(false);
-        RequireBindings(invite, route, first);
+        first = RequireBindings(invite, route, first);
         ContactCodec.VerifyDeviceSignature(route.Reachability, first.Device.Certificate.DeviceEd25519PublicKey.Span);
         var final = await first.RecheckAsync(cancellationToken).ConfigureAwait(false);
-        RequireBindings(invite, route, final);
+        final = RequireBindings(invite, route, final);
         return new(invite, route, recipient, network, authority, trustedTime);
     }
 
-    internal static void RequireBindings(ParsedXir1V2 invite,
+    internal static DeepIdV2RouteContext RequireBindings(ParsedXir1V2 invite,
         ParsedContactRouteClosure route, DeepIdV2RouteContext current)
     {
         var xra = route.Authorization; var xrr = route.Reachability;
-        if (!DeepIdV2RouteContext.Fixed(route.Projection.CanonicalBytes.Span, current.Pmt.CanonicalBytes.Span))
-            throw new CryptographicException("The route PMT2 differs from the exact verified network projection.");
+        current = current.BindCurrentAssignment(route.Projection);
         current.RequireAdvertisement(xra);
-        current.RequireThreshold(xra, route.Selection, route.Route, route.Successor, requireCurrentDirectory: false);
+        current.RequireLiveThreshold(xra, route.Selection, route.Route, route.Successor);
         RequireIdentityBindings(invite, route, current);
         current.Covers(DeepIdV2RouteContext.U64(invite.FieldSpan(13)), DeepIdV2RouteContext.U64(invite.FieldSpan(14)), DeepIdV2RouteTimeArtifact.Xir1V2);
         current.Covers(DeepIdV2RouteContext.U64(xrr.FieldSpan(16)), DeepIdV2RouteContext.U64(xrr.FieldSpan(17)), DeepIdV2RouteTimeArtifact.Xrr1);
         // Structural framing already validates every exact route graph reference.
         DeepIdV2InviteRendezvousCodec.VerifyIssuerAndDca1(invite, current.Recipient.Authorization, current.Upper);
+        return current;
     }
 
     internal static void RequireIdentityBindings(ParsedXir1V2 invite,
@@ -205,13 +206,15 @@ internal sealed class DeepIdV2RouteContext
 {
     private readonly OnionTrustedTimeAuthority time;
     private readonly OnionMonotonicReading reading;
+    private readonly VerifiedLogicalMailboxAssignment? assignment;
     private DeepIdV2RouteContext(DeepIdV2CurrentContactAuthorization recipient,
         VerifiedOnionNetworkContext network, VerifiedXPointNetworkAuthority authority,
         OnionTrustedTimeAuthority time, OnionMonotonicReading reading, VerifiedDevice device,
-        ulong lower, ulong upper)
+        ulong lower, ulong upper, VerifiedLogicalMailboxAssignment? assignment = null)
     {
         Recipient = recipient; Network = network; Authority = authority; this.time = time;
         this.reading = reading; Device = device; Lower = lower; Upper = upper;
+        this.assignment = assignment;
     }
     internal DeepIdV2CurrentContactAuthorization Recipient { get; }
     internal VerifiedOnionNetworkContext Network { get; }
@@ -220,8 +223,8 @@ internal sealed class DeepIdV2RouteContext
     internal OnionMonotonicReading Reading => reading;
     internal ulong Lower { get; }
     internal ulong Upper { get; }
-    internal ContactRecord Pmt => Network.Closure!.Pmt;
-    internal ReadOnlyMemory<byte> PmtReference => Network.Closure!.PmtArtifactReference.ToArray();
+    internal ContactRecord Pmt => assignment?.Projection ?? Network.Closure!.Pmt;
+    internal ReadOnlyMemory<byte> PmtReference => ContactCodec.ArtifactReference(ProtocolMagic.PMT2, Pmt).CanonicalBytes;
     internal ReadOnlyMemory<byte> DeviceReference => new ContactArtifactReference(ProtocolMagic.DPD1, 1,
         Device.Certificate.CanonicalHash.Span).CanonicalBytes;
     internal ReadOnlyMemory<byte> DcaReference => new ContactArtifactReference(ProtocolMagic.DCA1, 2,
@@ -229,6 +232,24 @@ internal sealed class DeepIdV2RouteContext
     internal ReadOnlyMemory<byte> ViewReference => Network.Closure!.ViewCoreReference.ToArray();
     internal ReadOnlyMemory<byte> HeadReference => XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XNH1, Network.Closure!.Head.CoreHash.Span);
     internal ReadOnlyMemory<byte> DirectoryReference => Network.Closure!.Adh1CoreReference.ToArray();
+    internal ulong LogicalRecordExpiryCeiling => Math.Min(Authority.ExpiresAt,
+        Math.Min(Recipient.Authorization.Record.ExpiresAtUnixSeconds, Device.Certificate.ExpiresAtUnixSeconds));
+
+    internal DeepIdV2RouteContext BindCurrentAssignment(ContactRecord projection)
+    {
+        if (assignment is not null && Fixed(assignment.Projection.CanonicalBytes.Span, projection.CanonicalBytes.Span))
+        { assignment.EnsureCurrent(); return this; }
+        var eligible = VerifiedLogicalMailboxAssignment.Verify(Network, Authority, projection);
+        return new(Recipient, Network, Authority, time, reading, Device, Lower, Upper, eligible);
+    }
+
+    internal DeepIdV2RouteContext BindCurrentAssignment(ReadOnlyMemory<byte> exactReference)
+    {
+        if (assignment is not null && Fixed(PmtReference.Span, exactReference.Span))
+        { assignment.EnsureCurrent(); return this; }
+        var eligible = VerifiedLogicalMailboxAssignment.FromReference(Network, Authority, exactReference);
+        return new(Recipient, Network, Authority, time, reading, Device, Lower, Upper, eligible);
+    }
 
     internal static async ValueTask<DeepIdV2RouteContext> ReadAsync(
         DeepIdV2CurrentContactAuthorization recipient, VerifiedOnionNetworkContext network,
@@ -298,6 +319,12 @@ internal sealed class DeepIdV2RouteContext
         if (next.reading.SampleSeconds < reading.SampleSeconds ||
             !Fixed(next.reading.BootId.Span, reading.BootId.Span))
             throw new CryptographicException("Route authoring crossed a protected clock discontinuity.");
+        if (assignment is not null)
+        {
+            assignment.EnsureCurrent();
+            next = new(Recipient, Network, Authority, time, next.reading, next.Device,
+                next.Lower, next.Upper, assignment);
+        }
         return next;
     }
     internal void Covers(ulong start, ulong expiry, DeepIdV2RouteTimeArtifact artifact) =>
@@ -322,12 +349,24 @@ internal sealed class DeepIdV2RouteContext
     internal void RequireRetainedAdvertisementFacts(ContactRecord xra, ContactRecord originalPmt)
     {
         RequireAdvertisementScope(xra, ContactCodec.ArtifactReference(ProtocolMagic.PMT2, originalPmt).CanonicalBytes.Span);
+        RequireGenesisCreationWindow(xra, originalPmt);
         VerifyAdvertisementSignature(xra);
         if (U64(xra.FieldSpan(12)) > Lower)
             throw new CryptographicException("Retained reachability is issued after current trusted time.");
     }
 
-    private void RequireAdvertisementScope(ContactRecord xra) => RequireAdvertisementScope(xra, PmtReference.Span);
+    private void RequireAdvertisementScope(ContactRecord xra)
+    {
+        RequireAdvertisementScope(xra, PmtReference.Span);
+        RequireGenesisCreationWindow(xra, Pmt);
+    }
+
+    private static void RequireGenesisCreationWindow(ContactRecord xra, ContactRecord projection)
+    {
+        if (U64(xra.FieldSpan(3)) == 0 && (U64(xra.FieldSpan(12)) < U64(projection.FieldSpan(11)) ||
+            U64(xra.FieldSpan(12)) >= U64(projection.FieldSpan(12))))
+            throw new CryptographicException("Genesis advertisement was not created inside its assignment snapshot window.");
+    }
 
     private void RequireAdvertisementScope(ContactRecord xra, ReadOnlySpan<byte> pmtReference)
     {
@@ -353,24 +392,43 @@ internal sealed class DeepIdV2RouteContext
         DeepIdV2ContactUpdateRendezvousAuthor.RequireAgreementKey(xra.FieldSpan(11));
         ContactCodec.VerifyDeviceSignature(xra, Device.Certificate.DeviceEd25519PublicKey.Span);
     }
-    internal void RequireThreshold(ContactRecord xra, ContactRecord pms, ContactRecord xrc, ContactRecord xss,
-        bool requireCurrentDirectory = true)
+    internal void RequireThreshold(ContactRecord xra, ContactRecord pms, ContactRecord xrc, ContactRecord xss)
     {
-        ContactCodec.ValidateThresholdRouteGraph(xra, xrc, xss, Pmt, pms);
+        RequireThresholdWindows(xra, pms, xrc, xss);
         if (!Fixed(xrc.FieldSpan(8), ViewReference.Span) || !Fixed(xrc.FieldSpan(9), HeadReference.Span) ||
-            !Fixed(xrc.FieldSpan(19), xss.FieldSpan(12)) ||
-            (requireCurrentDirectory && !Fixed(xrc.FieldSpan(19), DirectoryReference.Span)) ||
-            !Fixed(xss.FieldSpan(8), ViewReference.Span))
-            throw new CryptographicException("The threshold route has stale or substituted current directory/network references.");
+            !Fixed(xrc.FieldSpan(19), DirectoryReference.Span))
+            throw new CryptographicException("The new threshold differs from current issuance directory/network references.");
         for (var offset = 0; offset < pms.FieldSpan(6).Length; offset += 32)
             if (Network.ResolveNode(pms.FieldSpan(6).Slice(offset, 32)).KeyEpoch != U64(xrc.FieldSpan(13)))
-                throw new CryptographicException("The live route names a different current node traffic-key epoch.");
+                throw new CryptographicException("The new threshold names a different current node traffic-key epoch.");
+        if (U64(xrc.FieldSpan(18)) > LogicalRecordExpiryCeiling)
+            throw new CryptographicException("The new threshold outlives its subject or issuing authority.");
+        VerifyWitnesses(pms, 11, Authority); VerifyWitnesses(xrc, 21, Authority); VerifyWitnesses(xss, 14, Authority);
+    }
+
+    internal void RequireLiveThreshold(ContactRecord xra, ContactRecord pms, ContactRecord xrc, ContactRecord xss)
+    {
+        RequireThresholdWindows(xra, pms, xrc, xss);
+        var issuer = XPointOnionCapabilityProducer.RequireRetainedIssuanceAuthority(Network, Authority,
+            xrc.Field(8), xrc.Field(9), U64(xrc.FieldSpan(16)), U64(xrc.FieldSpan(18)));
+        foreach (var (record, signatureTag, issuedTag, expiryTag) in new[] {
+            (pms, 11, 8, 9), (xrc, 21, 16, 18), (xss, 14, 10, 11) })
+        {
+            if (U64(record.FieldSpan(issuedTag)) < issuer.NotBefore ||
+                U64(record.FieldSpan(expiryTag)) > issuer.ExpiresAt)
+                throw new CryptographicException("Logical threshold exceeds its authenticated issuance authority.");
+            VerifyWitnesses(record, signatureTag, issuer);
+        }
+    }
+
+    private void RequireThresholdWindows(ContactRecord xra, ContactRecord pms, ContactRecord xrc, ContactRecord xss)
+    {
+        ContactCodec.ValidateThresholdRouteGraph(xra, xrc, xss, Pmt, pms);
+        if (!Fixed(xrc.FieldSpan(19), xss.FieldSpan(12)))
+            throw new CryptographicException("Threshold records disagree on their exact directory issuance anchor.");
         Covers(U64(pms.FieldSpan(8)), U64(pms.FieldSpan(9)), DeepIdV2RouteTimeArtifact.Pms2);
         Covers(U64(xrc.FieldSpan(17)), U64(xrc.FieldSpan(18)), DeepIdV2RouteTimeArtifact.Xrc1);
         Covers(U64(xss.FieldSpan(10)), U64(xss.FieldSpan(11)), DeepIdV2RouteTimeArtifact.Xss1);
-        if (U64(xrc.FieldSpan(18)) > Network.Closure!.HardUpperUnixSeconds)
-            throw new CryptographicException("The live route outlives its verified network/key closure.");
-        VerifyWitnesses(pms, 11, Authority); VerifyWitnesses(xrc, 21, Authority); VerifyWitnesses(xss, 14, Authority);
     }
     internal static void VerifyWitnesses(ContactRecord record, int tag, VerifiedXPointNetworkAuthority authority)
         => VerifyWitnesses(record, tag, authority.WitnessKeys, authority.WitnessThreshold);

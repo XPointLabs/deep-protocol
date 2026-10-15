@@ -25,16 +25,19 @@ public sealed partial class VerifiedMailboxHostAuthorityV2
         var quorum = MailboxReceiptV3Codec.DecodeDurableQuorum(exactMqr3.Span);
         var ownedQuorum = MailboxReceiptV3Codec.EncodeDurableQuorum(quorum);
         var proof = request.SenderMembershipProof.CanonicalInclusionProof;
-        if (proof.Length != 342 || !Fixed(proof.Span[..38], ProjectionReference.Span))
-            throw new CryptographicException("Store settlement is outside the exact current projection.");
+        if (proof.Length != 342)
+            throw new CryptographicException("Store settlement has a noncanonical membership proof.");
         var grant = MailboxAuthenticatedCapabilityCodec.DecodeGrant(proof.Span[38..]);
+        var assignment = VerifiedLogicalMailboxAssignment.FromMembership(network, root, grant.MembershipCommitment);
+        if (!Fixed(proof.Span[..38], Deep.Protocol.ContactV1.ContactCodec.ArtifactReference(
+            ProtocolMagic.PMT2, assignment.Projection).CanonicalBytes.Span))
+            throw new CryptographicException("Store settlement differs from its authenticated logical assignment.");
         var current = await ReadAsync(cancellationToken).ConfigureAwait(false);
         var issuer = current.Policy.ResolveIssuer(MailboxCapabilityDomain.Deposit);
         // These are past signed facts, not a current grant/time authorization.
         // Missing issuer/descriptor history fails closed rather than installing
         // receipt time or bypassing the current host's protected clock.
         if (grant.Domain != MailboxCapabilityDomain.Deposit || grant.Epoch != SelectionEpoch ||
-            !Fixed(grant.MembershipCommitment.Span, MembershipCommitment.Span) ||
             !Fixed(grant.IssuerPublicKey.Span, issuer.PublicKey.Span) ||
             grant.NotBeforeUnixSeconds < issuer.ValidFromUnixSeconds ||
             grant.ExpiresAtUnixSeconds > issuer.ValidUntilUnixSeconds ||
@@ -42,10 +45,13 @@ public sealed partial class VerifiedMailboxHostAuthorityV2
             !PublicKeyAuth.VerifyDetached(grant.IssuerSignature.ToArray(),
                 MailboxAuthenticatedCapabilityCodec.GetGrantSigningBytes(grant), issuer.PublicKey.ToArray()))
             throw new CryptographicException("Store settlement has no authenticated issuer scope.");
-        var ranked = await RankReplicasAsync(grant.SelectionInput, cancellationToken).ConfigureAwait(false);
-        if (ranked.Count != 2 ||
-            !ranked.Any(id => Fixed(id.Span, request.SenderRouterId.Span)) ||
-            !ranked.Any(id => Fixed(id.Span, request.RecipientRouterId.Span)))
+        var projection = assignment.Projection;
+        var ranked = Deep.Protocol.ContactV1.ContactRouteThresholdAuthor.RankReplicas(NetworkId.Span,
+            Deep.Protocol.ContactV1.ContactCodec.ArtifactReference(ProtocolMagic.PMT2, projection).CanonicalBytes.Span,
+            projection.FieldSpan(6), grant.SelectionInput.Span, projection.FieldSpan(9), projection.FieldSpan(7)[0]);
+        if (ranked.Length != 64 ||
+            !((Fixed(ranked.AsSpan(0, 32), request.SenderRouterId.Span) && Fixed(ranked.AsSpan(32, 32), request.RecipientRouterId.Span)) ||
+              (Fixed(ranked.AsSpan(32, 32), request.SenderRouterId.Span) && Fixed(ranked.AsSpan(0, 32), request.RecipientRouterId.Span))))
             throw new CryptographicException("Store settlement differs from the signed selected pair.");
         MailboxPeerWireV2Codec.VerifyStoreSettlement(ownedRequest, ownedQuorum, NetworkId.Span,
             network.ResolveNodeIdentityPublicKey(request.SenderRouterId).Span,

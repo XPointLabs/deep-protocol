@@ -59,18 +59,24 @@ public static class DeepIdV2PermanentContactResolveVerifier
         var result = Xis1Codec.Decode(exactXis1.Span, request.CanonicalBytes.Span);
         if (result.Status != Xis1Status.Success || result.MutationOutcome != ContactServiceMutationOutcome.None ||
             result.RetryAfterSeconds != 0 || result.Field(22).Length != 193 || !result.Field(23).IsEmpty ||
-            request.RequestedGeneration != 0 || U64(result.Field(16).Span) != 0)
-            throw new CryptographicException("Only a non-consuming DID2 reusable genesis read is accepted.");
+            request.RequestedGeneration != 0)
+            throw new CryptographicException("Only a non-consuming current DID2 reusable read is accepted.");
+        // Zero is the query's latest-publication selector, not a restriction
+        // on the returned signed generation. DR76 successors retain the same
+        // address; bind their actual generation to the authenticated DCB/XIR
+        // and both selected replica receipts below.
         using var resolution = DeepIdV2PermanentContactResolutionDerivation.DeriveFromDescriptor(request.NetworkId.Span, descriptor);
         if (!Fixed(resolution.LocatorHash.Span, request.LocatorHash.Span))
             throw new CryptographicException("Permanent read uses another descriptor/network locator.");
         var contact = DeepIdV2ResolverObjectProtection.OpenForDescriptor(
             result.Field(19).Span, request.NetworkId.Span, descriptor, resolution);
         var bundle = contact.Bundle;
+        var invite = DeepIdV2InviteRendezvousCodec.Decode(bundle.Field(14).Span[40..]);
         if (U64(bundle.Field(8).Span) != U64(result.Field(16).Span) ||
+            U64(bundle.Field(8).Span) != U64(invite.Field(3).Span) ||
             U64(bundle.Field(18).Span) != U64(result.Field(17).Span) ||
             BinaryPrimitives.ReadUInt32BigEndian(bundle.Field(16).Span) != 9 ||
-            DeepIdV2InviteRendezvousCodec.Decode(bundle.Field(14).Span[40..]).Field(9).Span[0] != 1)
+            invite.Field(9).Span[0] != 1)
             throw new CryptographicException("Resolved publication differs from the exact signed reusable object.");
         return new(descriptor, request, result, contact);
     }

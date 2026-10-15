@@ -95,7 +95,7 @@ public static class DeepIdV2MailboxGrantRequestAuthor
             var expiry = new[] { checked(start + 120), route.Network.MaximumRecordExpiryUnixSeconds,
                 U64(records.Reachability.Field(17).Span), U64(records.Authorization.Field(13).Span),
                 U64(records.Route.Field(18).Span), U64(records.Successor.Field(11).Span),
-                U64(records.Projection.Field(12).Span), U64(records.Selection.Field(9).Span) }.Min();
+                U64(records.Selection.Field(9).Span) }.Min();
             RequireWindow(first, start, expiry);
             operation = Random32();
             var placeholder = new byte[64]; placeholder[^1] = 1;

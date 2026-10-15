@@ -83,6 +83,7 @@ public static partial class DeepIdV2ContactRouteAuthor
         var signers = signerSnapshot ?? ValidateSigners(networkAuthority, witnessSigners);
         var current = await DeepIdV2RouteContext.ReadAsync(currentAuthorization, network,
             networkAuthority, trustedTime, cancellationToken).ConfigureAwait(false);
+        if (predecessor is not null) current = current.BindCurrentAssignment(predecessor.Route.Projection);
         predecessor?.RequireAtCurrentContext(current);
         if (predecessor is not null && (DeepIdV2RouteContext.U64(predecessor.Route.Route.Field(3).Span) >= ulong.MaxValue - 1 ||
             expiresAtUnixSeconds <= DeepIdV2RouteContext.U64(predecessor.Route.Route.Field(18).Span)))
@@ -90,8 +91,8 @@ public static partial class DeepIdV2ContactRouteAuthor
         current.RequireAdvertisement(xra); current.Covers(issuedAtUnixSeconds, expiresAtUnixSeconds, DeepIdV2RouteTimeArtifact.ThresholdAuthoring);
         if (issuedAtUnixSeconds < DeepIdV2RouteContext.U64(xra.FieldSpan(12)) ||
             expiresAtUnixSeconds > DeepIdV2RouteContext.U64(xra.FieldSpan(13)) ||
-            expiresAtUnixSeconds > network.Closure!.HardUpperUnixSeconds)
-            throw new CryptographicException("The threshold route lifetime exceeds current advertisement/network custody.");
+            expiresAtUnixSeconds > current.LogicalRecordExpiryCeiling)
+            throw new CryptographicException("The threshold route lifetime exceeds advertisement or issuing authority custody.");
         var pmt = current.Pmt;
         var ranked = ContactRouteThresholdAuthor.RankReplicas(network.NetworkId.Span, current.PmtReference.Span,
             pmt.FieldSpan(6), xra.FieldSpan(6), pmt.FieldSpan(9), pmt.FieldSpan(7)[0]);
@@ -115,6 +116,16 @@ public static partial class DeepIdV2ContactRouteAuthor
             var reuseSelection = oldSelection is not null &&
                 DeepIdV2RouteContext.U64(oldSelection.Field(8).Span) <= current.Lower &&
                 expiresAtUnixSeconds <= DeepIdV2RouteContext.U64(oldSelection.Field(9).Span);
+            if (reuseSelection)
+            {
+                var prior = predecessor!.Route.Route;
+                var issuer = XPointOnionCapabilityProducer.RequireRetainedIssuanceAuthority(network, networkAuthority,
+                    prior.Field(8), prior.Field(9), DeepIdV2RouteContext.U64(prior.Field(16).Span),
+                    DeepIdV2RouteContext.U64(prior.Field(18).Span));
+                reuseSelection = DeepIdV2RouteContext.Fixed(
+                    XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XNA1, issuer.CoreHash.Span),
+                    networkAuthority.AuthorityCoreReference.Span);
+            }
             var pms = reuseSelection ? oldSelection! : await SignRecordAsync(current, ProtocolMagic.PMS2, selection, 10,
                 ContactRouteAuthoritySignaturePurpose.Selection, signers, cancellationToken).ConfigureAwait(false);
             var priorRoute = predecessor?.Route.Route;
@@ -190,6 +201,7 @@ public static partial class DeepIdV2ContactRouteAuthor
         else predecessor.RequireThresholdSuccessor(xra, threshold);
         var current = await DeepIdV2RouteContext.ReadAsync(currentAuthorization, network,
             networkAuthority, trustedTime, cancellationToken).ConfigureAwait(false);
+        current = current.BindCurrentAssignment(xra.Field(5));
         predecessor?.RequireAtCurrentContext(current);
         current.RequireAdvertisement(xra);
         var pms = threshold.Selection; var xrc = threshold.LiveRoute; var xss = threshold.Successor;
@@ -250,7 +262,7 @@ public static partial class DeepIdV2ContactRouteAuthor
     {
         if (issued < current.Device.Certificate.IssuedAtUnixSeconds || expiry > current.Device.Certificate.ExpiresAtUnixSeconds ||
             issued < current.Recipient.Authorization.Record.NotBeforeUnixSeconds ||
-            expiry > current.Recipient.Authorization.Record.ExpiresAtUnixSeconds)
+            expiry > current.LogicalRecordExpiryCeiling)
             throw new CryptographicException("The advertisement lifetime exceeds the authorized device/delegation.");
     }
 

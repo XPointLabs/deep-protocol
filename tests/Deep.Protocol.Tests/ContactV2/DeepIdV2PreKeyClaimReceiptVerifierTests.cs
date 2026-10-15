@@ -394,6 +394,7 @@ public sealed partial class DeepIdV2PreKeyClaimReceiptVerifierTests
             // This binding-only seam never verified any historical authority;
             // it must not grant original-namespace verification permission.
             RetainedPmtAuthorities = new Dictionary<string, Xna1Record>(StringComparer.Ordinal),
+            RetainedHeads = [], // No verified historical issuance facts in this binding-only seam.
             ViewCoreHash = view.CoreHash.ToArray(), ViewCoreReference = viewRef,
             PmtArtifactReference = ContactCodec.ArtifactReference("PMT2", pmt).CanonicalBytes.ToArray(),
             PmtNodeIds = nodeIds, SelectionEpoch = 1, ReplicaCount = 2, HardUpperUnixSeconds = 20,

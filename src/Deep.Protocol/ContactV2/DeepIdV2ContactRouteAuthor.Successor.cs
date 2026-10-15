@@ -78,6 +78,7 @@ public static partial class DeepIdV2ContactRouteAuthor
             DeepIdV2ContactUpdateRendezvousAuthor.RequireAgreementKey(publicKey);
             var current = await DeepIdV2RouteContext.ReadAsync(currentAuthorization, network,
                 networkAuthority, trustedTime, cancellationToken).ConfigureAwait(false);
+            current = current.BindCurrentAssignment(predecessor.Field(5));
             current.RequireAdvertisementPredecessor(predecessor);
             var issued = current.Lower;
             RequireLifetime(issued, expiresAtUnixSeconds, 2_592_000);

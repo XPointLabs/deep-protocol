@@ -86,6 +86,40 @@ public sealed class VerifiedContactServicePlacement
 
 public static class ContactServicePlacementFactory
 {
+    // Read-only original commit facts. Never produces a current placement or
+    // permission to dispatch an old XPU; live writes still use Create below.
+    internal static (Xna1Record Issuer, IReadOnlyList<ReadOnlyMemory<byte>> Replicas) RequireCommittedPublicationPlacement(
+        VerifiedOnionNetworkContext network, VerifiedXPointNetworkAuthority authority, Xpu1Request request)
+    {
+        network.EnsureCurrent();
+        var projection = network.Closure!.RetainedPmts.SingleOrDefault(candidate =>
+            CryptographicOperations.FixedTimeEquals(candidate.FieldSpan(5)[6..], request.ViewHash.Span)) ??
+            throw new CryptographicException("Committed publication view is absent from verified retained history.");
+        _ = VerifiedLogicalMailboxAssignment.Verify(network, authority, projection);
+        if (request.IssuedAtUnixSeconds < BinaryPrimitives.ReadUInt64BigEndian(projection.FieldSpan(11)) ||
+            request.ExpiresAtUnixSeconds > BinaryPrimitives.ReadUInt64BigEndian(projection.FieldSpan(12)))
+            throw new CryptographicException("Committed publication was outside its original carriage interval.");
+        var issuer = XPointOnionCapabilityProducer.RequireRetainedProjectionAuthority(network, authority, projection);
+        var epoch = BinaryPrimitives.ReadUInt64BigEndian(projection.FieldSpan(6));
+        var count = projection.FieldSpan(7)[0];
+        var input = XPointNetworkCrypto.Sha256Domain("Deep/ContactResolver/V1/service-placement-input",
+            Join(network.NetworkId.ToArray(), [(byte)ContactServiceClass.InviteResolver], request.LocatorHash.ToArray()));
+        var rows = projection.Field(9).ToArray();
+        var ranked = Enumerable.Range(0, rows.Length / 136)
+            .Select(index => rows.AsSpan(index * 136, 32).ToArray())
+            .Select(id => (Id: id, Rank: Rank(network.NetworkId.Span, epoch, input, id)))
+            .OrderBy(static item => item.Rank, ByteArrayComparer.Instance)
+            .ThenBy(static item => item.Id, ByteArrayComparer.Instance).Take(count).Select(static item => item.Id).ToArray();
+        var hash = XPointNetworkCrypto.Sha256Domain("Deep/ContactResolver/V1/service-placement",
+            Join(Join(network.NetworkId.ToArray(), projection.Field(5).ToArray(),
+                ContactCodec.ArtifactReference(ProtocolMagic.PMT2, projection).CanonicalBytes.ToArray()),
+                U64(epoch), [(byte)ContactServiceClass.InviteResolver], request.LocatorHash.ToArray(), input, [count], Join(ranked)));
+        if (count != 2 || !CryptographicOperations.FixedTimeEquals(hash, request.PlacementHash.Span))
+            throw new CryptographicException("Committed publication differs from its exact original selected placement.");
+        network.EnsureCurrent();
+        return (issuer, Array.AsReadOnly(ranked.Select(static id => (ReadOnlyMemory<byte>)id).ToArray()));
+    }
+
     public static VerifiedContactServicePlacement Create(
         VerifiedOnionNetworkContext network,
         ContactServiceRequestKind requestKind,
@@ -196,6 +230,8 @@ internal sealed class VerifiedOnionNetworkClosure
     // Verified lineage facts, not current routing or grant authority. They are
     // never populated from an unsigned cache or terminal-only rehydration.
     internal required ContactRecord[] RetainedPmts { get; init; }
+    // Signed issuance facts, not a current head/time or transport lease.
+    internal required Xnh1Record[] RetainedHeads { get; init; }
     // Exact PMT artifact -> its actual signed view's verified XNA1. Keeping the
     // signature-key fact avoids borrowing terminal keys after authority renewal.
     internal required IReadOnlyDictionary<string, Xna1Record> RetainedPmtAuthorities { get; init; }
@@ -374,6 +410,8 @@ internal static class XPointOnionCapabilityProducer
                 Head = xnh,
                 Pmt = pmt,
                 RetainedPmts = retainedPmts,
+                RetainedHeads = forwardCheckpoint is null
+                    ? CaptureRetainedHeads(previous, heads) : [heads[^1]],
                 RetainedPmtAuthorities = retainedPmtAuthorities,
                 ViewCoreHash = xnv.CoreHash.ToArray(),
                 ViewCoreReference = viewReference,
@@ -462,6 +500,33 @@ internal static class XPointOnionCapabilityProducer
             throw new CryptographicException("The exact original projection and signature authority are absent from verified history.");
         return RequireHistoricalAuthority(authority,
             XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XNA1, original.CoreHash.Span));
+    }
+
+    // Original issuance signatures only. This does not revive its head/view
+    // lease; callers independently verify current network and resource lifetime.
+    internal static Xna1Record RequireRetainedIssuanceAuthority(VerifiedOnionNetworkContext network,
+        VerifiedXPointNetworkAuthority authority, ReadOnlyMemory<byte> exactViewReference,
+        ReadOnlyMemory<byte> exactHeadReference, ulong issuedAt, ulong expiresAt)
+    {
+        network.EnsureCurrent();
+        if (exactViewReference.Length != 38 || exactHeadReference.Length != 38 || expiresAt <= issuedAt)
+            throw new CryptographicException("Issuance references or validity are noncanonical.");
+        var closure = network.Closure!;
+        var projection = closure.RetainedPmts.SingleOrDefault(candidate =>
+            Fixed(candidate.FieldSpan(5), exactViewReference.Span)) ??
+            throw new CryptographicException("Issuance view is absent from verified retained lineage.");
+        var original = RequireRetainedProjectionAuthority(network, authority, projection);
+        var head = closure.RetainedHeads.SingleOrDefault(candidate => Fixed(
+            XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XNH1, candidate.CoreHash.Span), exactHeadReference.Span)) ??
+            throw new CryptographicException("Issuance head is absent from verified retained lineage.");
+        if (!Fixed(head.FieldSpan(6), exactViewReference.Span) ||
+            !Fixed(head.FieldSpan(8), XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XNA1, original.CoreHash.Span)) ||
+            !Fixed(head.DirectoryWitnessPolicyHash.Span, original.DirectoryWitnessPolicyHash.Span) ||
+            issuedAt < head.ValidFrom || issuedAt >= head.ValidUntil ||
+            issuedAt < original.NotBefore || expiresAt > original.ExpiresAt)
+            throw new CryptographicException("Original issuance differs from its authenticated view/head/authority interval.");
+        network.EnsureCurrent();
+        return original;
     }
 
     private static void RequireNondecreasingAuthority(VerifiedXPointNetworkAuthority authority,
@@ -916,6 +981,23 @@ internal static class XPointOnionCapabilityProducer
             bytes = checked(bytes + step.CanonicalBytes.Length);
             if (facts.Count >= MaximumSuccessorChainLength || bytes > MaximumSuccessorChainBytes)
                 Fail("retained-pmt-capacity", "Verified retained projection facts exceed the bounded lineage capacity.");
+            facts.Add(step);
+        }
+        return facts.ToArray();
+    }
+
+    private static Xnh1Record[] CaptureRetainedHeads(VerifiedOnionNetworkClosure? previous,
+        IReadOnlyList<Xnh1Record> verifiedSteps)
+    {
+        var facts = new List<Xnh1Record>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        long bytes = 0;
+        foreach (var step in (previous?.RetainedHeads ?? []).Concat(verifiedSteps))
+        {
+            if (!seen.Add(Convert.ToHexString(step.CoreHash.Span))) continue;
+            bytes = checked(bytes + step.CanonicalCopy().Length);
+            if (facts.Count >= MaximumSuccessorChainLength || bytes > MaximumSuccessorChainBytes)
+                Fail("retained-head-capacity", "Verified issuance head facts exceed the bounded lineage capacity.");
             facts.Add(step);
         }
         return facts.ToArray();

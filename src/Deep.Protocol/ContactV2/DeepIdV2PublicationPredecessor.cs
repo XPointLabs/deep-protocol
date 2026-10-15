@@ -144,13 +144,10 @@ public static partial class DeepIdV2PublicationCommitVerifier
         }
         finally { CryptographicOperations.ZeroMemory(input); }
         var parsed = DeepIdV2ContactPublicationCodec.DecodeXpu1(request.CanonicalBytes.Span);
-        _ = DeepIdV2Xpa1WitnessThresholdVerifier.Verify(parsed.Authorization, current.Authority);
         RequireResult(request, result);
-        var placement = ContactServicePlacementFactory.Create(current.Network,
-            ContactServiceRequestKind.PublishInvite, request.LocatorHash);
-        if (!Fixed(placement.ViewHash.Span, request.ViewHash.Span) || !Fixed(placement.PlacementHash.Span, request.PlacementHash.Span))
-            throw new CryptographicException("Historical publication requires separately authorized placement rollover.");
-        VerifyReceipts(request, result, placement);
+        var placement = ContactServicePlacementFactory.RequireCommittedPublicationPlacement(current.Network, current.Authority, request);
+        DeepIdV2Xpa1WitnessThresholdVerifier.RequireOriginalThreshold(parsed.Authorization, placement.Issuer);
+        VerifyReceipts(request, result, current.Network, placement.Replicas);
     }
 
     internal static void RequirePublicationSuccessor(ContactPublicationAuthorityWireRequest prior,

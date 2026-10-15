@@ -252,6 +252,7 @@ public static partial class DeepIdV2PublicationAuthorityAuthor
         var dca = route.Recipient.Authorization; var freshness = route.Recipient.Freshness;
         var closure = DeepIdV2ResolverClosureCodec.Decode(request.ExactDcr1.Span); var bundle = closure.Bundle;
         DeepIdV2ContactRouteVerifier.RequireBundleIssuanceAnchor(route, bundle);
+        string? rejectionScope = null;
         if (!Fixed(request.ExactDca1.Span, dca.Record.CanonicalBytes.Span) ||
             !Fixed(request.NetworkId.Span, route.Network.NetworkId.Span) ||
             !Fixed(request.DirectoryLookupKey.Span, freshness.QueriedDirectoryLeafKey.Span) ||
@@ -263,10 +264,18 @@ public static partial class DeepIdV2PublicationAuthorityAuthor
             (predecessor is null && (request.Generation != 0 || request.PredecessorObjectHash.Span.IndexOfAnyExcept((byte)0) >= 0)) ||
             route.Invite.Field(9).Span[0] != request.PublicationKind ||
             BinaryPrimitives.ReadUInt32BigEndian(bundle.Field(16).Span) != (request.PublicationKind == 1 ? 9u : 10u) ||
-            request.PublicationKind == 2 && (predecessor is not null || request.Generation != 0) ||
-            request.IssuedAtUnixSeconds > current.LowerUnixSeconds || current.UpperUnixSeconds >= request.ExpiresAtUnixSeconds ||
-            request.ExpiresAtUnixSeconds > RequestExpiry(route, request.IssuedAtUnixSeconds))
-            throw new CryptographicException("Publication request is not exact current owned DID2 lineage.");
+            request.PublicationKind == 2 && (predecessor is not null || request.Generation != 0))
+            rejectionScope = "owned-lineage";
+        else if (request.IssuedAtUnixSeconds > current.LowerUnixSeconds || current.UpperUnixSeconds >= request.ExpiresAtUnixSeconds)
+            rejectionScope = "request-window";
+        else if (request.ExpiresAtUnixSeconds > RequestExpiry(route, request.IssuedAtUnixSeconds))
+            rejectionScope = "request-authority-bound";
+        if (rejectionScope is not null)
+        {
+            var error = new CryptographicException("Publication request is not exact current owned DID2 lineage.");
+            error.Data["Deep.ContactPublication.RequestScope"] = rejectionScope;
+            throw error;
+        }
         predecessor?.RequireSuccessor(route, request, current, ct);
         DeepIdV2ResolverClosureCodec.VerifyIdentityAndSupport(closure, dca, current.UpperUnixSeconds);
     }
@@ -294,7 +303,7 @@ public static partial class DeepIdV2PublicationAuthorityAuthor
             route.Network.MaximumRecordExpiryUnixSeconds, route.NetworkAuthority.ExpiresAt,
             U64(records.Reachability.Field(17).Span), U64(records.Authorization.Field(13).Span),
             U64(records.Route.Field(18).Span), U64(records.Successor.Field(11).Span),
-            U64(records.Projection.Field(12).Span), U64(records.Selection.Field(9).Span),
+            U64(records.Selection.Field(9).Span),
             route.Recipient.Authorization.Record.ExpiresAtUnixSeconds }.Min();
     }
     private static ContactPublicationAuthorityWireRequest CopyWithSignature(ContactPublicationAuthorityWireRequest r, byte[] sig) =>

@@ -27,8 +27,21 @@ public sealed partial class MailboxHostAuthorityV2VerifierTests
         Assert.Equal(3, input.Network.Closure.RetainedPmts.Length);
         Assert.True(BinaryPrimitives.ReadUInt64BigEndian(old.FieldSpan(12)) < 220);
         var exact = MailboxAuthenticatedCapabilityCodec.EncodeGrant(RetainedReadGrant(input.Network));
-        await Assert.ThrowsAsync<CryptographicException>(() => host.EnsureGrantCurrentAsync(exact).AsTask());
-        await Assert.ThrowsAsync<CryptographicException>(() => host.ResolveGrantReplicasAsync(exact).AsTask());
+        if (unchangedEpoch)
+        {
+            // DR-0122: the old snapshot is assignment metadata, not an expired
+            // grant. Current eligibility and the grant's own issuer/time still
+            // verify; changed-epoch retained reads remain a separate lane below.
+            await host.EnsureGrantCurrentAsync(exact);
+            var current = await host.ResolveGrantReplicasAsync(exact);
+            Assert.Equal(2, current.Count);
+            Assert.Equal(old.ArtifactHash.ToArray(), MailboxAuthenticatedCapabilityCodec.DecodeGrant(exact).MembershipCommitment.ToArray());
+        }
+        else
+        {
+            await Assert.ThrowsAsync<CryptographicException>(() => host.EnsureGrantCurrentAsync(exact).AsTask());
+            await Assert.ThrowsAsync<CryptographicException>(() => host.ResolveGrantReplicasAsync(exact).AsTask());
+        }
         var result = await host.GetSelectedRetainedReadReplicasAsync(exact);
         var expected = ContactRouteThresholdAuthor.RankReplicas(input.Network.NetworkId.Span,
             ContactCodec.ArtifactReference("PMT2", old).CanonicalBytes.Span, old.FieldSpan(6),

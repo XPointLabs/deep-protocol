@@ -143,7 +143,7 @@ public sealed partial class VerifiedMailboxHostAuthorityV2
         RequireRetainedRequestSelection(request);
         var ceiling = new[] { U64Retained(route.Reachability.Field(17).Span), U64Retained(route.Authorization.Field(13).Span),
             U64Retained(route.Route.Field(18).Span), U64Retained(route.Successor.Field(11).Span),
-            U64Retained(route.Projection.Field(12).Span), U64Retained(route.Selection.Field(9).Span) }.Min();
+            U64Retained(route.Selection.Field(9).Span) }.Min();
         if (readUntil == 0 || ceiling > ulong.MaxValue - MaximumRetainedObjectHorizonSeconds ||
             readUntil > ceiling + MaximumRetainedObjectHorizonSeconds ||
             !Fixed(route.Reachability.Field(1).Span, network.NetworkId.Span) ||

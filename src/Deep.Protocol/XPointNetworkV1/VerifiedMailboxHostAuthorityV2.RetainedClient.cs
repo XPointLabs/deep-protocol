@@ -138,7 +138,7 @@ public sealed partial class VerifiedMailboxHostAuthorityV2
     {
         var admission = new[] { U64Retained(route.Reachability.Field(17).Span), U64Retained(route.Authorization.Field(13).Span),
             U64Retained(route.Route.Field(18).Span), U64Retained(route.Successor.Field(11).Span),
-            U64Retained(route.Projection.Field(12).Span), U64Retained(route.Selection.Field(9).Span) }.Min();
+            U64Retained(route.Selection.Field(9).Span) }.Min();
         if (admission > ulong.MaxValue - MaximumRetainedObjectHorizonSeconds)
             throw new CryptographicException("Retained route horizon overflows.");
         return admission + MaximumRetainedObjectHorizonSeconds;

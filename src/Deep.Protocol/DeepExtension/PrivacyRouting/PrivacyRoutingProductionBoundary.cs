@@ -384,6 +384,15 @@ public sealed class VerifiedOnionNetworkContext
                 projection);
     }
 
+    /// <summary>Checks current eligibility of an exact retained logical mailbox
+    /// assignment. Does not authorize a route, grant, holder, mutation or dispatch.</summary>
+    public void RequireCurrentMailboxAssignment(VerifiedXPointNetworkAuthority authority,
+        ReadOnlyMemory<byte> exactPmt2Reference)
+    {
+        ArgumentNullException.ThrowIfNull(authority);
+        _ = VerifiedLogicalMailboxAssignment.FromReference(this, authority, exactPmt2Reference);
+    }
+
     /// <summary>
     /// Returns the identity/receipt verification key of one node only after the
     /// node has been admitted by the exact current XNV1/XND1 closure.
