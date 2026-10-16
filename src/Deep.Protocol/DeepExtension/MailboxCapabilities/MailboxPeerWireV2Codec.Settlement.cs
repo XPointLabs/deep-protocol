@@ -11,6 +11,22 @@ public static partial class MailboxPeerWireV2Codec
     internal static void VerifyStoreSettlement(ReadOnlySpan<byte> exactRequest, ReadOnlySpan<byte> exactQuorum,
         ReadOnlySpan<byte> network, ReadOnlySpan<byte> senderKey, ReadOnlySpan<byte> recipientKey)
     {
+        var (request, envelope, grant) = VerifyOriginalStoreRequest(exactRequest, network, senderKey, recipientKey);
+        var digest = DomainSeparatedHash("deep.mailbox.peer.request-identity.v2"u8, exactRequest);
+        var verified = VerifyDurableQuorumCore(exactQuorum, request, envelope, digest, SettlementCrypto.Instance);
+        if (!FixedEquals(verified.CoordinatorReceipt.CoordinatorId.Span, request.SenderRouterId.Span) ||
+            verified.ReplicaReceipts.Any(receipt => receipt.AcceptedAtUnixSeconds < grant.NotBeforeUnixSeconds ||
+                receipt.AcceptedAtUnixSeconds >= grant.ExpiresAtUnixSeconds))
+            throw Error(MailboxPeerReplicationError.InvalidReceipt, "Store settlement acceptance interval differs.");
+    }
+
+    // Historical authentication only. Current-only admission/replay never uses
+    // this method. Issuer/selection/history and lower-time exclusion are owned
+    // by the closed host, not a caller-provided verification policy.
+    internal static (MailboxPeerWireRequestV2 Request, MailboxEncryptedEnvelope Envelope, MailboxAuthenticatedGrant Grant)
+        VerifyOriginalStoreRequest(ReadOnlySpan<byte> exactRequest,
+            ReadOnlySpan<byte> network, ReadOnlySpan<byte> senderKey, ReadOnlySpan<byte> recipientKey)
+    {
         var request = Decode(exactRequest);
         if (request.Operation != MailboxPeerReplicationOperation.Store ||
             !FixedEquals(senderKey, request.SenderMembershipProof.SigningPublicKey.Span) ||
@@ -39,12 +55,7 @@ public static partial class MailboxPeerWireV2Codec
         var crypto = SettlementCrypto.Instance;
         if (!crypto.Verify(senderKey, GetSigningDigest(request), request.Signature.Span))
             throw Error(MailboxPeerReplicationError.InvalidSignature, "Store settlement sender signature differs.");
-        var digest = DomainSeparatedHash("deep.mailbox.peer.request-identity.v2"u8, exactRequest);
-        var verified = VerifyDurableQuorumCore(exactQuorum, request, envelope, digest, crypto);
-        if (!FixedEquals(verified.CoordinatorReceipt.CoordinatorId.Span, request.SenderRouterId.Span) ||
-            verified.ReplicaReceipts.Any(receipt => receipt.AcceptedAtUnixSeconds < grant.NotBeforeUnixSeconds ||
-                receipt.AcceptedAtUnixSeconds >= grant.ExpiresAtUnixSeconds))
-            throw Error(MailboxPeerReplicationError.InvalidReceipt, "Store settlement acceptance interval differs.");
+        return (request, envelope, grant);
     }
 
     private sealed class SettlementCrypto : IMailboxPeerReplicationCrypto
