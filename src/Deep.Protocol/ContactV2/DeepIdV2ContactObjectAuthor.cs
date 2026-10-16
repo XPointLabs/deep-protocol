@@ -112,8 +112,8 @@ public static partial class DeepIdV2ContactObjectAuthor
             var verifiedDevice = binding.Identity.ActiveDevices.Single(value => Fixed(value.Certificate.DeviceId.Span, entry.DeviceId.Span));
             if (!Fixed(service.Field(1).Span, dca.Record.NetworkId.Span) ||
                 !Fixed(service.Field(4).Span, Reference(ProtocolMagicBytes.DPD1, verifiedDevice.Certificate.CanonicalHash.Span)) ||
-                U64(service.Field(5).Span) != 1 || U64(service.Field(10).Span) > issued)
-                throw new CryptographicException("The prekey descriptor is not the exact current genesis service.");
+                U64(service.Field(10).Span) > issued)
+                throw new CryptographicException("The prekey descriptor is outside the exact current device scope or interval.");
             DeepIdV2PreKeyServiceCodec.VerifyDeviceSignature(service, verifiedDevice.Certificate.DeviceEd25519PublicKey.Span);
             expiry = Math.Min(expiry, U64(service.Field(11).Span)); ordered.Add(service);
         }

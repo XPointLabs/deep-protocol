@@ -259,6 +259,68 @@ public sealed class ApplicationCoreVerificationTests
         xpsList[0] = 1;
         BinaryPrimitives.WriteUInt32BigEndian(xpsList.AsSpan(1), 352);
         xps.CopyTo(xpsList, 5);
+        // DR-0129 service-only predicate tests. Real Ed25519 signatures and
+        // exact verified device scope; the surrounding PQ fixture is a test
+        // verifier, not native publication or durable inventory evidence.
+        ReadOnlyMemory<byte>[] SuccessorFields()
+        {
+            var fields = xpsFields.ToArray();
+            fields[4] = Be64(2); fields[5] = SHA256.HashData(xps);
+            fields[9] = Be64(15); fields[10] = Be64(30);
+            return fields;
+        }
+        static byte[] ServiceList(byte[] service)
+        {
+            var list = new byte[5 + service.Length]; list[0] = 1;
+            BinaryPrimitives.WriteUInt32BigEndian(list.AsSpan(1), checked((uint)service.Length));
+            service.CopyTo(list, 5); return list;
+        }
+        void ServiceLineage(byte[] priorList, byte[] nextList) =>
+            DeepIdV2ContactObjectLineage.RequireServiceSuccessors(priorList, nextList, contactVerified);
+        void RejectService(Action action)
+        {
+            var error = Record.Exception(action);
+            Assert.True(error is CryptographicException or ApplicationCoreFormatException,
+                "Invalid exact service succession must reject before bundle signing.");
+        }
+        ServiceLineage(xpsList, xpsList);
+        var nextService = SignXps(SuccessorFields(), fixture.DeviceKey);
+        ServiceLineage(xpsList, ServiceList(nextService));
+        foreach (var mutation in new[] { "network", "capability", "device", "dpd", "minimum", "reuse",
+            "replay", "gap", "predecessor", "issued-rollback", "expiry-equal", "expiry-rollback" })
+        {
+            var fields = SuccessorFields();
+            switch (mutation)
+            {
+                case "network": fields[0] = ApplicationCoreFixture.Bytes(16, 0xe1); break;
+                case "capability": fields[1] = ApplicationCoreFixture.Bytes(32, 0xe2); break;
+                case "device": fields[2] = ApplicationCoreFixture.Bytes(32, 0xe3); break;
+                case "dpd": fields[3] = ContactRef("DPD1", 1, ApplicationCoreFixture.Bytes(32, 0xe4)); break;
+                case "minimum": fields[7] = Be16(2); break;
+                case "reuse": fields[8] = Be16(2); break;
+                case "replay": fields[4] = Be64(1); fields[5] = new byte[32]; break;
+                case "gap": fields[4] = Be64(3); break;
+                case "predecessor": fields[5] = ApplicationCoreFixture.Bytes(32, 0xe5); break;
+                case "issued-rollback": fields[9] = Be64(9); break;
+                case "expiry-equal": fields[10] = Be64(20); break;
+                case "expiry-rollback": fields[10] = Be64(19); break;
+            }
+            RejectService(() => ServiceLineage(xpsList, ServiceList(SignXps(fields, fixture.DeviceKey))));
+        }
+        var badServiceSignature = nextService.ToArray(); badServiceSignature[^1] ^= 1;
+        RejectService(() => ServiceLineage(xpsList, ServiceList(badServiceSignature)));
+        var badPriorSignature = xps.ToArray(); badPriorSignature[^1] ^= 1;
+        var boundToBadPrior = SuccessorFields(); boundToBadPrior[5] = SHA256.HashData(badPriorSignature);
+        RejectService(() => ServiceLineage(ServiceList(badPriorSignature), ServiceList(SignXps(boundToBadPrior, fixture.DeviceKey))));
+        var maximalService = SuccessorFields(); maximalService[4] = Be64(ulong.MaxValue);
+        RejectService(() => ServiceLineage(ServiceList(SignXps(maximalService, fixture.DeviceKey)), xpsList));
+        RejectService(() => ServiceLineage([], ServiceList(nextService)));
+        RejectService(() => ServiceLineage(xpsList, [.. ServiceList(nextService), 0]));
+        var badPrefix = ServiceList(nextService); BinaryPrimitives.WriteUInt32BigEndian(badPrefix.AsSpan(1), 351);
+        RejectService(() => ServiceLineage(xpsList, badPrefix));
+        var repeated = new byte[1 + 2 * 356]; repeated[0] = 2;
+        xpsList.AsSpan(1).CopyTo(repeated.AsSpan(1)); xpsList.AsSpan(1).CopyTo(repeated.AsSpan(357));
+        RejectService(() => ServiceLineage(repeated, repeated));
         var descriptor = new byte[651];
         Be16(1).CopyTo(descriptor, 0);
         Be16(1).CopyTo(descriptor, 2);

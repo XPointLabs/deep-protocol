@@ -85,7 +85,11 @@ public static partial class DeepIdV2PublicationAuthorityAuthor
             var first = await route.ReadCurrentTimeAsync(ct).ConfigureAwait(false);
             if (predecessor is null && U64(closure.Bundle.Field(8).Span) != 0)
                 throw new CryptographicException("Genesis publication cannot replace a nonzero contact generation.");
-            var expiry = RequestExpiry(route, first.LowerUnixSeconds);
+            // A signed prekey may cap the object before the route expires.
+            // The request must fit both independent lifetimes; the canonical
+            // wire reader enforces the same request <= effective expiry bound.
+            var expiry = Math.Min(RequestExpiry(route, first.LowerUnixSeconds),
+                U64(closure.Bundle.Field(18).Span));
             var placeholder = new byte[64]; placeholder[^1] = 1;
             var freshness = route.Recipient.Freshness;
             var minimum = closure.Bundle.Field(21);

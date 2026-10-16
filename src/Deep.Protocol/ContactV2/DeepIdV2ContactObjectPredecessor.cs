@@ -65,12 +65,55 @@ internal static class DeepIdV2ContactObjectLineage
         VerifiedDeepIdV2ContactRouteClosure next, ParsedDcb1V2 bundle)
     {
         RequireSuccessorChain(prior, bundle);
-        foreach (var tag in new[] { 1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 13, 15, 16, 22, 23, 24 })
+        foreach (var tag in new[] { 1, 2, 3, 4, 5, 6, 7, 10, 11, 13, 15, 16, 22, 23, 24 })
             if (!DeepIdV2RouteContext.Fixed(prior.Field(tag).Span, bundle.Field(tag).Span))
                 throw new CryptographicException("Contact successor requires separate identity, service, profile or policy rollover.");
+        RequireServiceSuccessors(prior.Field(12).Span, bundle.Field(12).Span, next.Recipient.Authorization);
         if (!DeepIdV2RouteContext.Fixed(bundle.Field(14).Span[40..], next.ExactXir1V2.Span) ||
             DeepIdV2RouteContext.U64(bundle.Field(8).Span) != DeepIdV2RouteContext.U64(next.Invite.Field(3).Span))
             throw new CryptographicException("Contact successor does not bind its exact current route generation.");
+    }
+
+    // DR-0129: a structural lineage predicate, never currentness, publication,
+    // inventory commitment or authority to retire any old prekey. Both owner
+    // and independent issuer reach this exact predicate through closed lineage.
+    internal static void RequireServiceSuccessors(ReadOnlySpan<byte> prior,
+        ReadOnlySpan<byte> candidate, VerifiedDca1V2 authorization)
+    {
+        ArgumentNullException.ThrowIfNull(authorization);
+        const int entryBytes = 4 + DeepIdV2PreKeyServiceCodec.CanonicalLength;
+        var active = authorization.Directory.Record.ActiveDevices;
+        if (prior.Length < 1 || candidate.Length < 1 || prior[0] is < 1 or > 16 ||
+            candidate[0] != prior[0] || prior[0] != active.Count ||
+            prior.Length != 1 + entryBytes * prior[0] || candidate.Length != prior.Length)
+            throw new CryptographicException("Contact prekey succession requires the exact bounded active-device set.");
+        for (var index = 0; index < active.Count; index++)
+        {
+            var offset = 1 + index * entryBytes;
+            if (BinaryPrimitives.ReadUInt32BigEndian(prior[offset..]) != DeepIdV2PreKeyServiceCodec.CanonicalLength ||
+                BinaryPrimitives.ReadUInt32BigEndian(candidate[offset..]) != DeepIdV2PreKeyServiceCodec.CanonicalLength)
+                throw new CryptographicException("Contact prekey succession has a noncanonical service entry.");
+            var old = DeepIdV2PreKeyServiceCodec.Decode(prior.Slice(offset + 4, DeepIdV2PreKeyServiceCodec.CanonicalLength));
+            var next = DeepIdV2PreKeyServiceCodec.Decode(candidate.Slice(offset + 4, DeepIdV2PreKeyServiceCodec.CanonicalLength));
+            var device = authorization.Binding.Identity.ActiveDevices.SingleOrDefault(value =>
+                value.Certificate.DeviceId.Span.SequenceEqual(active[index].DeviceId.Span));
+            if (device is null || !DeepIdV2RouteContext.Fixed(old.Field(1).Span, authorization.Record.NetworkId.Span) ||
+                !DeepIdV2RouteContext.Fixed(old.Field(3).Span, active[index].DeviceId.Span) ||
+                !DeepIdV2RouteContext.Fixed(old.Field(4).Span[6..], device.Certificate.CanonicalHash.Span))
+                throw new CryptographicException("Contact prekey succession changed its current device scope.");
+            foreach (var tag in new[] { 1, 2, 3, 4, 7, 8, 9 })
+                if (!DeepIdV2RouteContext.Fixed(old.Field(tag).Span, next.Field(tag).Span))
+                    throw new CryptographicException("Contact prekey succession changed its service identity or policy.");
+            DeepIdV2PreKeyServiceCodec.VerifyDeviceSignature(old, device.Certificate.DeviceEd25519PublicKey.Span);
+            DeepIdV2PreKeyServiceCodec.VerifyDeviceSignature(next, device.Certificate.DeviceEd25519PublicKey.Span);
+            if (DeepIdV2RouteContext.Fixed(old.CanonicalBytes.Span, next.CanonicalBytes.Span)) continue;
+            var generation = DeepIdV2RouteContext.U64(old.Field(5).Span);
+            if (generation == ulong.MaxValue || DeepIdV2RouteContext.U64(next.Field(5).Span) != generation + 1 ||
+                !DeepIdV2RouteContext.Fixed(next.Field(6).Span, SHA256.HashData(old.CanonicalBytes.Span)) ||
+                DeepIdV2RouteContext.U64(next.Field(10).Span) < DeepIdV2RouteContext.U64(old.Field(10).Span) ||
+                DeepIdV2RouteContext.U64(next.Field(11).Span) <= DeepIdV2RouteContext.U64(old.Field(11).Span))
+                throw new CryptographicException("Contact prekey succession does not advance its exact signed predecessor.");
+        }
     }
 
     // Ordering is generation/hash based. An unchanged signed service can cap

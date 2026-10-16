@@ -422,6 +422,16 @@ and independently current signed lifetime coverage is unchanged. This internal
 predicate correction adds no public API or wire generation and requires matched
 owner/issuer rebuilds. It does not activate prekey replenishment or renew keys.
 
+[DR-0129](../../docs/survival-program/decisions/DR-0129-owned-prekey-service-succession.md)
+permits the closed same-device XPS1 successor in the existing contact-object
+owner and independent issuer lineage. The object author accepts a current signed
+later-generation service at object genesis; it no longer equates object genesis
+with service genesis. No public API, wire/suite/domain or error code changes.
+Both consumers must rebuild together. This does not change SQL custody, reset
+accounts, extend old intervals or activate replica publication. Source evidence
+and remaining qualification are in the
+[service-succession checkpoint](testing/s05-prekey-service-succession-2026-10-16.md).
+
 For DR-0072 native-committed contact reconstruction, the additive bounded
 `ApplicationCoreVerifier.RequireRetainedContactHelloEndpointBindingsAsync` and
 `RequireRetainedContactAcceptEndpointBindingsAsync` verify original signed XUR1
