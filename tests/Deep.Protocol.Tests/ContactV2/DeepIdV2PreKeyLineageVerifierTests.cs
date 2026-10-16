@@ -43,14 +43,38 @@ public sealed class DeepIdV2PreKeyLineageVerifierTests
             Manifest(14, previous.ExactHash.Span), previous));
     }
 
+    [Fact]
+    public void ServiceSuccessor_StructuralEpochNamespaceIsSeparate_NotSignatureAuthority()
+    {
+        var previous = Manifest(14, Bytes(32, 0x51));
+        DeepIdV2PreKeyLineageVerifier.VerifySuccessor(
+            Manifest(1, serviceGeneration: 2, serviceReference: 0x48), previous);
+        Reject(() => DeepIdV2PreKeyLineageVerifier.VerifySuccessor(
+            Manifest(1, serviceGeneration: 3, serviceReference: 0x48), previous));
+        Reject(() => DeepIdV2PreKeyLineageVerifier.VerifySuccessor(
+            Manifest(1, serviceGeneration: 2), previous));
+        Reject(() => DeepIdV2PreKeyLineageVerifier.VerifySuccessor(
+            Manifest(2, previous.ExactHash.Span, serviceGeneration: 2, serviceReference: 0x48), previous));
+        // Epoch1 with a nonzero predecessor cannot reach lineage: the closed
+        // manifest codec rejects it first. Keep that earlier boundary explicit.
+        var malformed = Assert.Throws<ApplicationCoreFormatException>(() =>
+            Manifest(1, Bytes(32, 0x52), serviceGeneration: 2, serviceReference: 0x48));
+        Assert.Equal(ApplicationCoreValidationStage.SemanticFields, malformed.Stage);
+        Reject(() => DeepIdV2PreKeyLineageVerifier.VerifySuccessor(
+            Manifest(1, device: 0x77, serviceGeneration: 2, serviceReference: 0x48), previous));
+        Reject(() => DeepIdV2PreKeyLineageVerifier.VerifySuccessor(
+            Manifest(1, serviceGeneration: 1, serviceReference: 0x48),
+            Manifest(1, serviceGeneration: ulong.MaxValue)));
+    }
+
     private static ParsedXpi1V2 Manifest(ulong epoch,
         ReadOnlySpan<byte> predecessor = default, byte capability = 0x25,
-        byte device = 0x26)
+        byte device = 0x26, ulong serviceGeneration = 1, byte serviceReference = 0x28)
     {
         ReadOnlyMemory<byte>[] fields =
         [
             Bytes(16, 0x21), Bytes(32, capability), Bytes(32, device),
-            Reference("DPD1", 0x27), U64(1), Reference("XPS1", 0x28),
+            Reference("DPD1", 0x27), U64(serviceGeneration), Reference("XPS1", serviceReference),
             U64(epoch), predecessor.IsEmpty ? new byte[32] : predecessor.ToArray(),
             U16(32), Bytes(32, 0x29), Bytes(32, 0x2a),
             Bytes(32, 0x2b), Reference("DRS1", 0x2c), U64(10), U64(20)

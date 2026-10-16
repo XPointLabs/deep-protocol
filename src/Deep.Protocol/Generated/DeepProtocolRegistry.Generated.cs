@@ -510,7 +510,7 @@ internal readonly record struct GeneratedRegistryIdentifier(
 
 internal static class DeepProtocolRegistryGenerated
 {
-    internal const string RegistrySha256 = "cf54f50b8796ae7542122c60198045aa3a377c4130b30920ddc095d17fe75a1c";
+    internal const string RegistrySha256 = "05390f65d7c9869499853bfcc21c3ccab5695cbe3f1084b63d0ab6099437d998";
     internal const string Dnp1RegistrySha256 = "e036a0b6acb260e05e18ac536a723b0b8561d2ba1d813429304505b0e7a7da7b";
     internal const string Dnp1ApprovedCommit = "a8456987efe031388ca2eb9006886fb78f31e06c";
 

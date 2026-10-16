@@ -309,6 +309,13 @@ not activate message delivery, masked acquisition or a release claim.
   unchanged/immediate-service predicate used by contact owner/issuer and local
   successor custody. Currentness, exact owner scope and inventory commit are
   independently required. Package/runtime/device activation remains unqualified.
+- [DR-0132](../../docs/survival-program/decisions/DR-0132-replica-prekey-service-transition.md)
+  extends the existing read-only manifest lineage predicate to an immediate
+  service's separate epoch1 namespace. It is structural, not signature or commit
+  authority. The replica final committer independently verifies both exact XPS
+  signatures/transition against current device authority and its own historical
+  descriptor hash anchor before signing. Public API signatures, wire and native
+  snapshot formats are unchanged; full/package/runtime/device gates remain.
 
 ## DNP1 classical Wave 1
 

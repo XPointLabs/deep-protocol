@@ -46,6 +46,22 @@ public static class DeepIdV2PreKeyLineageVerifier
             return;
         }
 
+        // A new service has its own epoch namespace. Its signed XPS chain is
+        // independently verified by the authoritative committer; these parsed
+        // manifests alone are structural lineage, never that authority.
+        var previousGeneration = U64(durablePredecessor.Field(5).Span);
+        var generation = U64(candidate.Field(5).Span);
+        if (generation != previousGeneration)
+        {
+            foreach (var tag in new[] { 1, 2, 3, 4 })
+                if (!Fixed(candidate.Field(tag).Span, durablePredecessor.Field(tag).Span))
+                    Reject("The DID2 inventory service successor changed its device scope.");
+            if (previousGeneration == ulong.MaxValue || generation != previousGeneration + 1 ||
+                epoch != 1 || !IsZero(candidate.Field(8).Span) ||
+                Fixed(candidate.Field(6).Span, durablePredecessor.Field(6).Span))
+                Reject("The DID2 inventory does not start the exact next service.");
+            return;
+        }
         var previousEpoch = U64(durablePredecessor.Field(7).Span);
         if (previousEpoch == 14 || epoch != previousEpoch + 1 ||
             !Fixed(candidate.Field(8).Span,
