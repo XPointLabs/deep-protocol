@@ -401,6 +401,13 @@ authors remain strict. No historical fact exposes signing, dispatch, currentness
 or a server reservation. Shared protected CAS, Registry per-generation issuance,
 consumer API/package repins and physical recovery remain activation gates.
 
+[DR-0127](../../docs/survival-program/decisions/DR-0127-capped-contact-object-successor-validity.md)
+corrects only DCB succession at an unchanged service/delegation expiry cap:
+generation/hash ordering remains strict, issue time/expiry are nondecreasing,
+and independently current signed lifetime coverage is unchanged. This internal
+predicate correction adds no public API or wire generation and requires matched
+owner/issuer rebuilds. It does not activate prekey replenishment or renew keys.
+
 For DR-0072 native-committed contact reconstruction, the additive bounded
 `ApplicationCoreVerifier.RequireRetainedContactHelloEndpointBindingsAsync` and
 `RequireRetainedContactAcceptEndpointBindingsAsync` verify original signed XUR1

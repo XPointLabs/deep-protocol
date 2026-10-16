@@ -7,6 +7,26 @@ predicate, exception type and message. It now attaches only the closed
 logged or returned in this diagnostic. No wire, suite, public API or compatibility
 path is added. Consumers retain all current authority and signature checks.
 
+## Capped successor validity — 2026-10-16
+
+[DR-0127](../../../docs/survival-program/decisions/DR-0127-capped-contact-object-successor-validity.md)
+owns the nondecreasing DCB expiry correction. The internal chain predicate
+retains generation/hash/issue-time ordering; route scope and independently
+current complete lifetime checks remain separate. There is no public API/wire
+change and no signed service lifetime extension. Matching owner and issuer
+rebuilds are mandatory; an older installed APK is not fixed-source evidence.
+
+In `artifacts/s05-capped-contact-renewal-20261016/`, focused `protocol-06` passed
+24/0/0/native0, including nine chain boundary cases and existing current-contact
+security/API-surface tests. `build-07` compiled the production solution/native0.
+`graph-08` exited1 and still reports retired MAU2; it is unqualified and does not
+replace the earlier shipping graph failure. Shared's signed source regression
+and exact cold replay are recorded in its
+[custody checkpoint](../../../deep-client-shared/docs/architecture/owned-mailbox-grant-custody.md).
+Full, package/assembly graph, matched runtime and physical acceptance remain open.
+
+## Original contact-scope diagnostic
+
 The real retained Windows owner established the PMT-reference boundary; Shared's
 signed publication-successor negative case verifies the closed diagnostic.
 [Connected scope](../../../deep-devops/docs/S05-CONTACT-TRANSPORT-2026-10-15.md).

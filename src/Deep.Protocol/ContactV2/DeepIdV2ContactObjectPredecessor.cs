@@ -64,17 +64,24 @@ internal static class DeepIdV2ContactObjectLineage
     internal static void RequireSuccessorBundle(ParsedDcb1V2 prior,
         VerifiedDeepIdV2ContactRouteClosure next, ParsedDcb1V2 bundle)
     {
-        VerifiedDeepIdV2ContactRoutePredecessor.RequireIncrement(prior.Field(8).Span, bundle.Field(8).Span);
-        if (!DeepIdV2RouteContext.Fixed(prior.ObjectHash.Span, bundle.Field(9).Span) ||
-            DeepIdV2RouteContext.U64(bundle.Field(17).Span) < DeepIdV2RouteContext.U64(prior.Field(17).Span) ||
-            DeepIdV2RouteContext.U64(bundle.Field(18).Span) <= DeepIdV2RouteContext.U64(prior.Field(18).Span))
-            throw new CryptographicException("Contact successor does not advance its exact signed predecessor.");
+        RequireSuccessorChain(prior, bundle);
         foreach (var tag in new[] { 1, 2, 3, 4, 5, 6, 7, 10, 11, 12, 13, 15, 16, 22, 23, 24 })
             if (!DeepIdV2RouteContext.Fixed(prior.Field(tag).Span, bundle.Field(tag).Span))
                 throw new CryptographicException("Contact successor requires separate identity, service, profile or policy rollover.");
         if (!DeepIdV2RouteContext.Fixed(bundle.Field(14).Span[40..], next.ExactXir1V2.Span) ||
             DeepIdV2RouteContext.U64(bundle.Field(8).Span) != DeepIdV2RouteContext.U64(next.Invite.Field(3).Span))
             throw new CryptographicException("Contact successor does not bind its exact current route generation.");
+    }
+
+    // Ordering is generation/hash based. An unchanged signed service can cap
+    // both objects at the same expiry (DR-0127); this never renews that service.
+    internal static void RequireSuccessorChain(ParsedDcb1V2 prior, ParsedDcb1V2 bundle)
+    {
+        VerifiedDeepIdV2ContactRoutePredecessor.RequireIncrement(prior.Field(8).Span, bundle.Field(8).Span);
+        if (!DeepIdV2RouteContext.Fixed(prior.ObjectHash.Span, bundle.Field(9).Span) ||
+            DeepIdV2RouteContext.U64(bundle.Field(17).Span) < DeepIdV2RouteContext.U64(prior.Field(17).Span) ||
+            DeepIdV2RouteContext.U64(bundle.Field(18).Span) < DeepIdV2RouteContext.U64(prior.Field(18).Span))
+            throw new CryptographicException("Contact successor does not advance its exact signed predecessor.");
     }
 
 }
