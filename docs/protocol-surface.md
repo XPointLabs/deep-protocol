@@ -300,6 +300,15 @@ not activate message delivery, masked acquisition or a release claim.
   each opaque private pre-key capability until the Shared account owner takes
   and durably seals it. This local output is neither a two-replica XIC1 commit
   nor permission to dispatch XPP1 before the durable secret transaction.
+- [DR-0131](../../docs/survival-program/decisions/DR-0131-owned-prekey-maintenance-author.md)
+  adds `RestorePreKeyServiceV2` on that device-owned author. It re-verifies the
+  exact persisted current-generation signed descriptor against its actual
+  private device/directory and proposed inventory window, returning byte-identical
+  service support without signing, key generation or currentness authority.
+  `DeepIdV2PreKeyLineageVerifier.VerifyServiceTransition` is the sole signed
+  unchanged/immediate-service predicate used by contact owner/issuer and local
+  successor custody. Currentness, exact owner scope and inventory commit are
+  independently required. Package/runtime/device activation remains unqualified.
 
 ## DNP1 classical Wave 1
 

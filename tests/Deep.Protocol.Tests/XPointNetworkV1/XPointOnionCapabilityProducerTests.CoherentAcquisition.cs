@@ -27,8 +27,8 @@ public sealed partial class XPointOnionCapabilityProducerTests
     [Fact]
     public void CoherentAcquisitionHint_PublicApiReturnsNoCapabilityAndAcceptsNoClockOrCallback()
     {
-        var method = Assert.Single(typeof(OnionNetworkContextVerifier).GetMethods(BindingFlags.Public | BindingFlags.Static)
-            .Where(method => method.Name == nameof(OnionNetworkContextVerifier.ProofNamesStrictlyNewerView)));
+        var method = Assert.Single(typeof(OnionNetworkContextVerifier).GetMethods(BindingFlags.Public | BindingFlags.Static),
+            method => method.Name == nameof(OnionNetworkContextVerifier.ProofNamesStrictlyNewerView));
         Assert.Equal(typeof(bool), method.ReturnType);
         Assert.Equal(new[] { typeof(VerifiedXPointNetworkAuthority), typeof(VerifiedDeepIdV2DirectoryFreshness), typeof(ReadOnlyMemory<byte>) },
             method.GetParameters().Select(parameter => parameter.ParameterType));

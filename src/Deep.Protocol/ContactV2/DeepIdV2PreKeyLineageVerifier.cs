@@ -13,6 +13,27 @@ public static class DeepIdV2PreKeyLineageVerifier
 {
     public static bool RuntimeActivation => false;
 
+    /// <summary>Verifies an unchanged signed service or its exact immediate
+    /// same-device successor. The caller owns the independent expected device
+    /// key/scope; this proves no currentness, inventory commit or dispatch.</summary>
+    public static void VerifyServiceTransition(ParsedXps1V2 candidate,
+        ParsedXps1V2 durablePredecessor, ReadOnlySpan<byte> deviceSigningPublicKey)
+    {
+        ArgumentNullException.ThrowIfNull(candidate); ArgumentNullException.ThrowIfNull(durablePredecessor);
+        var old = durablePredecessor;
+        foreach (var tag in new[] { 1, 2, 3, 4, 7, 8, 9 })
+            if (!Fixed(old.Field(tag).Span, candidate.Field(tag).Span))
+                throw new CryptographicException("Contact prekey succession changed its service identity or policy.");
+        DeepIdV2PreKeyServiceCodec.VerifyDeviceSignature(old, deviceSigningPublicKey);
+        DeepIdV2PreKeyServiceCodec.VerifyDeviceSignature(candidate, deviceSigningPublicKey);
+        if (Fixed(old.CanonicalBytes.Span, candidate.CanonicalBytes.Span)) return;
+        var generation = U64(old.Field(5).Span);
+        if (generation == ulong.MaxValue || U64(candidate.Field(5).Span) != generation + 1 ||
+            !Fixed(candidate.Field(6).Span, SHA256.HashData(old.CanonicalBytes.Span)) ||
+            U64(candidate.Field(10).Span) < U64(old.Field(10).Span) || U64(candidate.Field(11).Span) <= U64(old.Field(11).Span))
+            throw new CryptographicException("Contact prekey succession does not advance its exact signed predecessor.");
+    }
+
     public static void VerifySuccessor(ParsedXpi1V2 candidate,
         ParsedXpi1V2? durablePredecessor)
     {

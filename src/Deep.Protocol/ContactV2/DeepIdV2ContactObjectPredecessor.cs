@@ -101,18 +101,7 @@ internal static class DeepIdV2ContactObjectLineage
                 !DeepIdV2RouteContext.Fixed(old.Field(3).Span, active[index].DeviceId.Span) ||
                 !DeepIdV2RouteContext.Fixed(old.Field(4).Span[6..], device.Certificate.CanonicalHash.Span))
                 throw new CryptographicException("Contact prekey succession changed its current device scope.");
-            foreach (var tag in new[] { 1, 2, 3, 4, 7, 8, 9 })
-                if (!DeepIdV2RouteContext.Fixed(old.Field(tag).Span, next.Field(tag).Span))
-                    throw new CryptographicException("Contact prekey succession changed its service identity or policy.");
-            DeepIdV2PreKeyServiceCodec.VerifyDeviceSignature(old, device.Certificate.DeviceEd25519PublicKey.Span);
-            DeepIdV2PreKeyServiceCodec.VerifyDeviceSignature(next, device.Certificate.DeviceEd25519PublicKey.Span);
-            if (DeepIdV2RouteContext.Fixed(old.CanonicalBytes.Span, next.CanonicalBytes.Span)) continue;
-            var generation = DeepIdV2RouteContext.U64(old.Field(5).Span);
-            if (generation == ulong.MaxValue || DeepIdV2RouteContext.U64(next.Field(5).Span) != generation + 1 ||
-                !DeepIdV2RouteContext.Fixed(next.Field(6).Span, SHA256.HashData(old.CanonicalBytes.Span)) ||
-                DeepIdV2RouteContext.U64(next.Field(10).Span) < DeepIdV2RouteContext.U64(old.Field(10).Span) ||
-                DeepIdV2RouteContext.U64(next.Field(11).Span) <= DeepIdV2RouteContext.U64(old.Field(11).Span))
-                throw new CryptographicException("Contact prekey succession does not advance its exact signed predecessor.");
+            DeepIdV2PreKeyLineageVerifier.VerifyServiceTransition(next, old, device.Certificate.DeviceEd25519PublicKey.Span);
         }
     }
 

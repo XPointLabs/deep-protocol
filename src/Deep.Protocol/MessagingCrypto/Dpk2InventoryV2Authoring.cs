@@ -44,7 +44,7 @@ public sealed class AuthoredDpk2InventoryV2 : IDisposable
 }
 
 /// <summary>
-/// Public DID2 device-signed XPS1 V2 support for one inventory generation.
+/// Public DID2 device-signed XPS1 V2 support for one service generation.
 /// It contains no pre-key private material or network publication authority.
 /// </summary>
 public sealed class AuthoredDeepIdV2PreKeyService
@@ -122,15 +122,18 @@ public sealed partial class Dpk2AuthoringAuthority
                     exactPredecessorXps1);
                 DeepIdV2PreKeyServiceCodec.VerifyDeviceSignature(predecessor,
                     certificate.DeviceEd25519PublicKey.Span);
+                var previousGeneration = BinaryPrimitives.ReadUInt64BigEndian(predecessor.Field(5).Span);
                 if (!predecessor.Field(1).Span.SequenceEqual(
                         current.Record.NetworkId.Span) ||
                     !predecessor.Field(3).Span.SequenceEqual(
                         certificate.DeviceId.Span) ||
                     !predecessor.Field(4).Span.SequenceEqual(
                         Dpd1Reference(certificate.CanonicalHash.Span)) ||
-                    BinaryPrimitives.ReadUInt64BigEndian(
-                        predecessor.Field(5).Span) + 1 !=
-                        context.PrekeyServiceGeneration)
+                    previousGeneration == ulong.MaxValue || previousGeneration + 1 != context.PrekeyServiceGeneration ||
+                    BinaryPrimitives.ReadUInt16BigEndian(predecessor.Field(8).Span) != minimumOneTimeInventory ||
+                    BinaryPrimitives.ReadUInt16BigEndian(predecessor.Field(9).Span) != lastResortReuseLimit ||
+                    BinaryPrimitives.ReadUInt64BigEndian(predecessor.Field(10).Span) > context.IssuedAtUnixSeconds ||
+                    BinaryPrimitives.ReadUInt64BigEndian(predecessor.Field(11).Span) >= context.ExpiresAtUnixSeconds)
                     throw new CryptographicException(
                         "The XPS1 V2 predecessor is outside this device lineage.");
                 capability = predecessor.Field(2).ToArray();
@@ -158,6 +161,51 @@ public sealed partial class Dpk2AuthoringAuthority
             }
             finally { CryptographicOperations.ZeroMemory(signature); }
         }
+    }
+
+    /// <summary>Restores the exact current-generation, device-owned signed
+    /// service for local inventory authoring after reopen. No signing, key
+    /// generation, currentness or permission to publish is granted.</summary>
+    public AuthoredDeepIdV2PreKeyService RestorePreKeyServiceV2(
+        Dpk2AuthoringContext context, VerifiedDab2 did2Binding,
+        ReadOnlySpan<byte> exactXps1)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(did2Binding);
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            var descriptor = RequireOwnedPreKeyService(context, did2Binding, exactXps1);
+            return new AuthoredDeepIdV2PreKeyService(descriptor.CanonicalBytes.ToArray(), descriptor.Field(2).ToArray());
+        }
+    }
+
+    // Both restoration and fresh inventory authoring enforce this boundary.
+    // Call only while holding this private author's gate.
+    private ParsedXps1V2 RequireOwnedPreKeyService(Dpk2AuthoringContext context,
+        VerifiedDab2 did2Binding, ReadOnlySpan<byte> exactXps1)
+    {
+        if (context.PrekeyServiceGeneration == 0 || context.InventoryEpoch is < 1 or > 14)
+            throw new ArgumentException("The DID2 inventory generation is outside its closed bound.");
+        var descriptor = DeepIdV2PreKeyServiceCodec.Decode(exactXps1);
+        var current = _deviceAgreement.RequireActiveDirectoryForProtocolOperation(context.CurrentDirectory);
+        if (!current.Identity.Account.Certificate.CanonicalBytes.Span.SequenceEqual(
+                did2Binding.Identity.Account.Certificate.CanonicalBytes.Span) ||
+            !current.Record.DeepAccountId.Span.SequenceEqual(did2Binding.Record.DeepAccountId.Span) ||
+            !current.Record.NetworkId.Span.SequenceEqual(did2Binding.Identity.Account.Certificate.NetworkId.Span))
+            throw new CryptographicException("The DID2 binding is outside the active inventory account.");
+        var certificate = current.Identity.ActiveDevices.Single(device =>
+            device.Certificate.DeviceId.Span.SequenceEqual(DeviceId.Span)).Certificate;
+        DeepIdV2PreKeyServiceCodec.VerifyDeviceSignature(descriptor, certificate.DeviceEd25519PublicKey.Span);
+        if (!descriptor.Field(1).Span.SequenceEqual(current.Record.NetworkId.Span) ||
+            !descriptor.Field(3).Span.SequenceEqual(DeviceId.Span) ||
+            !descriptor.Field(4).Span.SequenceEqual(Dpd1Reference(certificate.CanonicalHash.Span)) ||
+            BinaryPrimitives.ReadUInt64BigEndian(descriptor.Field(5).Span) != context.PrekeyServiceGeneration ||
+            BinaryPrimitives.ReadUInt64BigEndian(descriptor.Field(10).Span) > context.IssuedAtUnixSeconds ||
+            BinaryPrimitives.ReadUInt64BigEndian(descriptor.Field(10).Span) > context.NotBeforeUnixSeconds ||
+            BinaryPrimitives.ReadUInt64BigEndian(descriptor.Field(11).Span) < context.ExpiresAtUnixSeconds)
+            throw new CryptographicException("The DID2 inventory is outside its exact signed XPS1 V2 service.");
+        return descriptor;
     }
 
     /// <summary>
@@ -202,37 +250,12 @@ public sealed partial class Dpk2AuthoringAuthority
             ThrowIfDisposed();
             var current = _deviceAgreement.RequireActiveDirectoryForProtocolOperation(
                 context.CurrentDirectory);
-            if (!current.Identity.Account.Certificate.CanonicalBytes.Span
-                    .SequenceEqual(did2Binding.Identity.Account.Certificate
-                        .CanonicalBytes.Span) ||
-                !current.Record.DeepAccountId.Span.SequenceEqual(
-                    did2Binding.Record.DeepAccountId.Span) ||
-                !current.Record.NetworkId.Span.SequenceEqual(
-                    did2Binding.Identity.Account.Certificate.NetworkId.Span))
-                throw new CryptographicException(
-                    "The DID2 binding is outside the active inventory account.");
-            var certificate = current.Identity.ActiveDevices.Single(device =>
-                device.Certificate.DeviceId.Span.SequenceEqual(DeviceId.Span))
-                .Certificate;
-            var descriptor = DeepIdV2PreKeyServiceCodec.Decode(
-                service.ExactXps1.Span);
-            DeepIdV2PreKeyServiceCodec.VerifyDeviceSignature(descriptor,
-                certificate.DeviceEd25519PublicKey.Span);
-            if (!descriptor.Field(1).Span.SequenceEqual(current.Record.NetworkId.Span) ||
-                !descriptor.Field(2).Span.SequenceEqual(service.ServiceCapability.Span) ||
-                !descriptor.Field(3).Span.SequenceEqual(DeviceId.Span) ||
-                !descriptor.Field(4).Span.SequenceEqual(
-                    Dpd1Reference(certificate.CanonicalHash.Span)) ||
-                BinaryPrimitives.ReadUInt64BigEndian(descriptor.Field(5).Span) !=
-                    context.PrekeyServiceGeneration ||
+            var descriptor = RequireOwnedPreKeyService(context, did2Binding, service.ExactXps1.Span);
+            if (!descriptor.Field(2).Span.SequenceEqual(service.ServiceCapability.Span) ||
                 BinaryPrimitives.ReadUInt16BigEndian(descriptor.Field(8).Span) >
                     oneTimePreKeyCount ||
                 BinaryPrimitives.ReadUInt16BigEndian(descriptor.Field(9).Span) <
-                    lastResortReuseLimit ||
-                BinaryPrimitives.ReadUInt64BigEndian(descriptor.Field(10).Span) >
-                    context.NotBeforeUnixSeconds ||
-                BinaryPrimitives.ReadUInt64BigEndian(descriptor.Field(11).Span) <
-                    context.ExpiresAtUnixSeconds)
+                    lastResortReuseLimit)
                 throw new CryptographicException(
                     "The DID2 inventory is outside its exact signed XPS1 V2 service.");
             var offerings = new List<AuthoredDpk2Offering>(oneTimePreKeyCount);
