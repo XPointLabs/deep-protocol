@@ -98,8 +98,18 @@ public sealed partial class MailboxHostAuthorityV2VerifierTests
             grant = grant with { IssuerSignature = signature };
         }
         var before = clock.Reads;
-        await Assert.ThrowsAsync<CryptographicException>(() => host.GetSelectedRetainedReadReplicasAsync(
+        var error = await Assert.ThrowsAsync<CryptographicException>(() => host.GetSelectedRetainedReadReplicasAsync(
             MailboxAuthenticatedCapabilityCodec.EncodeGrant(grant)).AsTask());
+        var expected = defect switch
+        {
+            "network" => "Network", "generation" => "Generation", "future-start" => "GrantNotBefore",
+            "expired" => "GrantExpiry", "issuer" => "IssuerKey", "signature" => "Signature",
+            "overlap" => "Lifecycle", "lifetime" => "Lifetime", "network-expiry" => "PolicyExpiry",
+            _ => null
+        };
+        Assert.Equal(expected, error.Data["Deep.MailboxAuthority.Check"]);
+        if (expected is not null)
+            Assert.Equal("Mailbox grant is outside current issuer/network/time authority.", error.Message);
         if (defect == "deposit") Assert.Equal(before, clock.Reads);
     }
 

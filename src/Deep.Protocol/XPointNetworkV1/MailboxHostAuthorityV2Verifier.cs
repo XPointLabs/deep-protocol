@@ -178,18 +178,26 @@ public sealed partial class VerifiedMailboxHostAuthorityV2
         (VerifiedMailboxAuthorityV2 Policy, ulong Lower, ulong Upper) current)
     {
         var issuer = current.Policy.ResolveIssuer(grant.Domain);
-        if (grant.Lifecycle != MailboxCapabilityLifecycle.Active ||
-            !Fixed(grant.NetworkId.Span, network.NetworkId.Span) ||
-            grant.Generation < current.Policy.MinimumGrantGeneration ||
-            !Fixed(grant.IssuerPublicKey.Span, issuer.PublicKey.Span) ||
-            grant.NotBeforeUnixSeconds < issuer.ValidFromUnixSeconds ||
-            grant.NotBeforeUnixSeconds > current.Lower || current.Upper >= grant.ExpiresAtUnixSeconds ||
-            grant.ExpiresAtUnixSeconds > current.Policy.ExpiresAtUnixSeconds ||
-            grant.ExpiresAtUnixSeconds > network.Closure!.HardUpperUnixSeconds ||
-            grant.ExpiresAtUnixSeconds - grant.NotBeforeUnixSeconds > current.Policy.MaximumGrantLifetimeSeconds ||
+        // Same ordered, short-circuit predicates and original failure. Only a
+        // closed diagnostic reason is attached; no identity, time or grant bytes.
+        var rejection = grant.Lifecycle != MailboxCapabilityLifecycle.Active ? "Lifecycle" :
+            !Fixed(grant.NetworkId.Span, network.NetworkId.Span) ? "Network" :
+            grant.Generation < current.Policy.MinimumGrantGeneration ? "Generation" :
+            !Fixed(grant.IssuerPublicKey.Span, issuer.PublicKey.Span) ? "IssuerKey" :
+            grant.NotBeforeUnixSeconds < issuer.ValidFromUnixSeconds ? "IssuerNotBefore" :
+            grant.NotBeforeUnixSeconds > current.Lower ? "GrantNotBefore" :
+            current.Upper >= grant.ExpiresAtUnixSeconds ? "GrantExpiry" :
+            grant.ExpiresAtUnixSeconds > current.Policy.ExpiresAtUnixSeconds ? "PolicyExpiry" :
+            grant.ExpiresAtUnixSeconds > network.Closure!.HardUpperUnixSeconds ? "NetworkExpiry" :
+            grant.ExpiresAtUnixSeconds - grant.NotBeforeUnixSeconds > current.Policy.MaximumGrantLifetimeSeconds ? "Lifetime" :
             !PublicKeyAuth.VerifyDetached(grant.IssuerSignature.ToArray(),
-                MailboxAuthenticatedCapabilityCodec.GetGrantSigningBytes(grant), issuer.PublicKey.ToArray()))
-            throw new CryptographicException("Mailbox grant is outside current issuer/network/time authority.");
+                MailboxAuthenticatedCapabilityCodec.GetGrantSigningBytes(grant), issuer.PublicKey.ToArray()) ? "Signature" : null;
+        if (rejection is not null)
+        {
+            var error = new CryptographicException("Mailbox grant is outside current issuer/network/time authority.");
+            error.Data["Deep.MailboxAuthority.Check"] = rejection;
+            throw error;
+        }
     }
 
     private static bool Fixed(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b) =>
