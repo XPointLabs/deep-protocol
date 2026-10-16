@@ -13,7 +13,7 @@ using Fixture = Deep.Protocol.Tests.XPointNetworkV1.XPointOnionCapabilityProduce
 
 namespace Deep.Protocol.Tests.XPointNetworkV1;
 
-public sealed class MailboxRetainedReadIssuanceV2Tests
+public sealed partial class MailboxRetainedReadIssuanceV2Tests
 {
     [Theory]
     [InlineData(0UL)] [InlineData(1UL)] [InlineData(5UL)]
