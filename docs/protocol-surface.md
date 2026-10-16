@@ -7,6 +7,20 @@ The production package closure is exactly `Deep.Protocol`,
 
 ## Production surface
 
+### Replica prekey refusal diagnostics
+
+`DeepIdV2ReplicaPreKeyInventoryVerifier.VerifyComplete` separately evaluates
+the original exact device/service/directory binding, authenticated lower-time
+bound and authenticated upper-time bound. All predicates, inclusive-expiry
+behavior, exception type and `CryptographicVerification/VerificationFailed`
+remain unchanged. Only fixed owned exception text distinguishes the two time
+refusals; no new API, wire value, retry/renewal authority or resource lifetime
+is allocated. A refusal must never silently replace retained prekeys.
+`s05-prekey-time-diagnostic-20261016/red-01` preserves the old ambiguous-message
+failure; `green-02` passed9/0/0/native0, including signed manifest time/binding
+negatives in the existing closure fixture. This focused fixture uses a scoped
+test PQ verifier, not native PQ or physical-currentness/release evidence.
+
 ### Retired identity source removal
 
 [DR-0069](../../docs/survival-program/decisions/DR-0069-did2-retired-identity-surface-removal.md)

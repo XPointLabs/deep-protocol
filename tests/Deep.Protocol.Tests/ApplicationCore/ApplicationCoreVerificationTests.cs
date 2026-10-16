@@ -681,6 +681,35 @@ public sealed class ApplicationCoreVerificationTests
         Assert.False(DeepIdV2ReplicaPreKeyInventoryVerifier.RuntimeActivation);
         DeepIdV2ReplicaPreKeyInventoryVerifier.VerifyComplete(did, xps,
             currentContact, publication, bootId, 3);
+        // Different diagnostics, identical fail-closed stage/rejection. These
+        // signed fixtures isolate time coverage from exact device binding.
+        var futureInventory = InventoryFields(SHA256.HashData(xps),
+            directory.Record.RecordHash.ToArray(), root: inventoryRoot,
+            lastResortHash: lastResortMember.ExactHash.ToArray());
+        futureInventory[13] = InventoryU64(16);
+        AssertReplicaRefusal(SignInventory(futureInventory, fixture.DeviceKey), 3,
+            "XPP1 inventory begins after the authenticated lower time bound.");
+        AssertReplicaRefusal(SignInventory(InventoryFields(SHA256.HashData(xps),
+            directory.Record.RecordHash.ToArray(), 19, inventoryRoot,
+            lastResortMember.ExactHash.ToArray()), fixture.DeviceKey), 6,
+            "XPP1 inventory does not cover the authenticated upper time bound.");
+        AssertReplicaRefusal(SignInventory(InventoryFields(SHA256.HashData(xps),
+            ApplicationCoreFixture.Bytes(32, 0xe5), root: inventoryRoot,
+            lastResortHash: lastResortMember.ExactHash.ToArray()), fixture.DeviceKey), 3,
+            "XPP1 XPS1/XPI1 differ from the current DID2 device authority.");
+        void AssertReplicaRefusal(ParsedXpi1V2 candidate, ulong sample, string expected)
+        {
+            var exact = DeepIdV2PreKeyPublicationCodec.Decode(
+                DeepIdV2PreKeyPublicationCodec.Encode(fixture.Network,
+                    publication.PublicationOperationId.Span, publication.PlacementHash.Span,
+                    candidate, oneTimeMembers, lastResortMember));
+            var error = Assert.Throws<ApplicationCoreFormatException>(() =>
+                DeepIdV2ReplicaPreKeyInventoryVerifier.VerifyComplete(did, xps,
+                    currentContact, exact, bootId, sample));
+            Assert.Equal(ApplicationCoreValidationStage.CryptographicVerification, error.Stage);
+            Assert.Equal(ApplicationCoreRejection.VerificationFailed, error.Rejection);
+            Assert.Equal(expected, error.Message);
+        }
         var boundedPublication = DeepIdV2BoundedPreKeyPublicationCodec
             .CreateSequence(publication.CanonicalBytes.Span,
                 ApplicationCoreFixture.Bytes(32, 0xd5), did.CanonicalBytes.Span,

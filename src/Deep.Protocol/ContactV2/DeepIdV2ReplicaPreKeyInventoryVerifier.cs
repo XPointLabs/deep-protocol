@@ -62,10 +62,15 @@ public static class DeepIdV2ReplicaPreKeyInventoryVerifier
             U64(manifest.FieldSpan(5)) != U64(Field(xps, 5)) ||
             U16(manifest.FieldSpan(9)) < U16(Field(xps, 8)) ||
             U64(manifest.FieldSpan(14)) < U64(Field(xps, 10)) ||
-            U64(manifest.FieldSpan(15)) > U64(Field(xps, 11)) ||
-            current.TrustedLowerUnixSeconds < U64(manifest.FieldSpan(14)) ||
-            current.TrustedUpperUnixSeconds >= U64(manifest.FieldSpan(15)))
+            U64(manifest.FieldSpan(15)) > U64(Field(xps, 11)))
             Reject("XPP1 XPS1/XPI1 differ from the current DID2 device authority.");
+        // Same refusal stage/code and predicates; separate fixed diagnostics
+        // distinguish expiry from incompatible retained device support. Never
+        // renew or replace a staged inventory because this check rejects it.
+        if (current.TrustedLowerUnixSeconds < U64(manifest.FieldSpan(14)))
+            Reject("XPP1 inventory begins after the authenticated lower time bound.");
+        if (current.TrustedUpperUnixSeconds >= U64(manifest.FieldSpan(15)))
+            Reject("XPP1 inventory does not cover the authenticated upper time bound.");
 
         var signingKey = certificate.DeviceEd25519PublicKey.ToArray();
         DeepIdV2PreKeyServiceCodec.VerifyDeviceSignature(xps, signingKey);
