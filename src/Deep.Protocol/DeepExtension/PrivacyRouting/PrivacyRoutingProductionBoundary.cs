@@ -555,6 +555,18 @@ internal sealed record VerifiedNetworkNode(
 public static class OnionNetworkContextVerifier
 {
     /// <summary>
+    /// Read-only acquisition hint under DR-0128. The sealed proof must name a
+    /// strictly newer, different view under the same authority/witness policy.
+    /// This does not authenticate the candidate closure, prove currentness or
+    /// grant any operation/floor authority. Full verification remains required.
+    /// </summary>
+    public static bool ProofNamesStrictlyNewerView(
+        VerifiedXPointNetworkAuthority authority,
+        VerifiedDeepIdV2DirectoryFreshness proof,
+        ReadOnlyMemory<byte> exactTerminalXnv1) =>
+        XPointOnionCapabilityProducer.ProofNamesStrictlyNewerView(authority, proof, exactTerminalXnv1);
+
+    /// <summary>
     /// Verifies complete signed history against a caller-authenticated durable
     /// predecessor without reviving its expired time or traffic-key capability.
     /// </summary>

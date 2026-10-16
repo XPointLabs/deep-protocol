@@ -984,7 +984,7 @@ public sealed partial class XPointOnionCapabilityProducerTests
 
         var verifyMethods = typeof(OnionNetworkContextVerifier).GetMethods(
             BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
-        Assert.Equal(["VerifyAsync", "VerifyFromForwardCheckpointAsync",
+        Assert.Equal(["ProofNamesStrictlyNewerView", "VerifyAsync", "VerifyFromForwardCheckpointAsync",
                 "VerifyFromProtectedHistoryAsync",
                 "VerifyRehydratedCurrentAsync"],
             verifyMethods.Select(static method => method.Name).Order(StringComparer.Ordinal).ToArray());

@@ -374,6 +374,26 @@ and traffic-key capabilities are never revived. The same decision adds
 installedOnionPublicKey)`: it checks the verifier-selected active key without
 exporting a key or granting receive authority. Wire bytes and domains are unchanged.
 
+The separately frozen
+[`DR-0128`](../../docs/survival-program/decisions/DR-0128-coherent-network-view-acquisition.md)
+adds `OnionNetworkContextVerifier.ProofNamesStrictlyNewerView(authority, proof,
+exactTerminalXnv1)`. This is only a bounded acquisition hint over a sealed DID2
+proof and canonical public view, not closure/currentness/floor authority. It
+admits no caller clock, callback or override. The owned client may reacquire
+once after the original verifier's exact DTT-binding refusal, then fully verify
+the new pair under the original operation budget. Existing rejection codes,
+wire, signatures, history and currentness rules are unchanged.
+
+The observation/API tests passed14/0/0/native0 (`s05-coherent-acquisition-20261016/protocol-03`).
+The first expanded pass retained202PASS/2FAIL because the exact exported-method
+lists had not yet included the separately frozen observer. Adding only that
+method name preserved all no-bypass assertions; regression06 then passed204/0/0.
+The Release production solution build08 completed with0 warnings/errors. Graph09
+still exits1 on the existing retired MAU2 shipping token; its first reporting
+wrapper also failed to handle empty stdout and was classified from the original
+native terminal plus stderr, not rerun or relabelled PASS. Full source/package,
+matching consumers and physical acceptance remain open.
+
 ### 7.2 Exact-three path and receive-position proof
 
 `OnionPathContextFactory.CreateContactResolver(...)` and

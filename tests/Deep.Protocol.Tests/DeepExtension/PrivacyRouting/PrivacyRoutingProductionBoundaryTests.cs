@@ -151,7 +151,7 @@ public sealed class PrivacyRoutingProductionBoundaryTests
         Assert.Equal("BeginOpenAsync", Assert.Single(typeof(OnionReplayAuthority).GetMethods(
             BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)).Name);
         Assert.Equal(
-            ["VerifyAsync", "VerifyFromForwardCheckpointAsync",
+            ["ProofNamesStrictlyNewerView", "VerifyAsync", "VerifyFromForwardCheckpointAsync",
                 "VerifyFromProtectedHistoryAsync",
                 "VerifyRehydratedCurrentAsync"],
             typeof(OnionNetworkContextVerifier).GetMethods(

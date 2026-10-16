@@ -594,6 +594,32 @@ internal static class XPointOnionCapabilityProducer
             Fail("network-policy-invalid", "The active policy does not require the exact V1 route constraints.");
     }
 
+    internal static bool ProofNamesStrictlyNewerView(
+        VerifiedXPointNetworkAuthority authority,
+        VerifiedDeepIdV2DirectoryFreshness proof,
+        ReadOnlyMemory<byte> exactTerminalXnv1)
+    {
+        ArgumentNullException.ThrowIfNull(authority);
+        ArgumentNullException.ThrowIfNull(proof);
+        var view = XPointNetworkCodec.Parse<Xnv1Record>(exactTerminalXnv1.Span);
+        var exactDtt = proof.ExactDtt1;
+        var dtt = AccountDirectoryDtt1Codec.Decode(exactDtt.Span);
+        if (!Fixed(authority.NetworkId.Span, proof.NetworkId.Span) ||
+            !Fixed(authority.NetworkId.Span, dtt.NetworkId.Span) ||
+            !Fixed(authority.NetworkId.Span, view.NetworkId.Span) ||
+            !Fixed(authority.AuthorityCoreReference.Span, dtt.AuthorizingXna1CoreReference.Span) ||
+            !Fixed(authority.AuthorityCoreReference.Span, view.FieldSpan(7)) ||
+            !Fixed(authority.DirectoryWitnessPolicyHash.Span, dtt.WitnessPolicyHash.Span) ||
+            !Fixed(authority.DirectoryWitnessPolicyHash.Span, view.FieldSpan(8)) ||
+            dtt.UncertaintySeconds > authority.MaximumWitnessUncertaintySeconds ||
+            !Fixed(AccountDirectoryDtt1Codec.Encode(dtt), exactDtt.Span) ||
+            dtt.CurrentXnv1Generation <= view.ViewGeneration ||
+            Fixed(dtt.CurrentXnv1CoreHash.Span, view.CoreHash.Span))
+            return false;
+        VerifyDttThreshold(dtt.Witnesses, authority, AccountDirectoryCrypto.ComputeDtt1SigningInput(dtt));
+        return true;
+    }
+
     private static void VerifyDtt(
         VerifiedXPointNetworkAuthority authority,
         IVerifiedDirectoryNetworkTime freshness,
