@@ -15,6 +15,26 @@ namespace Deep.Protocol.Tests.XPointNetworkV1;
 
 public sealed partial class MailboxRetainedReadIssuanceV2Tests
 {
+    [Fact]
+    public async Task IndependentlyEarlierClientUpperRejectsFutureIssuerWithoutChangingTheWinner()
+    {
+        var state = await State.Create();
+        var clientClock = new Time();
+        var client = await MailboxHostAuthorityV2Verifier.VerifyAsync(state.Network,
+            Fixture.Create().Authority, state.Host.RetainedReadPolicyBytes, new(clientClock));
+        state.Clock.Sample++;
+        var issuance = await state.Issuance();
+        var response = await issuance.AuthorSuccessAsync(new Issuer());
+        var exact = response.ToArray();
+        var error = await Assert.ThrowsAsync<CryptographicException>(() =>
+            client.VerifyRetainedReadSuccessAsync(state.Route.ExactBytes, state.Request, response).AsTask());
+        Assert.Equal("IssuedAfterCurrentUpper", error.Data["Deep.MailboxRetainedRead.Check"]);
+        clientClock.Sample++;
+        var verified = await client.VerifyRetainedReadSuccessAsync(state.Route.ExactBytes, state.Request, response);
+        Assert.Equal(exact, verified.ExactXmc2.ToArray());
+        await verified.EnsureCurrentAsync();
+    }
+
     [Theory]
     [InlineData(0UL)] [InlineData(1UL)] [InlineData(5UL)]
     public async Task DelayedIssuerPreservesOriginalSignedRequestStart(ulong elapsed)

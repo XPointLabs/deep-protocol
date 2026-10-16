@@ -206,14 +206,23 @@ public sealed partial class VerifiedMailboxHostAuthorityV2
         _ = RequireRetainedReadGrant(grant, current);
         var requestStart = U64Retained(request.Field(9).Span);
         var requestExpiry = U64Retained(request.Field(10).Span);
-        if (grant.ExpiresAtUnixSeconds > readUntil || grant.OverlapUntilUnixSeconds != 0 ||
-            requestExpiry <= requestStart || requestExpiry - requestStart > 120 ||
-            grant.NotBeforeUnixSeconds < requestStart ||
-            U64Retained(response.Field(6).Span) != requestExpiry ||
-            U64Retained(response.Field(4).Span) < requestStart ||
-            U64Retained(response.Field(4).Span) >= requestExpiry ||
-            U64Retained(response.Field(4).Span) > current.Upper)
-            throw new CryptographicException("Retained read success exceeds its exact request/current issuer/horizon.");
+        // Same ordered predicates and refusal; the closed reason carries no
+        // signed timestamps, identifiers or capability data and grants no
+        // retry/currentness authority. Unknown data is never rendered by QA.
+        var check = grant.ExpiresAtUnixSeconds > readUntil ? "GrantHorizon"
+            : grant.OverlapUntilUnixSeconds != 0 ? "GrantOverlap"
+            : requestExpiry <= requestStart || requestExpiry - requestStart > 120 ? "RequestInterval"
+            : grant.NotBeforeUnixSeconds < requestStart ? "GrantStart"
+            : U64Retained(response.Field(6).Span) != requestExpiry ? "ResponseDeadline"
+            : U64Retained(response.Field(4).Span) < requestStart ? "IssuedBeforeRequest"
+            : U64Retained(response.Field(4).Span) >= requestExpiry ? "IssuedAfterRequest"
+            : U64Retained(response.Field(4).Span) > current.Upper ? "IssuedAfterCurrentUpper" : null;
+        if (check is not null)
+        {
+            var error = new CryptographicException("Retained read success exceeds its exact request/current issuer/horizon.");
+            error.Data["Deep.MailboxRetainedRead.Check"] = check;
+            throw error;
+        }
         RequireOriginalMailboxNodes(route);
         var final = await ReadAsync(ct).ConfigureAwait(false);
         _ = RequireRetainedReadGrant(grant, final);
