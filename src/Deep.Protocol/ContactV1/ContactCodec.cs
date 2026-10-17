@@ -306,8 +306,10 @@ public static class ContactCodec
 
         RequireReference(xrc1, 5, xra1); RequireReference(xrc1, 6, pmt2);
         RequireHash(xrc1, 7, pms2);
-        if ((U64(xrc1.FieldSpan(3)) == 0 && (!xrc1.FieldSpan(8).SequenceEqual(pmt2.FieldSpan(5)) ||
-             U64(xrc1.FieldSpan(16)) < U64(pmt2.FieldSpan(11)) ||
+        // DR-0122: a frozen proposal may cross an ordinary view renewal.
+        // XRC/XSS name actual issuance, not the assignment snapshot's view.
+        // Verified route authority independently authenticates that issuance.
+        if ((U64(xrc1.FieldSpan(3)) == 0 && (U64(xrc1.FieldSpan(16)) < U64(pmt2.FieldSpan(11)) ||
              U64(xrc1.FieldSpan(16)) >= U64(pmt2.FieldSpan(12)))) ||
             !xrc1.FieldSpan(11).SequenceEqual(xra1.FieldSpan(10)) ||
             !xrc1.FieldSpan(12).SequenceEqual(xra1.FieldSpan(11)))

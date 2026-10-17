@@ -83,7 +83,11 @@ public static partial class DeepIdV2ContactRouteAuthor
         var signers = signerSnapshot ?? ValidateSigners(networkAuthority, witnessSigners);
         var current = await DeepIdV2RouteContext.ReadAsync(currentAuthorization, network,
             networkAuthority, trustedTime, cancellationToken).ConfigureAwait(false);
-        if (predecessor is not null) current = current.BindCurrentAssignment(predecessor.Route.Projection);
+        // A proposal already selected its exact current assignment when it was
+        // authored. Ordinary view renewal must not silently select a new PMT.
+        // This resolves only verified retained history with live cohort/epoch
+        // eligibility; it is not caller-supplied historical authority.
+        current = current.BindCurrentAssignment(xra.Field(5));
         predecessor?.RequireAtCurrentContext(current);
         if (predecessor is not null && (DeepIdV2RouteContext.U64(predecessor.Route.Route.Field(3).Span) >= ulong.MaxValue - 1 ||
             expiresAtUnixSeconds <= DeepIdV2RouteContext.U64(predecessor.Route.Route.Field(18).Span)))

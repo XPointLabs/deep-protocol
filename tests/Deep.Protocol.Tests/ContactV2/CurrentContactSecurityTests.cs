@@ -14,7 +14,7 @@ public sealed class CurrentContactSecurityTests
 {
     [Theory]
     [InlineData("xrc-xra-sealing-binding", "Xrc1AuthorityBindingMismatch")]
-    [InlineData("xrc-pmt-xnv-binding", "Xrc1AuthorityBindingMismatch")]
+    [InlineData("xrc-pmt-xnv-binding", "ClosureReferenceMismatch")]
     [InlineData("xrr-device-binding", "RouteValidityIntersectionMismatch")]
     [InlineData("route-validity-intersection", "RouteValidityIntersectionMismatch")]
     public void InBandRouteRejectsExactCrossFieldMutation(string id, string rejection)
