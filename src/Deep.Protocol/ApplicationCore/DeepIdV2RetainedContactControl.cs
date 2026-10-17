@@ -8,6 +8,14 @@ namespace Deep.Protocol.ApplicationCore;
 
 public static partial class ApplicationCoreVerifier
 {
+    // DR-0138: only called after the owned responder authenticates the exact
+    // initial AEAD and proves both event lifetimes terminally expired. These
+    // creation facts cannot produce live admission or a public capability.
+    internal static ValueTask RequireExpiredInitialHelloCreationBindingsAsync(
+        ParsedDmc2 hello, VerifiedDeepIdV2DirectoryFreshness initiator,
+        VerifiedDeepIdV2DirectoryFreshness recipient, OnionTrustedTimeAuthority time, CancellationToken ct) =>
+        RequireRetainedContactEndpointBindingsAsync(hello, null, initiator, recipient, time, ct);
+
     /// <summary>Historical endpoint metadata only. The caller must independently
     /// prove exact native-committed Hello custody. No current rendezvous, route,
     /// new event admission, consent, materialization or ACK authority is returned.</summary>

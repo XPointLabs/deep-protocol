@@ -66,6 +66,8 @@ public sealed class MessagingCryptoSurfaceTests
                 nameof(ResponderInitialSessionAtomicStorePayload),
                 nameof(ResponderInitialSessionCommitCapability),
                 nameof(ResponderInitialSessionMaterial),
+                nameof(ResponderInitialMailboxPreparation),
+                nameof(ResponderExpiredInitialAtomicStorePayload),
                 nameof(MessagingE2eeActivationBlocker),
                 nameof(MessagingE2eeActivationReport),
                 nameof(MessagingE2eeActivationUnavailableException),

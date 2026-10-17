@@ -9,6 +9,29 @@ namespace Deep.Protocol.Tests.AccountDirectoryV1;
 public sealed class DeepIdV2OwnedResponderSurfaceTests
 {
     [Fact]
+    public void Did2ExpiredInitialSurface_HasNoPublicFactoryRatchetKeysOrLiveConversion()
+    {
+        var prepare = typeof(OwnedGenesisDeviceSecrets).GetMethod(nameof(OwnedGenesisDeviceSecrets.PrepareInitialMailboxSessionAsync))!;
+        var strict = typeof(OwnedGenesisDeviceSecrets).GetMethod(nameof(OwnedGenesisDeviceSecrets.PrepareInitialSessionAsync))!;
+        Assert.Equal(strict.GetParameters().Select(value => value.ParameterType), prepare.GetParameters().Select(value => value.ParameterType));
+        Assert.Equal(typeof(ValueTask<ResponderInitialMailboxPreparation>), prepare.ReturnType);
+        foreach (var type in new[] { typeof(ResponderInitialMailboxPreparation), typeof(ResponderExpiredInitialAtomicStorePayload) })
+        {
+            Assert.True(type.IsSealed); Assert.Empty(type.GetConstructors());
+            Assert.True(typeof(IDisposable).IsAssignableFrom(type));
+            Assert.All(type.GetProperties(), property => Assert.Null(property.SetMethod));
+        }
+        Assert.Equal(new[] { "DiscardedStateHash", "FirstApplicationDmc2", "ProvenLowerUnixSeconds", "Reservation", "SessionInitDmc2" },
+            typeof(ResponderExpiredInitialAtomicStorePayload).GetProperties().Select(value => value.Name).Order());
+        Assert.DoesNotContain(typeof(ResponderExpiredInitialAtomicStorePayload).GetMethods(),
+            method => method.Name.Contains("Live", StringComparison.Ordinal) || method.Name.Contains("Trs", StringComparison.Ordinal));
+        Assert.Equal(typeof(ResponderInitialSessionCommitCapability), typeof(ResponderInitialMailboxPreparation)
+            .GetMethod(nameof(ResponderInitialMailboxPreparation.ConsumeLive))!.ReturnType);
+        Assert.Equal(typeof(ResponderExpiredInitialAtomicStorePayload), typeof(ResponderInitialMailboxPreparation)
+            .GetMethod(nameof(ResponderInitialMailboxPreparation.ConsumeExpiredForAtomicStore))!.ReturnType);
+    }
+
+    [Fact]
     public void Did2OwnedResponderSurface_ClosedCurrentProofInputsAndSingleAtomicHandoff()
     {
         Assert.Empty(typeof(ResponderInitialSessionCommitCapability).GetConstructors());
