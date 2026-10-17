@@ -114,9 +114,15 @@ internal sealed class VerifiedLogicalMailboxAssignment
     }
 
     private void RequireContinuousCohort(ContactRecord terminal)
+        => RequireContinuousCohort(network, Projection, terminal);
+
+    // Read-only continuity fact for already authenticated retained projections.
+    // This does not verify a route, grant or current transport admission.
+    internal static void RequireContinuousCohort(VerifiedOnionNetworkContext network,
+        ContactRecord original, ContactRecord terminal)
     {
         var closure = network.Closure!;
-        var firstGeneration = U64(Projection.Field(2).Span);
+        var firstGeneration = U64(original.Field(2).Span);
         var lastGeneration = U64(terminal.Field(2).Span);
         if (firstGeneration > lastGeneration ||
             lastGeneration - firstGeneration >= XPointNetworkClosureWireCodec.MaximumChainCount)
@@ -128,10 +134,10 @@ internal sealed class VerifiedLogicalMailboxAssignment
             var generation = U64(step.Field(2).Span);
             if (generation < firstGeneration || generation > lastGeneration) continue;
             if (generation != expectedGeneration ||
-                !Fixed(step.Field(1).Span, Projection.Field(1).Span) ||
-                !Fixed(step.Field(6).Span, Projection.Field(6).Span) ||
-                !Fixed(step.Field(7).Span, Projection.Field(7).Span) ||
-                !SameNodeIds(Projection, step))
+                !Fixed(step.Field(1).Span, original.Field(1).Span) ||
+                !Fixed(step.Field(6).Span, original.Field(6).Span) ||
+                !Fixed(step.Field(7).Span, original.Field(7).Span) ||
+                !SameNodeIds(original, step))
                 throw new CryptographicException("Logical assignment lost continuous current epoch/cohort eligibility.");
             count++;
             if (generation != lastGeneration) expectedGeneration = checked(generation + 1);

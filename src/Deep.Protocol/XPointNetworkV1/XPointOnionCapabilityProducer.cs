@@ -87,6 +87,56 @@ public sealed class VerifiedContactServicePlacement
 
 public static class ContactServicePlacementFactory
 {
+    // DR-0136: original allocation facts only. No historical placement capability
+    // is returned; both receipt signers must still be the current admitted pair.
+    internal static void RequireCommittedClaimPlacement(ParsedXpk1V2 request,
+        VerifiedContactServicePlacement current)
+    {
+        var network = current.Network;
+        network.EnsureCurrent();
+        if (current.RequestKind != ContactServiceRequestKind.ClaimPreKey ||
+            current.ServiceClass != ContactServiceClass.PreKeyClaim ||
+            !current.Binds(ContactServiceRequestKind.ClaimPreKey, request.Field(16)) ||
+            !CryptographicOperations.FixedTimeEquals(request.Field(1).Span, network.NetworkId.Span))
+            throw new CryptographicException("Committed claim differs from its current service scope.");
+        var closure = network.Closure ?? throw new CryptographicException("Committed claim has no verified network history.");
+        var projection = closure.RetainedPmts.SingleOrDefault(candidate =>
+            CryptographicOperations.FixedTimeEquals(candidate.FieldSpan(5)[6..], request.Field(3).Span)) ??
+            throw new CryptographicException("Committed claim view is absent from verified retained history.");
+        // NETCODEC already authenticated this exact map against its complete
+        // authority lineage. No caller key or reconstructed authority enters.
+        if (!closure.RetainedPmtAuthorities.TryGetValue(Convert.ToHexString(projection.ArtifactHash.Span), out var issuer))
+            throw new CryptographicException("Committed claim lost its original issuance authority.");
+        XPointOnionCapabilityProducer.VerifyContactThreshold(projection, issuer);
+        VerifiedLogicalMailboxAssignment.RequireContinuousCohort(network, projection, closure.Pmt);
+        var issued = BinaryPrimitives.ReadUInt64BigEndian(request.Field(5).Span);
+        var expires = BinaryPrimitives.ReadUInt64BigEndian(request.Field(6).Span);
+        if (issued < BinaryPrimitives.ReadUInt64BigEndian(projection.FieldSpan(11)) ||
+            expires > BinaryPrimitives.ReadUInt64BigEndian(projection.FieldSpan(12)))
+            throw new CryptographicException("Committed claim exceeded its original carriage interval.");
+        var epoch = BinaryPrimitives.ReadUInt64BigEndian(projection.FieldSpan(6));
+        var count = projection.FieldSpan(7)[0];
+        var shard = request.Field(16).ToArray();
+        var input = XPointNetworkCrypto.Sha256Domain("Deep/ContactResolver/V1/service-placement-input",
+            Join(network.NetworkId.ToArray(), [(byte)ContactServiceClass.PreKeyClaim], shard));
+        var rows = projection.Field(9).ToArray();
+        var ranked = Enumerable.Range(0, rows.Length / 136)
+            .Select(index => rows.AsSpan(index * 136, 32).ToArray())
+            .Select(id => (Id: id, Rank: Rank(network.NetworkId.Span, epoch, input, id)))
+            .OrderBy(static item => item.Rank, ByteArrayComparer.Instance)
+            .ThenBy(static item => item.Id, ByteArrayComparer.Instance).Take(count).Select(static item => item.Id).ToArray();
+        var hash = XPointNetworkCrypto.Sha256Domain("Deep/ContactResolver/V1/service-placement",
+            Join(Join(network.NetworkId.ToArray(), projection.Field(5).ToArray(),
+                ContactCodec.ArtifactReference(ProtocolMagic.PMT2, projection).CanonicalBytes.ToArray()),
+                U64(epoch), [(byte)ContactServiceClass.PreKeyClaim], shard, input, [count], Join(ranked)));
+        var currentPair = current.RankedReplicaNodeIds;
+        if (count != 2 || ranked.Length != 2 || currentPair.Count != 2 ||
+            !CryptographicOperations.FixedTimeEquals(hash, request.Field(4).Span) ||
+            ranked.Where((id, index) => !CryptographicOperations.FixedTimeEquals(id, currentPair[index].Span)).Any())
+            throw new CryptographicException("Committed claim differs from its authenticated original/current pair.");
+        network.EnsureCurrent();
+    }
+
     // Read-only original placement facts, not durable commitment. Never produces
     // a current placement or old-XPU dispatch permission; live writes use Create.
     internal static (Xna1Record Issuer, IReadOnlyList<ReadOnlyMemory<byte>> Replicas) RequireOriginalPublicationPlacement(

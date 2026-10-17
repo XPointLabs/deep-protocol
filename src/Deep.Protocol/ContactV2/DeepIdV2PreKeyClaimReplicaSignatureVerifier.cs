@@ -21,7 +21,7 @@ public sealed class VerifiedXpc1V2ReplicaSignatures
     {
         exactRequest = request.CanonicalBytes.ToArray();
         exactResult = result.WireBytes.ToArray();
-        placementHash = placement.PlacementHash.ToArray();
+        placementHash = request.Field(4).ToArray();
     }
 
     public ReadOnlyMemory<byte> ExactRequest => exactRequest.ToArray();
@@ -36,6 +36,15 @@ public static class DeepIdV2PreKeyClaimReplicaSignatureVerifier
     public static VerifiedXpc1V2ReplicaSignatures Verify(
         ParsedXpk1V2 request, ParsedXpc1V2 result,
         VerifiedContactServicePlacement placement)
+        => VerifyCore(request, result, placement, committedRecipient: false);
+
+    internal static VerifiedXpc1V2ReplicaSignatures VerifyCommittedForRecipient(
+        ParsedXpk1V2 request, ParsedXpc1V2 result, VerifiedContactServicePlacement placement)
+        => VerifyCore(request, result, placement, committedRecipient: true);
+
+    private static VerifiedXpc1V2ReplicaSignatures VerifyCore(
+        ParsedXpk1V2 request, ParsedXpc1V2 result,
+        VerifiedContactServicePlacement placement, bool committedRecipient)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(result);
@@ -49,10 +58,14 @@ public static class DeepIdV2PreKeyClaimReplicaSignatureVerifier
             placement.ServiceClass != ContactServiceClass.PreKeyClaim ||
             !placement.Binds(ContactServiceRequestKind.ClaimPreKey,
                 request.Field(16)) ||
-            !Fixed(request.Field(1).Span, placement.Network.NetworkId.Span) ||
-            !Fixed(request.Field(3).Span, placement.ViewHash.Span) ||
-            !Fixed(request.Field(4).Span, placement.PlacementHash.Span))
+            !Fixed(request.Field(1).Span, placement.Network.NetworkId.Span))
             Reject("XPC1 V2 claim is outside the current selected placement.");
+        if (!Fixed(request.Field(3).Span, placement.ViewHash.Span) ||
+            !Fixed(request.Field(4).Span, placement.PlacementHash.Span))
+        {
+            if (!committedRecipient) Reject("XPC1 V2 claim is outside the current selected placement.");
+            ContactServicePlacementFactory.RequireCommittedClaimPlacement(request, placement);
+        }
 
         var replicas = placement.RankedReplicaNodeIds;
         var rows = result.Field(25).Span;

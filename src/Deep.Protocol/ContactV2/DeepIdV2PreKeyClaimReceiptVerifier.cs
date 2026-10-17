@@ -200,7 +200,9 @@ public static class DeepIdV2PreKeyClaimReceiptVerifier
             recipientAuthorization.Freshness, recipientAuthorization.Authorization,
             reading.BootId.Span, reading.SampleSeconds);
         _ = VerifyTimeCore(request, placement, current, reading, committedRecipient);
-        _ = DeepIdV2PreKeyClaimReplicaSignatureVerifier.Verify(request, result, placement);
+        _ = committedRecipient
+            ? DeepIdV2PreKeyClaimReplicaSignatureVerifier.VerifyCommittedForRecipient(request, result, placement)
+            : DeepIdV2PreKeyClaimReplicaSignatureVerifier.Verify(request, result, placement);
         var manifest = DeepIdV2PreKeyManifestCodec.Decode(result.Field(26).Span);
         var member = DeepIdV2Dpk2Codec.Decode(result.Field(16).Span);
         DeepIdV2Dpk2MemberBinding.Verify(recipientClosure, current, manifest, member,

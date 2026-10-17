@@ -465,3 +465,14 @@ protected lineage and unchanged root authority. It returns no typed renewal
 predecessor or live route. `VerifyPredecessorAsync` remains current-PMT-only,
 so reconstructing native-committed consent cannot activate PMT route rollover.
 The same CONTACT-AND-GROUP owner and consumer/API/package gates apply.
+
+DR-0136 corrects only the existing committed-recipient claim verifier across
+ordinary carriage renewal. Original view/placement facts must authenticate in
+the current NETCODEC retained lineage with continuous unchanged epoch/count/cohort
+and the same ordered currently admitted receipt-key pair. Initiator verification
+remains exact-current; no public API, caller policy flag, wire, suite, domain or
+journal/schema is added. Rebuild/repin Protocol, Shared and MAUI together before
+claiming device activation; no account/key/authority reset is needed. Other
+consumers must use the reviewed exact Protocol graph at final package qualification.
+The normative owner and verification requirements are in
+[DR-0136](../../docs/survival-program/decisions/DR-0136-committed-claim-original-carriage.md).

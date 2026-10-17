@@ -17,6 +17,54 @@ namespace Deep.Protocol.Tests.XPointNetworkV1;
 
 public sealed partial class XPointOnionCapabilityProducerTests
 {
+    [Theory]
+    [InlineData(false, "none")]
+    [InlineData(true, "none")]
+    [InlineData(false, "view")]
+    [InlineData(false, "placement")]
+    [InlineData(false, "interval")]
+    [InlineData(false, "kind")]
+    [InlineData(false, "shard")]
+    [InlineData(false, "epoch")]
+    public async Task CommittedClaimPlacement_AuthenticatesOriginalCarriageWithoutMintingCurrentPermission(bool coldRestore, string fault)
+    {
+        var fixture = Fixture.Create(selectionEpoch: 7);
+        var previous = await fixture.VerifyDid2Async();
+        var shard = Bytes(32, 0x91);
+        var original = ContactServicePlacementFactory.Create(previous, ContactServiceRequestKind.ClaimPreKey, shard);
+        var projection = previous.Closure!.Pmt;
+        var issued = BinaryPrimitives.ReadUInt64BigEndian(projection.FieldSpan(11));
+        var end = BinaryPrimitives.ReadUInt64BigEndian(projection.FieldSpan(12));
+        var expires = Math.Min(end, checked(issued + 60));
+        var view = original.ViewHash.ToArray();
+        var placement = original.PlacementHash.ToArray();
+        if (fault == "view") view[0] ^= 1;
+        if (fault == "placement") placement[0] ^= 1;
+        if (fault == "interval") { issued = end - 1; expires = end + 1; }
+        var request = DeepIdV2PreKeyClaimRequestCodec.Decode(DeepIdV2PreKeyClaimRequestCodec.Encode(
+            previous.NetworkId.Span, Bytes(32, 0x92), view, placement, issued, expires,
+            shard, Bytes(32, 0x93), Bytes(32, 0x94), Bytes(32, 0x95), Bytes(32, 0x96)));
+        var before = request.CanonicalBytes.ToArray();
+        var chain = fault == "epoch" ? fixture.BuildSuccessorChain(8, 9) : fixture.BuildSuccessorChain(7, 7);
+        var current = coldRestore
+            ? await fixture.VerifyHistoryAsync(OnionNetworkProtectedHistoryCodec.Encode(previous), chain)
+            : await chain.VerifyAsync(previous);
+        var selected = ContactServicePlacementFactory.Create(current,
+            fault == "kind" ? ContactServiceRequestKind.PublishPreKeyInventory : ContactServiceRequestKind.ClaimPreKey,
+            fault == "shard" ? Bytes(32, 0x97) : shard);
+        Assert.NotEqual(original.ViewHash.ToArray(), selected.ViewHash.ToArray());
+        if (fault == "none")
+        {
+            ContactServicePlacementFactory.RequireCommittedClaimPlacement(request, selected);
+            Assert.NotEqual(request.Field(4).ToArray(), selected.PlacementHash.ToArray());
+            Assert.Equal(original.RankedReplicaNodeIds.Select(id => Convert.ToHexString(id.Span)),
+                selected.RankedReplicaNodeIds.Select(id => Convert.ToHexString(id.Span)));
+        }
+        else Assert.Throws<CryptographicException>(() => ContactServicePlacementFactory.RequireCommittedClaimPlacement(request, selected));
+        Assert.Equal(before, request.CanonicalBytes.ToArray());
+        Assert.Equal(current.ProtectedLkg!.ViewCoreReference.ToArray()[6..], selected.ViewHash.ToArray());
+    }
+
     [Fact]
     public void PreKeyPublicationPlacement_ExactFixedWidthDomainVector()
     {
