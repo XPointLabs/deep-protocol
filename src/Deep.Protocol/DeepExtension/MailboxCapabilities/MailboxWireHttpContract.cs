@@ -101,7 +101,9 @@ public static class MailboxWireHttpContract
         ResponseFrame = MailboxWireFrame.Mqr3,
         MinimumResponseBytes = Ed25519Mqr3Length,
         MaximumResponseBytes = Ed25519Mqr3Length,
-        RequestTimeoutSeconds = 15,
+        // Coordinator work includes a bounded peer Store plus local authority
+        // and durable commit work. This total stays below public ONION30s.
+        RequestTimeoutSeconds = 25,
         MaximumConcurrentRequests = 16,
         RequestsPerMinute = 60,
         RateLimitPartition = "authenticated capability scope"
@@ -161,7 +163,8 @@ public static class MailboxWireHttpContract
             2 +
             Ed25519Mqr3Length,
         MaximumResponseBytes = MaximumEd25519Mar1Length,
-        RequestTimeoutSeconds = 15,
+        // Composite tombstone/ACK coordination, not a single peer leaf.
+        RequestTimeoutSeconds = 25,
         MaximumConcurrentRequests = 16,
         RequestsPerMinute = 60,
         RateLimitPartition = "authenticated capability scope"
