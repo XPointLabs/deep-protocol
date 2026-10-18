@@ -276,7 +276,7 @@ public static class ProductionMailboxAuthorityCodec
             throw Error(ProductionMailboxAuthorityError.InvalidField, "Authority is incomplete.");
         if (value.DevelopmentOnly || value.Environment != ProductionMailboxAuthorityEnvironment.Production ||
             value.Transport != ProductionMailboxAuthorityTransport.AuthenticatedMau2)
-            throw Error(ProductionMailboxAuthorityError.InvalidField, "Only production authenticated MAU2 authority is accepted.");
+            throw Error(ProductionMailboxAuthorityError.InvalidField, "Only current production authenticated mailbox authority is accepted.");
         if (value.Ownership is not (ProductionMailboxAuthorityOwnership.OfficialManaged or ProductionMailboxAuthorityOwnership.UserManaged) ||
             value.EndpointPolicy is not (ProductionMailboxAuthorityEndpointPolicy.PublicHttpsOnly or ProductionMailboxAuthorityEndpointPolicy.UserManagedPrivateHttps))
             throw Error(ProductionMailboxAuthorityError.InvalidEnum, "Authority ownership or endpoint policy is invalid.");

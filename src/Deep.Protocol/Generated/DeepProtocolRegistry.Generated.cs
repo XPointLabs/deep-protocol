@@ -194,6 +194,8 @@ public static class DeepProtocolIdentifiers
         public const string WHL1 = "WHL1";
         public const string XBA1 = "XBA1";
         public const string XBB1 = "XBB1";
+        public const string XBQ1 = "XBQ1";
+        public const string XBS1 = "XBS1";
         public const string XCA2 = "XCA2";
         public const string XCB1 = "XCB1";
         public const string XCC1 = "XCC1";
@@ -407,6 +409,8 @@ public static class DeepProtocolIdentifiers
         public static System.ReadOnlySpan<byte> WHL1 => "WHL1"u8;
         public static System.ReadOnlySpan<byte> XBA1 => "XBA1"u8;
         public static System.ReadOnlySpan<byte> XBB1 => "XBB1"u8;
+        public static System.ReadOnlySpan<byte> XBQ1 => "XBQ1"u8;
+        public static System.ReadOnlySpan<byte> XBS1 => "XBS1"u8;
         public static System.ReadOnlySpan<byte> XCA2 => "XCA2"u8;
         public static System.ReadOnlySpan<byte> XCB1 => "XCB1"u8;
         public static System.ReadOnlySpan<byte> XCC1 => "XCC1"u8;
@@ -510,7 +514,7 @@ internal readonly record struct GeneratedRegistryIdentifier(
 
 internal static class DeepProtocolRegistryGenerated
 {
-    internal const string RegistrySha256 = "05390f65d7c9869499853bfcc21c3ccab5695cbe3f1084b63d0ab6099437d998";
+    internal const string RegistrySha256 = "33f85177a84de6659b915d7fdc41bd4cc57ca7f6e674cba78a2fca6939d871c4";
     internal const string Dnp1RegistrySha256 = "e036a0b6acb260e05e18ac536a723b0b8561d2ba1d813429304505b0e7a7da7b";
     internal const string Dnp1ApprovedCommit = "a8456987efe031388ca2eb9006886fb78f31e06c";
 
@@ -686,6 +690,8 @@ internal static class DeepProtocolRegistryGenerated
         new("magic", "WHL1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "XBA1", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "XBB1", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
+        new("magic", "XBQ1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
+        new("magic", "XBS1", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "XCA2", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "XCB1", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),
         new("magic", "XCC1", null, ProtocolIdentifierLifecycle.TARGET_UNFROZEN),

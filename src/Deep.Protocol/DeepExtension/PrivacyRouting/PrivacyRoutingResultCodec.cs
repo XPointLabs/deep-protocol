@@ -21,6 +21,7 @@ internal sealed class PrivacyRoutingTerminalResult
         {
             PrivacyRoutingOperation.ContactResolve => PrivacyRoutingLimits.MaximumContactResolverResponseBytes,
             PrivacyRoutingOperation.GroupControl => PrivacyRoutingLimits.MaximumGroupControlResponseBytes,
+            PrivacyRoutingOperation.Blob => Deep.Protocol.BlobV1.BlobChunkCodec.MaximumResponseBytes,
             _ => PrivacyRoutingLimits.MaximumTerminalSuccessBodyBytes,
         };
         if (body.Length > maximum)

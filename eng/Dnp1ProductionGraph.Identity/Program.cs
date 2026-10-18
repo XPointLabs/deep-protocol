@@ -556,29 +556,28 @@ internal static class GraphPolicy
         {
             ["Deep.Protocol"] =
             [
-                // Reviewed DR-0017/18 V2 completion and DR-0019's three opaque
-                // local preclaim-persistence types (Debug, normalized Release).
-                // No raw private export, device lease, session or ACK shortcut.
+                // Current source closure after the accepted DID2 retirements
+                // and DR-0141's parsed BLOB records/current-network path factory.
+                // Exact normal Release/Debug, not the recovery test seam.
+                // No new signing/currentness, device lease or ACK shortcut.
                 // Pre-cutover/public-API predecessor snapshots are not accepted.
-                "Deep.Protocol|13053|8B87A195C8E77FD9462365E818296632DC13EE160565E4585E4B1921556045E9",
-                "Deep.Protocol|13053|DB6E432A4C38832B4904356733EA48579E6B2EAD10682F49D1BAEC27E089DD6D"
+                "Deep.Protocol|12926|BCC21B1056EDFB89BB4D01ED8D8C9FC1F72AD8D33E9F304A8F7A269FF7EE1FE6",
+                "Deep.Protocol|12926|3E94FF9B9DCF1824CD7E64F9A3E03718F9F1D3F6664A15FE52E8119BAA737361"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [
-                "Deep.Protocol.MembershipRoutes|2554|EA00ABECE1D572B507E98B695B77CCB49B3C076F50C507502D67CEC6A6C19855",
-                "Deep.Protocol.MembershipRoutes|2554|D01B68E7B3AB092D7E911BA3B227DFFC64B87138CA1D9E699B17AF1738C98B91",
-                "Deep.Protocol.MembershipRoutes|2554|BD52697AE36106138FE736514AA0AB91DAFC7745B53EFE8C50D84614C6F84AC0"
+                "Deep.Protocol.MembershipRoutes|114|913FE3DB32E98222C2041D3DAB0B20CFE811A1CB09D1ECCE7E4C1BBACE20DE5B",
+                "Deep.Protocol.MembershipRoutes|114|A1606DE5B53325B39F507598375E1732EF390731E1819E643AA88235DEA86AA0"
             ],
             ["Deep.Protocol.ProfileCarrier"] =
             [
-                "Deep.Protocol.ProfileCarrier|352|5AC0D63AF92645344DBDBA0DFFBD4844180B97D956B1E14E26CDB75FBA1F29AA",
-                "Deep.Protocol.ProfileCarrier|352|1CCD469CA874FCF66E086E1BBE759302B205635A2D7E0EBB6EEFF186AAB3D2F2",
-                "Deep.Protocol.ProfileCarrier|352|8BE8B79C8866FD5CB07A414E7255AD4FF1A530A1AA44D3249D2C4FDB5F5EBBCD"
+                "Deep.Protocol.ProfileCarrier|352|889CD3CC5E7477A824F3D409A5D2868B5BB0C982E7586D3B795AD454FB5D7C91",
+                "Deep.Protocol.ProfileCarrier|352|823983167EE469F40F8B3D7AAA10268AA1D321B5BB5FAD7ECF98B6EAB1199A54"
             ],
             ["Deep.Protocol.GoldenVectors"] =
             [
-                "Deep.Protocol.GoldenVectors|111|A10E47D43865462CEBF5236781E3F82D70B1D97F8DCF287F062B7C78791F26D0",
-                "Deep.Protocol.GoldenVectors|111|314594D533F6533B2D8402BC8EA39E1BF29D82D80AC029DD295DD5E307EA2EB0"
+                "Deep.Protocol.GoldenVectors|111|13397CF95756E6B9A4D3769DFA6227C66362BAA5F2E00A3281A1EDB1473ED8E5",
+                "Deep.Protocol.GoldenVectors|111|97C639C8AD7E4729F8886A0BD82493E34555BF5CC011C94BA1A7CF68B9F9C80F"
             ]
         };
 }

@@ -744,7 +744,7 @@ internal static class XPointOnionCapabilityProducer
                 node.NodeId.ToArray(), node.NodeId.ToArray(), node.FieldSpan(8).ToArray(), node.FailureDomainHash.ToArray(),
                 origin.Id.ToArray(), origin.Transport, origin.AddressFamily, origin.Address.ToArray(), origin.Port,
                 originSpki, node.RoleMask, node.UInt32(14), node.UInt64(15), node.UInt64(16),
-                epoch, keyId, onionKey, node.IdentityPublicKey.ToArray()));
+                epoch, keyId, onionKey, node.IdentityPublicKey.ToArray(), node.UInt64(17)));
         }
         if (aggregateRoles != policy.EnabledRoleMask)
             Fail("network-role-projection-invalid", "The current XND1 roster does not exactly project every active XVP1 role.");

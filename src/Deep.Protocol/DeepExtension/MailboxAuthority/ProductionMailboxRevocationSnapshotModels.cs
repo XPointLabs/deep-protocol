@@ -35,7 +35,7 @@ public sealed class ProductionMailboxRevocationSnapshotException(
     public ProductionMailboxRevocationSnapshotError Error { get; } = error;
 }
 
-/// <summary>Public PMR1 data only: exact MCG2 serials and public authority bindings.</summary>
+/// <summary>Public PMR1 data only: exact current grant serials and public authority bindings.</summary>
 public sealed record ProductionMailboxRevocationSnapshot
 {
     public required ReadOnlyMemory<byte> NetworkId { get; init; }

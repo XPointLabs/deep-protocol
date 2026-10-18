@@ -435,6 +435,14 @@ internal static class PrivacyRoutingPayloadVerifier
         if (request.Length > PrivacyRoutingLimits.MaximumApplicationPayloadBytes)
             throw PrivacyRoutingWire.Error(PrivacyRoutingProtocolError.InvalidLength, "Request exceeds the ONION-01 limit.");
 
+        if (operation == PrivacyRoutingOperation.Blob)
+        {
+            using var blob = Deep.Protocol.BlobV1.BlobChunkCodec.DecodeRequest(request);
+            if (!CryptographicOperations.FixedTimeEquals(blob.Descriptor.NetworkId.Span, networkId))
+                throw PrivacyRoutingWire.Error(PrivacyRoutingProtocolError.InvalidKeyBinding, "Blob request belongs to another network.");
+            return;
+        }
+
         if (operation == PrivacyRoutingOperation.GroupControl)
         {
             ValidateGroupControlRequest(networkId, request);
@@ -600,6 +608,12 @@ internal static class PrivacyRoutingPayloadVerifier
         if (result.Operation != operation)
             throw PrivacyRoutingWire.Error(PrivacyRoutingProtocolError.ReplyContextMismatch, "Result operation does not match the request.");
         if (result.Kind != PrivacyRoutingResultKind.Success) return;
+        if (operation == PrivacyRoutingOperation.Blob)
+        {
+            using var blob = Deep.Protocol.BlobV1.BlobChunkCodec.DecodeRequest(exactRequest);
+            _ = Deep.Protocol.BlobV1.BlobChunkCodec.DecodeResponse(blob, result.Body.Span);
+            return;
+        }
         if (operation == PrivacyRoutingOperation.GroupControl)
         {
             ValidateGroupControlResult(exactRequest, result.Body.Span);
@@ -949,7 +963,7 @@ internal static class PrivacyRoutingWire
     internal static void ValidateEpoch(ulong epoch, bool response) { if((response&&epoch!=0)||(!response&&epoch==0)) throw Error(PrivacyRoutingProtocolError.InvalidKeyBinding,"Epoch contradicts frame purpose."); }
     internal static void ValidateRole(PrivacyRoutingKeyRole role) { if(role is not (PrivacyRoutingKeyRole.Relay or PrivacyRoutingKeyRole.Exit)) throw Error(PrivacyRoutingProtocolError.InvalidKeyBinding,"Traffic-key role is invalid."); }
     internal static void ValidateReceivePosition(PrivacyRoutingReceivePosition position) { if(position is not (PrivacyRoutingReceivePosition.Ingress or PrivacyRoutingReceivePosition.Core or PrivacyRoutingReceivePosition.Exit)) throw Error(PrivacyRoutingProtocolError.InvalidKeyBinding,"Receive position is invalid."); }
-    internal static void ValidateOperation(PrivacyRoutingOperation op) { if(op is not (PrivacyRoutingOperation.Store or PrivacyRoutingOperation.Retrieve or PrivacyRoutingOperation.Acknowledge or PrivacyRoutingOperation.ContactResolve or PrivacyRoutingOperation.GroupControl)) throw Error(PrivacyRoutingProtocolError.InvalidOperation,"Operation is invalid."); }
+    internal static void ValidateOperation(PrivacyRoutingOperation op) { if(op is not (PrivacyRoutingOperation.Store or PrivacyRoutingOperation.Retrieve or PrivacyRoutingOperation.Acknowledge or PrivacyRoutingOperation.ContactResolve or PrivacyRoutingOperation.GroupControl or PrivacyRoutingOperation.Blob)) throw Error(PrivacyRoutingProtocolError.InvalidOperation,"Operation is invalid."); }
     internal static bool IsZero(ReadOnlySpan<byte> value) { var aggregate=0; foreach(var b in value) aggregate|=b; return aggregate==0; }
     internal static byte PaddingExponent(int block) { ValidatePaddingBlock(block); return (byte)System.Numerics.BitOperations.Log2((uint)block); }
     internal static void ValidatePaddingBlock(int block) { if(block is < 256 or > 65536 || (block&(block-1))!=0) throw Error(PrivacyRoutingProtocolError.InvalidPadding,"Padding block must be a power of two from 256 to 65536."); }

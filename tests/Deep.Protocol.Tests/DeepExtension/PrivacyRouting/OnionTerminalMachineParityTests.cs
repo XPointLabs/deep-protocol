@@ -1,6 +1,7 @@
 using System.Text.Json;
 using ProtocolMagic = Deep.Protocol.Registry.DeepProtocolIdentifiers.Magic;
 using Deep.Protocol.ContactV2;
+using Deep.Protocol.BlobV1;
 using Deep.Protocol.DeepExtension.MailboxCapabilities;
 using Deep.Protocol.DeepExtension.PrivacyRouting;
 
@@ -16,11 +17,12 @@ public sealed class OnionTerminalMachineParityTests
     [InlineData(3, "Acknowledge")]
     [InlineData(4, "ContactResolve")]
     [InlineData(5, "GroupControl")]
+    [InlineData(6, "Blob")]
     public void FrozenTerminalMetadataMatchesCurrentContracts(int id, string name)
     {
         using var manifest = JsonDocument.Parse(File.ReadAllText(FindVectors()));
         var operations = manifest.RootElement.GetProperty("terminalOperations");
-        Assert.Equal(5, operations.GetArrayLength());
+        Assert.Equal(6, operations.GetArrayLength());
         var row = operations[id - 1];
         Assert.Equal(id, row.GetProperty("id").GetInt32());
         Assert.Equal(name, row.GetProperty("name").GetString());
@@ -57,12 +59,18 @@ public sealed class OnionTerminalMachineParityTests
             resultMaximum = PrivacyRoutingLimits.MaximumContactResolverResponseBytes;
             Assert.Equal(OnionLimits.MaximumContactResolverResponseBytes, resultMaximum);
         }
-        else
+        else if (id == 5)
         {
             requests = [ProtocolMagic.GSW1, ProtocolMagic.GSQ1];
             results = [ProtocolMagic.GSS1];
             requestMaximum = PrivacyRoutingLimits.MaximumGroupControlRequestBytes;
             resultMaximum = PrivacyRoutingLimits.MaximumGroupControlResponseBytes;
+        }
+        else
+        {
+            requests = [ProtocolMagic.XBQ1]; results = [ProtocolMagic.XBS1];
+            requestMaximum = BlobChunkCodec.MaximumRequestBytes;
+            resultMaximum = BlobChunkCodec.MaximumResponseBytes;
         }
         Assert.Equal(requests, Strings(row, "requestMagic"));
         Assert.Equal(results, Strings(row, "successMagic"));
@@ -84,6 +92,7 @@ public sealed class OnionTerminalMachineParityTests
     [InlineData(2, 1_048_556)]
     [InlineData(4, 131_072)]
     [InlineData(5, 65_535)]
+    [InlineData(6, 262_208)]
     public void TerminalBodyMaximumAndOneByteOverflowExecuteActualFraming(int id, int maximum)
     {
         var operation = (PrivacyRoutingOperation)id;

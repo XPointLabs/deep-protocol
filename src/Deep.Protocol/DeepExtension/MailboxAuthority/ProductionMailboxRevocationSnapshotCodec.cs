@@ -119,7 +119,7 @@ public static class ProductionMailboxRevocationSnapshotCodec
         writer.UInt16(checked((ushort)value.RevokedGrantSerials.Count));
         writer.Zero(2);
         foreach (var serial in value.RevokedGrantSerials)
-            writer.Fixed(serial.Span, MailboxAuthenticatedCapabilityLimits.SerialLength, "MCG2 serial");
+            writer.Fixed(serial.Span, MailboxAuthenticatedCapabilityLimits.SerialLength, "current grant serial");
     }
 
     private static void Validate(ProductionMailboxRevocationSnapshot value, bool requireSignature)
@@ -138,7 +138,7 @@ public static class ProductionMailboxRevocationSnapshotCodec
         byte[]? previous = null;
         foreach (var serial in value.RevokedGrantSerials)
         {
-            Require(serial, MailboxAuthenticatedCapabilityLimits.SerialLength, "MCG2 serial");
+            Require(serial, MailboxAuthenticatedCapabilityLimits.SerialLength, "current grant serial");
             if (previous is not null && previous.AsSpan().SequenceCompareTo(serial.Span) >= 0)
                 throw Error(ProductionMailboxRevocationSnapshotError.InvalidSerialOrder, "PMR1 serials must be strictly ordered and distinct.");
             previous = serial.ToArray();

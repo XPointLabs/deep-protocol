@@ -25,7 +25,7 @@ internal static class PrivacyRoutingLimits
     internal const int MaximumTerminalSuccessBodyBytes = MaximumApplicationPayloadBytes - 20;
 }
 
-internal enum PrivacyRoutingOperation : byte { Store = 1, Retrieve = 2, Acknowledge = 3, ContactResolve = 4, GroupControl = 5 }
+internal enum PrivacyRoutingOperation : byte { Store = 1, Retrieve = 2, Acknowledge = 3, ContactResolve = 4, GroupControl = 5, Blob = 6 }
 internal enum PrivacyRoutingKeyRole : byte { Relay = 1, Exit = 2 }
 internal enum PrivacyRoutingReceivePosition : byte { Ingress = 1, Core = 2, Exit = 3 }
 

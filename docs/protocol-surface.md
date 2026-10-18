@@ -7,6 +7,32 @@ The production package closure is exactly `Deep.Protocol`,
 
 ## Production surface
 
+### DR-0141 encrypted blob candidate
+
+[DR-0141](../../docs/survival-program/decisions/DR-0141-owned-blob-chunk-plane.md)
+allocates ONION operation6 and generated XBQ1/XBS1 identifiers. Exact bytes and
+bounds belong to the root `blob-chunk-v1.registry.json`, not this consequence
+note. The public descriptor/request/response codecs produce parsed records, not
+currentness, signing, mailbox delivery or account authority. Disposable requests
+own bearer storage; exported copies still belong to their caller. No object key,
+filename or MIME is disclosed to the Blob node. `BlobNodeIds`/`CreateBlob` require
+an actual current verified network, signed role/capacity and normal hop diversity;
+there is no raw-key/time/endpoint path factory.
+
+Current ONION terminal admission also requires the existing mailbox-role exit
+bit, in addition to Blob. A Blob-only node is not admitted by this generation.
+Shared/CLI and XNode must rebuild together; old operation tables reject6. This
+is additive to the current closed grammar, not a legacy reader. Existing account,
+network pin, traffic/replay/entropy, native messaging and attachment keys/floors
+are preserved. Published package consumers still need exact-three package/API
+repinning and their own qualification before release.
+
+The registry/schema and exact API method inventories include only the new
+allocation; old API fingerprints are replaced, not accepted as alternate source
+surfaces. Four stale retired-frame diagnostic/comment names were removed without
+changing authority predicates or accepted wire bytes. Local CLI transfer evidence
+does not activate release/package/device claims or the still-unowned group path.
+
 ### Replica prekey refusal diagnostics
 
 `DeepIdV2ReplicaPreKeyInventoryVerifier.VerifyComplete` separately evaluates

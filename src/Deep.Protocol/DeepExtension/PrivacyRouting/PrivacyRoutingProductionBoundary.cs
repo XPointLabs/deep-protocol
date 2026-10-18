@@ -28,7 +28,8 @@ public enum OnionOperation : byte
     Retrieve = 2,
     Acknowledge = 3,
     ContactResolve = 4,
-    GroupControl = 5
+    GroupControl = 5,
+    Blob = 6
 }
 
 public enum OnionReceivePosition : byte
@@ -550,7 +551,8 @@ internal sealed record VerifiedNetworkNode(
     ulong KeyEpoch,
     byte[] KeyId,
     byte[] OnionPublicKey,
-    byte[]? IdentityPublicKey = null);
+    byte[]? IdentityPublicKey = null,
+    ulong BlobCapacity = 0);
 
 public static class OnionNetworkContextVerifier
 {
@@ -724,7 +726,7 @@ public static class GroupControlPlacementVerifier
     }
 }
 
-public static class OnionPathContextFactory
+public static partial class OnionPathContextFactory
 {
     public static VerifiedOnionPathContext CreateMailbox(
         VerifiedOnionNetworkContext network,
@@ -1672,6 +1674,7 @@ internal static class ProductionConversions
         OnionOperation.Acknowledge => PrivacyRoutingOperation.Acknowledge,
         OnionOperation.ContactResolve => PrivacyRoutingOperation.ContactResolve,
         OnionOperation.GroupControl => PrivacyRoutingOperation.GroupControl,
+        OnionOperation.Blob => PrivacyRoutingOperation.Blob,
         _ => throw new OnionBoundaryException("invalid-operation", "Unknown ONION terminal operation.")
     };
 
@@ -1682,6 +1685,7 @@ internal static class ProductionConversions
         PrivacyRoutingOperation.Acknowledge => OnionOperation.Acknowledge,
         PrivacyRoutingOperation.ContactResolve => OnionOperation.ContactResolve,
         PrivacyRoutingOperation.GroupControl => OnionOperation.GroupControl,
+        PrivacyRoutingOperation.Blob => OnionOperation.Blob,
         _ => throw new OnionBoundaryException("invalid-operation", "Unknown ONION terminal operation.")
     };
 

@@ -157,7 +157,7 @@ public sealed class PrivacyRoutingProductionBoundaryTests
             typeof(OnionNetworkContextVerifier).GetMethods(
                     BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly)
                 .Select(static method => method.Name).Order().ToArray());
-        Assert.Equal(["CreateContactResolver", "CreateMailbox"],
+        Assert.Equal(["BlobNodeIds", "CreateBlob", "CreateContactResolver", "CreateMailbox"],
             typeof(OnionPathContextFactory).GetMethods(
                     BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly)
                 .Select(static method => method.Name).Order(StringComparer.Ordinal).ToArray());
