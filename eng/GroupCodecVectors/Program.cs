@@ -46,9 +46,23 @@ static void Emit(string path)
     Add(records,"gss1-write-committed","GSS1",Encode("GSS1",[1,2,3,4,5,6,7,8,16,17,18,19,20],[network,Bytes(32,6),Bytes(32,11),U16(1),new byte[]{1},U64(150),U32(0),U16(4),new byte[]{1},U64(1),Bytes(32,12),U64(1),Bytes(96,13)]),null);
 
     var hostile = root["hostileCases"]!.AsArray();
-    for (var index=hostile.Count-1;index>=0;index--) if(hostile[index]!["id"]!.GetValue<string>()=="gsr1-signature")hostile.RemoveAt(index);
+    // Rebase each existing hostile mutation on current deterministic bytes.
+    for (var index=hostile.Count-1;index>=0;index--)
+    {
+        var item=hostile[index]!;
+        if(item["id"]!.GetValue<string>() is "gsr1-signature" or "giv1-retired-adc-reference") { hostile.RemoveAt(index); continue; }
+        var target=item["target"]!.GetValue<string>();
+        var current=records.Single(row=>row!["target"]!.GetValue<string>()==target)!;
+        var bytes=Convert.FromHexString(current["fixtureBytesHex"]!.GetValue<string>());
+        if(item["expectedCode"]!.GetValue<string>()=="NonCanonicalReserved") bytes[10]=1;
+        else bytes[^1]^=0x80;
+        item["fixtureBytesHex"]=Hex(bytes);
+        item["signerPublicKeyHex"]=current["signerPublicKeyHex"]?.DeepClone();
+    }
     var badGsr=gsrFields.Select(static value=>value.ToArray()).ToArray();badGsr[13][0]^=0x80;
     hostile.Add(new JsonObject{{"id","gsr1-signature"},{"target","GSR1"},{"fixtureBytesHex",Hex(Encode("GSR1",Enumerable.Range(1,14).ToArray(),badGsr))},{"expectedCode","DeviceSignatureVerificationFailed"},{"signerPublicKeyHex",Hex(key.PublicKey)}});
+    var oldAdc=invitationFields.Select(static value=>value.ToArray()).ToArray(); oldAdc[10][5]=1; oldAdc[17]=Bytes(64,0xa0);
+    hostile.Add(new JsonObject{{"id","giv1-retired-adc-reference"},{"target","GIV1"},{"fixtureBytesHex",Hex(Encode("GIV1",Enumerable.Range(1,18).ToArray(),oldAdc))},{"expectedCode","ReferenceTypeMismatch"},{"signerPublicKeyHex",null}});
     File.WriteAllText(path,root.ToJsonString(new JsonSerializerOptions{WriteIndented=true})+Environment.NewLine,new UTF8Encoding(false));
 }
 
@@ -66,13 +80,20 @@ static void Check(string path)
     foreach(var hostile in json.RootElement.GetProperty("hostileCases").EnumerateArray())
     {
         var magic=hostile.GetProperty("target").GetString()!;var bytes=Convert.FromHexString(hostile.GetProperty("fixtureBytesHex").GetString()!);var expectedCode=hostile.GetProperty("expectedCode").GetString()!;
-        if(expectedCode=="NonCanonicalReserved"){try{_ = GroupCodec.Decode(bytes);throw new InvalidDataException($"Hostile vector accepted: {hostile.GetProperty("id").GetString()}");}catch(GroupFormatException error)when(error.Code==expectedCode){}}
-        else{var record=GroupCodec.Decode(bytes);var key=Convert.FromHexString(hostile.GetProperty("signerPublicKeyHex").GetString()!);if(PublicKeyAuth.VerifyDetached(record.Field(SignatureTag(magic)).ToArray(),record.SignatureInput.ToArray(),key))throw new InvalidDataException($"Hostile signature accepted: {magic}");}
+        if(expectedCode is "NonCanonicalReserved" or "ReferenceTypeMismatch"){try{_ = GroupCodec.Decode(bytes);throw new InvalidDataException($"Hostile vector accepted: {hostile.GetProperty("id").GetString()}");}catch(GroupFormatException error)when(error.Code==expectedCode){}}
+        else
+        {
+            GroupRecord record;
+            try { record=GroupCodec.Decode(bytes); }
+            catch(GroupFormatException error) { throw new InvalidDataException($"Hostile signature fixture malformed: {hostile.GetProperty("id").GetString()} / {error.Code}", error); }
+            var key=Convert.FromHexString(hostile.GetProperty("signerPublicKeyHex").GetString()!);
+            if(PublicKeyAuth.VerifyDetached(record.Field(SignatureTag(magic)).ToArray(),record.SignatureInput.ToArray(),key))throw new InvalidDataException($"Hostile signature accepted: {magic}");
+        }
     }
     if(GroupCodec.RuntimeActivation||!GroupCodec.AccountDirectoryCapabilityAvailable)throw new InvalidDataException("GROUP-CODEC activation/capability state is inconsistent.");
     var productionAssembly=typeof(GroupCodec).Assembly;
     if(productionAssembly.GetCustomAttributes(typeof(InternalsVisibleToAttribute),false).Length!=0)throw new InvalidDataException("Production Deep.Protocol exposes InternalsVisibleTo.");
-    if(typeof(VerifiedGroupTransition).GetConstructors().Length!=0||typeof(GroupIdentityClosure).GetConstructors().Length!=0)throw new InvalidDataException("A verified GROUP capability has a public constructor.");
+    if(typeof(VerifiedGroupTransition).GetConstructors().Length!=0||typeof(VerifiedDeepIdV2GroupDirectory).GetConstructors().Length!=0)throw new InvalidDataException("A verified GROUP capability has a public constructor.");
     Console.WriteLine($"GROUP-CODEC vectors verified: {records.Length} records; runtime inactive; production directory capability available.");
 }
 
@@ -82,8 +103,8 @@ static int SignatureTag(string magic)=>magic switch{"GIV1"=>18,"GIA1"=>15,"DGP1"
 static byte[] RecordHash(string magic,byte[] bytes)=>DomainHash($"Deep/Application/V1/record-hash/{magic}",bytes);
 static byte[] DomainHash(string label,byte[] value){var l=Encoding.ASCII.GetBytes(label);var p=new byte[l.Length+5+value.Length];l.CopyTo(p,0);BinaryPrimitives.WriteUInt32BigEndian(p.AsSpan(l.Length+1),checked((uint)value.Length));value.CopyTo(p,l.Length+5);return SHA256.HashData(p);}
 static byte[] Encode(string magic,int[] tags,IReadOnlyList<byte[]> fields){var b=new byte[12+fields.Sum(x=>8+x.Length)];Encoding.ASCII.GetBytes(magic).CopyTo(b,0);BinaryPrimitives.WriteUInt16BigEndian(b.AsSpan(4),1);BinaryPrimitives.WriteUInt16BigEndian(b.AsSpan(6),0x0201);BinaryPrimitives.WriteUInt16BigEndian(b.AsSpan(8),checked((ushort)fields.Count));var at=12;for(var i=0;i<fields.Count;i++){BinaryPrimitives.WriteUInt16BigEndian(b.AsSpan(at),checked((ushort)tags[i]));BinaryPrimitives.WriteUInt32BigEndian(b.AsSpan(at+4),checked((uint)fields[i].Length));at+=8;fields[i].CopyTo(b,at);at+=fields[i].Length;}return b;}
-static byte[] Ref(string magic,byte seed){var b=new byte[38];Encoding.ASCII.GetBytes(magic).CopyTo(b,0);b[5]=1;Bytes(32,seed).CopyTo(b,6);return b;}
-static byte[] RefHash(string magic,byte[] hash){var b=new byte[38];Encoding.ASCII.GetBytes(magic).CopyTo(b,0);b[5]=1;hash.CopyTo(b,6);return b;}
+static byte[] Ref(string magic,byte seed){var b=new byte[38];Encoding.ASCII.GetBytes(magic).CopyTo(b,0);b[5]=magic is "ADC1" or "ADP1"?(byte)2:(byte)1;Bytes(32,seed).CopyTo(b,6);return b;}
+static byte[] RefHash(string magic,byte[] hash){var b=new byte[38];Encoding.ASCII.GetBytes(magic).CopyTo(b,0);b[5]=magic is "ADC1" or "ADP1"?(byte)2:(byte)1;hash.CopyTo(b,6);return b;}
 static byte[] Member(byte[] account,byte[] device,byte[] dpd){var body=new byte[290];account.CopyTo(body,0);body[32]=1;Ref("ADC1",0x61).CopyTo(body,33);Ref("ADH1",0x62).CopyTo(body,71);Bytes(32,0x63).CopyTo(body,109);U64(1).CopyTo(body,141);Bytes(32,0x64).CopyTo(body,149);Ref("DRS1",0x65).CopyTo(body,181);body[219]=1;device.CopyTo(body,220);dpd.CopyTo(body,252);var result=new byte[292];BinaryPrimitives.WriteUInt16BigEndian(result,290);body.CopyTo(result,2);return result;}
 static byte[] Profile(string name,byte policy,uint expiry){var value=Encoding.UTF8.GetBytes(name);var result=new byte[2+value.Length+5];BinaryPrimitives.WriteUInt16BigEndian(result,checked((ushort)value.Length));value.CopyTo(result,2);result[2+value.Length]=policy;BinaryPrimitives.WriteUInt32BigEndian(result.AsSpan(3+value.Length),expiry);return result;}
 static byte[] Lp(byte[] value){var b=new byte[value.Length+4];BinaryPrimitives.WriteUInt32BigEndian(b,checked((uint)value.Length));value.CopyTo(b,4);return b;}

@@ -20,7 +20,7 @@ public sealed class GroupArtifactReference
         {
             var value = new byte[38];
             System.Text.Encoding.ASCII.GetBytes(Magic).CopyTo(value, 0);
-            value[5] = 1;
+            value[5] = GroupCodec.ReferenceVersion(Magic);
             hash.CopyTo(value, 6);
             return value;
         }

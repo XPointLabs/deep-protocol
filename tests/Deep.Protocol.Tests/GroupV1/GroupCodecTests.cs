@@ -12,6 +12,24 @@ namespace Deep.Protocol.Tests.GroupV1;
 
 public sealed class GroupCodecTests
 {
+    [Theory]
+    [InlineData("ADC1", 1)]
+    [InlineData("ADC1", 3)]
+    [InlineData("ADP1", 1)]
+    [InlineData("ADP1", 3)]
+    public void DirectoryReferencesRejectRetiredAndUnknownVersions(string magic, byte version)
+    {
+        var reference = Ref(magic, 0x61); reference[5] = version;
+        Assert.Equal("ReferenceTypeMismatch", Assert.Throws<GroupFormatException>(() => GroupCodec.DecodeArtifactReference(reference, magic)).Code);
+    }
+
+    [Fact]
+    public void ReferenceDecoderDoesNotTrustCallerSelectedUnknownType()
+    {
+        var reference = Ref("DGC1", 0x61); Encoding.ASCII.GetBytes("ZZZ1").CopyTo(reference, 0);
+        Assert.Equal("ReferenceTypeMismatch", Assert.Throws<GroupFormatException>(() => GroupCodec.DecodeArtifactReference(reference, "ZZZ1")).Code);
+    }
+
     [Fact]
     public void InvitationAndAcceptanceAreCanonicalAndProductionAuthoringIsClosed()
     {
@@ -90,11 +108,11 @@ public sealed class GroupCodecTests
         using var document = System.Text.Json.JsonDocument.Parse(text);
         var canonical = text.Replace("\r\n", "\n", StringComparison.Ordinal)
             .Replace("\r", "\n", StringComparison.Ordinal);
-        Assert.Equal("dca069d80c506c2fe5da5b1c14073d784a875666484f83f7deb13662dd60147e", Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical))).ToLowerInvariant());
+        Assert.Equal("9da93be856b9d6b547548839f3aef390c9d3dbfc92b12b9aa2a71e5366289d14", Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonical))).ToLowerInvariant());
         var vectors=document.RootElement.GetProperty("records").EnumerateArray().ToArray();
         Assert.Equal(12,vectors.Length);Assert.Equal(12,vectors.Select(item=>item.GetProperty("target").GetString()).Distinct(StringComparer.Ordinal).Count());
         foreach(var vector in vectors){var bytes=Convert.FromHexString(vector.GetProperty("fixtureBytesHex").GetString()!);var record=GroupCodec.Decode(bytes);Assert.Equal(vector.GetProperty("target").GetString(),record.Magic);Assert.Equal(vector.GetProperty("recordHash32").GetString(),Convert.ToHexString(record.ArtifactHash.Span).ToLowerInvariant());var key=vector.GetProperty("signerPublicKeyHex");if(key.ValueKind!=System.Text.Json.JsonValueKind.Null)Assert.True(PublicKeyAuth.VerifyDetached(record.Field(SignatureTag(record.Magic)).ToArray(),record.SignatureInput.ToArray(),Convert.FromHexString(key.GetString()!)));}
-        foreach(var hostile in document.RootElement.GetProperty("hostileCases").EnumerateArray()){var bytes=Convert.FromHexString(hostile.GetProperty("fixtureBytesHex").GetString()!);var code=hostile.GetProperty("expectedCode").GetString();if(code=="NonCanonicalReserved")Assert.Equal(code,Assert.Throws<GroupFormatException>(()=>GroupCodec.Decode(bytes)).Code);else{var record=GroupCodec.Decode(bytes);Assert.False(PublicKeyAuth.VerifyDetached(record.Field(SignatureTag(record.Magic)).ToArray(),record.SignatureInput.ToArray(),Convert.FromHexString(hostile.GetProperty("signerPublicKeyHex").GetString()!)));}}
+        foreach(var hostile in document.RootElement.GetProperty("hostileCases").EnumerateArray()){var bytes=Convert.FromHexString(hostile.GetProperty("fixtureBytesHex").GetString()!);var code=hostile.GetProperty("expectedCode").GetString();if(code is "NonCanonicalReserved" or "ReferenceTypeMismatch")Assert.Equal(code,Assert.Throws<GroupFormatException>(()=>GroupCodec.Decode(bytes)).Code);else{var record=GroupCodec.Decode(bytes);Assert.False(PublicKeyAuth.VerifyDetached(record.Field(SignatureTag(record.Magic)).ToArray(),record.SignatureInput.ToArray(),Convert.FromHexString(hostile.GetProperty("signerPublicKeyHex").GetString()!)));}}
     }
 
     [Fact]
@@ -251,8 +269,8 @@ public sealed class GroupCodecTests
     private static byte[] Member(byte[] account, GroupRole role, byte[] device, byte[] adc, byte[] adh, byte[] adp, byte[] dmd, byte[] drs, byte[] dpd)
     { var body=new byte[290]; account.CopyTo(body,0);body[32]=(byte)role;adc.CopyTo(body,33);adh.CopyTo(body,71);adp.CopyTo(body,109);U64(1).CopyTo(body,141);dmd.CopyTo(body,149);drs.CopyTo(body,181);body[219]=1;device.CopyTo(body,220);dpd.CopyTo(body,252);var r=new byte[292];BinaryPrimitives.WriteUInt16BigEndian(r,290);body.CopyTo(r,2);return r; }
     private static byte[] MemberWithDevices(byte[] account,GroupRole role,(byte[] Id,byte[] Ref)[] devices){var ordered=devices.OrderBy(item=>item.Id,ByteComparer.Instance).ToArray();var body=new byte[220+70*ordered.Length];account.CopyTo(body,0);body[32]=(byte)role;Ref("ADC1",4).CopyTo(body,33);Ref("ADH1",5).CopyTo(body,71);B(32,6).CopyTo(body,109);U64(1).CopyTo(body,141);B(32,7).CopyTo(body,149);Ref("DRS1",8).CopyTo(body,181);body[219]=checked((byte)ordered.Length);for(var i=0;i<ordered.Length;i++){ordered[i].Id.CopyTo(body,220+70*i);ordered[i].Ref.CopyTo(body,252+70*i);}var result=new byte[body.Length+2];BinaryPrimitives.WriteUInt16BigEndian(result,checked((ushort)body.Length));body.CopyTo(result,2);return result;}
-    private static byte[] HashRef(string magic,byte[] bytes){var r=new byte[38];Encoding.ASCII.GetBytes(magic).CopyTo(r,0);r[5]=1;SHA256.HashData(bytes).CopyTo(r,6);return r;}
-    private static byte[] RefHash(string magic,ReadOnlySpan<byte> hash){var r=new byte[38];Encoding.ASCII.GetBytes(magic).CopyTo(r,0);r[5]=1;hash.CopyTo(r.AsSpan(6));return r;}
+    private static byte[] HashRef(string magic,byte[] bytes){var r=new byte[38];Encoding.ASCII.GetBytes(magic).CopyTo(r,0);r[5]=GroupCodec.ReferenceVersion(magic);SHA256.HashData(bytes).CopyTo(r,6);return r;}
+    private static byte[] RefHash(string magic,ReadOnlySpan<byte> hash){var r=new byte[38];Encoding.ASCII.GetBytes(magic).CopyTo(r,0);r[5]=GroupCodec.ReferenceVersion(magic);hash.CopyTo(r.AsSpan(6));return r;}
     private static byte[] Lp(ReadOnlySpan<byte> bytes){var r=new byte[4+bytes.Length];BinaryPrimitives.WriteUInt32BigEndian(r,(uint)bytes.Length);bytes.CopyTo(r.AsSpan(4));return r;}
     private static GroupRecord Record(string magic, IReadOnlyList<ReadOnlyMemory<byte>> fields) => GroupCodec.Decode(magic, Encode(magic, fields));
     private static GroupRecord RecordTagged(string magic,IReadOnlyList<int> tags,IReadOnlyList<ReadOnlyMemory<byte>> fields)=>GroupCodec.Decode(magic,EncodeTagged(magic,tags,fields));
@@ -272,7 +290,7 @@ public sealed class GroupCodecTests
     private static byte[] U16(ushort n){var b=new byte[2];BinaryPrimitives.WriteUInt16BigEndian(b,n);return b;}
     private static byte[] U32(uint n){var b=new byte[4];BinaryPrimitives.WriteUInt32BigEndian(b,n);return b;}
     private static byte[] U64(ulong n){var b=new byte[8];BinaryPrimitives.WriteUInt64BigEndian(b,n);return b;}
-    private static byte[] Ref(string magic,byte seed){var b=new byte[38];Encoding.ASCII.GetBytes(magic).CopyTo(b,0);b[5]=1;B(32,seed).CopyTo(b,6);return b;}
+    private static byte[] Ref(string magic,byte seed){var b=new byte[38];Encoding.ASCII.GetBytes(magic).CopyTo(b,0);b[5]=GroupCodec.ReferenceVersion(magic);B(32,seed).CopyTo(b,6);return b;}
     private static byte[] ProfileAction(string name,byte policy,uint expiry){var text=Encoding.UTF8.GetBytes(name);var result=new byte[2+text.Length+5];BinaryPrimitives.WriteUInt16BigEndian(result,checked((ushort)text.Length));text.CopyTo(result,2);result[2+text.Length]=policy;BinaryPrimitives.WriteUInt32BigEndian(result.AsSpan(3+text.Length),expiry);return result;}
     private static GroupRecord SignedRecord(string magic,IReadOnlyList<ReadOnlyMemory<byte>> original,int signatureTag,KeyPair key)
     {

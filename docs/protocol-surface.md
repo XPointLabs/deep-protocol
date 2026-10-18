@@ -7,6 +7,29 @@ The production package closure is exactly `Deep.Protocol`,
 
 ## Production surface
 
+### DR-0142 current DID2 group authority
+
+[DR-0142](../../docs/survival-program/decisions/DR-0142-current-did2-group-directory.md)
+replaces group ADC1/ADP1 references with version2-only references. The current
+directory capability requires the actual DID2 verifier result and rechecks its
+boot-specific clock; no raw-key or caller-sign callback mints group authority.
+`DeepIdV2GroupTransitions` owns genesis, owner invitations, explicit acceptance
+and the accepted-invite successor reducer. `OwnedGenesisDeviceSecrets` signs
+only those artifact-specific intents with the current independent device key.
+The unused empty `GroupProductionAuthor`/generic device signer is removed.
+
+Independent current nonce proofs select the same stable ADC/DMD/DRS/device
+state, not identical ADP bytes. Exact original invitation provenance is retained
+for its GCP1 closure. The accepted machine corpus retains group headers/domains,
+has current references and a negative retired-reference vector. Source API
+snapshots are normal Debug/Release only, not alternate old-reader fingerprints.
+
+No account/database/journal generation changes. Old group bytes cannot be
+imported and require explicit group-state reset. Existing contact/file accounts
+remain intact. DMC2 emission, protected group ownership, native receive/ACK,
+control quorum and durable batch fanout are **not** activated by this source
+reducer; CLI/device/package/full and release acceptance remain separate.
+
 ### DR-0141 encrypted blob candidate
 
 [DR-0141](../../docs/survival-program/decisions/DR-0141-owned-blob-chunk-plane.md)

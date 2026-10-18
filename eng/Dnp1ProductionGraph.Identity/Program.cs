@@ -557,12 +557,13 @@ internal static class GraphPolicy
             ["Deep.Protocol"] =
             [
                 // Current source closure after the accepted DID2 retirements
-                // and DR-0141's parsed BLOB records/current-network path factory.
+                // DR-0141's BLOB records and DR-0142's current DID2 group
+                // directory/owner-consent reducer, retiring the unused generic signer.
                 // Exact normal Release/Debug, not the recovery test seam.
-                // No new signing/currentness, device lease or ACK shortcut.
+                // Closed owned signing/currentness, not DMC2 activation or ACK authority.
                 // Pre-cutover/public-API predecessor snapshots are not accepted.
-                "Deep.Protocol|12926|BCC21B1056EDFB89BB4D01ED8D8C9FC1F72AD8D33E9F304A8F7A269FF7EE1FE6",
-                "Deep.Protocol|12926|3E94FF9B9DCF1824CD7E64F9A3E03718F9F1D3F6664A15FE52E8119BAA737361"
+                "Deep.Protocol|12913|C5536256E5C633CA8D49BC5717E42EE60760ECD646974DFCF1AE7447496F47A4",
+                "Deep.Protocol|12913|A76C5B3A90E7054C61514AEBB3C4592240D3A35FAD786274CE8C29BC22189CDA"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

@@ -135,7 +135,7 @@ public static partial class GroupCodec
 
     private static byte[] ReferenceBytes(string magic, ReadOnlySpan<byte> hash)
     {
-        var value = new byte[38]; Encoding.ASCII.GetBytes(magic).CopyTo(value, 0); value[5] = 1; hash.CopyTo(value.AsSpan(6)); return value;
+        var value = new byte[38]; Encoding.ASCII.GetBytes(magic).CopyTo(value, 0); value[5] = ReferenceVersion(magic); hash.CopyTo(value.AsSpan(6)); return value;
     }
 
     private static void RequireReference(ReadOnlySpan<byte> reference, string magic, ReadOnlySpan<byte> hash)

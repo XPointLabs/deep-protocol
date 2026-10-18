@@ -9,53 +9,6 @@ using Sodium;
 
 namespace Deep.Protocol.GroupV1;
 
-public enum GroupDeviceSignaturePurpose : byte
-{
-    Invitation = 1,
-    InvitationAcceptance = 2,
-    Proposal = 3,
-    Commit = 4,
-}
-
-public sealed class GroupAuthoringException : CryptographicException
-{
-    internal GroupAuthoringException(string code, string message, Exception? inner = null)
-        : base(message, inner) => Code = code;
-    public string Code { get; }
-}
-
-/// <summary>Custody boundary for one verified active device signing key.</summary>
-public interface IGroupDeviceCustodySigner
-{
-    ReadOnlyMemory<byte> DeviceId { get; }
-    ReadOnlyMemory<byte> Ed25519PublicKey { get; }
-    ReadOnlyMemory<byte> CustodyDomainHash { get; }
-    ValueTask<int> SignAsync(GroupDeviceSigningRequest request, Memory<byte> signature64, CancellationToken cancellationToken);
-}
-
-public sealed class GroupDeviceSigningRequest
-{
-    private readonly byte[] networkId, groupId, accountId, deviceId, custodyDomainHash, signingInput, signingInputHash;
-    internal GroupDeviceSigningRequest(GroupDeviceSignaturePurpose purpose, ReadOnlySpan<byte> networkId,
-        ReadOnlySpan<byte> groupId, ReadOnlySpan<byte> accountId, ReadOnlySpan<byte> deviceId,
-        ReadOnlySpan<byte> custodyDomainHash, ReadOnlySpan<byte> signingInput)
-    {
-        Purpose = purpose; this.networkId = networkId.ToArray(); this.groupId = groupId.ToArray();
-        this.accountId = accountId.ToArray(); this.deviceId = deviceId.ToArray();
-        this.custodyDomainHash = custodyDomainHash.ToArray(); this.signingInput = signingInput.ToArray();
-        signingInputHash = SHA256.HashData(signingInput);
-    }
-    public GroupDeviceSignaturePurpose Purpose { get; }
-    public ReadOnlyMemory<byte> NetworkId => networkId.ToArray();
-    public ReadOnlyMemory<byte> GroupId => groupId.ToArray();
-    public ReadOnlyMemory<byte> AccountId => accountId.ToArray();
-    public ReadOnlyMemory<byte> DeviceId => deviceId.ToArray();
-    public ReadOnlyMemory<byte> CustodyDomainHash => custodyDomainHash.ToArray();
-    /// <summary>Exact GROUP-CODEC-01 signing input; valid only during SignAsync.</summary>
-    public ReadOnlyMemory<byte> SigningInput => signingInput;
-    public ReadOnlyMemory<byte> SigningInputSha256 => signingInputHash;
-    internal void Clear() { CryptographicOperations.ZeroMemory(signingInput); CryptographicOperations.ZeroMemory(signingInputHash); }
-}
 
 public sealed class VerifiedAuthoredGroupTransition
 {
@@ -65,15 +18,6 @@ public sealed class VerifiedAuthoredGroupTransition
     public ReadOnlyMemory<byte> CanonicalPackageBytes => Package.CanonicalBytes;
 }
 
-public static class GroupProductionAuthor
-{
-    private static byte[] SignaturePlaceholder() { var value = new byte[64]; value[0] = 1; return value; }
-    private static byte[] U16(ushort value) { var b = new byte[2]; BinaryPrimitives.WriteUInt16BigEndian(b, value); return b; }
-    private static byte[] U32(uint value) { var b = new byte[4]; BinaryPrimitives.WriteUInt32BigEndian(b, value); return b; }
-    private static byte[] U64(ulong value) { var b = new byte[8]; BinaryPrimitives.WriteUInt64BigEndian(b, value); return b; }
-    private static byte[] Join(params byte[][] values) { var result = new byte[checked(values.Sum(v => v.Length))]; var at = 0; foreach (var value in values) { value.CopyTo(result, at); at += value.Length; } return result; }
-    private static void Fail(string code, string message) => throw new GroupAuthoringException(code, message);
-}
 
 public static partial class GroupCodec
 {
