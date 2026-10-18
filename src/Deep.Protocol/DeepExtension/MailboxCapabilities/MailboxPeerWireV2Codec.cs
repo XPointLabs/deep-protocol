@@ -202,6 +202,14 @@ public static partial class MailboxPeerWireV2Codec
               ?? throw Error(
                   MailboxPeerReplicationError.ExpiredOrStale,
                   "A stale PRQ2 has no persisted replay reservation.");
+        return FinishReplayVerification(request, envelope, claim, evaluation, isAdmissionFresh, crypto);
+    }
+
+    private static VerifiedMailboxPeerWireRequestV2 FinishReplayVerification(
+        MailboxPeerWireRequestV2 request, MailboxEncryptedEnvelope? envelope,
+        MailboxPeerReplayClaim claim, MailboxPeerReplayEvaluation evaluation,
+        bool isAdmissionFresh, IMailboxPeerReplicationCrypto crypto)
+    {
         ValidateReplayEvaluation(evaluation, claim, isAdmissionFresh);
         var disposition = evaluation.State switch
         {

@@ -9,12 +9,25 @@ public sealed class GroupDmc2Payload : Dmc2Payload
     internal GroupDmc2Payload(Dmc2ContentKind kind, byte[] canonical, GroupRecord record)
         : base(kind, canonical) => Record = record;
     public GroupRecord Record { get; }
+    /// <summary>Inner group selector of kind30, never exposed to the control service.</summary>
+    public ReadOnlyMemory<byte> ControlGroup => Kind == Dmc2ContentKind.GroupControlRendezvous ? CanonicalBytes[..32] : throw new InvalidOperationException();
+    /// <summary>Intended E2EE recipient of kind30; receipt alone grants no membership.</summary>
+    public ReadOnlyMemory<byte> ControlRecipient => Kind == Dmc2ContentKind.GroupControlRendezvous ? CanonicalBytes.Slice(32, 32) : throw new InvalidOperationException();
 }
 
 public static partial class GroupCodec
 {
     internal static GroupDmc2Payload DecodeDmc2Payload(Dmc2ContentKind kind, ReadOnlySpan<byte> payload)
     {
+        if (kind == Dmc2ContentKind.GroupControlRendezvous)
+        {
+            if (payload.Length != 624 || payload[..32].IndexOfAnyExcept((byte)0) < 0 || payload.Slice(32, 32).IndexOfAnyExcept((byte)0) < 0)
+                throw new GroupFormatException(GroupValidationStage.Bounds, "InvalidControlCarrier");
+            var descriptor = (GroupControlRendezvousRecord)Decode(ProtocolMagic.GSR1, payload.Slice(64, 528));
+            if (!GroupControlCipher.PublicKey(payload[592..]).AsSpan().SequenceEqual(descriptor.Field(9).Span))
+                throw new GroupFormatException(GroupValidationStage.Closure, "ControlKeyMismatch");
+            return new GroupDmc2Payload(kind, payload.ToArray(), descriptor);
+        }
         var expected = ExpectedDmcRecord(kind);
         if (payload.Length < 5) throw new GroupFormatException(GroupValidationStage.Bounds, "TruncatedDmcPayload");
         var length = BinaryPrimitives.ReadUInt32BigEndian(payload);

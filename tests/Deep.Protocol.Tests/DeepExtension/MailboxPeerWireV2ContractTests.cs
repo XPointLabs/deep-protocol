@@ -5,7 +5,7 @@ using Deep.Protocol.GoldenVectors;
 
 namespace Deep.Protocol.Tests.DeepExtension;
 
-public sealed class MailboxPeerWireV2ContractTests
+public sealed partial class MailboxPeerWireV2ContractTests
 {
     [Fact]
     public void Store_IsCanonicalFreshReplaySafeAndReturnsOnlyDurableMrr2()
@@ -446,7 +446,9 @@ public sealed class MailboxPeerWireV2ContractTests
                 Assert.Equal(
                     "/api/peer/mailbox/v2/tombstone",
                     endpoint.Route);
-                Assert.Equal(8_824, endpoint.MaximumRequestBytes);
+                Assert.Equal(8_824 + MailboxPeerWireV2Codec.TombstoneForwardingOverhead, endpoint.MaximumRequestBytes);
+                Assert.Equal(MailboxWireFrame.Ptr1, endpoint.RequestFrame);
+                Assert.Equal(MailboxWireHttpContract.Ptr1ContentType, endpoint.RequestContentType);
             });
         Assert.True(MailboxWireHttpContract.RequiresContentLength);
         Assert.False(MailboxWireHttpContract.AllowsContentEncoding);

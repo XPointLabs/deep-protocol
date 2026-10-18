@@ -10,6 +10,31 @@ namespace Deep.Protocol.GroupV1;
 /// <summary>Closed endpoint-bound group authors. Generic/raw emission stays disabled.</summary>
 public static class DeepIdV2GroupEvents
 {
+    /// <summary>Authors only a current sequencer's E2EE-bound control descriptor/key carrier.</summary>
+    public static async ValueTask<ParsedDmc2> AuthorControlAsync(GroupControlRendezvousRecord descriptor,
+        ReadOnlyMemory<byte> sealingScalar, VerifiedGroupTransition head, VerifiedDeepIdV2GroupDirectory sender,
+        VerifiedDeepIdV2GroupDirectory recipient, OwnedGenesisDeviceSecrets device, VerifiedOnionNetworkContext network,
+        ReadOnlyMemory<byte> logicalId, ReadOnlyMemory<byte> conversation, ulong sequence, OnionTrustedTimeAuthority time, CancellationToken ct = default)
+    {
+        RequireId(logicalId.Span); RequireId(conversation.Span);
+        if (sequence is < 3 or >= long.MaxValue) throw new ArgumentOutOfRangeException(nameof(sequence));
+        var first = await time.ReadCurrentAsync(ct).ConfigureAwait(false); RequirePair(sender, recipient, first);
+        device.RequireCurrentGroupDevice(sender); GroupCodec.RequireCurrentSequencer(head.Commit, sender, device.DeviceId.Bytes.Span);
+        await GroupControlProductionClient.RequireRendezvousAsync(descriptor, head, sender, network, time, ct).ConfigureAwait(false);
+        var raw = new byte[624]; head.Commit.Field(2).Span.CopyTo(raw); recipient.AccountId.Span.CopyTo(raw.AsSpan(32));
+        descriptor.CanonicalBytes.Span.CopyTo(raw.AsSpan(64)); sealingScalar.Span.CopyTo(raw.AsSpan(592));
+        try
+        {
+            var payload = GroupCodec.DecodeDmc2Payload(Dmc2ContentKind.GroupControlRendezvous, raw);
+            var created = checked((Math.Max(Upper(sender, first), Upper(recipient, first)) + 1) * 1000);
+            var result = ApplicationCoreCodec.AuthorOwnedGroupDmc2(sender.NetworkId.Span, logicalId.Span, conversation.Span,
+                sender.AccountId.Span, device.DeviceId.Bytes.Span, sequence, created, checked(created + 604800000), payload);
+            var final = await time.ReadCurrentAsync(ct).ConfigureAwait(false); ContactControlEndpointV2.RequireContinuous(first, final);
+            RequirePair(sender, recipient, final); ct.ThrowIfCancellationRequested(); return result;
+        }
+        finally { CryptographicOperations.ZeroMemory(raw); }
+    }
+
     public static IReadOnlyList<GroupCommitChunkRecord> Chunk(VerifiedGroupTransition head, ReadOnlyMemory<byte> exactPackage)
     {
         ArgumentNullException.ThrowIfNull(head);

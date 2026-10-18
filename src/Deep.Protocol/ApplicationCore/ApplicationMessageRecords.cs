@@ -31,6 +31,7 @@ public enum Dmc2ContentKind : ushort
     GroupInvitationAcceptance = 27,
     GroupCommitChunk = 28,
     GroupEmergencySequencerTransfer = 29,
+    GroupControlRendezvous = 30,
 }
 
 [Flags]

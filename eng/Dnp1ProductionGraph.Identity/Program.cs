@@ -563,8 +563,11 @@ internal static class GraphPolicy
                 // DR-0143 adds the closed typed event author/consumer surface;
                 // generic DMC2 activation stays disabled. ACK remains Shared-owned.
                 // Pre-cutover/public-API predecessor snapshots are not accepted.
-                "Deep.Protocol|12918|AC8A4AE1D4E6E88850AF325ACD5E75EF770B9DD7D9139D6258690C09B83B1755",
-                "Deep.Protocol|12918|A3C927DB84975C5099023F08EF0B95CE0240DD2026224F755453379AADF09813"
+                // DR-0145: current GSR1 placement, descriptor/cipher and owned
+                // carrier/result APIs. Actual metadata review: no public
+                // placement constructors or generic device signer were added.
+                "Deep.Protocol|12963|3F3E969C17F1EF798ACD25A57C195DD72108C9BA4A0E127D4E2E1406B46BDBA3",
+                "Deep.Protocol|12963|7CFC798C6EC459A7353FD9D522223B65D0179A46A9886BB6B8C76DB0FBFA5D6C"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

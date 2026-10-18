@@ -704,7 +704,7 @@ public static class OnionNetworkContextVerifier
         left.Length == right.Length && CryptographicOperations.FixedTimeEquals(left, right);
 }
 
-public static class GroupControlPlacementVerifier
+public static partial class GroupControlPlacementVerifier
 {
     private static readonly byte[] RankDomain =
         "Deep/XPoint/V1/PMS2/rendezvous-sha256/v2"u8.ToArray();

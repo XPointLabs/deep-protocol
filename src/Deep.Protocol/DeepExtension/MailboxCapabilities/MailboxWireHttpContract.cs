@@ -11,7 +11,8 @@ public enum MailboxWireFrame
     Mar1 = 7,
     Prq2 = 8,
     Mqr3 = 9,
-    Mau3 = 10
+    Mau3 = 10,
+    Ptr1 = 11
 }
 
 public sealed record MailboxHttpEndpointContract
@@ -72,6 +73,7 @@ public static class MailboxWireHttpContract
     public const string Mqr3ContentType = "application/vnd.deep.mailbox.mqr3";
     public const string Mar1ContentType = "application/vnd.deep.mailbox.mar1";
     public const string Prq2ContentType = "application/vnd.deep.mailbox.prq2";
+    public const string Ptr1ContentType = "application/vnd.deep.mailbox.ptr1";
     public const string Mau3ContentType = "application/vnd.deep.mailbox.mau3";
 
     public const string StoreRoute = "/api/client/mailbox/v2/store";
@@ -179,8 +181,12 @@ public static class MailboxWireHttpContract
     public static MailboxHttpEndpointContract PeerTombstone { get; } =
         PeerEndpoint(
             PeerTombstoneRoute,
-            MailboxPeerWireV2Limits.MinimumTombstoneRequestLength,
-            MailboxPeerWireV2Limits.MaximumTombstoneRequestLength);
+            MailboxPeerWireV2Limits.MinimumTombstoneRequestLength + MailboxPeerWireV2Codec.TombstoneForwardingOverhead,
+            MailboxPeerWireV2Limits.MaximumTombstoneRequestLength + MailboxPeerWireV2Codec.TombstoneForwardingOverhead) with
+        {
+            RequestContentType = Ptr1ContentType,
+            RequestFrame = MailboxWireFrame.Ptr1
+        };
 
     public static IReadOnlyList<MailboxHttpEndpointContract> ClientEndpoints { get; } =
         Array.AsReadOnly([Store, Retrieve, Acknowledge]);

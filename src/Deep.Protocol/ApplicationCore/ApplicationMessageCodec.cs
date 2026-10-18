@@ -523,7 +523,7 @@ public static partial class ApplicationCoreCodec
         {
             Dmc2ContentKind.GroupProposal or Dmc2ContentKind.GroupCommit or Dmc2ContentKind.GroupApplicationMessage or
             Dmc2ContentKind.GroupInvite or Dmc2ContentKind.GroupInvitationAcceptance or Dmc2ContentKind.GroupCommitChunk or
-            Dmc2ContentKind.GroupEmergencySequencerTransfer => DecodeGroupPayload(kind, payload, network, senderAccount, senderDevice),
+            Dmc2ContentKind.GroupEmergencySequencerTransfer or Dmc2ContentKind.GroupControlRendezvous => DecodeGroupPayload(kind, payload, network, senderAccount, senderDevice),
                 Dmc2ContentKind.SessionInit => DecodeSessionInit(payload, network, senderAccount, senderDevice, validateSenderDevice),
                 Dmc2ContentKind.ContactHello => DecodeContactHello(payload),
                 Dmc2ContentKind.ContactAccept => DecodeContactAccept(payload),
@@ -561,6 +561,9 @@ public static partial class ApplicationCoreCodec
     {
         var group = GroupCodec.DecodeDmc2Payload(kind, payload);
         var record = group.Record;
+        if (kind == Dmc2ContentKind.GroupControlRendezvous &&
+            (!record.Field(1).Span.SequenceEqual(network) || !record.Field(10).Span.SequenceEqual(senderDevice)))
+            PayloadInvalid(ApplicationCoreRejection.CrossFieldMismatch, "Control descriptor differs from authenticated sender/network.");
         if (record.Magic is ProtocolMagic.DGP1 or ProtocolMagic.DGC1 or ProtocolMagic.DGM1 or ProtocolMagic.GIV1 or ProtocolMagic.GIA1 or ProtocolMagic.DGT1)
         {
             if (!record.Field(1).Span.SequenceEqual(network))
@@ -946,6 +949,7 @@ public static partial class ApplicationCoreCodec
             case Dmc2ContentKind.GroupInvitationAcceptance:
             case Dmc2ContentKind.GroupCommitChunk:
             case Dmc2ContentKind.GroupEmergencySequencerTransfer:
+            case Dmc2ContentKind.GroupControlRendezvous:
                 if (flags != Dmc2Flags.None || !reply.IsEmpty || expiresAt == 0 || expiresAt - createdAt > 604_800_000)
                     Invalid(ApplicationCoreRejection.InvalidFlags,
                         "Group control events require zero flags/reply and expiry within seven days.");
