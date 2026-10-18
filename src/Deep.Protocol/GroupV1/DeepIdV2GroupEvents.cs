@@ -105,6 +105,7 @@ public static class DeepIdV2GroupEvents
                 if (!exactPackage.IsEmpty)
                 {
                     if (!head.BindsExactGcp1(exactPackage.Span) ||
+                        BinaryPrimitives.ReadUInt32BigEndian(chunk.Field(2).Span) != checked((uint)exactPackage.Length) ||
                         !chunk.Field(1).Span.SequenceEqual(GroupCodec.RecordHash(ProtocolMagic.GCP1, exactPackage.Span)))
                         throw new CryptographicException("Group chunk differs from verified package.");
                     var index = BinaryPrimitives.ReadUInt32BigEndian(chunk.Field(4).Span);

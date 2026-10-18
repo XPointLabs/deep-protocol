@@ -158,7 +158,7 @@
       "id": "contact-group-v1",
       "kind": "normative-document",
       "path": "docs/architecture/CONTACT-AND-GROUP-PROTOCOL-V1.md",
-      "normalizedSha256": "8f56b0c42e391c9cede895d111843a6e581c43af2128fd1f80f821e25ffb1a7b"
+      "normalizedSha256": "e1fe5693f291f45332cd83094457285fe491b250bc42f0c0a7189fc2f8bfe674"
     },
     {
       "id": "account-directory-v1",

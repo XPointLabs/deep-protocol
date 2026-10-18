@@ -39,7 +39,7 @@ public static partial class GroupCodec
         var invitation = (GroupInvitationRecord)pair.Invitation;
         var acceptance = (GroupInvitationAcceptanceRecord)pair.Acceptance;
         var invitee = FindAuthority(authorities, invitation.FieldSpan(9));
-        RequireCurrentConsent(prior, invitation, acceptance, owner, invitee, reading);
+        var committedAt = U64(commit.FieldSpan(16));
         var proposal = parsed.Proposals.Single();
         if (U16(proposal.FieldSpan(9)) != (ushort)GroupProposalAction.ActivateAcceptedInvite ||
             !proposal.FieldSpan(2).SequenceEqual(prior.FieldSpan(2)) ||
@@ -49,10 +49,11 @@ public static partial class GroupCodec
         VerifyCurrentDeviceSignature(proposal, 6, 7, 8, 13, owner);
         if (!proposal.FieldSpan(7).SequenceEqual(prior.FieldSpan(7)))
             Reject(GroupValidationStage.Transition, "GroupActivationProposerMismatch");
-        RequireWindowAt(proposal, 11, 12, owner, reading);
         if (U64(proposal.FieldSpan(11)) < U64(acceptance.FieldSpan(13)) ||
             U64(commit.FieldSpan(16)) < U64(proposal.FieldSpan(11)))
             Reject(GroupValidationStage.Transition, "GroupConsentTimeOrderMismatch");
+        RequireCurrentConsent(prior, invitation, acceptance, owner, invitee, reading, committedAt);
+        RequireWindowAt(proposal, 11, 12, owner, reading, committedAt);
         var expectedPayload = new[] { pair.InvitationReference.CanonicalBytes.ToArray(), pair.AcceptanceReference.CanonicalBytes.ToArray(),
             invitation.Field(9).ToArray(), invitation.Field(10).ToArray(), invitation.Field(11).ToArray(), invitation.Field(12).ToArray(),
             invitation.Field(13).ToArray(), invitation.Field(14).ToArray(), invitation.Field(15).ToArray() }.SelectMany(static value => value).ToArray();
@@ -86,7 +87,7 @@ public static partial class GroupCodec
     }
 
     internal static void RequireCurrentInvitation(GroupCommitRecord head, GroupInvitationRecord invitation,
-        VerifiedDeepIdV2GroupDirectory inviter, VerifiedDeepIdV2GroupDirectory invitee, OnionMonotonicReading reading)
+        VerifiedDeepIdV2GroupDirectory inviter, VerifiedDeepIdV2GroupDirectory invitee, OnionMonotonicReading reading, ulong? committedAt = null)
     {
         inviter.RequireCurrent(reading); invitee.RequireCurrent(reading);
         if (!invitation.FieldSpan(2).SequenceEqual(head.FieldSpan(2)) ||
@@ -103,14 +104,14 @@ public static partial class GroupCodec
             Reject(GroupValidationStage.Transition, "GroupInvitationUnauthorized");
         invitee.RequireStableTuple(invitation.FieldSpan(11), invitation.FieldSpan(14), invitation.FieldSpan(15));
         VerifyCurrentDeviceSignature(invitation, 6, 7, 8, 18, inviter);
-        RequireWindowAt(invitation, 16, 17, inviter, reading);
+        RequireWindowAt(invitation, 16, 17, inviter, reading, committedAt);
     }
 
     internal static void RequireCurrentConsent(GroupCommitRecord head, GroupInvitationRecord invitation,
         GroupInvitationAcceptanceRecord acceptance, VerifiedDeepIdV2GroupDirectory inviter,
-        VerifiedDeepIdV2GroupDirectory invitee, OnionMonotonicReading reading)
+        VerifiedDeepIdV2GroupDirectory invitee, OnionMonotonicReading reading, ulong? committedAt = null)
     {
-        RequireCurrentInvitation(head, invitation, inviter, invitee, reading);
+        RequireCurrentInvitation(head, invitation, inviter, invitee, reading, committedAt);
         if (!acceptance.FieldSpan(1).SequenceEqual(invitation.FieldSpan(1)) ||
             !acceptance.FieldSpan(4).SequenceEqual(ArtifactReference(ProtocolMagic.GIV1, invitation).CanonicalBytes.Span))
             Reject(GroupValidationStage.Closure, "InvitationAcceptanceMismatch");
@@ -121,7 +122,7 @@ public static partial class GroupCodec
             Reject(GroupValidationStage.Closure, "InvitationAcceptanceMismatch");
         invitee.RequireStableTuple(acceptance.FieldSpan(8), acceptance.FieldSpan(11), acceptance.FieldSpan(12));
         VerifyCurrentDeviceSignature(acceptance, 5, 6, 7, 15, invitee);
-        RequireWindowAt(acceptance, 13, 14, invitee, reading);
+        RequireWindowAt(acceptance, 13, 14, invitee, reading, committedAt);
     }
 
     private static void VerifyCurrentMembers(GroupCommitRecord commit, IReadOnlyList<VerifiedDeepIdV2GroupDirectory> authorities)
@@ -148,9 +149,12 @@ public static partial class GroupCodec
     }
 
     private static void RequireWindowAt(GroupRecord record, int issuedTag, int expiryTag,
-        VerifiedDeepIdV2GroupDirectory authority, OnionMonotonicReading reading)
+        VerifiedDeepIdV2GroupDirectory authority, OnionMonotonicReading reading, ulong? committedAt = null)
     {
-        var upper = checked(authority.Proof.TrustedUpperUnixSeconds + reading.SampleSeconds - authority.Proof.MonotonicSample);
+        // Expiry controls the right to commit, not the lifetime of an already
+        // authenticated membership lineage. Fresh authors omit committedAt.
+        // All directory/device capabilities still pass currentness separately.
+        var upper = committedAt ?? checked(authority.Proof.TrustedUpperUnixSeconds + reading.SampleSeconds - authority.Proof.MonotonicSample);
         if (U64(record.FieldSpan(issuedTag)) > upper || U64(record.FieldSpan(expiryTag)) <= upper)
             Reject(GroupValidationStage.Transition, "GroupRecordNotCurrent");
     }
