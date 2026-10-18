@@ -15,6 +15,41 @@ namespace Deep.Protocol.Tests.AccountDirectoryV1;
 public sealed partial class AccountDirectoryFreshnessVerificationTests
 {
     [Fact]
+    public async Task Did2Groups_ClosedEventsRequireActivatedMembershipAndExactPackageCustody()
+    {
+        using var fixture = await CurrentGroupFixture.CreateAsync(); using var device = CurrentGroupDevice();
+        var genesis = await DeepIdV2GroupTransitions.CreateGenesisAsync(fixture.Alice, device, "g", fixture.Time);
+        await Assert.ThrowsAnyAsync<Exception>(async () => await DeepIdV2GroupEvents.TextAsync(genesis.Transition,
+            fixture.Alice, fixture.Bob, device, Bytes(32, 0x61), 1, "not a member", fixture.Time));
+        var chunks = DeepIdV2GroupEvents.Chunk(genesis.Transition, genesis.CanonicalPackageBytes);
+        var assembler = new GroupChunkAssembler(); ReadOnlyMemory<byte> complete = default;
+        foreach (var chunk in chunks) Assert.True(assembler.TryAdd(chunk, out complete));
+        Assert.Equal(genesis.CanonicalPackageBytes.ToArray(), complete.ToArray());
+        var changed = genesis.CanonicalPackageBytes.ToArray(); changed[^1] ^= 1;
+        Assert.Throws<CryptographicException>(() => DeepIdV2GroupEvents.Chunk(genesis.Transition, changed));
+        var invite = await DeepIdV2GroupTransitions.InviteAsync(genesis.Transition, fixture.Alice, device, fixture.Bob, fixture.Time);
+        var consent = await DeepIdV2GroupTransitions.AcceptAsync(genesis.Transition, invite, fixture.Alice, fixture.Bob, device, fixture.Time);
+        var active = await DeepIdV2GroupTransitions.ActivateAsync(genesis.Transition, genesis.Package, invite, consent,
+            fixture.Alice, device, fixture.Bob, fixture.Bob.ExactLookupProof, [fixture.Alice, fixture.Bob], fixture.Time);
+        foreach (var reversed in new[] { false, true })
+        {
+            var sender = reversed ? fixture.Bob : fixture.Alice; var recipient = reversed ? fixture.Alice : fixture.Bob;
+            var text = await DeepIdV2GroupEvents.TextAsync(active.Transition, sender, recipient, device, Bytes(32, reversed ? (byte)0x62 : (byte)0x63), 1, "hello", fixture.Time);
+            var dmc = await DeepIdV2GroupEvents.AuthorAsync(text, active.Transition, sender, recipient, device, Bytes(32, 0x64), Bytes(32, 0x65), 3, fixture.Time);
+            Assert.Equal(Dmc2ContentKind.GroupApplicationMessage, dmc.ContentKind);
+            Assert.Equal(text.CanonicalBytes.ToArray(), Assert.IsType<GroupDmc2Payload>(ApplicationCoreCodec.DecodeDmc2(dmc.CanonicalBytes.Span).ParsedPayload).Record.CanonicalBytes.ToArray());
+            await DeepIdV2GroupEvents.RequireAsync(text, active.Transition, sender, recipient, device.DeviceId.Bytes, fixture.Time);
+            await Assert.ThrowsAsync<CryptographicException>(async () => await DeepIdV2GroupEvents.RequireAsync(text, active.Transition, recipient, sender, device.DeviceId.Bytes, fixture.Time));
+            var fields = Enumerable.Range(1, 12).Select(text.Field).ToArray(); var expiry = new byte[8];
+            BinaryPrimitives.WriteUInt64BigEndian(expiry, BinaryPrimitives.ReadUInt64BigEndian(text.Field(10).Span) + 1000); fields[9] = expiry;
+            var excessive = GroupCodec.CreateForAuthoring("DGM1", fields);
+            await Assert.ThrowsAsync<CryptographicException>(async () => await DeepIdV2GroupEvents.RequireAsync(excessive, active.Transition, sender, recipient, device.DeviceId.Bytes, fixture.Time));
+            Assert.Throws<InvalidOperationException>(() => ApplicationCoreCodec.AuthorDmc2(sender.NetworkId.Span, Bytes(32, 0x64), Bytes(32, 0x65),
+                sender.AccountId.Span, device.DeviceId.Bytes.Span, 3, dmc.CreatedAtUnixMilliseconds, dmc.ExpiresAtUnixMilliseconds, Dmc2Flags.None, [], dmc.ParsedPayload));
+        }
+    }
+
+    [Fact]
     public async Task Did2Groups_CreateInviteConsentActivate_WithIndependentNonceProofsAndOwnedKeys()
     {
         using var fixture = await CurrentGroupFixture.CreateAsync();

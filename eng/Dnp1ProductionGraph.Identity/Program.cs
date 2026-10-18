@@ -560,10 +560,11 @@ internal static class GraphPolicy
                 // DR-0141's BLOB records and DR-0142's current DID2 group
                 // directory/owner-consent reducer, retiring the unused generic signer.
                 // Exact normal Release/Debug, not the recovery test seam.
-                // Closed owned signing/currentness, not DMC2 activation or ACK authority.
+                // DR-0143 adds the closed typed event author/consumer surface;
+                // generic DMC2 activation stays disabled. ACK remains Shared-owned.
                 // Pre-cutover/public-API predecessor snapshots are not accepted.
-                "Deep.Protocol|12913|C5536256E5C633CA8D49BC5717E42EE60760ECD646974DFCF1AE7447496F47A4",
-                "Deep.Protocol|12913|A76C5B3A90E7054C61514AEBB3C4592240D3A35FAD786274CE8C29BC22189CDA"
+                "Deep.Protocol|12918|AC8A4AE1D4E6E88850AF325ACD5E75EF770B9DD7D9139D6258690C09B83B1755",
+                "Deep.Protocol|12918|A3C927DB84975C5099023F08EF0B95CE0240DD2026224F755453379AADF09813"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

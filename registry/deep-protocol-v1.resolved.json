@@ -3,7 +3,7 @@
   "schemaVersion": "1.0.0",
   "registryGeneration": 1,
   "registryId": "deep-protocol-v1-resolved",
-  "sourceRegistrySha256": "ad5cb795ff86878c4a1dc0675b32900f770b30207ceab331bd3da5a49800861b",
+  "sourceRegistrySha256": "72dcce37f088ce3d442d36ba9e977d18920d5eb9957a0e6059aeef39555ac57c",
   "dnp1ApprovedCommit": "a8456987efe031388ca2eb9006886fb78f31e06c",
   "dnp1RegistrySha256": "e036a0b6acb260e05e18ac536a723b0b8561d2ba1d813429304505b0e7a7da7b",
   "records": [
@@ -4275,6 +4275,7 @@
       "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
       "implementationPaths": [
+        "src/Deep.Protocol/GroupV1/DeepIdV2GroupEvents.cs",
         "src/Deep.Protocol/GroupV1/GroupCodec.cs",
         "src/Deep.Protocol/GroupV1/GroupDmc2Payload.cs",
         "src/Deep.Protocol/GroupV1/GroupRecords.cs"
@@ -4297,6 +4298,7 @@
       "lifecycle": "FROZEN_TARGET_NOT_ACTIVE",
       "contractState": "allocation-only",
       "implementationPaths": [
+        "src/Deep.Protocol/GroupV1/DeepIdV2GroupEvents.cs",
         "src/Deep.Protocol/GroupV1/GroupCodec.cs",
         "src/Deep.Protocol/GroupV1/GroupProductionAuthor.cs",
         "src/Deep.Protocol/GroupV1/GroupRecords.cs"
@@ -4361,6 +4363,7 @@
       "implementationPaths": [
         "src/Deep.Protocol/ApplicationCore/ApplicationMessageCodec.cs",
         "src/Deep.Protocol/GroupV1/DeepIdV2GroupDirectoryAuthority.cs",
+        "src/Deep.Protocol/GroupV1/DeepIdV2GroupEvents.cs",
         "src/Deep.Protocol/GroupV1/DeepIdV2GroupTransitions.cs",
         "src/Deep.Protocol/GroupV1/DeepIdV2GroupTransitionVerifier.cs",
         "src/Deep.Protocol/GroupV1/GroupCodec.cs",
@@ -4389,6 +4392,7 @@
       "implementationPaths": [
         "src/Deep.Protocol/ApplicationCore/ApplicationMessageCodec.cs",
         "src/Deep.Protocol/GroupV1/DeepIdV2GroupDirectoryAuthority.cs",
+        "src/Deep.Protocol/GroupV1/DeepIdV2GroupEvents.cs",
         "src/Deep.Protocol/GroupV1/DeepIdV2GroupTransitions.cs",
         "src/Deep.Protocol/GroupV1/DeepIdV2GroupTransitionVerifier.cs",
         "src/Deep.Protocol/GroupV1/GroupCodec.cs",
@@ -4830,6 +4834,7 @@
       "contractState": "allocation-only",
       "implementationPaths": [
         "src/Deep.Protocol/ApplicationCore/ApplicationMessageCodec.cs",
+        "src/Deep.Protocol/GroupV1/DeepIdV2GroupEvents.cs",
         "src/Deep.Protocol/GroupV1/GroupCodec.cs",
         "src/Deep.Protocol/GroupV1/GroupDmc2Payload.cs",
         "src/Deep.Protocol/GroupV1/GroupRecords.cs"

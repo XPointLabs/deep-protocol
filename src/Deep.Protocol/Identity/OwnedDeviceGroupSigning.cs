@@ -5,6 +5,15 @@ namespace Deep.Protocol.Identity;
 
 public sealed partial class OwnedGenesisDeviceSecrets
 {
+    internal void RequireCurrentGroupDevice(VerifiedDeepIdV2GroupDirectory authority)
+    {
+        lock (sync)
+        {
+            ThrowIfDisposed();
+            if (!SigningPublicKey.Matches(authority.RequireDevice(DeviceId.Bytes.Span).Certificate.DeviceEd25519PublicKey.Span))
+                throw new CryptographicException("Group device custody differs from the verified current device.");
+        }
+    }
     // Artifact-specific internal intent; never export a general device signer.
     internal byte[] SignCurrentGroupRecord(GroupRecord record, VerifiedDeepIdV2GroupDirectory authority)
     {

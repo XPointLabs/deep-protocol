@@ -158,7 +158,7 @@
       "id": "contact-group-v1",
       "kind": "normative-document",
       "path": "docs/architecture/CONTACT-AND-GROUP-PROTOCOL-V1.md",
-      "normalizedSha256": "36cfd385dfe8ba0ae8fa5a555efbc73a990433c10ca94b8a72fbe2bb2cd532e4"
+      "normalizedSha256": "8f56b0c42e391c9cede895d111843a6e581c43af2128fd1f80f821e25ffb1a7b"
     },
     {
       "id": "account-directory-v1",
@@ -254,7 +254,7 @@
       "id": "production-wire-source",
       "kind": "production-source-scan",
       "path": "deep-protocol/src",
-      "normalizedSha256": "65e9622c9544a17b9250417ff06392fe168b2508170421630aed15196956eaf9"
+      "normalizedSha256": "8d9e3ba490fd4214b0c217ae76b27f93faa86150057eea656496a01737a0f45c"
     }
   ],
   "productionInventory": {
