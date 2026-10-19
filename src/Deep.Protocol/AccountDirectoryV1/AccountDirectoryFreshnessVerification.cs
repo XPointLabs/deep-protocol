@@ -253,7 +253,11 @@ public static class AccountDirectoryCurrentProofVerifier
         try
         {
             lower = checked(lower + elapsed);
-            upper = checked(upper + elapsed);
+            // The signed observation occurred somewhere inside the live
+            // challenge/response window, not necessarily at receipt. Use the
+            // shortest possible elapsed for lower and the longest for upper.
+            // Otherwise different RTTs produce disjoint, falsely precise clocks.
+            upper = checked(upper + (monotonic.CurrentSample - monotonic.NonceCreatedAt));
         }
         catch (OverflowException)
         {

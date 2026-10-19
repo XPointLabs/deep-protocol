@@ -17,6 +17,11 @@ public sealed partial class VerifiedMailboxHostAuthorityV2
     private readonly OnionTrustedTimeAuthority time;
     private readonly object clockGate = new();
     private ulong lastSample;
+    // This host owns immutable network/root/PMA inputs. Only the pure PMA
+    // verification result for an IDENTICAL actual trusted interval is reused.
+    // Every call still checks the network lease, boot, clock and full bounds.
+    private VerifiedMailboxAuthorityV2? policyMemo;
+    private ulong policyMemoLower, policyMemoUpper;
 
     internal VerifiedMailboxHostAuthorityV2(VerifiedOnionNetworkContext network,
         VerifiedXPointNetworkAuthority root, ContactRecord pma,
@@ -118,19 +123,26 @@ public sealed partial class VerifiedMailboxHostAuthorityV2
     private (VerifiedMailboxAuthorityV2 Policy, ulong Lower, ulong Upper) ReadAtReading(
         OnionMonotonicReading reading)
     {
-        var result = VerifyAtReading(network, root, pma, reading);
         lock (clockGate)
         {
             if (reading.SampleSeconds < lastSample)
                 throw new CryptographicException("Mailbox authority crossed a protected clock rollback.");
+            var result = VerifyAtReadingCore(network, root, pma, reading, policyMemo, policyMemoLower, policyMemoUpper);
             lastSample = reading.SampleSeconds;
+            policyMemo = result.Policy; policyMemoLower = result.Lower; policyMemoUpper = result.Upper;
+            return result;
         }
-        return result;
     }
 
     internal static (VerifiedMailboxAuthorityV2 Policy, ulong Lower, ulong Upper) VerifyAtReading(
         VerifiedOnionNetworkContext network, VerifiedXPointNetworkAuthority root,
-        ContactRecord pma, OnionMonotonicReading reading)
+        ContactRecord pma, OnionMonotonicReading reading) =>
+        VerifyAtReadingCore(network, root, pma, reading, null, 0, 0);
+
+    private static (VerifiedMailboxAuthorityV2 Policy, ulong Lower, ulong Upper) VerifyAtReadingCore(
+        VerifiedOnionNetworkContext network, VerifiedXPointNetworkAuthority root,
+        ContactRecord pma, OnionMonotonicReading reading,
+        VerifiedMailboxAuthorityV2? memo, ulong memoLower, ulong memoUpper)
     {
         network.EnsureCurrent();
         var closure = network.Closure!;
@@ -159,7 +171,8 @@ public sealed partial class VerifiedMailboxHostAuthorityV2
             upper >= BinaryPrimitives.ReadUInt64BigEndian(closure.Pmt.FieldSpan(12)) ||
             upper >= closure.HardUpperUnixSeconds)
             throw new CryptographicException("Mailbox authority does not cover the full current proof interval.");
-        var policy = MailboxAuthorityV2Verifier.Verify(root, pma.CanonicalBytes.Span, lower, upper);
+        var policy = memo is not null && memoLower == lower && memoUpper == upper
+            ? memo : MailboxAuthorityV2Verifier.Verify(root, pma.CanonicalBytes.Span, lower, upper);
         if (!policy.BindsProjection(closure.Pmt.CanonicalBytes.Span))
             throw new CryptographicException("Current PMT2 does not bind this mailbox issuer policy.");
         return (policy, lower, upper);

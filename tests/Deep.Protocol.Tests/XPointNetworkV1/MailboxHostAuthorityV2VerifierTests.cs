@@ -12,6 +12,25 @@ namespace Deep.Protocol.Tests.XPointNetworkV1;
 public sealed partial class MailboxHostAuthorityV2VerifierTests
 {
     [Fact]
+    public async Task SameIntervalReusesOnlyPublicPolicyAndStillRejectsLaterClockRollback()
+    {
+        var fixture = Fixture.Create(); var inputs = await fixture.VerifyMailboxAsync();
+        var clock = new Clock(); var authority = await Verify(fixture, inputs, clock);
+        var before = clock.Reads;
+        var first = await authority.ReadAsync(default);
+        var same = await authority.ReadAsync(default);
+        Assert.Same(first.Policy, same.Policy);
+        Assert.Equal(before + 2, clock.Reads);
+        clock.Sample++;
+        var next = await authority.ReadAsync(default);
+        Assert.NotSame(first.Policy, next.Policy);
+        Assert.Equal(first.Lower + 1, next.Lower);
+        Assert.Equal(first.Upper + 1, next.Upper);
+        clock.Sample--;
+        await Assert.ThrowsAsync<CryptographicException>(() => authority.EnsureCurrentAsync().AsTask());
+    }
+
+    [Fact]
     public async Task CurrentSignedNetwork_BindsExactPolicyEpochAndPmsRanking()
     {
         var fixture = Fixture.Create(); var inputs = await fixture.VerifyMailboxAsync();

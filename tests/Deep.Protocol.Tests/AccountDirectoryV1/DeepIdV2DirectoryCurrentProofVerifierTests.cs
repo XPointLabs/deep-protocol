@@ -885,10 +885,10 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
         internal VerifiedDeepIdV2DirectoryFreshness Verify(
             byte[]? nonce = null, byte[]? query = null, byte[]? adp = null,
             byte[]? dtt = null, AccountDirectoryProtectedLkg? lkg = null,
-            ushort supportedReader = 2) =>
+            ushort supportedReader = 2, AccountDirectoryMonotonicRequestWindow? window = null) =>
             DeepIdV2DirectoryCurrentProofVerifier.VerifyExactLeafForAuthor(
                 Authority.Verified, HeadBytes, dtt ?? DttBytes, adp ?? AdpBytes,
-                nonce ?? Nonce, query ?? Query, Window(), lkg,
+                nonce ?? Nonce, query ?? Query, window ?? Window(), lkg,
                 deploymentProfileId: 1, supportedReader, new DenyingMlDsa65Verifier());
     }
 
