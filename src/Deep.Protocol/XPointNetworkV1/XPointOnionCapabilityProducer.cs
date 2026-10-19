@@ -676,13 +676,18 @@ internal static class XPointOnionCapabilityProducer
         AccountDirectoryDtt1 dtt,
         Xnv1Record view)
     {
-        if (!Fixed(dtt.AuthorizingXna1CoreReference.Span, authority.AuthorityCoreReference.Span) ||
-            !Fixed(dtt.WitnessPolicyHash.Span, authority.DirectoryWitnessPolicyHash.Span) ||
-            !Fixed(dtt.CurrentXnv1CoreHash.Span, view.CoreHash.Span) ||
-            dtt.CurrentXnv1Generation != view.ViewGeneration ||
-            dtt.UncertaintySeconds > authority.MaximumWitnessUncertaintySeconds ||
-            !Fixed(AccountDirectoryDtt1Codec.Encode(dtt), freshness.ExactDtt1.Span))
-            Fail("dtt-binding-invalid", "The nonce-bound DTT1 does not authenticate the exact current network view.");
+        var check = !Fixed(dtt.AuthorizingXna1CoreReference.Span, authority.AuthorityCoreReference.Span) ? "Authority" :
+            !Fixed(dtt.WitnessPolicyHash.Span, authority.DirectoryWitnessPolicyHash.Span) ? "WitnessPolicy" :
+            !Fixed(dtt.CurrentXnv1CoreHash.Span, view.CoreHash.Span) ? "ViewCore" :
+            dtt.CurrentXnv1Generation != view.ViewGeneration ? "ViewGeneration" :
+            dtt.UncertaintySeconds > authority.MaximumWitnessUncertaintySeconds ? "Uncertainty" :
+            !Fixed(AccountDirectoryDtt1Codec.Encode(dtt), freshness.ExactDtt1.Span) ? "ExactProof" : null;
+        if (check is not null)
+        {
+            var error = new OnionBoundaryException("dtt-binding-invalid", "The nonce-bound DTT1 does not authenticate the exact current network view.");
+            error.Data["Deep.DttBinding.Check"] = check;
+            throw error;
+        }
         VerifyDttThreshold(dtt.Witnesses, authority, AccountDirectoryCrypto.ComputeDtt1SigningInput(dtt));
     }
 
