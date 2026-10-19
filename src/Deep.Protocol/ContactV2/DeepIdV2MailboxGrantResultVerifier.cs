@@ -157,18 +157,23 @@ public static class DeepIdV2MailboxGrantResultVerifier
             U64(records.Reachability.Field(17).Span), U64(records.Authorization.Field(13).Span),
             U64(records.Route.Field(18).Span), U64(records.Successor.Field(11).Span),
             U64(records.Selection.Field(9).Span) }.Min();
-        if (grant.Lifecycle != MailboxCapabilityLifecycle.Active ||
-            !Fixed(grant.NetworkId.Span, route.Network.NetworkId.Span) ||
-            !Fixed(grant.MembershipCommitment.Span, records.Projection.ArtifactHash.Span) ||
-            grant.Epoch != U64(records.Selection.Field(4).Span) ||
-            !Fixed(grant.IssuerPublicKey.Span, issuer.PublicKey.Span) ||
-            grant.Generation < policy.MinimumGrantGeneration ||
-            grant.NotBeforeUnixSeconds < issuer.ValidFromUnixSeconds ||
-            grant.ExpiresAtUnixSeconds > maximumExpiry ||
-            grant.ExpiresAtUnixSeconds - grant.NotBeforeUnixSeconds > policy.MaximumGrantLifetimeSeconds ||
+        var failure = grant.Lifecycle != MailboxCapabilityLifecycle.Active ? "Lifecycle" :
+            !Fixed(grant.NetworkId.Span, route.Network.NetworkId.Span) ? "Network" :
+            !Fixed(grant.MembershipCommitment.Span, records.Projection.ArtifactHash.Span) ? "Membership" :
+            grant.Epoch != U64(records.Selection.Field(4).Span) ? "Epoch" :
+            !Fixed(grant.IssuerPublicKey.Span, issuer.PublicKey.Span) ? "Issuer" :
+            grant.Generation < policy.MinimumGrantGeneration ? "Generation" :
+            grant.NotBeforeUnixSeconds < issuer.ValidFromUnixSeconds ? "IssuerWindow" :
+            grant.ExpiresAtUnixSeconds > maximumExpiry ? "RouteExpiry" :
+            grant.ExpiresAtUnixSeconds - grant.NotBeforeUnixSeconds > policy.MaximumGrantLifetimeSeconds ? "Lifetime" :
             !PublicKeyAuth.VerifyDetached(grant.IssuerSignature.ToArray(),
-                MailboxAuthenticatedCapabilityCodec.GetGrantSigningBytes(grant), issuer.PublicKey.ToArray()))
-            throw new CryptographicException("Mailbox grant is outside current root-authorized issuer/topology scope.");
+                MailboxAuthenticatedCapabilityCodec.GetGrantSigningBytes(grant), issuer.PublicKey.ToArray()) ? "Signature" : null;
+        if (failure is not null)
+        {
+            var error = new CryptographicException("Mailbox grant is outside current root-authorized issuer/topology scope.");
+            error.Data["Deep.MailboxGrant.Check"] = failure;
+            throw error;
+        }
         ContactCodec.ValidateMailboxGrantResultRouteBinding(response, records);
         Covers(current, grant.NotBeforeUnixSeconds, grant.ExpiresAtUnixSeconds);
     }
