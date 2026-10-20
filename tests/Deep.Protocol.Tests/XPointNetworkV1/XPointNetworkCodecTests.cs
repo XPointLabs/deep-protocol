@@ -6,6 +6,21 @@ namespace Deep.Protocol.Tests.XPointNetworkV1;
 
 public sealed class XPointNetworkCodecTests
 {
+    [Theory]
+    [MemberData(nameof(Definitions))]
+    public void OwnedCoreDigestMatchesProjectionAndCannotBeChangedByExportOrSourceBuffers(string magic)
+    {
+        var definition = XPointNetworkRegistry.Get(magic);
+        var bytes = XPointNetworkTestRecords.Create(definition);
+        var parsed = XPointNetworkCodec.Parse(bytes);
+        var expected = XPointNetworkCrypto.ComputeCoreHash(parsed);
+        bytes.AsSpan().Clear();
+        parsed.CanonicalCopy().AsSpan().Clear();
+        parsed.CoreHash.ToArray().AsSpan().Clear();
+        Parallel.For(0, 32, _ => Assert.Equal(expected, parsed.CoreHash.ToArray()));
+        Assert.Equal(expected, XPointNetworkCrypto.ComputeCoreHash(parsed));
+    }
+
     public static IEnumerable<object[]> Definitions() =>
         XPointNetworkRegistry.All.Select(value => new object[] { value.Magic });
 

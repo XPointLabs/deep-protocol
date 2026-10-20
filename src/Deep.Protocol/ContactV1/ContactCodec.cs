@@ -939,13 +939,21 @@ public sealed class ContactArtifactReference
 
 public sealed class ContactRecord
 {
-    private readonly byte[] canonical; private readonly byte[][] fields; private readonly string? signatureDomain; private readonly string? coreDomain; private readonly int[] projectionTags;
-    internal ContactRecord(string magic,byte[] canonical,byte[][] fields,string? signatureDomain,string? coreDomain,int[] projectionTags) { Magic=magic; this.canonical=canonical; this.fields=fields; this.signatureDomain=signatureDomain; this.coreDomain=coreDomain; this.projectionTags=projectionTags; }
-    public string Magic { get; } public ReadOnlyMemory<byte> CanonicalBytes=>canonical.ToArray(); public ReadOnlyMemory<byte> ArtifactHash=>SHA256.HashData(canonical);
+    private readonly byte[] artifactHash;
+    private readonly byte[] coreHash;
+    private readonly byte[] canonical; private readonly byte[][] fields; private readonly string? signatureDomain; private readonly int[] projectionTags;
+    internal ContactRecord(string magic,byte[] canonical,byte[][] fields,string? signatureDomain,string? coreDomain,int[] projectionTags)
+    {
+        Magic=magic; this.canonical=canonical; this.fields=fields; this.signatureDomain=signatureDomain; this.projectionTags=projectionTags;
+        artifactHash=SHA256.HashData(canonical);
+        coreHash=coreDomain is null ? artifactHash : ContactCodec.Sha256Domain(coreDomain,ContactCodec.Project(this,projectionTags));
+    }
+    public string Magic { get; } public ReadOnlyMemory<byte> CanonicalBytes=>canonical.ToArray(); public ReadOnlyMemory<byte> ArtifactHash=>artifactHash.ToArray();
+    internal ReadOnlySpan<byte> CanonicalSpan=>canonical;
     public ReadOnlyMemory<byte> Field(int tag)=>FieldSpan(tag).ToArray(); internal ReadOnlySpan<byte> FieldSpan(int tag)=>fields[tag-1];
     public ReadOnlyMemory<byte> SigningProjection=>signatureDomain is null ? throw new InvalidOperationException("Record has no signature projection.") : ContactCodec.Project(this,projectionTags);
     public ReadOnlyMemory<byte> SignatureInput=>signatureDomain is null ? throw new InvalidOperationException("Record has no signature projection.") : ContactCodec.SignatureInput(signatureDomain,SigningProjection.Span);
-    public ReadOnlyMemory<byte> CoreHash=>coreDomain is null ? ArtifactHash : ContactCodec.Sha256Domain(coreDomain,ContactCodec.Project(this,projectionTags));
+    public ReadOnlyMemory<byte> CoreHash=>coreHash.ToArray();
 }
 
 public sealed class VerifiedContactPreKeyServiceClosure

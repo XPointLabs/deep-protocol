@@ -1009,8 +1009,9 @@ public sealed partial class XPointOnionCapabilityProducerTests
         Assert.Empty(typeof(VerifiedOnionReceiveContext).GetConstructors());
         Assert.Empty(typeof(VerifiedOnionPathCandidateSnapshot).GetConstructors());
         Assert.Empty(typeof(VerifiedOnionPathCandidate).GetConstructors());
-        Assert.Null(typeof(PrivacyRoutingCodec).Assembly.GetType(
-            "Deep.Protocol.DeepExtension.PrivacyRouting.VerifiedGroupControlPlacement"));
+        // DR-0145/0146 activated the closed GSR placement capability. It must
+        // not regain a public raw-hash/constructor authority seam.
+        Assert.Empty(typeof(VerifiedGroupControlPlacement).GetConstructors());
 
         var historyMethods = typeof(OnionNetworkProtectedHistoryCodec).GetMethods(
             BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
@@ -1045,13 +1046,23 @@ public sealed partial class XPointOnionCapabilityProducerTests
 
         var creates = typeof(OnionPathContextFactory).GetMethods(
             BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
-        Assert.Equal(["BlobNodeIds", "CreateBlob", "CreateContactResolver", "CreateMailbox"],
+        Assert.Equal(["BlobNodeIds", "CreateBlob", "CreateContactResolver", "CreateGroupControl", "CreateMailbox"],
             creates.Select(static method => method.Name).Order(StringComparer.Ordinal).ToArray());
         Assert.All(creates, create => Assert.DoesNotContain(create.GetParameters(), parameter =>
             parameter.Name?.Contains("hop", StringComparison.OrdinalIgnoreCase) == true ||
             parameter.Name?.Contains("key", StringComparison.OrdinalIgnoreCase) == true));
-        Assert.Empty(typeof(GroupControlPlacementVerifier).GetMethods(
-            BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly));
+        var groupCreates = typeof(GroupControlPlacementVerifier).GetMethods(
+            BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
+        Assert.Equal(["Create", "CreateForRequest"], groupCreates.Select(method => method.Name).Order().ToArray());
+        Assert.All(groupCreates, method =>
+        {
+            Assert.Equal(typeof(VerifiedOnionNetworkContext), method.GetParameters()[0].ParameterType);
+            Assert.Equal(typeof(VerifiedGroupControlPlacement), method.ReturnType);
+            Assert.DoesNotContain(method.GetParameters(), parameter =>
+                typeof(Delegate).IsAssignableFrom(parameter.ParameterType) || parameter.ParameterType == typeof(bool));
+        });
+        Assert.Equal(typeof(VerifiedGroupControlPlacement),
+            Assert.Single(creates, method => method.Name == "CreateGroupControl").GetParameters()[0].ParameterType);
         Assert.Equal(["EntryRouterId"], typeof(VerifiedOnionPathContext).GetProperties(
             BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly).Select(static value => value.Name));
 

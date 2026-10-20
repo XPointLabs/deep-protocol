@@ -132,6 +132,7 @@ internal abstract class XPointParsedRecord
 {
     private readonly byte[] _canonical;
     private readonly byte[][] _fields;
+    private readonly XPointBytes _coreHash;
 
     protected XPointParsedRecord(
         XPointRecordDefinition definition,
@@ -141,6 +142,9 @@ internal abstract class XPointParsedRecord
         Definition = definition;
         _canonical = canonical;
         _fields = fields;
+        // Parsed records own immutable canonical fields. This is a pure
+        // projection digest, never a signature, freshness or admission result.
+        _coreHash = new(XPointNetworkCrypto.ComputeCoreHash(this));
     }
 
     internal XPointRecordDefinition Definition { get; }
@@ -159,7 +163,7 @@ internal abstract class XPointParsedRecord
     internal XPointArtifactReference ArtifactReference(int tag) => XPointNetworkCodec.DecodeArtifactReference(FieldSpan(tag));
     internal XPointBytes NetworkId => FieldBytes(1);
     internal ulong Generation => Definition.GenerationTag == 0 ? 0 : UInt64(Definition.GenerationTag);
-    internal XPointBytes CoreHash => new(XPointNetworkCrypto.ComputeCoreHash(this));
+    internal XPointBytes CoreHash => _coreHash;
     internal XPointCoreReference CoreReferenceValue => new(Magic, Definition.Version, CoreHash);
 }
 

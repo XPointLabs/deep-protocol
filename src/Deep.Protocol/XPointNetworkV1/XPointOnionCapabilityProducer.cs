@@ -282,6 +282,7 @@ internal sealed class VerifiedOnionNetworkClosure
     // Verified lineage facts, not current routing or grant authority. They are
     // never populated from an unsigned cache or terminal-only rehydration.
     internal required ContactRecord[] RetainedPmts { get; init; }
+    internal required IReadOnlyDictionary<string, ContactRecord> RetainedPmtByArtifact { get; init; }
     // Signed issuance facts, not a current head/time or transport lease.
     internal required Xnh1Record[] RetainedHeads { get; init; }
     // Exact PMT artifact -> its actual signed view's verified XNA1. Keeping the
@@ -377,13 +378,16 @@ internal static class XPointOnionCapabilityProducer
             }
 
             Xvp1Record[] knownPolicies = previous is null ? policies : [previous.Policy, .. policies];
+            var policiesByHash = new Dictionary<string, Xvp1Record>(StringComparer.Ordinal);
+            foreach (var policy in knownPolicies)
+                policiesByHash.TryAdd(Convert.ToHexString(policy.CoreHash.Span), policy);
             Xnv1Record? viewCursor = previous?.View;
             Xnh1Record? headCursor = previous?.Head;
             for (var index = 0; index < views.Length; index++)
             {
                 var view = views[index];
                 var head = heads[index];
-                var activePolicy = FindPolicy(knownPolicies, view.ActivePolicy.Hash.Span);
+                var activePolicy = FindPolicy(policiesByHash, view.ActivePolicy.Hash.Span);
                 VerifyViewAndHeadBinding(authority, activePolicy, view, head);
                 if (viewCursor is not null)
                     RequireNondecreasingAuthority(authority, viewCursor.FieldSpan(7), view.FieldSpan(7));
@@ -401,6 +405,9 @@ internal static class XPointOnionCapabilityProducer
             }
 
             Xnv1Record[] knownViews = previous is null ? views : [previous.View, .. views];
+            var viewsByReference = new Dictionary<string, Xnv1Record>(StringComparer.Ordinal);
+            foreach (var view in knownViews)
+                viewsByReference.TryAdd(Convert.ToHexString(view.CoreReferenceValue.Encode()), view);
             ContactRecord? pmtCursor = previous?.Pmt;
             var retainedPmtAuthorities = forwardCheckpoint is null && previous is not null
                 ? new Dictionary<string, Xna1Record>(previous.RetainedPmtAuthorities, StringComparer.Ordinal)
@@ -408,8 +415,8 @@ internal static class XPointOnionCapabilityProducer
             for (var index = 0; index < pmts.Length; index++)
             {
                 var candidate = pmts[index];
-                var candidateView = FindView(knownViews, candidate.FieldSpan(5));
-                var candidatePolicy = FindPolicy(knownPolicies, candidateView.ActivePolicy.Hash.Span);
+                var candidateView = FindView(viewsByReference, candidate.FieldSpan(5));
+                var candidatePolicy = FindPolicy(policiesByHash, candidateView.ActivePolicy.Hash.Span);
                 VerifyPmtAuthenticated(authority, candidatePolicy, candidateView, candidate, pmtCursor,
                     pmts.Length == 1 && index == 0, forwardCheckpoint is not null);
                 retainedPmtAuthorities[Convert.ToHexString(candidate.ArtifactHash.Span)] =
@@ -462,6 +469,8 @@ internal static class XPointOnionCapabilityProducer
                 Head = xnh,
                 Pmt = pmt,
                 RetainedPmts = retainedPmts,
+                RetainedPmtByArtifact = retainedPmts.ToDictionary(
+                    static record => Convert.ToHexString(record.ArtifactHash.Span), StringComparer.Ordinal),
                 RetainedHeads = forwardCheckpoint is null
                     ? CaptureRetainedHeads(previous, heads) : [heads[^1]],
                 RetainedPmtAuthorities = retainedPmtAuthorities,
@@ -547,8 +556,10 @@ internal static class XPointOnionCapabilityProducer
     {
         network.EnsureCurrent();
         var closure = network.Closure!;
-        if (!closure.RetainedPmts.Any(candidate => Fixed(candidate.CanonicalBytes.Span, projection.CanonicalBytes.Span)) ||
-            !closure.RetainedPmtAuthorities.TryGetValue(Convert.ToHexString(projection.ArtifactHash.Span), out var original))
+        var key = Convert.ToHexString(projection.ArtifactHash.Span);
+        if (!closure.RetainedPmtByArtifact.TryGetValue(key, out var retained) ||
+            !Fixed(retained.CanonicalSpan, projection.CanonicalSpan) ||
+            !closure.RetainedPmtAuthorities.TryGetValue(key, out var original))
             throw new CryptographicException("The exact original projection and signature authority are absent from verified history.");
         return RequireHistoricalAuthority(authority,
             XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XNA1, original.CoreHash.Span));
@@ -589,18 +600,16 @@ internal static class XPointOnionCapabilityProducer
             Fail("network-authority-rollback", "An exact signed network successor returns to an earlier XNA1 authority.");
     }
 
-    private static Xvp1Record FindPolicy(IEnumerable<Xvp1Record> policies, ReadOnlySpan<byte> coreHash)
+    private static Xvp1Record FindPolicy(IReadOnlyDictionary<string, Xvp1Record> policies, ReadOnlySpan<byte> coreHash)
     {
-        foreach (var policy in policies)
-            if (Fixed(policy.CoreHash.Span, coreHash)) return policy;
+        if (policies.TryGetValue(Convert.ToHexString(coreHash), out var policy)) return policy;
         Fail("network-chain-incomplete", "The successor chain omits an XVP1 referenced by an XNV1.");
         return null!;
     }
 
-    private static Xnv1Record FindView(IEnumerable<Xnv1Record> views, ReadOnlySpan<byte> coreReference)
+    private static Xnv1Record FindView(IReadOnlyDictionary<string, Xnv1Record> views, ReadOnlySpan<byte> coreReference)
     {
-        foreach (var view in views)
-            if (Fixed(XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XNV1, view.CoreHash.Span), coreReference)) return view;
+        if (views.TryGetValue(Convert.ToHexString(coreReference), out var view)) return view;
         Fail("network-chain-incomplete", "The successor chain omits an XNV1 referenced by a PMT2.");
         return null!;
     }

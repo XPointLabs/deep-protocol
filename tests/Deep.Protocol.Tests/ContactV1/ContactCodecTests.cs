@@ -14,6 +14,30 @@ namespace Deep.Protocol.Tests.ContactV1;
 public sealed class ContactCodecTests
 {
     [Fact]
+    public void ImmutableProjectionDigestsRemainExactDefensiveAndIndependentOfFreshness()
+    {
+        var bytes = Records.Pmt.CanonicalBytes.ToArray();
+        var record = ContactCodec.Decode(bytes);
+        var artifact = SHA256.HashData(bytes);
+        var core = ContactCodec.Sha256Domain("Deep/XPoint/V1/PMT2/core", record.SigningProjection.Span);
+        bytes.AsSpan().Clear();
+        Assert.True(System.Runtime.InteropServices.MemoryMarshal.TryGetArray(record.CoreHash, out var exportedCore));
+        exportedCore.AsSpan().Clear();
+        Assert.True(System.Runtime.InteropServices.MemoryMarshal.TryGetArray(record.ArtifactHash, out var exportedArtifact));
+        exportedArtifact.AsSpan().Clear();
+        Parallel.For(0, 32, _ =>
+        {
+            Assert.Equal(artifact, record.ArtifactHash.ToArray());
+            Assert.Equal(core, record.CoreHash.ToArray());
+        });
+        var changed = record.CanonicalBytes.ToArray(); changed[^1] ^= 1;
+        var other = ContactCodec.Decode(changed);
+        Assert.NotEqual(artifact, other.ArtifactHash.ToArray());
+        // A signature-byte change is not part of the unsigned core projection.
+        Assert.Equal(core, other.CoreHash.ToArray());
+    }
+
+    [Fact]
     public void FrozenMachinePrimitivesExecuteAgainstExactFixtureBytes()
     {
         var manifest = File.ReadAllBytes(FindSpec("contact-codec-v1.vectors.json"));
