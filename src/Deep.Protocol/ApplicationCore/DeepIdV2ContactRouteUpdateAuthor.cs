@@ -51,8 +51,13 @@ public static partial class ApplicationCoreCodec
             var first = await ownPublication.ReadCurrentTimeAsync(cancellationToken).ConfigureAwait(false);
             var route = ownPublication.Route;
             var created = checked(first.UpperUnixSeconds * 1000);
+            // DR-0122: the exact PMT snapshot authenticates assignment creation,
+            // not the logical route's lifetime. ReadCurrentTimeAsync above and
+            // the independent successor verifier below require current admitted
+            // carriage/eligibility. Only the route's OWN signed windows bound
+            // this control; an expired route itself still cannot be advertised.
             var routeEnd = new[] { (route.Reachability, 17), (route.Authorization, 13),
-                (route.Route, 18), (route.Successor, 11), (route.Projection, 12), (route.Selection, 9) }
+                (route.Route, 18), (route.Successor, 11), (route.Selection, 9) }
                 .Min(part => BinaryPrimitives.ReadUInt64BigEndian(part.Item1.Field(part.Item2).Span));
             var expires = Math.Min(checked(routeEnd * 1000), checked(created + 7UL * 24 * 60 * 60 * 1000));
             if (expires <= created)
