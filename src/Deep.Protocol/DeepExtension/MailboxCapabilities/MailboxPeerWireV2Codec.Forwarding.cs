@@ -83,11 +83,13 @@ public static partial class MailboxPeerWireV2Codec
 
     private static MailboxReplicaReceiptV2 RequireForwardingReceipt(
         MailboxPeerWireRequestV2 request, ReadOnlySpan<byte> encoded,
-        IMailboxPeerReplicationCrypto crypto, ulong now)
+        IMailboxPeerReplicationCrypto crypto, ulong now,
+        MailboxPeerReplicationOperation expectedOperation = MailboxPeerReplicationOperation.Tombstone)
     {
-        if (request.Operation != MailboxPeerReplicationOperation.Tombstone)
-            throw Error(MailboxPeerReplicationError.InvalidReceipt, "PTR1 cannot recover Store.");
-        var receipt = DecodeAndVerifySelectedReplica(encoded, request, null, crypto);
+        if (request.Operation != expectedOperation)
+            throw Error(MailboxPeerReplicationError.InvalidReceipt, "Peer forwarding operation differs.");
+        var receipt = DecodeAndVerifySelectedReplica(encoded, request,
+            request.Operation == MailboxPeerReplicationOperation.Store ? DecodeCanonicalEnvelope(request.Payload.Span) : null, crypto);
         var rejection = !FixedEquals(receipt.ReplicaId.Span, request.SenderRouterId.Span) ? "OriginRole" :
             receipt.AcceptedAtUnixSeconds - request.CreatedAtUnixSeconds >
                 MailboxPeerWireV2Limits.MaximumPastAgeSeconds ? "OriginAdmission" :

@@ -179,6 +179,7 @@ public static class DeepProtocolIdentifiers
         public const string PMT2 = "PMT2";
         public const string PRQ1 = "PRQ1";
         public const string PRQ2 = "PRQ2";
+        public const string PSR1 = "PSR1";
         public const string PTR1 = "PTR1";
         public const string RAH1 = "RAH1";
         public const string RFC1 = "RFC1";
@@ -395,6 +396,7 @@ public static class DeepProtocolIdentifiers
         public static System.ReadOnlySpan<byte> PMT2 => "PMT2"u8;
         public static System.ReadOnlySpan<byte> PRQ1 => "PRQ1"u8;
         public static System.ReadOnlySpan<byte> PRQ2 => "PRQ2"u8;
+        public static System.ReadOnlySpan<byte> PSR1 => "PSR1"u8;
         public static System.ReadOnlySpan<byte> PTR1 => "PTR1"u8;
         public static System.ReadOnlySpan<byte> RAH1 => "RAH1"u8;
         public static System.ReadOnlySpan<byte> RFC1 => "RFC1"u8;
@@ -516,9 +518,9 @@ internal readonly record struct GeneratedRegistryIdentifier(
 
 internal static class DeepProtocolRegistryGenerated
 {
-    internal const string RegistrySha256 = "10e7544f0988a76e4e5bf7f96f2eee098f96ff01b89171edbafd21eeee2824ce";
+    internal const string RegistrySha256 = "5afaf84c3859d7097dc35f1c1bfa1d0fb7a599d889d7cc2ece810759485c6337";
     internal const string Dnp1RegistrySha256 = "e036a0b6acb260e05e18ac536a723b0b8561d2ba1d813429304505b0e7a7da7b";
-    internal const string Dnp1ApprovedCommit = "a8456987efe031388ca2eb9006886fb78f31e06c";
+    internal const string Dnp1ApprovedCommit = "bab4de048d24e2fbff55133d0eb4ff92eb5c79b2";
 
     internal static GeneratedRegistryIdentifier[] Identifiers { get; } =
     [
@@ -677,6 +679,7 @@ internal static class DeepProtocolRegistryGenerated
         new("magic", "PMT2", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
         new("magic", "PRQ1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "PRQ2", null, ProtocolIdentifierLifecycle.FROZEN_TARGET_NOT_ACTIVE),
+        new("magic", "PSR1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "PTR1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "RAH1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),
         new("magic", "RFC1", null, ProtocolIdentifierLifecycle.CURRENT_PRE_CUTOVER),

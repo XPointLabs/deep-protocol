@@ -12,7 +12,8 @@ public enum MailboxWireFrame
     Prq2 = 8,
     Mqr3 = 9,
     Mau3 = 10,
-    Ptr1 = 11
+    Ptr1 = 11,
+    Psr1 = 12
 }
 
 public sealed record MailboxHttpEndpointContract
@@ -58,6 +59,7 @@ public enum MailboxHttpFailure
 /// </summary>
 public static class MailboxWireHttpContract
 {
+    public const string Psr1ContentType = "application/vnd.deep.mailbox.psr1";
     public const string Method = "POST";
     public const bool RequiresContentLength = true;
     public const bool AllowsContentEncoding = false;
@@ -175,8 +177,12 @@ public static class MailboxWireHttpContract
     public static MailboxHttpEndpointContract PeerStore { get; } =
         PeerEndpoint(
             PeerStoreRoute,
-            MailboxPeerWireV2Limits.MinimumStoreRequestLength,
-            MailboxPeerWireV2Limits.MaximumRequestLength);
+            MailboxPeerWireV2Limits.MinimumStoreRequestLength + MailboxPeerWireV2Codec.StoreForwardingOverhead,
+            MailboxPeerWireV2Limits.MaximumRequestLength + MailboxPeerWireV2Codec.StoreForwardingOverhead) with
+        {
+            RequestContentType = Psr1ContentType,
+            RequestFrame = MailboxWireFrame.Psr1
+        };
 
     public static MailboxHttpEndpointContract PeerTombstone { get; } =
         PeerEndpoint(

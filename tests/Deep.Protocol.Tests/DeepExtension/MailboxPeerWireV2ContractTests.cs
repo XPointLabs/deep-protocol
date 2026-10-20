@@ -436,8 +436,10 @@ public sealed partial class MailboxPeerWireV2ContractTests
                 Assert.Null(endpoint.AuthenticatedOperation);
                 Assert.Equal("/api/peer/mailbox/v2/store", endpoint.Route);
                 Assert.Equal(
-                    MailboxPeerWireV2Limits.MaximumRequestLength,
+                    MailboxPeerWireV2Limits.MaximumRequestLength + MailboxPeerWireV2Codec.StoreForwardingOverhead,
                     endpoint.MaximumRequestBytes);
+                Assert.Equal(MailboxWireFrame.Psr1, endpoint.RequestFrame);
+                Assert.Equal(MailboxWireHttpContract.Psr1ContentType, endpoint.RequestContentType);
                 Assert.Equal(MailboxWireFrame.Mrr2, endpoint.ResponseFrame);
             },
             endpoint =>

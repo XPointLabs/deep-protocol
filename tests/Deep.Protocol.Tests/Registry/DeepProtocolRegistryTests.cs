@@ -165,7 +165,7 @@ public sealed class DeepProtocolRegistryTests
     [Fact]
     public void FrozenRegistryProvenanceAndDomains_AreIndependentExpectedValues()
     {
-        Assert.Equal("a8456987efe031388ca2eb9006886fb78f31e06c", DeepProtocolRegistryGenerated.Dnp1ApprovedCommit);
+        Assert.Equal("bab4de048d24e2fbff55133d0eb4ff92eb5c79b2", DeepProtocolRegistryGenerated.Dnp1ApprovedCommit);
         Assert.Equal("e036a0b6acb260e05e18ac536a723b0b8561d2ba1d813429304505b0e7a7da7b", DeepProtocolRegistryGenerated.Dnp1RegistrySha256);
 
         Assert.Equal("Deep/Artifact/V1/DPA1", DeepProtocolRegistryGenerated.GetDnp1ArtifactHashDomain(1));

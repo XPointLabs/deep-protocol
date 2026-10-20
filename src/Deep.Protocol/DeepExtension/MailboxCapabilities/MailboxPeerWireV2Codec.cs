@@ -268,6 +268,14 @@ public static partial class MailboxPeerWireV2Codec
         return request;
     }
 
+    /// <summary>Returns the pure canonical PRQ2 replay-identity digest. This
+    /// does not authenticate a signature, admit a request or prove persistence.</summary>
+    public static byte[] GetReplayRequestDigest(ReadOnlySpan<byte> encoded)
+    {
+        _ = Decode(encoded);
+        return DomainSeparatedHash("deep.mailbox.peer.request-identity.v2"u8, encoded);
+    }
+
     /// <summary>
     /// Creates the recipient's unsigned durable MRR2. The caller must invoke this method only
     /// after the exact Store or Tombstone mutation has been durably persisted.
@@ -479,7 +487,7 @@ public static partial class MailboxPeerWireV2Codec
         MailboxPeerWireVerificationPolicyV2 policy,
         IMailboxPeerReplicationCrypto crypto,
         IMailboxReplicaMembershipProofVerifier membershipVerifier,
-        bool enforceAdmissionFreshness = true)
+        bool enforceAdmissionFreshness = true, bool hostVerifiedTombstoneCommitment = false)
     {
         var request = Decode(encoded);
         if (request.Operation != policy.ExpectedOperation ||
@@ -497,7 +505,8 @@ public static partial class MailboxPeerWireV2Codec
                 policy.PlacementCommitment.Span) ||
             !FixedEquals(
                 request.PlacementCommitment.Span,
-                MailboxPlacementCommitment.Compute(policy.PlacementId)))
+                hostVerifiedTombstoneCommitment && request.Operation == MailboxPeerReplicationOperation.Tombstone
+                    ? policy.PlacementCommitment.Span : MailboxPlacementCommitment.Compute(policy.PlacementId)))
             throw Error(
                 MailboxPeerReplicationError.BindingMismatch,
                 "PRQ2 does not match exact peer routing authority.");

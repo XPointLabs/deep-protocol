@@ -203,13 +203,13 @@ the stated bounds. Requests without Content-Length, including chunked transfer, 
 body processing; a declared length below the canonical frame minimum is malformed and a length
 above the endpoint maximum is too large.
 
-| Route | Request | Success response | Request bytes | Response bytes | Deadline | Concurrency | Rate |
-| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| `/api/client/mailbox/v2/store` | Store `MAU2(MCP2,MEO1)`, `application/vnd.deep.mailbox.mau2` | 200 `MQR3`, `application/vnd.deep.mailbox.mqr3` | 608..82344 | 776 | 15 s | 16 | 60/min/capability scope |
-| `/api/client/mailbox/v2/retrieve` | Retrieve `MAU2(MCP2,MBR2)`, `application/vnd.deep.mailbox.mau2` | 200 `MRP1`, `application/vnd.deep.mailbox.mrp1` | 536..792 | 48..1048576 | 10 s | 16 | 120/min/capability scope |
-| `/api/client/mailbox/v2/acknowledge` | Ack `MAU2(MCP2,MBA2)`, `application/vnd.deep.mailbox.mau2` | 200 `MAR1`, `application/vnd.deep.mailbox.mar1` | 576..4792 | 818..77840 | 15 s | 16 | 60/min/capability scope |
-| `/api/peer/mailbox/v2/store` | Store `PRQ2`, `application/vnd.deep.mailbox.prq2` | 200 `MRR2`, `application/vnd.deep.mailbox.mrr2` | 786..90712 | 296 | 15 s | 32 | 120/min/sender router |
-| `/api/peer/mailbox/v2/tombstone` | Tombstone `PRQ2`, `application/vnd.deep.mailbox.prq2` | 200 `MRR2`, `application/vnd.deep.mailbox.mrr2` | 634..8824 | 296 | 15 s | 32 | 120/min/sender router |
+Current authority and carriage belong to the root
+[Protocol registry](../../../docs/architecture/PROTOCOL-REGISTRY-V1.md),
+DR-0081/0147/0154/0155, not this earlier inner-codec ADR. Exact executable HTTP
+mapping is `MailboxWireHttpContract`: current client MAU3, peer Store PSR1 and
+peer Tombstone PTR1. Raw peer Store and raw peer Tombstone HTTP are not fallback
+readers. All replicas update together; existing identities and client intents
+are retained. This ADR does not freeze a duplicate table of widths or budgets.
 
 Concurrency is a hard in-flight cap per endpoint. Rate windows are fixed 60-second windows.
 Capability partitions use the verified blinded capability replay scope, never a raw user,

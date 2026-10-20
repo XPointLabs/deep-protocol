@@ -566,8 +566,16 @@ internal static class GraphPolicy
                 // DR-0145: current GSR1 placement, descriptor/cipher and owned
                 // carrier/result APIs. Actual metadata review: no public
                 // placement constructors or generic device signer were added.
-                "Deep.Protocol|12963|3F3E969C17F1EF798ACD25A57C195DD72108C9BA4A0E127D4E2E1406B46BDBA3",
-                "Deep.Protocol|12963|7CFC798C6EC459A7353FD9D522223B65D0179A46A9886BB6B8C76DB0FBFA5D6C"
+                // DR-0154/0155: actual metadata delta +20/-0: closed prepared
+                // type (no public constructor), eight codec methods, PSR1
+                // constants/frame and defensive getters. Resources unchanged.
+                // DR-0156 adds exactly two purpose-separated historical host
+                // preparations, no constructor, grant or dispatch capability.
+                // DR-0157/0158: +2 methods, no new type/constructor/resource:
+                // host-verified absent-target preparation and a pure canonical
+                // replay-request digest. Neither grants admission authority.
+                "Deep.Protocol|12987|102B640D5F35A23BEF668C5B8DC50D124F3CFCA54E67B5FC1ABCF90081821F2D",
+                "Deep.Protocol|12987|C579C49850CAFA5A55E842A041BD5713CD93D7A17E3D715D729929E22D669C29"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

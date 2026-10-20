@@ -1,11 +1,11 @@
 {
   "schemaVersion": "1.0.0",
-  "normativeCommit": "a8456987efe031388ca2eb9006886fb78f31e06c",
+  "normativeCommit": "bab4de048d24e2fbff55133d0eb4ff92eb5c79b2",
   "protocolBaseCommit": "e75bfed411cfe13134a55a09a3c754b174f13322",
   "normativeFiles": [
     {
       "path": "DNP1-CLASSICAL-IDENTITY-RESET-MRL2-V1.md",
-      "sha256": "6E2ACEB98DC4DA5CAE1563692B583A018305552757A219AC5CBAC086DB1728A8"
+      "sha256": "82F440EA37F2F260EC4F6B0E62BD2F41041F0B37E0ED36063EA3D46F82981F85"
     },
     {
       "path": "dnp1-classical-v1.registry.json",
@@ -56,9 +56,22 @@
     "artifacts/dnp1-vector-fragments/recovery-exact193.json",
     "artifacts/dnp1-vector-fragments/wire.json",
     "eng/Dnp1NormativeBinding.ps1",
+    "eng/Dnp1ProductionGraph.Identity/DeepProtocolRegistryPolicy.Generated.cs",
+    "eng/Dnp1ProductionGraph.Identity/Program.cs",
     "eng/New-Dnp1ExecutableVectorManifest.ps1",
     "eng/Test-Dnp1EvidenceOwnership.ps1",
     "eng/Test-Dnp1ExecutableVectors.ps1",
+    "src/Deep.Protocol/DeepExtension/MailboxCapabilities/MailboxPeerWireV2Codec.cs",
+    "src/Deep.Protocol/DeepExtension/MailboxCapabilities/MailboxPeerWireV2Codec.Forwarding.cs",
+    "src/Deep.Protocol/DeepExtension/MailboxCapabilities/MailboxPeerWireV2Codec.Preparation.cs",
+    "src/Deep.Protocol/DeepExtension/MailboxCapabilities/MailboxPeerWireV2Codec.StoreForwarding.cs",
+    "src/Deep.Protocol/DeepExtension/MailboxCapabilities/MailboxWireHttpContract.cs",
+    "src/Deep.Protocol/Generated/DeepProtocolRegistry.Generated.cs",
+    "src/Deep.Protocol/XPointNetworkV1/VerifiedMailboxHostAuthorityV2.AbsentTarget.cs",
+    "src/Deep.Protocol/XPointNetworkV1/VerifiedMailboxHostAuthorityV2.PeerCustody.cs",
+    "tests/Deep.Protocol.Tests/DeepExtension/MailboxPeerWireV2ContractTests.cs",
+    "tests/Deep.Protocol.Tests/DeepExtension/MailboxPeerWireV2PreparationTests.cs",
+    "tests/Deep.Protocol.Tests/DeepExtension/MailboxPeerWireV2StoreForwardingTests.cs",
     "tests/Deep.Protocol.Tests/DeepExtension/ManagedIngress/ManagedIngressContractTests.cs",
     "tests/Deep.Protocol.Tests/DeepNative/Dnp1Batch2EvidenceTests.cs",
     "tests/Deep.Protocol.Tests/DeepNative/Dnp1DeploymentGovernanceOriginTests.cs",
@@ -86,9 +99,10 @@
     "tests/Deep.Protocol.Tests/DeepNative/Dnp1WitnessHeadHistoryContainerTests.cs",
     "tests/Deep.Protocol.Tests/DeepNative/Dnp1WitnessTreeVerifierTests.cs",
     "tests/Deep.Protocol.Tests/DeepNative/RecoveryColdProtectedPayloadTests.cs",
-    "tests/Deep.Protocol.Tests/DevOpsWitness/Dnp1PackageBlockingWitnessTests.cs"
+    "tests/Deep.Protocol.Tests/DevOpsWitness/Dnp1PackageBlockingWitnessTests.cs",
+    "tests/Deep.Protocol.Tests/Registry/DeepProtocolRegistryTests.cs"
   ],
-  "implementationScopeSha256": "CBC9E73D595F837E1C1FB6F09B1D73F4D6ED40A0BC8FA1FE67160CC33CA40498",
+  "implementationScopeSha256": "E9075E018BA0CD29B7592C4D6F84A4607541933D9FA543089976CB8183B41FB6",
   "mappings": [
     {
       "id": "api-recovery-freeze-provider-nonce",
