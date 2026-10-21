@@ -1,11 +1,11 @@
 {
   "schemaVersion": "1.0.0",
-  "normativeCommit": "bab4de048d24e2fbff55133d0eb4ff92eb5c79b2",
+  "normativeCommit": "e568992ccf40de1e1b6d7791394ed689450ff1b7",
   "protocolBaseCommit": "e75bfed411cfe13134a55a09a3c754b174f13322",
   "normativeFiles": [
     {
       "path": "DNP1-CLASSICAL-IDENTITY-RESET-MRL2-V1.md",
-      "sha256": "82F440EA37F2F260EC4F6B0E62BD2F41041F0B37E0ED36063EA3D46F82981F85"
+      "sha256": "DBAB81CE2E0320190E10AA76EF464FB5E65004DA7860F47BDFEFFF9CDE377D59"
     },
     {
       "path": "dnp1-classical-v1.registry.json",
@@ -102,7 +102,7 @@
     "tests/Deep.Protocol.Tests/DevOpsWitness/Dnp1PackageBlockingWitnessTests.cs",
     "tests/Deep.Protocol.Tests/Registry/DeepProtocolRegistryTests.cs"
   ],
-  "implementationScopeSha256": "E9075E018BA0CD29B7592C4D6F84A4607541933D9FA543089976CB8183B41FB6",
+  "implementationScopeSha256": "A1DD965C8E268572BF69AF139146F245ED172756E0105EE27C213E86EB656133",
   "mappings": [
     {
       "id": "api-recovery-freeze-provider-nonce",

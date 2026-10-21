@@ -1,4 +1,4 @@
-﻿name: build-test
+name: build-test
 
 on:
   workflow_dispatch:
@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/deep-platform
-          ref: bab4de048d24e2fbff55133d0eb4ff92eb5c79b2
+          ref: e568992ccf40de1e1b6d7791394ed689450ff1b7
           path: normative-source
           persist-credentials: false
           fetch-depth: 0
@@ -30,7 +30,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/deep-platform
-          ref: bab4de048d24e2fbff55133d0eb4ff92eb5c79b2
+          ref: e568992ccf40de1e1b6d7791394ed689450ff1b7
           path: integration-source
           persist-credentials: false
 

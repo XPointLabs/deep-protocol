@@ -1,5 +1,5 @@
 {
-  "normativeHead": "bab4de048d24e2fbff55133d0eb4ff92eb5c79b2",
+  "normativeHead": "e568992ccf40de1e1b6d7791394ed689450ff1b7",
   "mappings": [
     { "id": "api-recovery-freeze-provider-nonce", "testFqn": "Deep.Protocol.Tests.DeepNative.VectorAuthorityRecoveryCoverageTests.ApiRecoveryFreezeProviderNonce", "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1VectorAuthorityRecoveryCoverageTests.cs" },
     { "id": "api-recovery-nonce-reuse-latch", "testFqn": "Deep.Protocol.Tests.DeepNative.VectorAuthorityRecoveryCoverageTests.ApiRecoveryNonceReuseLatch", "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1VectorAuthorityRecoveryCoverageTests.cs" },

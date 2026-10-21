@@ -1,5 +1,5 @@
 {
-  "normativeHead": "bab4de048d24e2fbff55133d0eb4ff92eb5c79b2",
+  "normativeHead": "e568992ccf40de1e1b6d7791394ed689450ff1b7",
   "mappings": [
     { "id": "peer-outer-journal-pure-transitions", "testFqn": "Deep.Protocol.Tests.DeepNative.OuterPeerJournalTests.PureTransitionPlans_PreservePreparedPendingStaleAndForkWithoutDurabilityClaim", "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1OuterPeerJournalTests.cs" },
     { "id": "grammar-all-exact-lengths", "testFqn": "Deep.Protocol.Tests.DeepNative.VectorWireCoverageTestsCore.GrammarAllExactLengths", "fixturePath": "tests/Deep.Protocol.Tests/DeepNative/Dnp1VectorWireCoverageTests.Core.cs" },
