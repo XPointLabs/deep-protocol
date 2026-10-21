@@ -17,14 +17,16 @@ public sealed class AuthoredXPointNetworkAuthorityRenewal
 public static partial class XPointNetworkBootstrapAuthor
 {
     /// <summary>Offline routine authority/time-policy renewal preserving keys,
-    /// thresholds, source policy and client floors. No root/witness rotation,
+    /// thresholds and client floors. Optional source additions require the same
+    /// root ceremony and preserve all old tuples and policy limits. No root/witness rotation,
     /// genesis replacement, publication or protected-floor mutation.</summary>
     public static async ValueTask<AuthoredXPointNetworkAuthorityRenewal> AuthorSameKeyRenewalAsync(
         ReadOnlyMemory<byte> ceremonyId, VerifiedXPointNetworkAuthority predecessor,
         IReadOnlyList<ReadOnlyMemory<byte>> exactDts1PolicyChain,
         ulong authorityIssuedAtUnixSeconds, ulong authorityNotBeforeUnixSeconds, ulong authorityExpiresAtUnixSeconds,
         ulong timePolicyNotBeforeUnixSeconds, ulong timePolicyExpiresAtUnixSeconds,
-        IReadOnlyList<IXPointNetworkBootstrapRootSigner> rootSigners, CancellationToken cancellationToken = default)
+        IReadOnlyList<IXPointNetworkBootstrapRootSigner> rootSigners, CancellationToken cancellationToken = default,
+        IReadOnlyList<AccountDirectoryDts1Source>? successorTimeSources = null)
     {
         ArgumentNullException.ThrowIfNull(predecessor);
         ArgumentNullException.ThrowIfNull(exactDts1PolicyChain);
@@ -44,6 +46,18 @@ public static partial class XPointNetworkBootstrapAuthor
         _ = XPointNetworkAuthorityVerifier.Verify(pin, xnaChain, dtsChain);
         var prior = predecessor.AuthorityChain[^1];
         var priorDts = AccountDirectoryDts1Codec.Decode(dtsChain[^1].Span);
+        // The codec constructor validates canonical ordering, endpoint uniqueness,
+        // byte bounds and families, and defensively copies the complete input.
+        var sourceSnapshot = successorTimeSources is null ? priorDts.Sources : new AccountDirectoryDts1(
+            priorDts.NetworkId.Span, priorDts.PolicyGeneration, priorDts.PredecessorPolicyHash.Span,
+            successorTimeSources, priorDts.RequiredSourceCount, priorDts.RequiredDistinctFailureFamilies,
+            priorDts.MaximumIntervalWidthSeconds, priorDts.MaximumSourceSampleAgeSeconds,
+            priorDts.NotBefore, priorDts.ExpiresAt, priorDts.MinimumReader, priorDts.RootAuthorityGeneration,
+            priorDts.RootReceipts).Sources;
+        if (successorTimeSources is not null && (sourceSnapshot.Count <= priorDts.Sources.Count ||
+            sourceSnapshot.Select(source => Convert.ToHexString(source.FailureFamilyHash.Span)).Distinct(StringComparer.Ordinal).Count() < 3 ||
+            priorDts.Sources.Any(old => !sourceSnapshot.Any(source => SameSource(old, source)))))
+            throw new ArgumentException("Time-source renewal must add redundancy while retaining every exact prior source.", nameof(successorTimeSources));
         if (authorityIssuedAtUnixSeconds < predecessor.NotBefore || authorityIssuedAtUnixSeconds < predecessor.IssuedAt ||
             authorityIssuedAtUnixSeconds > authorityNotBeforeUnixSeconds || authorityNotBeforeUnixSeconds < predecessor.NotBefore ||
             authorityNotBeforeUnixSeconds >= authorityExpiresAtUnixSeconds ||
@@ -75,7 +89,7 @@ public static partial class XPointNetworkBootstrapAuthor
         var generation = checked(predecessor.AuthorityGeneration + 1);
         var policyGeneration = checked(priorDts.PolicyGeneration + 1);
         AccountDirectoryDts1 Policy(IReadOnlyList<AccountDirectoryDts1RootReceipt> receipts) => new(predecessor.NetworkId.Span,
-            policyGeneration, AccountDirectoryCrypto.ComputeDts1PolicyHash(priorDts), priorDts.Sources,
+            policyGeneration, AccountDirectoryCrypto.ComputeDts1PolicyHash(priorDts), sourceSnapshot,
             priorDts.RequiredSourceCount, priorDts.RequiredDistinctFailureFamilies, priorDts.MaximumIntervalWidthSeconds,
             priorDts.MaximumSourceSampleAgeSeconds, timePolicyNotBeforeUnixSeconds, timePolicyExpiresAtUnixSeconds,
             priorDts.MinimumReader, generation, receipts);
@@ -110,6 +124,7 @@ public static partial class XPointNetworkBootstrapAuthor
             foreach (var signer in signers)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                RequireSignerBindings();
                 var request = new XPointNetworkRootSigningRequest(ceremony, purpose, predecessor.NetworkId.Span,
                     signingGeneration, signer.Id, signer.Generation, signer.PublicKey,
                     signer.CustodyDomainHash, input);
@@ -117,6 +132,7 @@ public static partial class XPointNetworkBootstrapAuthor
                 try
                 {
                     var written = await signer.Signer.SignAsync(request, signature, cancellationToken).ConfigureAwait(false);
+                    RequireSignerBindings();
                     if (written != 64 || !PublicKeyAuth.VerifyDetached(signature, input, signer.PublicKey))
                         throw new CryptographicException("Authority renewal signer returned an invalid exact receipt.");
                     receipts.Add(new(signer.Id.ToArray(), signature.ToArray()));
@@ -125,5 +141,21 @@ public static partial class XPointNetworkBootstrapAuthor
             }
             return receipts.ToArray();
         }
+
+        void RequireSignerBindings()
+        {
+            foreach (var binding in signers)
+                if (binding.Signer.KeyGeneration != binding.Generation ||
+                    !Fixed(binding.Signer.RootKeyId.Span, binding.Id) ||
+                    !Fixed(binding.Signer.Ed25519PublicKey.Span, binding.PublicKey) ||
+                    !Fixed(binding.Signer.CustodyDomainHash.Span, binding.CustodyDomainHash))
+                    throw new CryptographicException("Renewal signer binding changed during the ceremony.");
+        }
     }
+
+    private static bool SameSource(AccountDirectoryDts1Source left, AccountDirectoryDts1Source right) =>
+        left.SourceId.Span.SequenceEqual(right.SourceId.Span) &&
+        left.FailureFamilyHash.Span.SequenceEqual(right.FailureFamilyHash.Span) &&
+        left.Protocol == right.Protocol && left.HostAscii == right.HostAscii && left.Port == right.Port &&
+        left.TlsSpkiSha256.Span.SequenceEqual(right.TlsSpkiSha256.Span) && left.MaximumRadiusSeconds == right.MaximumRadiusSeconds;
 }

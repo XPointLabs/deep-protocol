@@ -44,6 +44,22 @@ public sealed partial class XPointOnionCapabilityProducerTests
         await Fixture.Create().CheckSameKeyRenewalAsync();
 
     [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public async Task OperationalRollover_TimeSourceAdditionPreservesPolicyAndCopiesCallbackInputs(bool mutateInput) =>
+        await Fixture.Create().CheckTimeSourceAdditionAsync(mutateInput: mutateInput);
+
+    [Theory]
+    [InlineData("removed")] [InlineData("changed-family")] [InlineData("changed-radius")]
+    [InlineData("duplicate-id")] [InlineData("duplicate-endpoint")] [InlineData("same-family")]
+    [InlineData("unsorted")] [InlineData("oversized")] [InlineData("unchanged")]
+    public async Task OperationalRollover_TimeSourceAdditionRejectsBeforeRootCallbacks(string fault) =>
+        await Fixture.Create().CheckTimeSourceAdditionAsync(fault);
+
+    [Fact]
+    public async Task OperationalRollover_TimeSourceAdditionRejectsSignerMutationAtCallback() =>
+        await Fixture.Create().CheckTimeSourceAdditionAsync("signer-mutation");
+
+    [Theory]
     [InlineData("short-root")] [InlineData("root-time-rollback")] [InlineData("dts-before-root")]
     [InlineData("oversized-dts")] [InlineData("invalid-predecessor-signature")]
     [InlineData("unknown-signer")] [InlineData("empty-roots")]
@@ -203,6 +219,56 @@ public sealed partial class XPointOnionCapabilityProducerTests
             }
             finally { foreach (var signer in witnesses.Concat(identities)) signer.Dispose(); }
         }
+        internal async Task CheckTimeSourceAdditionAsync(string? fault = null, bool mutateInput = false)
+        {
+            using var root = new OperationalTestSigner(_root);
+            var oldPolicy = AccountDirectoryDts1Codec.Decode(_dts);
+            var extra = new AccountDirectoryDts1Source(Bytes(32, 0xf1), Bytes(32, 0xf2), 1, "third.example", 4460, Bytes(32, 0xf3), 5);
+            var sources = oldPolicy.Sources.Append(extra).ToArray();
+            if (fault == "removed") sources = sources.Skip(1).ToArray();
+            if (fault is "changed-family" or "changed-radius") {
+                var old = sources[0];
+                sources[0] = new(old.SourceId.Span, fault == "changed-family" ? Bytes(32, 0xf4) : old.FailureFamilyHash.Span,
+                    old.Protocol, old.HostAscii, old.Port, old.TlsSpkiSha256.Span, fault == "changed-radius" ? (ushort)4 : old.MaximumRadiusSeconds);
+            }
+            if (fault == "duplicate-id") sources[^1] = sources[0];
+            if (fault == "duplicate-endpoint") sources[^1] = new(extra.SourceId.Span, extra.FailureFamilyHash.Span, 1,
+                sources[0].HostAscii, sources[0].Port, sources[0].TlsSpkiSha256.Span, 5);
+            if (fault == "same-family") sources[^1] = new(extra.SourceId.Span, sources[0].FailureFamilyHash.Span, 1,
+                extra.HostAscii, extra.Port, extra.TlsSpkiSha256.Span, 5);
+            if (fault == "unsorted") Array.Reverse(sources);
+            if (fault == "oversized") sources = Enumerable.Repeat(extra, 9).ToArray();
+            if (fault == "unchanged") sources = oldPolicy.Sources.ToArray();
+            if (mutateInput) root.BeforeSign = () => Array.Clear(sources);
+            if (fault == "signer-mutation") root.BeforeSign = () => root.Key.FailureDomain[0] ^= 1;
+            async Task<AuthoredXPointNetworkAuthorityRenewal> Renew() => await XPointNetworkBootstrapAuthor.AuthorSameKeyRenewalAsync(
+                Bytes(32, 0x19), _authority, [_dts], 850, 850, 1500, 850, 1400, [root], successorTimeSources: sources);
+            if (fault is not null) {
+                var error = await Record.ExceptionAsync(Renew);
+                Assert.True(error is ArgumentException or CryptographicException, error?.ToString());
+                Assert.Equal(fault == "signer-mutation" ? 1 : 0, root.Calls);
+                return;
+            }
+            var renewed = await Renew();
+            var pin = new XPointNetworkGenesisPin(_authority.NetworkId.Span, _authority.AuthorityCoreHash.Span);
+            var verified = XPointNetworkAuthorityVerifier.Verify(pin, [_xna, renewed.ExactXna1], [_dts, renewed.ExactDts1]);
+            var next = AccountDirectoryDts1Codec.Decode(renewed.ExactDts1.Span);
+            Assert.Equal(3, next.Sources.Count);
+            Assert.Equal(oldPolicy.Sources.Select(s => s.HostAscii), next.Sources.Take(2).Select(s => s.HostAscii));
+            Assert.Equal(extra.HostAscii, next.Sources[^1].HostAscii);
+            Assert.Equal(oldPolicy.RequiredSourceCount, next.RequiredSourceCount);
+            Assert.Equal(oldPolicy.RequiredDistinctFailureFamilies, next.RequiredDistinctFailureFamilies);
+            Assert.Equal(oldPolicy.MaximumSourceSampleAgeSeconds, next.MaximumSourceSampleAgeSeconds);
+            Assert.Equal(oldPolicy.MaximumIntervalWidthSeconds, next.MaximumIntervalWidthSeconds);
+            Assert.Equal(oldPolicy.MinimumReader, next.MinimumReader);
+            Assert.Equal(_authority.RootThreshold, verified.RootThreshold);
+            Assert.Equal(_authority.WitnessThreshold, verified.WitnessThreshold);
+            Assert.Equal(_authority.MinimumClientGeneration, verified.MinimumClientGeneration);
+            Assert.Equal(_authority.RootKeys.Select(k => k.Ed25519PublicKey.ToArray()), verified.RootKeys.Select(k => k.Ed25519PublicKey.ToArray()));
+            Assert.Equal(_authority.WitnessKeys.Select(k => k.Ed25519PublicKey.ToArray()), verified.WitnessKeys.Select(k => k.Ed25519PublicKey.ToArray()));
+            Assert.Equal(2, root.Calls);
+        }
+
         internal async Task CheckSameKeyRenewalAsync(string? fault = null, ulong renewalFrom = 850)
         {
             using var root = new OperationalTestSigner(_root);
