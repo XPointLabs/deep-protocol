@@ -555,7 +555,14 @@ internal static class XPointOnionCapabilityProducer
         VerifiedXPointNetworkAuthority authority, ContactRecord projection)
     {
         network.EnsureCurrent();
-        var closure = network.Closure!;
+        return RequireRetainedProjectionAuthorityFact(network.Closure!, authority, projection);
+    }
+
+    // Immutable signature/lineage facts only, for synchronous historical
+    // verification bracketed by the current host's actual ReadAsync fences.
+    internal static Xna1Record RequireRetainedProjectionAuthorityFact(VerifiedOnionNetworkClosure closure,
+        VerifiedXPointNetworkAuthority authority, ContactRecord projection)
+    {
         var key = Convert.ToHexString(projection.ArtifactHash.Span);
         if (!closure.RetainedPmtByArtifact.TryGetValue(key, out var retained) ||
             !Fixed(retained.CanonicalSpan, projection.CanonicalSpan) ||
@@ -1112,7 +1119,7 @@ internal static class XPointOnionCapabilityProducer
 
     private static bool VerifyEd25519(ReadOnlySpan<byte> key, ReadOnlySpan<byte> message, ReadOnlySpan<byte> signature)
     {
-        try { return PublicKeyAuth.VerifyDetached(signature.ToArray(), message.ToArray(), key.ToArray()); }
+        try { return ExactEd25519VerificationMemo.Shared.Verify(key, message, signature); }
         catch (Exception) { return false; }
     }
 

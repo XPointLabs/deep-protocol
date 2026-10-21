@@ -39,14 +39,7 @@ public sealed partial class VerifiedMailboxHostAuthorityV2
             !Fixed(ranked.AsSpan(32, 32), request.RecipientRouterId.Span))
             throw new CryptographicException("Store exclusion differs from the signed writer order.");
         var current = await ReadAsync(cancellationToken).ConfigureAwait(false);
-        var issuer = current.Policy.ResolveIssuer(MailboxCapabilityDomain.Deposit);
-        if (!Fixed(grant.IssuerPublicKey.Span, issuer.PublicKey.Span) ||
-            grant.NotBeforeUnixSeconds < issuer.ValidFromUnixSeconds ||
-            grant.ExpiresAtUnixSeconds > issuer.ValidUntilUnixSeconds ||
-            grant.ExpiresAtUnixSeconds - grant.NotBeforeUnixSeconds > current.Policy.MaximumGrantLifetimeSeconds ||
-            !PublicKeyAuth.VerifyDetached(grant.IssuerSignature.ToArray(),
-                MailboxAuthenticatedCapabilityCodec.GetGrantSigningBytes(grant), issuer.PublicKey.ToArray()))
-            throw new CryptographicException("Store exclusion has no authenticated issuer scope.");
+        _ = RequireHistoricalStoreIssuer(grant);
         if (current.Lower < grant.ExpiresAtUnixSeconds)
             throw new CryptographicException("Original Store permission has not permanently expired.");
         var final = await ReadAsync(cancellationToken).ConfigureAwait(false);

@@ -15,6 +15,7 @@ public sealed partial class VerifiedMailboxHostAuthorityV2
     private readonly VerifiedXPointNetworkAuthority root;
     private readonly ContactRecord pma;
     private readonly OnionTrustedTimeAuthority time;
+    private readonly IReadOnlyList<ContactRecord> issuerHistory;
     private readonly object clockGate = new();
     private ulong lastSample;
     // This host owns immutable network/root/PMA inputs. Only the pure PMA
@@ -25,9 +26,10 @@ public sealed partial class VerifiedMailboxHostAuthorityV2
 
     internal VerifiedMailboxHostAuthorityV2(VerifiedOnionNetworkContext network,
         VerifiedXPointNetworkAuthority root, ContactRecord pma,
-        OnionTrustedTimeAuthority time, OnionMonotonicReading reading)
+        OnionTrustedTimeAuthority time, OnionMonotonicReading reading, IReadOnlyList<ContactRecord>? issuerHistory = null)
     {
         this.network = network; this.root = root; this.pma = pma; this.time = time;
+        this.issuerHistory = Array.AsReadOnly((issuerHistory ?? [pma]).ToArray());
         lastSample = reading.SampleSeconds;
     }
 
@@ -233,6 +235,24 @@ public sealed class VerifiedMailboxReplicaV2
 
 public static class MailboxHostAuthorityV2Verifier
 {
+    /// <summary>Preserves authenticated historical issuer facts of a verified
+    /// current policy; all actual current host/time checks still run.</summary>
+    public static async ValueTask<VerifiedMailboxHostAuthorityV2> VerifyPolicyAsync(
+        VerifiedOnionNetworkContext network, VerifiedXPointNetworkAuthority root,
+        VerifiedMailboxAuthorityV2 policy, OnionTrustedTimeAuthority trustedTime,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(network); ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(policy); ArgumentNullException.ThrowIfNull(trustedTime);
+        cancellationToken.ThrowIfCancellationRequested();
+        var pma = ContactCodec.Decode(ProtocolMagic.PMA2, policy.ExactPma2.Span);
+        var reading = await trustedTime.ReadCurrentAsync(cancellationToken).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        VerifiedMailboxHostAuthorityV2.VerifyAtReading(network, root, pma, reading);
+        var result = new VerifiedMailboxHostAuthorityV2(network, root, pma, trustedTime, reading, policy.IssuerHistory);
+        await result.EnsureCurrentAsync(cancellationToken).ConfigureAwait(false); return result;
+    }
+
     public static async ValueTask<VerifiedMailboxHostAuthorityV2> VerifyAsync(
         VerifiedOnionNetworkContext network, VerifiedXPointNetworkAuthority root,
         ReadOnlyMemory<byte> exactPma2, OnionTrustedTimeAuthority trustedTime,

@@ -574,8 +574,11 @@ internal static class GraphPolicy
                 // DR-0157/0158: +2 methods, no new type/constructor/resource:
                 // host-verified absent-target preparation and a pure canonical
                 // replay-request digest. Neither grants admission authority.
-                "Deep.Protocol|12987|102B640D5F35A23BEF668C5B8DC50D124F3CFCA54E67B5FC1ABCF90081821F2D",
-                "Deep.Protocol|12987|C579C49850CAFA5A55E842A041BD5713CD93D7A17E3D715D729929E22D669C29"
+                // DR-0163: +2 verifier methods, no public type/constructor,
+                // resource or assembly-reference delta. Exact owned PMA history
+                // and a typed current policy; predecessor snapshots retired.
+                "Deep.Protocol|12989|B970C504AFBCB632F8CC34F3EFB40FA5DBD718905B2FE647098194AA1552B23C",
+                "Deep.Protocol|12989|AF50AC6617C4040366D9F5BC81D418239B44139B3674484121EA9A9F123D3DFD"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

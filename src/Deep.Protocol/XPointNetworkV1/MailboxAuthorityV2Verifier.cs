@@ -16,10 +16,12 @@ public sealed class VerifiedMailboxAuthorityV2
     private readonly ContactRecord record;
     private readonly byte[] depositIssuerPublicKey;
     private readonly byte[] retrieveIssuerPublicKey;
+    internal IReadOnlyList<ContactRecord> IssuerHistory { get; }
 
-    internal VerifiedMailboxAuthorityV2(ContactRecord record)
+    internal VerifiedMailboxAuthorityV2(ContactRecord record, IReadOnlyList<ContactRecord>? issuerHistory = null)
     {
         this.record = record;
+        IssuerHistory = Array.AsReadOnly((issuerHistory ?? [record]).ToArray());
         depositIssuerPublicKey = record.Field(5).ToArray();
         retrieveIssuerPublicKey = record.Field(6).ToArray();
         Generation = BinaryPrimitives.ReadUInt64BigEndian(record.Field(2).Span);
@@ -81,6 +83,30 @@ public sealed class VerifiedMailboxAuthorityV2
 
 public static class MailboxAuthorityV2Verifier
 {
+    /// <summary>Current terminal authority plus authenticated past issuer facts.
+    /// Past entries never become current grant/dispatch authority.</summary>
+    public static VerifiedMailboxAuthorityV2 VerifyWithHistory(VerifiedXPointNetworkAuthority networkAuthority,
+        IReadOnlyList<ReadOnlyMemory<byte>> exactOrderedPma2Chain, ulong trustedLowerUnixSeconds, ulong trustedUpperUnixSeconds)
+    {
+        ArgumentNullException.ThrowIfNull(networkAuthority); ArgumentNullException.ThrowIfNull(exactOrderedPma2Chain);
+        var count = exactOrderedPma2Chain.Count;
+        if (count is < 1 or > XPointNetworkClosureWireCodec.MaximumChainCount) throw new CryptographicException("Mailbox policy history exceeds its closed bound.");
+        var records = new ContactRecord[count];
+        for (var i = 0; i < count; i++)
+        {
+            var bytes = exactOrderedPma2Chain[i];
+            if (bytes.Length is < 497 or > 1_169) throw new CryptographicException("Historical PMA2 exceeds its closed bound.");
+            var record = ContactCodec.Decode(ProtocolMagic.PMA2, bytes.Span); records[i] = record;
+            var issue = BinaryPrimitives.ReadUInt64BigEndian(record.Field(11).Span);
+            VerifyHistoricalLineage(networkAuthority, record.CanonicalBytes.Span, issue, issue);
+            if (i > 0 && (BinaryPrimitives.ReadUInt64BigEndian(record.Field(2).Span) != checked(BinaryPrimitives.ReadUInt64BigEndian(records[i - 1].Field(2).Span) + 1) ||
+                !CryptographicOperations.FixedTimeEquals(record.Field(3).Span, records[i - 1].CoreHash.Span))) throw new CryptographicException("Mailbox issuer history is not an exact ordered predecessor chain.");
+        }
+        if (exactOrderedPma2Chain.Count != count) throw new CryptographicException("Mailbox issuer history changed during capture.");
+        var current = Verify(networkAuthority, records[^1].CanonicalBytes.Span, trustedLowerUnixSeconds, trustedUpperUnixSeconds);
+        return new VerifiedMailboxAuthorityV2(records[^1], records);
+    }
+
     public static VerifiedMailboxAuthorityV2 Verify(
         VerifiedXPointNetworkAuthority networkAuthority,
         ReadOnlySpan<byte> exactPma2,
@@ -171,8 +197,7 @@ public static class MailboxAuthorityV2Verifier
     {
         try
         {
-            return PublicKeyAuth.VerifyDetached(
-                signature.ToArray(), message.ToArray(), key.ToArray());
+            return ExactEd25519VerificationMemo.Shared.Verify(key, message, signature);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

@@ -416,7 +416,7 @@ public static class XPointNetworkForwardCheckpointVerifier
         public bool VerifyEd25519(ReadOnlySpan<byte> publicKey, ReadOnlySpan<byte> message, ReadOnlySpan<byte> signature)
         {
             if (publicKey.Length != 32 || signature.Length != 64) return false;
-            try { return PublicKeyAuth.VerifyDetached(signature.ToArray(), message.ToArray(), publicKey.ToArray()); }
+            try { return ExactEd25519VerificationMemo.Shared.Verify(publicKey, message, signature); }
             catch (Exception) { return false; }
         }
     }

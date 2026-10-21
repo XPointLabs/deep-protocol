@@ -14,6 +14,11 @@ public sealed partial class XPointOnionCapabilityProducerTests
 {
     [Theory]
     [InlineData(false)] [InlineData(true)]
+    public async Task OperationalRollover_HistoricalIssuerFactsNeverRestoreCurrentGrant(bool cold) =>
+        await Fixture.Create().CheckOperationalRolloverAsync(cold, rotateMailbox: true, verifyHistoricalIssuer: true);
+
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
     public async Task OperationalRollover_OfflineThenDelegatedAppendPreservesMixedAuthorityPrefix(bool cold) =>
         await Fixture.Create().CheckOperationalRolloverAsync(cold);
 
@@ -323,7 +328,8 @@ public sealed partial class XPointOnionCapabilityProducerTests
         }
 
         internal async Task CheckOperationalRolloverAsync(bool cold, string? fault = null, bool extendRootPolicy = false, bool rotateMailbox = false,
-            bool relocateOrigins = false, bool delegatedRelocation = false, bool ipv6Origins = false, bool mutateOriginCollections = false)
+            bool relocateOrigins = false, bool delegatedRelocation = false, bool ipv6Origins = false, bool mutateOriginCollections = false,
+            bool verifyHistoricalIssuer = false)
         {
             var original = await VerifyMailboxAsync();
             var renewed = BuildAuthorityRollover();
@@ -474,6 +480,33 @@ public sealed partial class XPointOnionCapabilityProducerTests
                 Assert.Equal(original.Network.Closure.Pmt.CanonicalBytes.ToArray(), current.Closure.RetainedPmts[0].CanonicalBytes.ToArray());
                 Assert.Equal(original.Network.ProtectedLkg!.HeadRoot.ToArray(), current.PriorProtectedLkg!.HeadRoot.ToArray());
                 var host = await MailboxHostAuthorityV2Verifier.VerifyAsync(current, renewed.Authority, delegated.ExactPma2, clock);
+                if (verifyHistoricalIssuer)
+                {
+                    var oldPolicy = MailboxAuthorityV2Verifier.Verify(_authority, original.Pma, 195, 205);
+                    var issuerSeed = Bytes(32, 0xe1);
+                    var grant = new SodiumMailboxCapabilityCrypto().SignGrant(new()
+                    {
+                        Domain = MailboxCapabilityDomain.Deposit, Lifecycle = MailboxCapabilityLifecycle.Active,
+                        NetworkId = current.NetworkId, Epoch = _selectionEpoch, Generation = 5, Serial = Bytes(16, 0x51),
+                        NotBeforeUnixSeconds = 190, ExpiresAtUnixSeconds = 230, OverlapUntilUnixSeconds = 0,
+                        PlacementCommitment = MailboxPlacementCommitment.Compute(new(Bytes(32, 0x52))),
+                        MembershipCommitment = original.Network.Closure.Pmt.ArtifactHash,
+                        IssuerPublicKey = PublicKeyAuth.GenerateKeyPair(issuerSeed).PublicKey,
+                        HolderPublicKey = PublicKeyAuth.GenerateKeyPair(Bytes(32, 0x53)).PublicKey,
+                        SelectionInput = Bytes(32, 0x54), IssuerSignature = new byte[64]
+                    }, issuerSeed);
+                    var history = MailboxAuthorityV2Verifier.VerifyWithHistory(renewed.Authority, [original.Pma, first.ExactPma2], 195, 205);
+                    var historicalHost = await MailboxHostAuthorityV2Verifier.VerifyPolicyAsync(current, renewed.Authority, history, clock);
+                    Assert.Equal(oldPolicy.CoreHash.ToArray(), historicalHost.RequireHistoricalStoreIssuer(grant).CoreHash.ToArray());
+                    Assert.Throws<CryptographicException>(() => host.RequireHistoricalStoreIssuer(grant));
+                    await Assert.ThrowsAsync<CryptographicException>(() => historicalHost.EnsureGrantCurrentAsync(MailboxAuthenticatedCapabilityCodec.EncodeGrant(grant)).AsTask());
+                    Assert.Throws<CryptographicException>(() => historicalHost.RequireHistoricalStoreIssuer(grant with { IssuerSignature = Bytes(64, 0xff) }));
+                    Assert.Throws<CryptographicException>(() => historicalHost.RequireHistoricalStoreIssuer(grant with { Generation = 1 }));
+                    Assert.Throws<CryptographicException>(() => historicalHost.RequireHistoricalStoreIssuer(grant with { NetworkId = Bytes(16, 0xff) }));
+                    var bad = original.Pma.ToArray(); bad[^1] ^= 1;
+                    Assert.Throws<CryptographicException>(() => MailboxAuthorityV2Verifier.VerifyWithHistory(renewed.Authority, [bad, first.ExactPma2], 195, 205));
+                    Assert.Throws<CryptographicException>(() => MailboxAuthorityV2Verifier.VerifyWithHistory(renewed.Authority, [first.ExactPma2, original.Pma], 195, 205));
+                }
                 await host.RequireOriginalNamespaceAsync(original.Pma, original.Network.Closure.Pmt.CanonicalBytes);
                 Assert.Equal(_selectionEpoch, host.SelectionEpoch); // Metadata does not establish exclusion.
                 await Assert.ThrowsAsync<CryptographicException>(() => host.RequireOriginalNamespaceAsync(

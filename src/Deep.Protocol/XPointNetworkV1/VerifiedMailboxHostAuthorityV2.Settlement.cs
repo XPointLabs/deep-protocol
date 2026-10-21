@@ -32,18 +32,12 @@ public sealed partial class VerifiedMailboxHostAuthorityV2
         if (!Fixed(proof.Span[..38], Deep.Protocol.ContactV1.ContactCodec.ArtifactReference(
             ProtocolMagic.PMT2, assignment.Projection).CanonicalBytes.Span))
             throw new CryptographicException("Store settlement differs from its authenticated logical assignment.");
-        var current = await ReadAsync(cancellationToken).ConfigureAwait(false);
-        var issuer = current.Policy.ResolveIssuer(MailboxCapabilityDomain.Deposit);
+        _ = await ReadAsync(cancellationToken).ConfigureAwait(false);
+        _ = RequireHistoricalStoreIssuer(grant);
         // These are past signed facts, not a current grant/time authorization.
         // Missing issuer/descriptor history fails closed rather than installing
         // receipt time or bypassing the current host's protected clock.
-        if (grant.Domain != MailboxCapabilityDomain.Deposit || grant.Epoch != SelectionEpoch ||
-            !Fixed(grant.IssuerPublicKey.Span, issuer.PublicKey.Span) ||
-            grant.NotBeforeUnixSeconds < issuer.ValidFromUnixSeconds ||
-            grant.ExpiresAtUnixSeconds > issuer.ValidUntilUnixSeconds ||
-            grant.ExpiresAtUnixSeconds - grant.NotBeforeUnixSeconds > current.Policy.MaximumGrantLifetimeSeconds ||
-            !PublicKeyAuth.VerifyDetached(grant.IssuerSignature.ToArray(),
-                MailboxAuthenticatedCapabilityCodec.GetGrantSigningBytes(grant), issuer.PublicKey.ToArray()))
+        if (grant.Epoch != SelectionEpoch)
             throw new CryptographicException("Store settlement has no authenticated issuer scope.");
         var projection = assignment.Projection;
         var ranked = Deep.Protocol.ContactV1.ContactRouteThresholdAuthor.RankReplicas(NetworkId.Span,

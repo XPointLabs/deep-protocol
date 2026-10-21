@@ -102,7 +102,7 @@
     "tests/Deep.Protocol.Tests/DevOpsWitness/Dnp1PackageBlockingWitnessTests.cs",
     "tests/Deep.Protocol.Tests/Registry/DeepProtocolRegistryTests.cs"
   ],
-  "implementationScopeSha256": "A1DD965C8E268572BF69AF139146F245ED172756E0105EE27C213E86EB656133",
+  "implementationScopeSha256": "3ECE9785BC58DF15A105575555E9E4DDF7B3B0EEA0BB782C485351059FF05624",
   "mappings": [
     {
       "id": "api-recovery-freeze-provider-nonce",
