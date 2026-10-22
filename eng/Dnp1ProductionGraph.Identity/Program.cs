@@ -577,8 +577,13 @@ internal static class GraphPolicy
                 // DR-0163: +2 verifier methods, no public type/constructor,
                 // resource or assembly-reference delta. Exact owned PMA history
                 // and a typed current policy; predecessor snapshots retired.
-                "Deep.Protocol|12989|B970C504AFBCB632F8CC34F3EFB40FA5DBD718905B2FE647098194AA1552B23C",
-                "Deep.Protocol|12989|AF50AC6617C4040366D9F5BC81D418239B44139B3674484121EA9A9F123D3DFD"
+                // DR-0162 memo replacement changes internal TypeRef/blob
+                // indices, not API: actual approved predecessor versus current
+                // decoded metadata/resources/references: 15093 equal rows.
+                // Raw snapshot row count remains12989; accept only current
+                // Debug/Release exact hashes, not predecessor snapshots.
+                "Deep.Protocol|12989|3477EEAFEA18EB5D05698F718F6721FB3B4B35CD82C534C2AB4B9484D508C653",
+                "Deep.Protocol|12989|D374782B29DC4CC8F1E4C026288CB2C970506ADCEEFE94D595D163276A30C25D"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

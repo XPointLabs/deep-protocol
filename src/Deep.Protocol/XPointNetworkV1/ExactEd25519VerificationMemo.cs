@@ -5,14 +5,22 @@ namespace Deep.Protocol.XPointNetworkV1;
 
 // Pure public signature arithmetic ONLY. No policy, clock, chain, endpoint,
 // protected-floor, revocation or authorization result can enter this memo.
-internal sealed class ExactEd25519VerificationMemo(int maximumEntries = 4096, int maximumBytes = 8 * 1024 * 1024)
+internal sealed class ExactEd25519VerificationMemo(int maximumEntries = 4096, int maximumBytes = 8 * 1024 * 1024,
+    Random? eviction = null)
 {
     internal static readonly ExactEd25519VerificationMemo Shared = new();
     private sealed record Entry(string Digest, byte[] Key, byte[] Message, byte[] Signature)
-    { internal int Bytes => Key.Length + Message.Length + Signature.Length; }
+    {
+        internal int Bytes => Key.Length + Message.Length + Signature.Length;
+        internal int Index;
+    }
     private readonly object gate = new();
-    private readonly Dictionary<string, LinkedListNode<Entry>> entries = new(StringComparer.Ordinal);
-    private readonly LinkedList<Entry> fifo = new();
+    private readonly Dictionary<string, Entry> entries = new(StringComparer.Ordinal);
+    private readonly List<Entry> residents = new();
+    // Eviction is scheduling only, not cryptography or authority. Random
+    // replacement prevents repeated retained-history scans larger than the
+    // working set from evicting EVERY upcoming exact tuple in FIFO order.
+    private readonly Random replacement = eviction ?? Random.Shared;
     private int bytes;
     private long nativeVerifications;
     internal (int Entries, int Bytes, long NativeVerifications) Snapshot()
@@ -33,8 +41,8 @@ internal sealed class ExactEd25519VerificationMemo(int maximumEntries = 4096, in
             digest = Convert.ToHexString(hash.GetHashAndReset());
             lock (gate)
                 if (entries.TryGetValue(digest, out var hit) &&
-                    hit.Value.Key.AsSpan().SequenceEqual(ownedKey) && hit.Value.Message.AsSpan().SequenceEqual(ownedMessage) &&
-                    hit.Value.Signature.AsSpan().SequenceEqual(ownedSignature)) return true;
+                    hit.Key.AsSpan().SequenceEqual(ownedKey) && hit.Message.AsSpan().SequenceEqual(ownedMessage) &&
+                    hit.Signature.AsSpan().SequenceEqual(ownedSignature)) return true;
         }
         bool valid;
         Interlocked.Increment(ref nativeVerifications);
@@ -44,11 +52,22 @@ internal sealed class ExactEd25519VerificationMemo(int maximumEntries = 4096, in
         var entry = new Entry(digest!, ownedKey, ownedMessage, ownedSignature);
         lock (gate)
         {
-            if (entries.Remove(digest!, out var prior)) { bytes -= prior.Value.Bytes; fifo.Remove(prior); }
+            if (entries.TryGetValue(digest!, out var prior)) Remove(prior);
             while (entries.Count >= maximumEntries || bytes + entry.Bytes > maximumBytes)
-            { var first = fifo.First!; entries.Remove(first.Value.Digest); bytes -= first.Value.Bytes; fifo.RemoveFirst(); }
-            entries.Add(digest!, fifo.AddLast(entry)); bytes += entry.Bytes;
+                Remove(residents[replacement.Next(residents.Count)]);
+            entry.Index = residents.Count; residents.Add(entry);
+            entries.Add(digest!, entry); bytes += entry.Bytes;
         }
         return true;
+    }
+
+    // Called only under gate. Swap removal preserves O(1) bounded eviction;
+    // no positive result survives without its complete exact public tuple.
+    private void Remove(Entry entry)
+    {
+        var last = residents[^1];
+        residents[entry.Index] = last; last.Index = entry.Index;
+        residents.RemoveAt(residents.Count - 1);
+        entries.Remove(entry.Digest); bytes -= entry.Bytes;
     }
 }
