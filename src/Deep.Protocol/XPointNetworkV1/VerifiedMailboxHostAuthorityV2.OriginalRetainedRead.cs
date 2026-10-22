@@ -25,8 +25,7 @@ public sealed partial class VerifiedMailboxHostAuthorityV2
         var request = ContactCodec.Decode(ProtocolMagic.XMG2, exactXmg2.Span);
         var response = ContactCodec.Decode(ProtocolMagic.XMC2, exactXmc2.Span);
         var grant = MailboxAuthenticatedCapabilityCodec.DecodeGrant(response.Field(8).Span);
-        await RequireOriginalNamespaceAsync(policy.CanonicalBytes, route.Projection.CanonicalBytes,
-            cancellationToken).ConfigureAwait(false);
+        await RequireOriginalReadNamespacesAsync(policy, route.Projection, cancellationToken).ConfigureAwait(false);
         RequireRetainedRouteScope(request, route, RetainedRouteHorizonCeiling(route));
         ContactCodec.VerifyMailboxGrantHolderSignature(request);
         ContactCodec.ValidateMailboxGrantResultBinding(request, response);
@@ -56,9 +55,30 @@ public sealed partial class VerifiedMailboxHostAuthorityV2
                 MailboxAuthenticatedCapabilityCodec.GetGrantSigningBytes(grant), issuer.ToArray()))
             throw new CryptographicException("Original Retrieve differs from its signed policy/request/route interval.");
         _ = await ReadAsync(cancellationToken).ConfigureAwait(false);
-        await RequireOriginalNamespaceAsync(policy.CanonicalBytes, route.Projection.CanonicalBytes,
-            cancellationToken).ConfigureAwait(false);
+        await RequireOriginalReadNamespacesAsync(policy, route.Projection, cancellationToken).ConfigureAwait(false);
         RequireRetainedRouteScope(request, route, RetainedRouteHorizonCeiling(route));
         cancellationToken.ThrowIfCancellationRequested();
+    }
+
+    // Original issuance and original assignment can name different signed
+    // PMA2 generations. Both exact joins must independently authenticate in
+    // THIS current protected history. No raw-record or current-issuer fallback.
+    private async ValueTask RequireOriginalReadNamespacesAsync(ContactRecord issuance,
+        ContactRecord originalProjection, CancellationToken cancellationToken)
+    {
+        var issuanceReference = XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.PMA2, issuance.CoreHash.Span);
+        if (Fixed(originalProjection.Field(4).Span, issuanceReference))
+        {
+            await RequireOriginalNamespaceAsync(issuance.CanonicalBytes, originalProjection.CanonicalBytes, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+        var issuanceProjection = network.Closure!.RetainedPmts.FirstOrDefault(candidate =>
+            Fixed(candidate.Field(4).Span, issuanceReference)) ??
+            throw new CryptographicException("Original Retrieve issuance policy is absent from exact protected projection history.");
+        var routePolicy = issuerHistory.FirstOrDefault(candidate =>
+            Fixed(XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.PMA2, candidate.CoreHash.Span), originalProjection.Field(4).Span)) ??
+            throw new CryptographicException("Original Retrieve assignment policy is absent from authenticated issuer history.");
+        await RequireOriginalNamespaceAsync(issuance.CanonicalBytes, issuanceProjection.CanonicalBytes, cancellationToken).ConfigureAwait(false);
+        await RequireOriginalNamespaceAsync(routePolicy.CanonicalBytes, originalProjection.CanonicalBytes, cancellationToken).ConfigureAwait(false);
     }
 }
