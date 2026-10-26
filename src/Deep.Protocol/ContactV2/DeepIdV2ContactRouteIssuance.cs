@@ -22,7 +22,7 @@ public sealed class VerifiedDeepIdV2ContactRouteIssuance
     public ReadOnlyMemory<byte> ExactIssuanceAdh1 => IssuanceHead.ExactAdh1;
     internal AccountDirectoryProtectedLkg IssuanceHead { get; }
 
-    internal void RequireAtCurrentContext(DeepIdV2RouteContext current)
+    internal void RequireAtCurrentContext(DeepIdV2RouteContext current, DeepIdV2RouteNotBeforeWindow? scheduling = null)
     {
         var floor = current.Recipient.Freshness.NextProtectedLkg;
         var head = IssuanceHead.Head;
@@ -52,7 +52,7 @@ public sealed class VerifiedDeepIdV2ContactRouteIssuance
         if (predecessor is not null)
         { predecessor.RequireAtCurrentContext(current); predecessor.RequireThresholdSuccessor(xra, Threshold); }
         current.RequireAdvertisement(xra);
-        current.RequireLiveThreshold(xra, Threshold.Selection, xrc, xss);
+        current.RequireLiveThreshold(xra, Threshold.Selection, xrc, xss, scheduling);
     }
 
     internal void RequireExactRoute(VerifiedDeepIdV2ContactRouteClosure route)
@@ -95,8 +95,12 @@ public static partial class DeepIdV2ContactRouteVerifier
             request.ExactPredecessorXir1V2, request.ExactPredecessorRouteClosure, trustedTime, cancellationToken).ConfigureAwait(false) : null;
         var result = new VerifiedDeepIdV2ContactRouteIssuance(request, records, head, authority.AuthorityCoreReference.Span, predecessor);
         var first = await DeepIdV2RouteContext.ReadAsync(recipient, network, authority, trustedTime, cancellationToken).ConfigureAwait(false);
-        result.RequireAtCurrentContext(first);
-        result.RequireAtCurrentContext(await first.RecheckAsync(cancellationToken).ConfigureAwait(false));
+        result.RequireAtCurrentContext(first, new(first.Lower, first.Upper));
+        var final = await first.RecheckAsync(cancellationToken).ConfigureAwait(false);
+        var scheduling = new DeepIdV2RouteNotBeforeWindow(final.Lower, final.Upper);
+        result.RequireAtCurrentContext(final, scheduling);
+        cancellationToken.ThrowIfCancellationRequested();
+        scheduling.ThrowIfPending();
         cancellationToken.ThrowIfCancellationRequested(); return result;
     }
 }

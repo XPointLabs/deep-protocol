@@ -580,10 +580,12 @@ internal static class GraphPolicy
                 // DR-0162 memo replacement changes internal TypeRef/blob
                 // indices, not API: actual approved predecessor versus current
                 // decoded metadata/resources/references: 15093 equal rows.
-                // Raw snapshot row count remains12989; accept only current
-                // Debug/Release exact hashes, not predecessor snapshots.
-                "Deep.Protocol|12989|3477EEAFEA18EB5D05698F718F6721FB3B4B35CD82C534C2AB4B9484D508C653",
-                "Deep.Protocol|12989|D374782B29DC4CC8F1E4C026288CB2C970506ADCEEFE94D595D163276A30C25D"
+                // DR-0078 bounded threshold convergence: decoded API delta +3/-0,
+                // sealed DeepIdV2RouteNotBeforeException (no public constructor),
+                // readonly UInt32 duration property/getter only. No resource or
+                // AssemblyRef delta. Accept only current Debug/Release snapshots.
+                "Deep.Protocol|12992|9C26E38BBE7BE0DFC4E9E95F164766B006F3D9A7E3644BA9378B45AF9D9614D3",
+                "Deep.Protocol|12992|3AC6272C3F4A850ACFD00961C5C0BE5CD03D9C722F8AA00B1E9A4D4823ABCE59"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

@@ -407,9 +407,10 @@ internal sealed class DeepIdV2RouteContext
         VerifyWitnesses(pms, 11, Authority); VerifyWitnesses(xrc, 21, Authority); VerifyWitnesses(xss, 14, Authority);
     }
 
-    internal void RequireLiveThreshold(ContactRecord xra, ContactRecord pms, ContactRecord xrc, ContactRecord xss)
+    internal void RequireLiveThreshold(ContactRecord xra, ContactRecord pms, ContactRecord xrc, ContactRecord xss,
+        DeepIdV2RouteNotBeforeWindow? scheduling = null)
     {
-        RequireThresholdWindows(xra, pms, xrc, xss);
+        RequireThresholdWindows(xra, pms, xrc, xss, scheduling);
         var issuer = XPointOnionCapabilityProducer.RequireRetainedIssuanceAuthority(Network, Authority,
             xrc.Field(8), xrc.Field(9), U64(xrc.FieldSpan(16)), U64(xrc.FieldSpan(18)));
         foreach (var (record, signatureTag, issuedTag, expiryTag) in new[] {
@@ -422,14 +423,20 @@ internal sealed class DeepIdV2RouteContext
         }
     }
 
-    private void RequireThresholdWindows(ContactRecord xra, ContactRecord pms, ContactRecord xrc, ContactRecord xss)
+    private void RequireThresholdWindows(ContactRecord xra, ContactRecord pms, ContactRecord xrc, ContactRecord xss,
+        DeepIdV2RouteNotBeforeWindow? scheduling = null)
     {
         ContactCodec.ValidateThresholdRouteGraph(xra, xrc, xss, Pmt, pms);
         if (!Fixed(xrc.FieldSpan(19), xss.FieldSpan(12)))
             throw new CryptographicException("Threshold records disagree on their exact directory issuance anchor.");
-        Covers(U64(pms.FieldSpan(8)), U64(pms.FieldSpan(9)), DeepIdV2RouteTimeArtifact.Pms2);
-        Covers(U64(xrc.FieldSpan(17)), U64(xrc.FieldSpan(18)), DeepIdV2RouteTimeArtifact.Xrc1);
-        Covers(U64(xss.FieldSpan(10)), U64(xss.FieldSpan(11)), DeepIdV2RouteTimeArtifact.Xss1);
+        Require(U64(pms.FieldSpan(8)), U64(pms.FieldSpan(9)), DeepIdV2RouteTimeArtifact.Pms2);
+        Require(U64(xrc.FieldSpan(17)), U64(xrc.FieldSpan(18)), DeepIdV2RouteTimeArtifact.Xrc1);
+        Require(U64(xss.FieldSpan(10)), U64(xss.FieldSpan(11)), DeepIdV2RouteTimeArtifact.Xss1);
+        void Require(ulong start, ulong expiry, DeepIdV2RouteTimeArtifact artifact)
+        {
+            if (scheduling is null) Covers(start, expiry, artifact);
+            else scheduling.Require(start, expiry, artifact);
+        }
     }
     internal static void VerifyWitnesses(ContactRecord record, int tag, VerifiedXPointNetworkAuthority authority)
         => VerifyWitnesses(record, tag, authority.WitnessKeys, authority.WitnessThreshold);
