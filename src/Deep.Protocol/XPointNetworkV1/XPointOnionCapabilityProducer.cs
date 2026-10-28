@@ -304,7 +304,7 @@ internal sealed class VerifiedOnionNetworkClosure
     internal required ulong FreshnessDeadlineMonotonicSeconds { get; init; }
 }
 
-internal static class XPointOnionCapabilityProducer
+internal static partial class XPointOnionCapabilityProducer
 {
     private const int MaximumSuccessorChainLength = 4_096;
     private const int MaximumSuccessorChainBytes = 64 * 1024 * 1024;
@@ -364,65 +364,8 @@ internal static class XPointOnionCapabilityProducer
             if (protectedPrevious is not null && previous is null)
                 Fail("network-lkg-invalid", "The protected predecessor was not minted by the complete NETCODEC verifier.");
 
-            Xvp1Record? policyCursor = previous?.Policy;
-            for (var index = 0; index < policies.Length; index++)
-            {
-                var policy = policies[index];
-                VerifyPolicyBinding(authority, policy);
-                if (policyCursor is not null)
-                    RequireNondecreasingAuthority(authority, policyCursor.FieldSpan(18), policy.FieldSpan(18));
-                if (forwardCheckpoint is null)
-                    VerifyOrderedLineage(policyCursor, policy, "policy", policies.Length == 1 && index == 0);
-                VerifyPolicy(authority, policy);
-                policyCursor = policy;
-            }
-
-            Xvp1Record[] knownPolicies = previous is null ? policies : [previous.Policy, .. policies];
-            var policiesByHash = new Dictionary<string, Xvp1Record>(StringComparer.Ordinal);
-            foreach (var policy in knownPolicies)
-                policiesByHash.TryAdd(Convert.ToHexString(policy.CoreHash.Span), policy);
-            Xnv1Record? viewCursor = previous?.View;
-            Xnh1Record? headCursor = previous?.Head;
-            for (var index = 0; index < views.Length; index++)
-            {
-                var view = views[index];
-                var head = heads[index];
-                var activePolicy = FindPolicy(policiesByHash, view.ActivePolicy.Hash.Span);
-                VerifyViewAndHeadBinding(authority, activePolicy, view, head);
-                if (viewCursor is not null)
-                    RequireNondecreasingAuthority(authority, viewCursor.FieldSpan(7), view.FieldSpan(7));
-                if (forwardCheckpoint is null)
-                {
-                    VerifyOrderedLineage(viewCursor, view, "view", views.Length == 1 && index == 0);
-                    VerifyOrderedLineage(headCursor, head, "head", heads.Length == 1 && index == 0);
-                }
-                var stepAuthority = RequireHistoricalAuthority(authority, view.FieldSpan(7));
-                VerifyThreshold(view.WitnessSignatures, stepAuthority, XPointNetworkCrypto.ComputeSigningInput(view), "view-threshold-invalid");
-                VerifyThreshold(head.WitnessSignatures, stepAuthority, XPointNetworkCrypto.ComputeSigningInput(head), "head-threshold-invalid");
-                if (forwardCheckpoint is null) VerifyHead(view, head, viewCursor, headCursor);
-                viewCursor = view;
-                headCursor = head;
-            }
-
-            Xnv1Record[] knownViews = previous is null ? views : [previous.View, .. views];
-            var viewsByReference = new Dictionary<string, Xnv1Record>(StringComparer.Ordinal);
-            foreach (var view in knownViews)
-                viewsByReference.TryAdd(Convert.ToHexString(view.CoreReferenceValue.Encode()), view);
-            ContactRecord? pmtCursor = previous?.Pmt;
-            var retainedPmtAuthorities = forwardCheckpoint is null && previous is not null
-                ? new Dictionary<string, Xna1Record>(previous.RetainedPmtAuthorities, StringComparer.Ordinal)
-                : new Dictionary<string, Xna1Record>(StringComparer.Ordinal);
-            for (var index = 0; index < pmts.Length; index++)
-            {
-                var candidate = pmts[index];
-                var candidateView = FindView(viewsByReference, candidate.FieldSpan(5));
-                var candidatePolicy = FindPolicy(policiesByHash, candidateView.ActivePolicy.Hash.Span);
-                VerifyPmtAuthenticated(authority, candidatePolicy, candidateView, candidate, pmtCursor,
-                    pmts.Length == 1 && index == 0, forwardCheckpoint is not null);
-                retainedPmtAuthorities[Convert.ToHexString(candidate.ArtifactHash.Span)] =
-                    RequireHistoricalAuthority(authority, candidateView.FieldSpan(7));
-                pmtCursor = candidate;
-            }
+            var retainedPmtAuthorities = VerifySignedHistory(authority, policies, views, heads, pmts,
+                previous, forwardCheckpoint is not null);
 
             // Forward-only checkpoints are not exact protected-prefix joins.
             // They may mint their terminal current fact, not retained history.
@@ -506,6 +449,73 @@ internal static class XPointOnionCapabilityProducer
                 "The exact XNA1/XVP1/XNV1/XNH1/XND1/PMT2/DTT1 closure is invalid.",
                 exception);
         }
+    }
+
+    private static Dictionary<string, Xna1Record> VerifySignedHistory(
+        VerifiedXPointNetworkAuthority authority, Xvp1Record[] policies, Xnv1Record[] views,
+        Xnh1Record[] heads, ContactRecord[] pmts, VerifiedOnionNetworkClosure? previous,
+        bool forwardReset)
+    {
+        Xvp1Record? policyCursor = previous?.Policy;
+        for (var index = 0; index < policies.Length; index++)
+        {
+            var policy = policies[index];
+            VerifyPolicyBinding(authority, policy);
+            if (policyCursor is not null)
+                RequireNondecreasingAuthority(authority, policyCursor.FieldSpan(18), policy.FieldSpan(18));
+            if (!forwardReset)
+                VerifyOrderedLineage(policyCursor, policy, "policy", policies.Length == 1 && index == 0);
+            VerifyPolicy(authority, policy);
+            policyCursor = policy;
+        }
+
+        Xvp1Record[] knownPolicies = previous is null ? policies : [previous.Policy, .. policies];
+        var policiesByHash = new Dictionary<string, Xvp1Record>(StringComparer.Ordinal);
+        foreach (var policy in knownPolicies)
+            policiesByHash.TryAdd(Convert.ToHexString(policy.CoreHash.Span), policy);
+        Xnv1Record? viewCursor = previous?.View;
+        Xnh1Record? headCursor = previous?.Head;
+        for (var index = 0; index < views.Length; index++)
+        {
+            var view = views[index];
+            var head = heads[index];
+            var activePolicy = FindPolicy(policiesByHash, view.ActivePolicy.Hash.Span);
+            VerifyViewAndHeadBinding(authority, activePolicy, view, head);
+            if (viewCursor is not null)
+                RequireNondecreasingAuthority(authority, viewCursor.FieldSpan(7), view.FieldSpan(7));
+            if (!forwardReset)
+            {
+                VerifyOrderedLineage(viewCursor, view, "view", views.Length == 1 && index == 0);
+                VerifyOrderedLineage(headCursor, head, "head", heads.Length == 1 && index == 0);
+            }
+            var stepAuthority = RequireHistoricalAuthority(authority, view.FieldSpan(7));
+            VerifyThreshold(view.WitnessSignatures, stepAuthority, XPointNetworkCrypto.ComputeSigningInput(view), "view-threshold-invalid");
+            VerifyThreshold(head.WitnessSignatures, stepAuthority, XPointNetworkCrypto.ComputeSigningInput(head), "head-threshold-invalid");
+            if (!forwardReset) VerifyHead(view, head, viewCursor, headCursor);
+            viewCursor = view;
+            headCursor = head;
+        }
+
+        Xnv1Record[] knownViews = previous is null ? views : [previous.View, .. views];
+        var viewsByReference = new Dictionary<string, Xnv1Record>(StringComparer.Ordinal);
+        foreach (var view in knownViews)
+            viewsByReference.TryAdd(Convert.ToHexString(view.CoreReferenceValue.Encode()), view);
+        ContactRecord? pmtCursor = previous?.Pmt;
+        var retainedPmtAuthorities = !forwardReset && previous is not null
+            ? new Dictionary<string, Xna1Record>(previous.RetainedPmtAuthorities, StringComparer.Ordinal)
+            : new Dictionary<string, Xna1Record>(StringComparer.Ordinal);
+        for (var index = 0; index < pmts.Length; index++)
+        {
+            var candidate = pmts[index];
+            var candidateView = FindView(viewsByReference, candidate.FieldSpan(5));
+            var candidatePolicy = FindPolicy(policiesByHash, candidateView.ActivePolicy.Hash.Span);
+            VerifyPmtAuthenticated(authority, candidatePolicy, candidateView, candidate, pmtCursor,
+                pmts.Length == 1 && index == 0, forwardReset);
+            retainedPmtAuthorities[Convert.ToHexString(candidate.ArtifactHash.Span)] =
+                RequireHistoricalAuthority(authority, candidateView.FieldSpan(7));
+            pmtCursor = candidate;
+        }
+        return retainedPmtAuthorities;
     }
 
     private static void VerifyPolicyBinding(
@@ -716,32 +726,13 @@ internal static class XPointOnionCapabilityProducer
         IReadOnlyList<Xnd1Record> nodes,
         out ulong hardUpper)
     {
-        var refs = Rows(view.FieldSpan(12), 38)
-            .Select(static value => XPointNetworkCodec.DecodeArtifactReference(value))
-            .ToArray();
-        if (refs.Length != nodes.Count)
-            Fail("network-view-incomplete", "Every current XND1 artifact must be supplied exactly once.");
-        var revoked = Rows(view.FieldSpan(14), 32).Select(Convert.ToHexString).ToHashSet(StringComparer.Ordinal);
+        VerifyNodeHistory(authority, policy, view, nodes);
         var pmtRows = Rows(pmt.FieldSpan(9), 136).ToDictionary(static row => Convert.ToHexString(row[..32]), StringComparer.Ordinal);
-        var seen = new HashSet<string>(StringComparer.Ordinal);
         var output = new List<VerifiedNetworkNode>(nodes.Count);
-        ushort aggregateRoles = 0;
         hardUpper = new[] { authority.ExpiresAt, policy.ExpiresAt, view.ExpiresAt, freshness.ExpiresAtUnixSeconds }.Min();
         foreach (var node in nodes)
         {
             var nodeId = Convert.ToHexString(node.NodeId.Span);
-            var artifactHash = XPointNetworkCrypto.ComputeArtifactHash(node);
-            if (!seen.Add(nodeId) || revoked.Contains(nodeId) || !Fixed(node.NetworkId.Span, authority.NetworkId.Span) ||
-                !refs.Any(reference => reference.Magic == ProtocolMagic.XND1 && Fixed(reference.Hash.Span, artifactHash)))
-                Fail("network-node-invalid", "An XND1 is duplicated, revoked, cross-network or not committed by XNV1.");
-            if (!VerifyEd25519(node.IdentityPublicKey.Span, XPointNetworkCrypto.ComputeSigningInput(node), node.Signature.Span))
-                Fail("network-node-signature-invalid", "An XND1 self-signature is invalid.");
-            if (node.NotBefore > view.NotBefore || view.ExpiresAt > node.ExpiresAt ||
-                !Covers(node.UInt64(23), node.UInt64(24), node.UInt64(27), node.UInt64(28), view.NotBefore, view.ExpiresAt) ||
-                !node.Origins.Any(origin => Covers(origin.CurrentNotBefore, origin.CurrentExpiresAt,
-                    origin.NextNotBefore, origin.NextExpiresAt, view.NotBefore, view.ExpiresAt)))
-                Fail("network-node-time-invalid", "An XND1 descriptor, onion key or origin does not cover the complete XNV1 interval.");
-
             var (epoch, onionKey, onionUntil) = SelectOnionKey(node, freshness.TrustedLowerUnixSeconds, freshness.TrustedUpperUnixSeconds);
             XPointPeerOriginEntry origin;
             if (pmtRows.TryGetValue(nodeId, out var pmtRow))
@@ -759,7 +750,6 @@ internal static class XPointOnionCapabilityProducer
             var epochBytes = U64(epoch);
             var keyId = XPointNetworkCrypto.Sha256Domain(
                 "Deep/XPoint/V1/onion-key-id", Join(node.NodeId.ToArray(), epochBytes, onionKey));
-            aggregateRoles |= node.RoleMask;
             hardUpper = Math.Min(hardUpper, Math.Min(node.ExpiresAt, Math.Min(onionUntil, originUntil)));
             output.Add(new VerifiedNetworkNode(
                 node.NodeId.ToArray(), node.NodeId.ToArray(), node.FieldSpan(8).ToArray(), node.FailureDomainHash.ToArray(),
@@ -767,9 +757,38 @@ internal static class XPointOnionCapabilityProducer
                 originSpki, node.RoleMask, node.UInt32(14), node.UInt64(15), node.UInt64(16),
                 epoch, keyId, onionKey, node.IdentityPublicKey.ToArray(), node.UInt64(17)));
         }
+        return output.ToArray();
+    }
+
+    private static void VerifyNodeHistory(VerifiedXPointNetworkAuthority authority,
+        Xvp1Record policy, Xnv1Record view, IReadOnlyList<Xnd1Record> nodes)
+    {
+        var refs = Rows(view.FieldSpan(12), 38)
+            .Select(static value => XPointNetworkCodec.DecodeArtifactReference(value)).ToArray();
+        if (refs.Length != nodes.Count)
+            Fail("network-view-incomplete", "Every current XND1 artifact must be supplied exactly once.");
+        var revoked = Rows(view.FieldSpan(14), 32).Select(Convert.ToHexString).ToHashSet(StringComparer.Ordinal);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        ushort aggregateRoles = 0;
+        foreach (var node in nodes)
+        {
+            var nodeId = Convert.ToHexString(node.NodeId.Span);
+            var artifactHash = XPointNetworkCrypto.ComputeArtifactHash(node);
+            if (!seen.Add(nodeId) || revoked.Contains(nodeId) || !Fixed(node.NetworkId.Span, authority.NetworkId.Span) ||
+                !refs.Any(reference => reference.Magic == ProtocolMagic.XND1 && Fixed(reference.Hash.Span, artifactHash)))
+                Fail("network-node-invalid", "An XND1 is duplicated, revoked, cross-network or not committed by XNV1.");
+            if (!VerifyEd25519(node.IdentityPublicKey.Span, XPointNetworkCrypto.ComputeSigningInput(node), node.Signature.Span))
+                Fail("network-node-signature-invalid", "An XND1 self-signature is invalid.");
+            if (node.NotBefore > view.NotBefore || view.ExpiresAt > node.ExpiresAt ||
+                !Covers(node.UInt64(23), node.UInt64(24), node.UInt64(27), node.UInt64(28), view.NotBefore, view.ExpiresAt) ||
+                !node.Origins.Any(origin => Covers(origin.CurrentNotBefore, origin.CurrentExpiresAt,
+                    origin.NextNotBefore, origin.NextExpiresAt, view.NotBefore, view.ExpiresAt)))
+                Fail("network-node-time-invalid", "An XND1 descriptor, onion key or origin does not cover the complete XNV1 interval.");
+
+            aggregateRoles |= node.RoleMask;
+        }
         if (aggregateRoles != policy.EnabledRoleMask)
             Fail("network-role-projection-invalid", "The current XND1 roster does not exactly project every active XVP1 role.");
-        return output.ToArray();
     }
 
     private static void VerifyPmtAuthenticated(
@@ -810,6 +829,11 @@ internal static class XPointOnionCapabilityProducer
             freshness.TrustedUpperUnixSeconds >= BinaryPrimitives.ReadUInt64BigEndian(pmt.FieldSpan(12)))
             Fail("pmt-binding-invalid", "The terminal PMT2 does not cover the authenticated directory freshness interval.");
 
+        VerifyPmtNodeProjection(pmt, nodes);
+    }
+
+    private static void VerifyPmtNodeProjection(ContactRecord pmt, IReadOnlyList<Xnd1Record> nodes)
+    {
         var mailboxNodes = nodes.Where(static node => (node.RoleMask & (1 << 2)) != 0)
             .OrderBy(static node => node.NodeId.ToArray(), ByteArrayComparer.Instance).ToArray();
         var rows = Rows(pmt.FieldSpan(9), 136).ToArray();
