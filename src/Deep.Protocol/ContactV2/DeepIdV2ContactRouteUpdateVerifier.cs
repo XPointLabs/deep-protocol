@@ -90,7 +90,7 @@ public static class DeepIdV2ContactRouteUpdateVerifier
         ArgumentNullException.ThrowIfNull(time); ct.ThrowIfCancellationRequested();
         RequireSelector(previousHash.Span); RequireSelector(relationship.Span); RequireSelector(conversation.Span);
         if (exactPrevious.Length is < ContactRouteClosureCodec.MinimumEncodedBytes or > ContactRouteClosureCodec.MaximumEncodedBytes ||
-            exactEvent.Length is < 4497 or > 23649)
+            exactEvent.Length is < 4497 or > ApplicationCoreCodec.MaximumContactRouteUpdateRecordBytes)
             throw new CryptographicException("Private route-update input exceeds its exact closed bounds.");
         // All caller-owned buffers become immutable bounded records/selectors
         // before the first asynchronous clock/current-authority operation.
@@ -107,11 +107,7 @@ public static class DeepIdV2ContactRouteUpdateVerifier
         var predecessorHash = previousHash.ToArray(); var relationshipId = relationship.ToArray(); var conversationId = conversation.ToArray();
         try
         {
-            var bytes = ContactRouteClosureCodec.EncodeRecords([update.Reachability, update.Authorization,
-                update.Route, update.Successor, update.MailboxProjection, update.MailboxSelection]);
-            ParsedContactRouteClosure route;
-            try { route = ContactRouteClosureCodec.Decode(bytes); }
-            finally { CryptographicOperations.ZeroMemory(bytes); }
+            var route = ContactRouteClosureCodec.Decode(update.ExactRouteClosure.Span);
             var checkpoint = peer.CurrentCheckpoint ?? throw new CryptographicException("Private route update lost its current peer.");
             var delegation = DeepIdV2ContactAuthorizationCodec.Verify(original.Authorization, checkpoint.Binding, checkpoint.Directory);
             var reading = await time.ReadCurrentAsync(ct).ConfigureAwait(false);
@@ -134,7 +130,9 @@ public static class DeepIdV2ContactRouteUpdateVerifier
                     throw new CryptographicException("Private route update differs from the actual peer, relationship or predecessor.");
                 RequireOriginalScope(original.Route, previous);
                 RequireHistoricalRoute(previous, context);
-                RequireTransition(original.Invite, previous, route);
+                var history = update.RecoveryWitness is null ? null :
+                    DeepIdV2ContactRouteRecoveryWitnessCodec.VerifyAtCurrentContext(update.RecoveryWitness, previous, context);
+                RequireTransition(original.Invite, previous, route, history);
                 RequireHistoricalRoute(route, context);
                 var created = message.CreatedAtUnixMilliseconds / 1000;
                 if (message.CreatedAtUnixMilliseconds > checked(context.Upper * 1000) ||
@@ -209,11 +207,14 @@ public static class DeepIdV2ContactRouteUpdateVerifier
                 throw new CryptographicException("Private route predecessor changes its original signed recipient scope.");
     }
 
-    private static void RequireTransition(ParsedXir1V2 originalInvite, ParsedContactRouteClosure previous, ParsedContactRouteClosure next)
+    private static void RequireTransition(ParsedXir1V2 originalInvite, ParsedContactRouteClosure previous, ParsedContactRouteClosure next,
+        VerifiedDeepIdV2ContactRouteRecordedHistory? history)
     {
         // Reuse the single DR72 same-scope XRA/XRC/XSS/PMS transition checks.
         // This internal selector exposes no invitation or current capability.
-        new VerifiedDeepIdV2ContactRoutePredecessor(originalInvite, previous).RequireThresholdSuccessor(next.Authorization,
+        var predecessor = history is null ? new VerifiedDeepIdV2ContactRoutePredecessor(originalInvite, previous) :
+            history.Predecessor.AfterRecordedHistory(history);
+        predecessor.RequireThresholdSuccessor(next.Authorization,
             new ParsedDeepIdV2RouteThreshold(next.Selection.CanonicalBytes.Span, next.Route.CanonicalBytes.Span, next.Successor.CanonicalBytes.Span));
         VerifiedDeepIdV2ContactRoutePredecessor.RequireIncrement(previous.Reachability.Field(3).Span, next.Reachability.Field(3).Span);
         if (!Fixed(previous.Reachability.CoreHash.Span, next.Reachability.Field(4).Span) ||

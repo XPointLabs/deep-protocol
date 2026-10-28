@@ -11,17 +11,26 @@ public sealed class VerifiedDeepIdV2ContactRoutePredecessor
 {
     internal VerifiedDeepIdV2ContactRoutePredecessor(ParsedXir1V2 invite, ParsedContactRouteClosure route)
     { Invite = invite; Route = route; }
+    internal VerifiedDeepIdV2ContactRouteRecordedHistory? RecordedHistory { get; private init; }
+    private readonly ContactRecord? historicalAdvertisement;
+    private readonly ParsedDeepIdV2RouteThreshold? historicalThreshold;
+    internal VerifiedDeepIdV2ContactRoutePredecessor(ParsedXir1V2 invite, ParsedContactRouteClosure route, ContactRecord advertisement, ParsedDeepIdV2RouteThreshold threshold)
+    { Invite = invite; Route = route; historicalAdvertisement = advertisement; historicalThreshold = threshold; }
+    internal ContactRecord Proposal => historicalAdvertisement ?? RecordedHistory?.LastAdvertisement ?? Route.Authorization;
+    internal ContactRecord ProposalRoute => historicalThreshold?.LiveRoute ?? RecordedHistory?.LastThreshold.LiveRoute ?? Route.Route;
+    internal ContactRecord ProposalSelection => historicalThreshold?.Selection ?? RecordedHistory?.LastThreshold.Selection ?? Route.Selection;
+    internal VerifiedDeepIdV2ContactRoutePredecessor AfterRecordedHistory(VerifiedDeepIdV2ContactRouteRecordedHistory history) => new(Invite, Route) { RecordedHistory = history };
     internal ParsedXir1V2 Invite { get; }
     internal ParsedContactRouteClosure Route { get; }
     public ReadOnlyMemory<byte> ExactXir1V2 => Invite.CanonicalBytes;
     public ReadOnlyMemory<byte> ExactRouteClosure => Route.ExactBytes;
 
-    internal void RequireAtCurrentContext(DeepIdV2RouteContext current) =>
-        DeepIdV2ContactRouteVerifier.RequirePredecessorBindings(Invite, Route, current);
+    internal void RequireAtCurrentContext(DeepIdV2RouteContext current)
+    { DeepIdV2ContactRouteVerifier.RequirePredecessorBindings(Invite, Route, current); RecordedHistory?.RequireAtCurrentContext(current); }
 
     internal void RequireAdvertisementSuccessor(ContactRecord next)
     {
-        var prior = Route.Authorization;
+        var prior = Proposal;
         RequireIncrement(prior.Field(3).Span, next.Field(3).Span);
         if (!DeepIdV2RouteContext.Fixed(prior.CoreHash.Span, next.Field(4).Span) ||
             DeepIdV2RouteContext.U64(next.Field(12).Span) < DeepIdV2RouteContext.U64(prior.Field(12).Span) ||
@@ -35,7 +44,7 @@ public sealed class VerifiedDeepIdV2ContactRoutePredecessor
     internal void RequireThresholdSuccessor(ContactRecord nextXra, ParsedDeepIdV2RouteThreshold next)
     {
         RequireAdvertisementSuccessor(nextXra);
-        var prior = Route.Route; var xrc = next.LiveRoute; var xss = next.Successor;
+        var prior = ProposalRoute; var xrc = next.LiveRoute; var xss = next.Successor;
         RequireIncrement(prior.Field(3).Span, xrc.Field(3).Span);
         if (!DeepIdV2RouteContext.Fixed(prior.CoreHash.Span, xrc.Field(4).Span) ||
             !DeepIdV2RouteContext.Fixed(prior.CoreHash.Span, xss.Field(4).Span) ||
@@ -46,7 +55,7 @@ public sealed class VerifiedDeepIdV2ContactRoutePredecessor
         foreach (var tag in new[] { 1, 2, 6, 10, 14, 15 })
             if (!DeepIdV2RouteContext.Fixed(prior.Field(tag).Span, xrc.Field(tag).Span))
                 throw new CryptographicException("Threshold successor changes its retained route or capabilities.");
-        var previousSelection = Route.Selection;
+        var previousSelection = ProposalSelection;
         foreach (var tag in Enumerable.Range(1, 7))
             if (!DeepIdV2RouteContext.Fixed(previousSelection.Field(tag).Span, next.Selection.Field(tag).Span))
                 throw new CryptographicException("Selection renewal changes its exact placement projection.");

@@ -34,6 +34,41 @@ public static class DeepIdV2PreKeyLineageVerifier
             throw new CryptographicException("Contact prekey succession does not advance its exact signed predecessor.");
     }
 
+    /// <summary>Anchors an exact bounded set of historical intermediates in
+    /// the supplied authenticated predecessor. Every hop remains immediate;
+    /// this proves no service currentness, inventory commitment or dispatch.</summary>
+    public static void VerifyServiceHistory(ParsedXps1V2 candidate,
+        ParsedXps1V2 durablePredecessor, IReadOnlyList<ParsedXps1V2> intermediates,
+        ReadOnlySpan<byte> deviceSigningPublicKey)
+    {
+        ArgumentNullException.ThrowIfNull(candidate); ArgumentNullException.ThrowIfNull(durablePredecessor);
+        ArgumentNullException.ThrowIfNull(intermediates);
+        if (intermediates.Count > DeepIdV2ResolverClosureCodec.MaximumPreKeyServiceHistoryEntries)
+            throw new CryptographicException("Contact prekey history exceeds its bounded support.");
+        if (intermediates.Count == 0)
+        {
+            VerifyServiceTransition(candidate, durablePredecessor, deviceSigningPublicKey); return;
+        }
+        if (Fixed(candidate.CanonicalBytes.Span, durablePredecessor.CanonicalBytes.Span))
+        {
+            throw new CryptographicException("An unchanged service cannot consume historical witnesses.");
+        }
+        var oldGeneration = U64(durablePredecessor.Field(5).Span);
+        var nextGeneration = U64(candidate.Field(5).Span);
+        if (nextGeneration <= oldGeneration || nextGeneration - oldGeneration != (ulong)intermediates.Count + 1)
+            throw new CryptographicException("Contact prekey history omits or adds an exact intermediate.");
+        var ordered = intermediates.Select(value => value ?? throw new CryptographicException("A prekey history record is absent."))
+            .OrderBy(value => U64(value.Field(5).Span)).ToArray();
+        var previous = durablePredecessor;
+        foreach (var item in ordered)
+        {
+            if (U64(item.Field(5).Span) <= oldGeneration || U64(item.Field(5).Span) >= nextGeneration)
+                throw new CryptographicException("A prekey history witness is not a strict intermediate.");
+            VerifyServiceTransition(item, previous, deviceSigningPublicKey); previous = item;
+        }
+        VerifyServiceTransition(candidate, previous, deviceSigningPublicKey);
+    }
+
     public static void VerifySuccessor(ParsedXpi1V2 candidate,
         ParsedXpi1V2? durablePredecessor)
     {

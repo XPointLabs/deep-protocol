@@ -40,7 +40,7 @@ public static partial class DeepIdV2ContactObjectAuthor
         IReadOnlyList<ParsedXps1V2> preKeyServices, string profileName,
         ReadOnlyMemory<byte> resolverReadCapability16, VerifiedDeepIdV2ContactRouteIssuance? issuance,
         VerifiedDeepIdV2ContactObjectPredecessor? predecessor,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, IReadOnlyList<ParsedXps1V2>? preKeyServiceHistory = null)
     {
         ArgumentNullException.ThrowIfNull(route);
         cancellationToken.ThrowIfCancellationRequested();
@@ -53,7 +53,7 @@ public static partial class DeepIdV2ContactObjectAuthor
             using var resolution = DeepIdV2PermanentContactResolutionDerivation.Derive(
                 route.Network.NetworkId.Span, route.Recipient.Authorization.Binding.DeepId, capability);
             var closure = await AuthorClosureCoreAsync(route, device, preKeyServices, profileName,
-                issuance, predecessor, 1, cancellationToken).ConfigureAwait(false);
+                issuance, predecessor, 1, cancellationToken, preKeyServiceHistory).ConfigureAwait(false);
             protectedBytes = DeepIdV2ResolverObjectProtection.Seal(closure, route.Network.NetworkId.Span,
                 route.Recipient.Authorization.Binding.DeepId, resolution);
             cancellationToken.ThrowIfCancellationRequested();
@@ -71,7 +71,7 @@ public static partial class DeepIdV2ContactObjectAuthor
         IReadOnlyList<ParsedXps1V2> preKeyServices, string profileName,
         VerifiedDeepIdV2ContactRouteIssuance? issuance,
         VerifiedDeepIdV2ContactObjectPredecessor? predecessor, byte inviteKind,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, IReadOnlyList<ParsedXps1V2>? preKeyServiceHistory = null)
     {
         ArgumentNullException.ThrowIfNull(route); ArgumentNullException.ThrowIfNull(device);
         ArgumentNullException.ThrowIfNull(preKeyServices); ArgumentNullException.ThrowIfNull(profileName);
@@ -88,6 +88,13 @@ public static partial class DeepIdV2ContactObjectAuthor
                 throw new ArgumentException("A prekey descriptor is absent.", nameof(preKeyServices))).CanonicalBytes.Span);
         if (services.Select(value => Convert.ToHexString(value.Field(3).Span)).Distinct(StringComparer.Ordinal).Count() != serviceCount)
             throw new CryptographicException("Duplicate device prekey descriptors are forbidden.");
+        var historyCount = preKeyServiceHistory?.Count ?? 0;
+        if (historyCount > DeepIdV2ResolverClosureCodec.MaximumPreKeyServiceHistoryEntries || predecessor is null && historyCount != 0)
+            throw new CryptographicException("Contact prekey history exceeds its exact successor scope.");
+        var history = new ParsedXps1V2[historyCount];
+        for (var index = 0; index < history.Length; index++)
+            history[index] = DeepIdV2PreKeyServiceCodec.Decode((preKeyServiceHistory![index] ??
+                throw new CryptographicException("A prekey history record is absent.")).CanonicalBytes.Span);
         var binding = route.Recipient.Authorization.Binding;
         var window = await route.ReadCurrentTimeAsync(cancellationToken).ConfigureAwait(false);
         issuance?.RequireExactRoute(route);
@@ -99,7 +106,7 @@ public static partial class DeepIdV2ContactObjectAuthor
         if (inviteKind is < 1 or > 2 || (inviteKind == 2 && (predecessor is not null || issuance?.Request.HasPredecessor == true)) ||
             route.Invite.Field(9).Span[0] != inviteKind || directory.ActiveDevices.Count != services.Length ||
             U64(route.Invite.Field(3).Span) != (predecessor is null ? 0 : checked(U64(predecessor.Closure.Bundle.Field(8).Span) + 1)) ||
-            U64(route.Route.Authorization.Field(3).Span) != U64(route.Invite.Field(3).Span))
+            (predecessor is null && U64(route.Route.Authorization.Field(3).Span) != 0))
             throw new CryptographicException("The object requires the exact authorized invite kind and route generation.");
         var issued = window.LowerUnixSeconds;
         var expiry = Math.Min(dca.Record.ExpiresAtUnixSeconds, U64(route.Invite.Field(14).Span));
@@ -148,12 +155,16 @@ public static partial class DeepIdV2ContactObjectAuthor
                 lookup.CanonicalBytes, minimumHead, binding.DeepId.RecordHash, binding.DeepId.CanonicalBytes,
                 binding.Record.CanonicalBytes];
         var unsigned = EncodeBundle(fields);
-        predecessor?.RequireSuccessorBundle(route, unsigned, window, cancellationToken);
+        var supportLength = checked(6 + binding.Identity.Revocations.Snapshot.CanonicalBytes.Length +
+            binding.Identity.ActiveDevices.Sum(value => 6 + value.Certificate.CanonicalBytes.Length) + history.Length * (6 + 352));
+        if (supportLength > 16_384 || 62 + unsigned.CanonicalBytes.Length + supportLength > DeepIdV2ResolverClosureCodec.MaximumLength)
+            throw new CryptographicException("Contact support exceeds its bounded artifact closure.");
+        predecessor?.RequireSuccessorBundle(route, unsigned, window, cancellationToken, history);
         var signature = device.SignCurrentContactBundle(unsigned, dca);
         ParsedDcb1V2 bundle;
         try { fields[18] = signature; bundle = EncodeBundle(fields); }
         finally { CryptographicOperations.ZeroMemory(signature); }
-        var closure = CloseSupport(bundle, dca);
+        var closure = CloseSupport(bundle, dca, history);
         var final = await route.ReadCurrentTimeAsync(cancellationToken).ConfigureAwait(false);
         RequireContinuous(window, final);
         issuance?.RequireExactRoute(route);
@@ -220,16 +231,20 @@ public static partial class DeepIdV2ContactObjectAuthor
         writer.Complete(); return DeepIdV2ContactBundleCodec.Decode(bytes);
     }
 
-    private static ParsedDcr1V2 CloseSupport(ParsedDcb1V2 bundle, VerifiedDca1V2 dca)
+    private static ParsedDcr1V2 CloseSupport(ParsedDcb1V2 bundle, VerifiedDca1V2 dca, IReadOnlyList<ParsedXps1V2> history)
     {
         var identity = dca.Binding.Identity;
         var dpds = identity.ActiveDevices.OrderBy(value => Convert.ToHexString(value.Certificate.CanonicalHash.Span), StringComparer.Ordinal)
             .Select(value => value.Certificate.CanonicalBytes).ToArray();
-        ReadOnlyMemory<byte>[] artifacts = [identity.Revocations.Snapshot.CanonicalBytes, .. dpds];
+        var historical = history.OrderBy(value => Convert.ToHexString(SHA256.HashData(value.CanonicalBytes.Span)), StringComparer.Ordinal)
+            .Select(value => value.CanonicalBytes).ToArray();
+        ReadOnlyMemory<byte>[] artifacts = [identity.Revocations.Snapshot.CanonicalBytes, .. dpds, .. historical];
+        if (artifacts.Sum(value => 6 + value.Length) > 16_384)
+            throw new CryptographicException("Contact support exceeds its bounded artifact closure.");
         var support = new byte[artifacts.Sum(value => 6 + value.Length)]; var offset = 0;
         for (var i = 0; i < artifacts.Length; i++)
         {
-            BinaryPrimitives.WriteUInt16BigEndian(support.AsSpan(offset), (ushort)(i == 0 ? 1 : 2));
+            BinaryPrimitives.WriteUInt16BigEndian(support.AsSpan(offset), (ushort)(i == 0 ? 1 : i <= dpds.Length ? 2 : 3));
             BinaryPrimitives.WriteUInt32BigEndian(support.AsSpan(offset + 2), checked((uint)artifacts[i].Length));
             artifacts[i].Span.CopyTo(support.AsSpan(offset + 6)); offset += 6 + artifacts[i].Length;
         }

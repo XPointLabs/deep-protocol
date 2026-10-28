@@ -27,7 +27,8 @@ public sealed class PublicationStoreAuthoritySurfaceTests
         Assert.Equal(15_167, DeepIdV2PublicationCurrentWireCodec.MinimumResponseBytes);
         Assert.Equal(96_457, DeepIdV2PublicationCurrentWireCodec.MaximumResponseBytes);
         Assert.Equal((byte)5, (byte)ContactCoordinationTarget.PublicationCurrent);
-        Assert.Equal(new byte[] { 1, 2, 5 }, Enum.GetValues<ContactCoordinationTarget>().Select(value => (byte)value).ToArray());
+        Assert.Equal(new byte[] { 1, 2, 5, 6 }, Enum.GetValues<ContactCoordinationTarget>().Select(value => (byte)value).ToArray());
+        Assert.Equal((byte)6, (byte)ContactCoordinationTarget.RouteRecovery);
         foreach (var retired in new[] { "PublicationLeaseWireRequest", "PublicationWinnerReadWireRequest",
             "DeepIdV2PublicationLeaseWireCodec", "DeepIdV2PublicationLeaseAuthor",
             "DeepIdV2PublicationWinnerReadWireCodec", "DeepIdV2PublicationWinnerReadAuthor" })
@@ -174,8 +175,12 @@ public sealed class PublicationStoreAuthoritySurfaceTests
         var objectAuthor = Assert.Single(typeof(DeepIdV2ContactObjectAuthor).GetMethods(), method => method.Name == "AuthorRetainedSuccessorAsync");
         Assert.Equal([typeof(VerifiedDeepIdV2ContactRouteClosure), typeof(VerifiedDeepIdV2ContactRouteIssuance),
             typeof(VerifiedDeepIdV2ContactObjectPredecessor), typeof(OwnedGenesisDeviceSecrets), typeof(IReadOnlyList<ParsedXps1V2>),
-            typeof(string), typeof(ReadOnlyMemory<byte>), typeof(CancellationToken)],
+            typeof(string), typeof(ReadOnlyMemory<byte>), typeof(CancellationToken), typeof(IReadOnlyList<ParsedXps1V2>)],
             objectAuthor.GetParameters().Select(parameter => parameter.ParameterType).ToArray());
+        var history = objectAuthor.GetParameters()[^1];
+        Assert.Equal("preKeyServiceHistory", history.Name);
+        Assert.True(history.IsOptional);
+        Assert.Null(history.DefaultValue);
         foreach (var name in new[] { "AuthorSuccessorRequestAsync", "VerifySuccessorRequestAsync", "AuthorThresholdSuccessorAsync", "VerifySuccessorResponseAsync" })
         {
             var method = Assert.Single(typeof(DeepIdV2PublicationAuthorityAuthor).GetMethods(), value => value.Name == name);

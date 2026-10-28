@@ -34,15 +34,15 @@ public sealed class VerifiedDeepIdV2ContactObjectPredecessor
     }
 
     internal void RequireSuccessorBundle(VerifiedDeepIdV2ContactRouteClosure next, ParsedDcb1V2 bundle,
-        DeepIdV2ContactRouteTimeWindow window, CancellationToken ct)
+        DeepIdV2ContactRouteTimeWindow window, CancellationToken ct, IReadOnlyList<ParsedXps1V2>? preKeyServiceHistory = null)
     {
         RequireSuccessorRoute(next, window, ct);
-        DeepIdV2ContactObjectLineage.RequireSuccessorBundle(Closure.Bundle, next, bundle);
+        DeepIdV2ContactObjectLineage.RequireSuccessorBundle(Closure.Bundle, next, bundle, preKeyServiceHistory);
     }
 
     internal void RequireSuccessorObject(VerifiedDeepIdV2ContactRouteClosure next, ParsedDcr1V2 closure,
         DeepIdV2ContactRouteTimeWindow window, CancellationToken ct) =>
-        RequireSuccessorBundle(next, closure.Bundle, window, ct);
+        RequireSuccessorBundle(next, closure.Bundle, window, ct, closure.PreKeyServiceHistory);
 }
 
 // Signed lineage comparisons shared by client decrypt verification and the
@@ -52,7 +52,7 @@ internal static class DeepIdV2ContactObjectLineage
     internal static void RequireSuccessorRoute(VerifiedDeepIdV2ContactRoutePredecessor prior,
         VerifiedDeepIdV2ContactRouteClosure next)
     {
-        prior.RequireThresholdSuccessor(next.Route.Authorization,
+        (next.RecordedHistory is null ? prior : next.RecordedHistory.RequireExactPredecessor(prior).AfterRecordedHistory(next.RecordedHistory)).RequireThresholdSuccessor(next.Route.Authorization,
             new(next.Route.Selection.CanonicalBytes.Span, next.Route.Route.CanonicalBytes.Span,
                 next.Route.Successor.CanonicalBytes.Span));
         VerifiedDeepIdV2ContactRoutePredecessor.RequireIncrement(prior.Invite.Field(3).Span, next.Invite.Field(3).Span);
@@ -62,13 +62,13 @@ internal static class DeepIdV2ContactObjectLineage
     }
 
     internal static void RequireSuccessorBundle(ParsedDcb1V2 prior,
-        VerifiedDeepIdV2ContactRouteClosure next, ParsedDcb1V2 bundle)
+        VerifiedDeepIdV2ContactRouteClosure next, ParsedDcb1V2 bundle, IReadOnlyList<ParsedXps1V2>? preKeyServiceHistory = null)
     {
         RequireSuccessorChain(prior, bundle);
         foreach (var tag in new[] { 1, 2, 3, 4, 5, 6, 7, 10, 11, 13, 15, 16, 22, 23, 24 })
             if (!DeepIdV2RouteContext.Fixed(prior.Field(tag).Span, bundle.Field(tag).Span))
                 throw new CryptographicException("Contact successor requires separate identity, service, profile or policy rollover.");
-        RequireServiceSuccessors(prior.Field(12).Span, bundle.Field(12).Span, next.Recipient.Authorization);
+        RequireServiceSuccessors(prior.Field(12).Span, bundle.Field(12).Span, next.Recipient.Authorization, preKeyServiceHistory ?? []);
         if (!DeepIdV2RouteContext.Fixed(bundle.Field(14).Span[40..], next.ExactXir1V2.Span) ||
             DeepIdV2RouteContext.U64(bundle.Field(8).Span) != DeepIdV2RouteContext.U64(next.Invite.Field(3).Span))
             throw new CryptographicException("Contact successor does not bind its exact current route generation.");
@@ -78,9 +78,12 @@ internal static class DeepIdV2ContactObjectLineage
     // inventory commitment or authority to retire any old prekey. Both owner
     // and independent issuer reach this exact predicate through closed lineage.
     internal static void RequireServiceSuccessors(ReadOnlySpan<byte> prior,
-        ReadOnlySpan<byte> candidate, VerifiedDca1V2 authorization)
+        ReadOnlySpan<byte> candidate, VerifiedDca1V2 authorization, IReadOnlyList<ParsedXps1V2>? preKeyServiceHistory = null)
     {
         ArgumentNullException.ThrowIfNull(authorization);
+        if (preKeyServiceHistory?.Count > DeepIdV2ResolverClosureCodec.MaximumPreKeyServiceHistoryEntries)
+            throw new CryptographicException("Contact prekey history exceeds the exact support bound.");
+        var remaining = preKeyServiceHistory?.ToList() ?? [];
         const int entryBytes = 4 + DeepIdV2PreKeyServiceCodec.CanonicalLength;
         var active = authorization.Directory.Record.ActiveDevices;
         if (prior.Length < 1 || candidate.Length < 1 || prior[0] is < 1 or > 16 ||
@@ -101,8 +104,11 @@ internal static class DeepIdV2ContactObjectLineage
                 !DeepIdV2RouteContext.Fixed(old.Field(3).Span, active[index].DeviceId.Span) ||
                 !DeepIdV2RouteContext.Fixed(old.Field(4).Span[6..], device.Certificate.CanonicalHash.Span))
                 throw new CryptographicException("Contact prekey succession changed its current device scope.");
-            DeepIdV2PreKeyLineageVerifier.VerifyServiceTransition(next, old, device.Certificate.DeviceEd25519PublicKey.Span);
+            var history = remaining.Where(value => value.Field(3).Span.SequenceEqual(active[index].DeviceId.Span)).ToArray();
+            DeepIdV2PreKeyLineageVerifier.VerifyServiceHistory(next, old, history, device.Certificate.DeviceEd25519PublicKey.Span);
+            foreach (var item in history) remaining.Remove(item);
         }
+        if (remaining.Count != 0) throw new CryptographicException("Contact prekey history contains unused device support.");
     }
 
     // Ordering is generation/hash based. An unchanged signed service can cap
@@ -124,11 +130,12 @@ public static partial class DeepIdV2ContactObjectAuthor
         VerifiedDeepIdV2ContactRouteClosure route, VerifiedDeepIdV2ContactRouteIssuance issuance,
         VerifiedDeepIdV2ContactObjectPredecessor predecessor, OwnedGenesisDeviceSecrets device,
         IReadOnlyList<ParsedXps1V2> preKeyServices, string profileName,
-        ReadOnlyMemory<byte> resolverReadCapability16, CancellationToken cancellationToken = default)
+        ReadOnlyMemory<byte> resolverReadCapability16, CancellationToken cancellationToken = default,
+        IReadOnlyList<ParsedXps1V2>? preKeyServiceHistory = null)
     {
         ArgumentNullException.ThrowIfNull(issuance); ArgumentNullException.ThrowIfNull(predecessor);
         return AuthorGenesisCoreAsync(route, device, preKeyServices, profileName, resolverReadCapability16,
-            issuance, predecessor, cancellationToken);
+            issuance, predecessor, cancellationToken, preKeyServiceHistory);
     }
 
     public static async ValueTask<VerifiedDeepIdV2ContactObjectPredecessor> VerifyPredecessorAsync(

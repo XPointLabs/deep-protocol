@@ -89,8 +89,8 @@ public static partial class DeepIdV2ContactRouteAuthor
         // eligibility; it is not caller-supplied historical authority.
         current = current.BindCurrentAssignment(xra.Field(5));
         predecessor?.RequireAtCurrentContext(current);
-        if (predecessor is not null && (DeepIdV2RouteContext.U64(predecessor.Route.Route.Field(3).Span) >= ulong.MaxValue - 1 ||
-            expiresAtUnixSeconds <= DeepIdV2RouteContext.U64(predecessor.Route.Route.Field(18).Span)))
+        if (predecessor is not null && (DeepIdV2RouteContext.U64(predecessor.ProposalRoute.Field(3).Span) >= ulong.MaxValue - 1 ||
+            expiresAtUnixSeconds <= DeepIdV2RouteContext.U64(predecessor.ProposalRoute.Field(18).Span)))
             throw new CryptographicException("The retained route generation or expiry cannot advance.");
         current.RequireAdvertisement(xra); current.Covers(issuedAtUnixSeconds, expiresAtUnixSeconds, DeepIdV2RouteTimeArtifact.ThresholdAuthoring);
         if (issuedAtUnixSeconds < DeepIdV2RouteContext.U64(xra.FieldSpan(12)) ||
@@ -114,9 +114,9 @@ public static partial class DeepIdV2ContactRouteAuthor
                 ContactRouteThresholdAuthor.EncodeProjection(ProtocolMagic.PMS2, selection, 6));
             if (predecessor is not null)
                 for (var tag = 1; tag <= 7; tag++)
-                    if (!DeepIdV2RouteContext.Fixed(selection[tag - 1].Span, predecessor.Route.Selection.Field(tag).Span))
+                    if (!DeepIdV2RouteContext.Fixed(selection[tag - 1].Span, predecessor.ProposalSelection.Field(tag).Span))
                         throw new CryptographicException("A route successor cannot change its selection projection.");
-            var oldSelection = predecessor?.Route.Selection;
+            var oldSelection = predecessor?.ProposalSelection;
             var reuseSelection = oldSelection is not null &&
                 DeepIdV2RouteContext.U64(oldSelection.Field(8).Span) <= current.Lower &&
                 expiresAtUnixSeconds <= DeepIdV2RouteContext.U64(oldSelection.Field(9).Span);
@@ -132,7 +132,7 @@ public static partial class DeepIdV2ContactRouteAuthor
             }
             var pms = reuseSelection ? oldSelection! : await SignRecordAsync(current, ProtocolMagic.PMS2, selection, 10,
                 ContactRouteAuthoritySignaturePurpose.Selection, signers, cancellationToken).ConfigureAwait(false);
-            var priorRoute = predecessor?.Route.Route;
+            var priorRoute = predecessor?.ProposalRoute;
             var count = pms.FieldSpan(5)[0]; var replicas = priorRoute?.Field(15).ToArray() ?? new byte[count * 64];
             for (var index = 0; priorRoute is null && index < count; index++)
             {
@@ -252,7 +252,7 @@ public static partial class DeepIdV2ContactRouteAuthor
             issuance?.RequireAtCurrentContext(final);
             closure = ContactRouteClosureCodec.EncodeRecords([xrr, xra, xrc, xss, current.Pmt, pms]);
             return await DeepIdV2ContactRouteVerifier.VerifyAsync(currentAuthorization, network, networkAuthority,
-                invite.CanonicalBytes, closure, trustedTime, cancellationToken).ConfigureAwait(false);
+                invite.CanonicalBytes, closure, trustedTime, cancellationToken, predecessor?.RecordedHistory).ConfigureAwait(false);
         }
         finally
         {

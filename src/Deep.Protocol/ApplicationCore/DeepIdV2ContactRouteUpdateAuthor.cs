@@ -62,9 +62,16 @@ public static partial class ApplicationCoreCodec
             var expires = Math.Min(checked(routeEnd * 1000), checked(created + 7UL * 24 * 60 * 60 * 1000));
             if (expires <= created)
                 throw new CryptographicException("Current publication has no private route-control lifetime.");
+            byte[] witness = [];
+            if (ownPublication.RecordedHistory is { } history)
+            {
+                if (!CryptographicOperations.FixedTimeEquals(history.Predecessor.ExactRouteClosure.Span, previous.ExactBytes.Span))
+                    throw new CryptographicException("Private recovery witness does not join the actual native-advertised predecessor.");
+                witness = DeepIdV2ContactRouteRecoveryWitnessCodec.Encode(history);
+            }
             var payload = CreateContactRouteUpdatePayloadCore(relationship,
                 BinaryPrimitives.ReadUInt64BigEndian(route.Reachability.Field(3).Span), predecessor,
-                route.Reachability, route.Authorization, route.Route, route.Successor, route.Projection, route.Selection);
+                route.Reachability, route.Authorization, route.Route, route.Successor, route.Projection, route.Selection, witness);
             var recipient = ownPublication.Recipient;
             var record = AuthorDmc2Core(ownPublication.Network.NetworkId.Span, logical, conversation,
                 recipient.Authorization.Binding.Record.DeepAccountId.Span, recipient.Authorization.Record.PublisherDeviceId.Span,

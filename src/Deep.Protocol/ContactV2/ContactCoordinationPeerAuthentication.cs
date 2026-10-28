@@ -6,7 +6,7 @@ using Deep.Protocol.ContactV1;
 
 namespace Deep.Protocol.ContactV2;
 
-public enum ContactCoordinationTarget : byte { Route = 1, Publication = 2, PublicationCurrent = 5 }
+public enum ContactCoordinationTarget : byte { Route = 1, Publication = 2, PublicationCurrent = 5, RouteRecovery = 6 }
 
 public sealed record ContactCoordinationPeerHeaders(
     string NodePublicKeyHex, string TimestampUnixMilliseconds, string NonceHex, string SignatureHex);
@@ -88,6 +88,8 @@ public static class ContactCoordinationPeerAuthentication
                 body.Length <= ContactPublicationAuthorityWireCodec.MaximumRequestBytes,
             ContactCoordinationTarget.PublicationCurrent => body.Length >= DeepIdV2PublicationCurrentWireCodec.MinimumRequestBytes &&
                 body.Length <= DeepIdV2PublicationCurrentWireCodec.MaximumRequestBytes,
+            ContactCoordinationTarget.RouteRecovery => body.Length >= DeepIdV2ContactRouteRecoveryWireCodec.MinimumRequestBytes &&
+                body.Length <= DeepIdV2ContactRouteRecoveryWireCodec.MaximumRequestBytes,
             _ => false
         };
         if (!valid) throw new ArgumentException("Private coordination target/body exceeds its frozen bound.");

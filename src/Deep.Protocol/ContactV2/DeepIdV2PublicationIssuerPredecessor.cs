@@ -35,8 +35,9 @@ public sealed class VerifiedDeepIdV2PublicationIssuerPredecessor : IVerifiedDeep
     {
         RequireAtCurrentContext(next.VerifyContextAtWindow(window, ct));
         DeepIdV2ContactObjectLineage.RequireSuccessorRoute(route, next);
+        var nextClosure = DeepIdV2ResolverClosureCodec.Decode(candidate.ExactDcr1.Span);
         DeepIdV2ContactObjectLineage.RequireSuccessorBundle(closure.Bundle, next,
-            DeepIdV2ResolverClosureCodec.Decode(candidate.ExactDcr1.Span).Bundle);
+            nextClosure.Bundle, nextClosure.PreKeyServiceHistory);
         DeepIdV2PublicationCommitVerifier.RequirePublicationSuccessor(owned, result, candidate);
     }
 }

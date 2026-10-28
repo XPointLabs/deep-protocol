@@ -479,6 +479,66 @@ public sealed class ApplicationCoreVerificationTests
         Assert.False(DeepIdV2ResolverClosureCodec.RuntimeActivation);
         DeepIdV2ResolverClosureCodec.VerifyIdentityAndSupport(
             closure, contactVerified, 15);
+        // DR-0129: generic resolution authenticates a signed suffix, while
+        // only an owned/issuer predecessor proves the actual left anchor.
+        byte[] HistoricalService(ulong generation, byte[]? prior, ulong expires,
+            Action<ReadOnlyMemory<byte>[]>? mutate = null)
+        {
+            var fields = xpsFields.ToArray(); fields[4] = Be64(generation);
+            fields[5] = prior is null ? ApplicationCoreFixture.Bytes(32, 0xd1) : SHA256.HashData(prior);
+            fields[10] = Be64(expires); mutate?.Invoke(fields);
+            return SignXps(fields, fixture.DeviceKey);
+        }
+        var service5 = HistoricalService(5, null, 12);
+        var service6 = HistoricalService(6, service5, 14);
+        var service7 = HistoricalService(7, service6, 20);
+        var suffixFields = bundleFields.ToArray(); suffixFields[11] = ServiceList(service7);
+        var suffixBundle = SignBundle(suffixFields, fixture.DeviceKey);
+        byte[] HistorySupport(params byte[][] services) => support.Concat(services
+            .OrderBy(value => Convert.ToHexString(SHA256.HashData(value)), StringComparer.Ordinal)
+            .SelectMany(value => DcrSupport(3, value))).ToArray();
+        ParsedDcr1V2 Suffix(params byte[][] history) => DeepIdV2ResolverClosureCodec.AuthorForValidation(
+            fixture.Network, suffixBundle.CanonicalBytes.Span, checked((ushort)(2 + history.Length)), HistorySupport(history));
+        var suffix = Suffix(service6);
+        DeepIdV2ResolverClosureCodec.VerifyIdentityAndSupport(suffix, contactVerified, 15);
+        Assert.Equal(service6, Assert.Single(suffix.PreKeyServiceHistory).CanonicalBytes.ToArray());
+        // The historical intermediate has already expired, yet current XPS7
+        // remains live. No fabricated old AccountProof is needed for XPS6.
+        Assert.True(BinaryPrimitives.ReadUInt64BigEndian(DeepIdV2PreKeyServiceCodec.Decode(service6).Field(11).Span) < 15);
+        DeepIdV2ResolverClosureCodec.VerifyIdentityAndSupport(Suffix(), contactVerified, 15);
+        DeepIdV2ResolverClosureCodec.VerifyIdentityAndSupport(Suffix(service5, service6), contactVerified, 15);
+        RejectService(() => DeepIdV2PreKeyLineageVerifier.VerifyServiceHistory(
+            DeepIdV2PreKeyServiceCodec.Decode(service7), DeepIdV2PreKeyServiceCodec.Decode(service5), [], fixture.DeviceKey.PublicKey));
+        void RejectSuffix(params byte[][] history) => RejectService(() =>
+            DeepIdV2ResolverClosureCodec.VerifyIdentityAndSupport(Suffix(history), contactVerified, 15));
+        var signature6 = service6.ToArray(); signature6[^1] ^= 1;
+        RejectSuffix(signature6);
+        RejectSuffix(service6, service6);
+        RejectSuffix(service7);
+        RejectSuffix(service6, service7);
+        RejectSuffix(service5); // The omitted middle link cannot reach XPS7.
+        RejectSuffix(HistoricalService(6, service5, 14, fields => fields[1] = ApplicationCoreFixture.Bytes(32, 0xd2)));
+        RejectSuffix(HistoricalService(6, null, 14)); // Dangling exact hash.
+        RejectSuffix(HistoricalService(6, service7, 14)); // Back-edge/cycle attempt.
+        RejectSuffix(service6, HistoricalService(8, service7, 21)); // Unused future branch.
+        RejectSuffix(HistoricalService(6, service5, 14, fields => fields[7] = Be16(2)));
+        RejectService(() => DeepIdV2ResolverClosureCodec.VerifyIdentityAndSupport(suffix, contactVerified, 20));
+        foreach (var malformedSupport in new[]
+        {
+            support.Concat(DcrSupport(4, service6)).ToArray(),
+            support.Concat(DcrSupport(3, service6[..^1])).ToArray(),
+            support.Concat(DcrSupport(3, [.. service6, 0])).ToArray(),
+            DcrSupport(3, service6).Concat(support).ToArray(),
+            HistorySupport(service6).Concat(new byte[] { 0 }).ToArray(),
+            support.Concat(Enumerable.Repeat(DcrSupport(3, service6), 46).SelectMany(value => value)).ToArray()
+        })
+            RejectService(() => DeepIdV2ResolverClosureCodec.AuthorForValidation(
+                fixture.Network, suffixBundle.CanonicalBytes.Span, 3, malformedSupport));
+        var orderedHistory = new[] { service5, service6 }.OrderBy(value =>
+            Convert.ToHexString(SHA256.HashData(value)), StringComparer.Ordinal).ToArray();
+        RejectService(() => DeepIdV2ResolverClosureCodec.AuthorForValidation(fixture.Network,
+            suffixBundle.CanonicalBytes.Span, 4, support.Concat(orderedHistory.Reverse().SelectMany(value => DcrSupport(3, value))).ToArray()));
+        Assert.Equal(65_535, DeepIdV2ResolverClosureCodec.MaximumLength);
         using (var resolver = DeepIdV2PermanentContactResolutionDerivation.Derive(
             fixture.Network, did, ApplicationCoreFixture.Bytes(16, 0x73)))
         {

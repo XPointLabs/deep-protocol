@@ -21,6 +21,12 @@ public sealed class ParsedContactCoordinationOnionRequest
         network = request.NetworkId.ToArray(); nonce = request.RequestNonce.ToArray();
         projection = []; shard = request.GatewayShard.ToArray(); ExpiresAtUnixSeconds = request.ExpiresAtUnixSeconds;
     }
+    internal ParsedContactCoordinationOnionRequest(ReadOnlySpan<byte> canonical, DeepIdV2ContactRouteRecoveryWireRequest request)
+    {
+        this.canonical = canonical.ToArray(); Target = ContactCoordinationTarget.RouteRecovery;
+        network = request.NetworkId.ToArray(); nonce = request.RequestNonce.ToArray();
+        projection = []; shard = request.GatewayShard.ToArray(); ExpiresAtUnixSeconds = request.ExpiresAtUnixSeconds;
+    }
     public ContactCoordinationTarget Target { get; }
     public ReadOnlyMemory<byte> CanonicalBytes => canonical.ToArray();
     public ReadOnlyMemory<byte> ExactBody => canonical.AsSpan(ContactCoordinationOnionCodec.HeaderBytes).ToArray();
@@ -57,6 +63,8 @@ public static class ContactCoordinationOnionCodec
         }
         if (target == ContactCoordinationTarget.PublicationCurrent)
             return new(encoded, DeepIdV2PublicationCurrentWireCodec.DecodeRequest(body));
+        if (target == ContactCoordinationTarget.RouteRecovery)
+            return new(encoded, DeepIdV2ContactRouteRecoveryWireCodec.DecodeRequest(body));
         var publication = ContactPublicationAuthorityWireCodec.DecodeRequest(body);
         if (publication.PublicationKind != 2)
             throw new FormatException("Reusable publication requires its independently current submission.");
@@ -89,6 +97,8 @@ public static class ContactCoordinationOnionCodec
             _ = ContactRouteAuthorityWireCodec.DecodeResponse(ContactRouteAuthorityWireCodec.DecodeRequest(pending.Span), body);
         else if (request.Target == ContactCoordinationTarget.Publication)
             _ = ContactPublicationAuthorityWireCodec.DecodeResponse(ContactPublicationAuthorityWireCodec.DecodeRequest(pending.Span), body);
+        else if (request.Target == ContactCoordinationTarget.RouteRecovery)
+            _ = DeepIdV2ContactRouteRecoveryWireCodec.DecodeResponse(DeepIdV2ContactRouteRecoveryWireCodec.DecodeRequest(pending.Span), body);
         else if (request.Target == ContactCoordinationTarget.PublicationCurrent)
             _ = DeepIdV2PublicationCurrentWireCodec.DecodeResponse(DeepIdV2PublicationCurrentWireCodec.DecodeRequest(pending.Span), body);
         else throw new FormatException("Unknown coordination target.");
@@ -109,6 +119,8 @@ public static class ContactCoordinationOnionCodec
     {
         var limits = (target, response) switch
         {
+            (ContactCoordinationTarget.RouteRecovery, false) => (DeepIdV2ContactRouteRecoveryWireCodec.MinimumRequestBytes, DeepIdV2ContactRouteRecoveryWireCodec.MaximumRequestBytes),
+            (ContactCoordinationTarget.RouteRecovery, true) => (DeepIdV2ContactRouteRecoveryWireCodec.MinimumResponseBytes, DeepIdV2ContactRouteRecoveryWireCodec.MaximumResponseBytes),
             (ContactCoordinationTarget.Route, false) => (ContactRouteAuthorityWireCodec.MinimumRequestBytes, ContactRouteAuthorityWireCodec.MaximumRequestBytes),
             (ContactCoordinationTarget.Route, true) => (ContactRouteAuthorityWireCodec.MinimumResponseBytes, ContactRouteAuthorityWireCodec.MaximumResponseBytes),
             (ContactCoordinationTarget.Publication, false) => (ContactPublicationAuthorityWireCodec.MinimumRequestBytes, ContactPublicationAuthorityWireCodec.MaximumRequestBytes),

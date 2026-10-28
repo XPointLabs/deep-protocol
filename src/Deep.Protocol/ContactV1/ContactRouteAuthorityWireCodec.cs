@@ -242,9 +242,15 @@ public static class ContactRouteAuthorityWireCodec
         ReadOnlySpan<byte> encoded)
     {
         ArgumentNullException.ThrowIfNull(request);
+        return DecodeResponse(request.NetworkId.Span, request.RequestNonce.Span, encoded);
+    }
+
+    internal static ContactRouteAuthorityWireResponse DecodeResponse(ReadOnlySpan<byte> network,
+        ReadOnlySpan<byte> nonce, ReadOnlySpan<byte> encoded)
+    {
         ValidateHeader(encoded, MinimumResponseBytes, MaximumResponseBytes, ResponseVersion);
-        if (!Fixed(encoded.Slice(8, 16), request.NetworkId.Span) ||
-            !Fixed(encoded.Slice(24, 32), request.RequestNonce.Span))
+        if (!Fixed(encoded.Slice(8, 16), network) ||
+            !Fixed(encoded.Slice(24, 32), nonce))
             throw new CryptographicException(
                 "The route-authority response does not bind the exact request.");
         var offset = 56;
@@ -255,7 +261,7 @@ public static class ContactRouteAuthorityWireCodec
         if (offset != encoded.Length)
             throw new FormatException("The route-authority response has trailing bytes.");
         return new ContactRouteAuthorityWireResponse(
-            request.NetworkId.Span, request.RequestNonce.Span, pms, xrc, xss, adh);
+            network, nonce, pms, xrc, xss, adh);
     }
 
     private static void ValidateHeader(

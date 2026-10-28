@@ -17,6 +17,9 @@ public sealed class VerifiedDeepIdV2ContactRouteIssuance
         ParsedDeepIdV2RouteThreshold threshold, AccountDirectoryProtectedLkg head,
         ReadOnlySpan<byte> authorityReference, VerifiedDeepIdV2ContactRoutePredecessor? predecessor)
     { Request = request; Threshold = threshold; IssuanceHead = head; this.authorityReference = authorityReference.ToArray(); this.predecessor = predecessor; }
+    /// <summary>Authenticated expired proposal lineage retained by this exact issuance.
+    /// This fact grants no current route, dispatch or generic signing authority.</summary>
+    public VerifiedDeepIdV2ContactRouteRecordedHistory? RecordedHistory => predecessor?.RecordedHistory;
     public ContactRouteAuthorityWireRequest Request { get; }
     public ParsedDeepIdV2RouteThreshold Threshold { get; }
     public ReadOnlyMemory<byte> ExactIssuanceAdh1 => IssuanceHead.ExactAdh1;
@@ -77,7 +80,8 @@ public static partial class DeepIdV2ContactRouteVerifier
         DeepIdV2CurrentContactAuthorization recipient, VerifiedOnionNetworkContext network,
         VerifiedXPointNetworkAuthority authority, ContactRouteAuthorityWireRequest exactPendingRequest,
         ParsedDeepIdV2RouteThreshold threshold, ReadOnlyMemory<byte> exactIssuanceAdh1,
-        OnionTrustedTimeAuthority trustedTime, CancellationToken cancellationToken = default)
+        OnionTrustedTimeAuthority trustedTime, CancellationToken cancellationToken = default,
+        VerifiedDeepIdV2ContactRouteRecordedHistory? recordedHistory = null)
     {
         ArgumentNullException.ThrowIfNull(authority); ArgumentNullException.ThrowIfNull(exactPendingRequest);
         ArgumentNullException.ThrowIfNull(threshold); cancellationToken.ThrowIfCancellationRequested();
@@ -93,6 +97,8 @@ public static partial class DeepIdV2ContactRouteVerifier
             throw new CryptographicException("Retained DID2 issuance requires the supported directory reader generation.");
         var predecessor = request.HasPredecessor ? await VerifyPredecessorAsync(recipient, network, authority,
             request.ExactPredecessorXir1V2, request.ExactPredecessorRouteClosure, trustedTime, cancellationToken).ConfigureAwait(false) : null;
+        if (recordedHistory is not null)
+        { recordedHistory.RequireExactPredecessor(predecessor ?? throw new CryptographicException("Recorded issuance requires its completed predecessor.")); predecessor = predecessor.AfterRecordedHistory(recordedHistory); }
         var result = new VerifiedDeepIdV2ContactRouteIssuance(request, records, head, authority.AuthorityCoreReference.Span, predecessor);
         var first = await DeepIdV2RouteContext.ReadAsync(recipient, network, authority, trustedTime, cancellationToken).ConfigureAwait(false);
         result.RequireAtCurrentContext(first, new(first.Lower, first.Upper));
@@ -144,6 +150,6 @@ public static partial class DeepIdV2ContactRouteAuthor
             !DeepIdV2RouteContext.Fixed(predecessor.ExactRouteClosure.Span, issuance.Request.ExactPredecessorRouteClosure.Span))
             throw new CryptographicException("Retained successor completion must use its exact request predecessor.");
         return CompleteCoreAsync(currentAuthorization, network, networkAuthority, deviceSecrets,
-            issuance.Request.ExactXra1, issuance.Threshold, minimumReader, trustedTime, predecessor, cancellationToken, issuance);
+            issuance.Request.ExactXra1, issuance.Threshold, minimumReader, trustedTime, issuance.RecordedHistory is null ? predecessor : predecessor.AfterRecordedHistory(issuance.RecordedHistory), cancellationToken, issuance);
     }
 }

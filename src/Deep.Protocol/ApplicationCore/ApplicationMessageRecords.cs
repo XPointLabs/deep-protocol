@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using Deep.Protocol.DeepNative;
 using Deep.Protocol.ContactV1;
+using Deep.Protocol.ContactV2;
 
 namespace Deep.Protocol.ApplicationCore;
 
@@ -348,12 +349,14 @@ public sealed class ContactRouteUpdateDmc2Payload : Dmc2Payload
         ContactRecord route,
         ContactRecord successor,
         ContactRecord mailboxProjection,
-        ContactRecord mailboxSelection)
+        ContactRecord mailboxSelection, ReadOnlySpan<byte> exactRouteClosure,
+        ParsedDeepIdV2ContactRouteRecoveryWitness? recoveryWitness)
         : base(Dmc2ContentKind.ContactRouteUpdate, canonical)
     {
         this.relationshipId = relationshipId.ToArray();
         RouteGeneration = routeGeneration;
         this.predecessorRouteUpdateHash = predecessorRouteUpdateHash.ToArray();
+        routeClosure = exactRouteClosure.ToArray(); RecoveryWitness = recoveryWitness;
         Reachability = reachability;
         Authorization = authorization;
         Route = route;
@@ -362,6 +365,11 @@ public sealed class ContactRouteUpdateDmc2Payload : Dmc2Payload
         MailboxSelection = mailboxSelection;
     }
 
+    private readonly byte[] routeClosure;
+    /// <summary>Exact six-record signed route closure, excluding comparison selectors and recovery evidence.</summary>
+    public ReadOnlyMemory<byte> ExactRouteClosure => routeClosure.ToArray();
+    /// <summary>Untrusted bounded recovery evidence; no historical or current authority follows from parsing.</summary>
+    public ParsedDeepIdV2ContactRouteRecoveryWitness? RecoveryWitness { get; }
     public ReadOnlyMemory<byte> RelationshipId => relationshipId.ToArray();
     public ulong RouteGeneration { get; }
     public ReadOnlyMemory<byte> PredecessorRouteUpdateHash => predecessorRouteUpdateHash.ToArray();

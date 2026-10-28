@@ -46,9 +46,10 @@ public sealed class VerifiedDeepIdV2ContactRouteClosure : VerifiedDeepIdV2Mailbo
     internal VerifiedDeepIdV2ContactRouteClosure(ParsedXir1V2 invite,
         ParsedContactRouteClosure route, DeepIdV2CurrentContactAuthorization recipient,
         VerifiedOnionNetworkContext network, VerifiedXPointNetworkAuthority authority,
-        OnionTrustedTimeAuthority time)
-    { Invite = invite; Route = route; Recipient = recipient; Network = network; NetworkAuthority = authority; this.time = time; }
+        OnionTrustedTimeAuthority time, VerifiedDeepIdV2ContactRouteRecordedHistory? recordedHistory = null)
+    { RecordedHistory = recordedHistory; Invite = invite; Route = route; Recipient = recipient; Network = network; NetworkAuthority = authority; this.time = time; }
 
+    internal VerifiedDeepIdV2ContactRouteRecordedHistory? RecordedHistory { get; }
     public ParsedXir1V2 Invite { get; }
     public override ParsedContactRouteClosure Route { get; }
     public override DeepIdV2CurrentContactAuthorization Recipient { get; }
@@ -64,13 +65,16 @@ public sealed class VerifiedDeepIdV2ContactRouteClosure : VerifiedDeepIdV2Mailbo
     {
         var context = DeepIdV2RouteContext.VerifyAtReading(Recipient, Network, NetworkAuthority, time,
             new(window.BootId.Span, window.MonotonicSample), ct);
-        return DeepIdV2ContactRouteVerifier.RequireBindings(Invite, Route, context);
+        context = DeepIdV2ContactRouteVerifier.RequireBindings(Invite, Route, context);
+        RecordedHistory?.RequireSuccessor(context, Route.Authorization, new(Route.Selection.CanonicalBytes.Span, Route.Route.CanonicalBytes.Span, Route.Successor.CanonicalBytes.Span));
+        return context;
     }
 
     internal DeepIdV2ContactRouteTimeWindow VerifyAtReading(OnionMonotonicReading reading, CancellationToken ct)
     {
         var current = DeepIdV2RouteContext.VerifyAtReading(Recipient, Network, NetworkAuthority, time, reading, ct);
         current = DeepIdV2ContactRouteVerifier.RequireBindings(Invite, Route, current);
+        RecordedHistory?.RequireSuccessor(current, Route.Authorization, new(Route.Selection.CanonicalBytes.Span, Route.Route.CanonicalBytes.Span, Route.Successor.CanonicalBytes.Span));
         return new(current.Lower, current.Upper, current.Reading);
     }
 
@@ -80,6 +84,7 @@ public sealed class VerifiedDeepIdV2ContactRouteClosure : VerifiedDeepIdV2Mailbo
         var current = await DeepIdV2RouteContext.ReadAsync(Recipient, Network,
             NetworkAuthority, time, cancellationToken).ConfigureAwait(false);
         current = DeepIdV2ContactRouteVerifier.RequireBindings(Invite, Route, current);
+        RecordedHistory?.RequireSuccessor(current, Route.Authorization, new(Route.Selection.CanonicalBytes.Span, Route.Route.CanonicalBytes.Span, Route.Successor.CanonicalBytes.Span));
         return new(current.Lower, current.Upper, current.Reading);
     }
 }
@@ -130,7 +135,7 @@ public static partial class DeepIdV2ContactRouteVerifier
         DeepIdV2CurrentContactAuthorization recipient, VerifiedOnionNetworkContext network,
         VerifiedXPointNetworkAuthority authority, ReadOnlyMemory<byte> exactXir1V2,
         ReadOnlyMemory<byte> exactSixRecordClosure, OnionTrustedTimeAuthority trustedTime,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, VerifiedDeepIdV2ContactRouteRecordedHistory? recordedHistory = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (exactXir1V2.Length != DeepIdV2InviteRendezvousCodec.CanonicalLength ||
@@ -145,7 +150,8 @@ public static partial class DeepIdV2ContactRouteVerifier
         ContactCodec.VerifyDeviceSignature(route.Reachability, first.Device.Certificate.DeviceEd25519PublicKey.Span);
         var final = await first.RecheckAsync(cancellationToken).ConfigureAwait(false);
         final = RequireBindings(invite, route, final);
-        return new(invite, route, recipient, network, authority, trustedTime);
+        recordedHistory?.RequireSuccessor(final, route.Authorization, new(route.Selection.CanonicalBytes.Span, route.Route.CanonicalBytes.Span, route.Successor.CanonicalBytes.Span));
+        return new(invite, route, recipient, network, authority, trustedTime, recordedHistory);
     }
 
     internal static DeepIdV2RouteContext RequireBindings(ParsedXir1V2 invite,

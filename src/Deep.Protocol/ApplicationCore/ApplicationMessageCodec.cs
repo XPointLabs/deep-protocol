@@ -13,6 +13,7 @@ public static partial class ApplicationCoreCodec
     public const int MaximumContactControlPayloadBytes = 682 + DeepIdV2ContactMailboxRouteCodec.MaximumBytes;
     public const int MinimumContactControlRecordBytes = 282 + MinimumContactControlPayloadBytes;
     public const int MaximumContactControlRecordBytes = 282 + MaximumContactControlPayloadBytes;
+    public const int MaximumContactRouteUpdateRecordBytes = 33_050;
     private static ReadOnlySpan<byte> DmcMagic => ProtocolMagicBytes.DMC2;
     private const uint CoreFlagMask = (uint)(Dmc2Flags.Silent | Dmc2Flags.Disappearing | Dmc2Flags.HighPriority);
     private const uint SessionCapabilityMask = (uint)(SessionInitCapabilities.TextCore |
@@ -339,7 +340,7 @@ public static partial class ApplicationCoreCodec
         ContactRecord xrc1,
         ContactRecord xss1,
         ContactRecord pmt2,
-        ContactRecord pms2)
+        ContactRecord pms2, ReadOnlySpan<byte> exactRecoveryWitness = default)
     {
         RequireLength(relationshipId32, 32, "relationship ID");
         RequireLength(predecessorRouteUpdateHash32, 32, "predecessor route-update hash");
@@ -348,11 +349,14 @@ public static partial class ApplicationCoreCodec
         ArgumentNullException.ThrowIfNull(pmt2); ArgumentNullException.ThrowIfNull(pms2);
 
         var records = new[] { xrr1, xra1, xrc1, xss1, pmt2, pms2 };
-        var payload = new byte[checked(97 + records.Sum(record => record.CanonicalBytes.Length))];
+        if (!exactRecoveryWitness.IsEmpty) _ = DeepIdV2ContactRouteRecoveryWitnessCodec.Decode(exactRecoveryWitness);
+        var size = checked(97 + records.Sum(record => record.CanonicalBytes.Length) + (exactRecoveryWitness.IsEmpty ? 0 : 4 + exactRecoveryWitness.Length));
+        if (size > 32_768) throw new CryptographicException("Private route update exceeds the unchanged message capacity.");
+        var payload = new byte[size];
         relationshipId32.CopyTo(payload);
         BinaryPrimitives.WriteUInt64BigEndian(payload.AsSpan(32, 8), routeGeneration);
         predecessorRouteUpdateHash32.CopyTo(payload.AsSpan(40, 32));
-        payload[72] = 6;
+        payload[72] = exactRecoveryWitness.IsEmpty ? (byte)6 : (byte)7;
         var offset = 73;
         foreach (var record in records)
         {
@@ -360,6 +364,11 @@ public static partial class ApplicationCoreCodec
             BinaryPrimitives.WriteUInt32BigEndian(payload.AsSpan(offset, 4), checked((uint)canonical.Length));
             canonical.Span.CopyTo(payload.AsSpan(offset + 4));
             offset += 4 + canonical.Length;
+        }
+        if (!exactRecoveryWitness.IsEmpty)
+        {
+            BinaryPrimitives.WriteUInt32BigEndian(payload.AsSpan(offset), checked((uint)exactRecoveryWitness.Length));
+            exactRecoveryWitness.CopyTo(payload.AsSpan(offset + 4));
         }
         return DecodeContactRouteUpdate(payload, xrr1.Field(1).Span);
     }
@@ -651,7 +660,7 @@ public static partial class ApplicationCoreCodec
 
     private static ContactRouteUpdateDmc2Payload DecodeContactRouteUpdate(ReadOnlySpan<byte> payload, ReadOnlySpan<byte> network)
     {
-        if (payload.Length is < 4_215 or > 23_367 || payload[72] != 6)
+        if (payload.Length is < 4_215 or > 32_768 || payload[72] is < 6 or > 7 || (payload[72] == 6 && payload.Length > 23_367))
             PayloadInvalid(ApplicationCoreRejection.InvalidFieldLength, "ContactRouteUpdate has a noncanonical closure count or total length.");
         var relationshipId = NonzeroContact(payload[..32], "relationship ID");
         var routeGeneration = BinaryPrimitives.ReadUInt64BigEndian(payload.Slice(32, 8));
@@ -666,6 +675,16 @@ public static partial class ApplicationCoreCodec
         var xss1 = DecodeContactRouteRecord(payload, ref offset, ProtocolMagic.XSS1, 643, 3_523);
         var pmt2 = DecodeContactRouteRecord(payload, ref offset, ProtocolMagic.PMT2, 842, 11_066);
         var pms2 = DecodeContactRouteRecord(payload, ref offset, ProtocolMagic.PMS2, 500, 3_476);
+        var exactRoute = payload.Slice(72, offset - 72).ToArray(); exactRoute[0] = 6;
+        ParsedDeepIdV2ContactRouteRecoveryWitness? witness = null;
+        if (payload[72] == 7)
+        {
+            if (offset > payload.Length - 4) PayloadInvalid(ApplicationCoreRejection.InvalidFieldLength, "Private recovery tail is truncated.");
+            var size = BinaryPrimitives.ReadUInt32BigEndian(payload[offset..]); offset += 4;
+            if (size != payload.Length - offset || size is < DeepIdV2ContactRouteRecoveryWitnessCodec.MinimumBytes or > DeepIdV2ContactRouteRecoveryWitnessCodec.MaximumBytes)
+                PayloadInvalid(ApplicationCoreRejection.InvalidFieldLength, "Private recovery tail length is not canonical.");
+            witness = DeepIdV2ContactRouteRecoveryWitnessCodec.Decode(payload[offset..]); offset = payload.Length;
+        }
         if (offset != payload.Length)
             PayloadInvalid(ApplicationCoreRejection.InvalidFieldLength, "ContactRouteUpdate has trailing bytes.");
 
@@ -684,7 +703,7 @@ public static partial class ApplicationCoreCodec
         }
 
         return new ContactRouteUpdateDmc2Payload(payload.ToArray(), relationshipId, routeGeneration, predecessor,
-            xrr1, xra1, xrc1, xss1, pmt2, pms2);
+            xrr1, xra1, xrc1, xss1, pmt2, pms2, exactRoute, witness);
     }
 
     private static ContactRecord DecodeContactRouteRecord(ReadOnlySpan<byte> payload, ref int offset, string expectedMagic, int minimum, int maximum)

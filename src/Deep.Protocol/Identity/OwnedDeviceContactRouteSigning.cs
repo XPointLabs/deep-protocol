@@ -105,6 +105,19 @@ public sealed partial class OwnedGenesisDeviceSecrets
         }
     }
 
+    internal byte[] SignCurrentRouteRecovery(DeepIdV2ContactRouteRecoveryWireRequest request, VerifiedDca1V2 authorization)
+    {
+        lock (sync)
+        {
+            ThrowIfDisposed(); _ = RequireCurrentRouteDevice(authorization);
+            if (!request.NetworkId.Span.SequenceEqual(authorization.Record.NetworkId.Span) ||
+                !request.BaseRequest.ExactDca1.Span.SequenceEqual(authorization.Record.CanonicalBytes.Span))
+                throw new CryptographicException("Recovery signing differs from exact owned subject.");
+            var input = DeepIdV2ContactRouteRecoveryWireCodec.SigningInput(request);
+            try { return SignRouteIntent(input); } finally { CryptographicOperations.ZeroMemory(input); }
+        }
+    }
+
     private byte[] SignRouteIntent(ReadOnlySpan<byte> input)
     {
         var signature = new byte[OwnedSodiumEd25519.SignatureSize];

@@ -13,14 +13,17 @@ public sealed class ParsedDcr1V2
 {
     private readonly byte[] canonical;
 
-    internal ParsedDcr1V2(byte[] canonical, ParsedDcb1V2 bundle)
+    internal ParsedDcr1V2(byte[] canonical, ParsedDcb1V2 bundle, ParsedXps1V2[] preKeyServiceHistory)
     {
         this.canonical = canonical;
         Bundle = bundle;
+        PreKeyServiceHistory = Array.AsReadOnly(preKeyServiceHistory);
     }
 
     public ReadOnlyMemory<byte> CanonicalBytes => canonical.ToArray();
     public ParsedDcb1V2 Bundle { get; }
+    /// <summary>Parsed historical suffix only; no published left boundary or current authority.</summary>
+    public IReadOnlyList<ParsedXps1V2> PreKeyServiceHistory { get; }
 }
 
 /// <summary>
@@ -30,6 +33,7 @@ public sealed class ParsedDcr1V2
 public static class DeepIdV2ResolverClosureCodec
 {
     public const int MaximumLength = 65_535;
+    public const int MaximumPreKeyServiceHistoryEntries = 45;
     public static bool RuntimeActivation => false;
 
     public static ParsedDcr1V2 Decode(ReadOnlySpan<byte> canonical)
@@ -54,13 +58,14 @@ public static class DeepIdV2ResolverClosureCodec
                 "DCR1 V2 network differs from its exact DCB1 V2.");
         var directory = ApplicationCoreCodec.DecodeDmd1(bundle.FieldSpan(5));
         var count = BinaryPrimitives.ReadUInt16BigEndian(Get(canonical, slices, 3));
-        if (count != directory.ActiveDevices.Count + 1)
+        if (count < directory.ActiveDevices.Count + 1 || count > directory.ActiveDevices.Count + 1 + MaximumPreKeyServiceHistoryEntries)
             Invalid(ApplicationCoreRejection.InvalidFieldLength,
-                "DCR1 V2 support count must exactly cover DRS1 and each DPD1.");
+                "DCR1 V2 support count exceeds its exact device and history bounds.");
 
         var offset = 0;
         var sawDrs = false;
         var dpds = new List<DeviceCertificate>(directory.ActiveDevices.Count);
+        var history = new List<ParsedXps1V2>();
         ushort previousKind = 0;
         byte[]? previousHash = null;
         for (var index = 0; index < count; index++)
@@ -71,7 +76,7 @@ public static class DeepIdV2ResolverClosureCodec
             var kind = BinaryPrimitives.ReadUInt16BigEndian(support[offset..]);
             var encodedLength = BinaryPrimitives.ReadUInt32BigEndian(support[(offset + 2)..]);
             offset += 6;
-            if (kind is < 1 or > 2 || encodedLength > int.MaxValue ||
+            if (kind is < 1 or > 3 || encodedLength > int.MaxValue ||
                 encodedLength < 12 || encodedLength > support.Length - offset)
                 Invalid(ApplicationCoreRejection.InvalidFieldLength,
                     "DCR1 V2 support entry is unknown or out of bounds.");
@@ -97,16 +102,22 @@ public static class DeepIdV2ResolverClosureCodec
                         "DCR1 V2 DRS1 reference differs from DCB1 V2.");
                 sawDrs = true;
             }
-            else
+            else if (kind == 2)
             {
                 if (length != 776)
                     Invalid(ApplicationCoreRejection.InvalidFieldLength,
                         "DCR1 V2 DPD1 has a noncanonical length.");
                 dpds.Add(IdentityCodec.DecodeDeviceCertificate(entry));
             }
+            else
+            {
+                if (length != DeepIdV2PreKeyServiceCodec.CanonicalLength)
+                    Invalid(ApplicationCoreRejection.InvalidFieldLength, "DCR1 V2 historical XPS1 has a noncanonical length.");
+                history.Add(DeepIdV2PreKeyServiceCodec.Decode(entry));
+            }
         }
         if (offset != support.Length || !sawDrs ||
-            dpds.Count != directory.ActiveDevices.Count)
+            dpds.Count != directory.ActiveDevices.Count || count != 1 + dpds.Count + history.Count)
             Invalid(ApplicationCoreRejection.InvalidFieldLength,
                 "DCR1 V2 support closure is incomplete or trailing.");
         foreach (var device in directory.ActiveDevices)
@@ -122,7 +133,7 @@ public static class DeepIdV2ResolverClosureCodec
                 Invalid(ApplicationCoreRejection.InvalidReference,
                     "DCR1 V2 DPD1 does not close over the exact DMD1 device.");
         }
-        return new ParsedDcr1V2(canonical.ToArray(), bundle);
+        return new ParsedDcr1V2(canonical.ToArray(), bundle, history.ToArray());
     }
 
     /// <summary>
@@ -165,7 +176,7 @@ public static class DeepIdV2ResolverClosureCodec
                     Reject("DCR1 V2 DRS1 bytes differ from verified custody.");
                 sawDrs = true;
             }
-            else
+            else if (kind == 2)
             {
                 var certificate = IdentityCodec.DecodeDeviceCertificate(entry);
                 var hash = Convert.ToHexString(certificate.CanonicalHash.Span);
@@ -176,6 +187,45 @@ public static class DeepIdV2ResolverClosureCodec
         }
         if (!sawDrs || expected.Count != 0)
             Reject("DCR1 V2 verified support closure is incomplete.");
+        VerifyServiceHistorySuffix(closure, authorization);
+    }
+
+    private static void VerifyServiceHistorySuffix(ParsedDcr1V2 closure, VerifiedDca1V2 authorization)
+    {
+        if (closure.PreKeyServiceHistory.Count == 0) return;
+        var remaining = closure.PreKeyServiceHistory.ToList();
+        var services = closure.Bundle.Field(12);
+        foreach (var active in authorization.Directory.Record.ActiveDevices)
+        {
+            var device = authorization.Binding.Identity.ActiveDevices.Single(value =>
+                value.Certificate.DeviceId.Span.SequenceEqual(active.DeviceId.Span));
+            ParsedXps1V2? current = null;
+            for (var offset = 1; offset < services.Length; offset += 356)
+            {
+                var item = DeepIdV2PreKeyServiceCodec.Decode(services.Span.Slice(offset + 4, 352));
+                if (item.Field(3).Span.SequenceEqual(active.DeviceId.Span)) current = item;
+            }
+            if (current is null) Reject("DCR1 V2 historical support has no current service endpoint.");
+            var group = remaining.Where(value => value.Field(3).Span.SequenceEqual(active.DeviceId.Span))
+                .OrderBy(value => BinaryPrimitives.ReadUInt64BigEndian(value.Field(5).Span)).ToArray();
+            if (group.Length == 0) continue;
+            var endpointGeneration = BinaryPrimitives.ReadUInt64BigEndian(current!.Field(5).Span);
+            var previous = group[0];
+            if (BinaryPrimitives.ReadUInt64BigEndian(previous.Field(5).Span) >= endpointGeneration)
+                Reject("DCR1 V2 history includes a current endpoint or unnecessary successor.");
+            for (var index = 1; index < group.Length; index++)
+            {
+                var generation = BinaryPrimitives.ReadUInt64BigEndian(group[index].Field(5).Span);
+                if (generation >= endpointGeneration || generation <=
+                    BinaryPrimitives.ReadUInt64BigEndian(previous.Field(5).Span))
+                    Reject("DCR1 V2 history repeats a generation or includes its current endpoint.");
+                DeepIdV2PreKeyLineageVerifier.VerifyServiceTransition(group[index], previous, device.Certificate.DeviceEd25519PublicKey.Span);
+                previous = group[index];
+            }
+            DeepIdV2PreKeyLineageVerifier.VerifyServiceTransition(current, previous, device.Certificate.DeviceEd25519PublicKey.Span);
+            foreach (var item in group) remaining.Remove(item);
+        }
+        if (remaining.Count != 0) Reject("DCR1 V2 history contains a foreign or unused device.");
     }
 
 #if DEEP_PROTOCOL_RECOVERY_TEST_SEAM
