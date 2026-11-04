@@ -556,36 +556,22 @@ internal static class GraphPolicy
         {
             ["Deep.Protocol"] =
             [
-                // Current source closure after the accepted DID2 retirements
-                // DR-0141's BLOB records and DR-0142's current DID2 group
-                // directory/owner-consent reducer, retiring the unused generic signer.
-                // Exact normal Release/Debug, not the recovery test seam.
-                // DR-0143 adds the closed typed event author/consumer surface;
-                // generic DMC2 activation stays disabled. ACK remains Shared-owned.
-                // Pre-cutover/public-API predecessor snapshots are not accepted.
-                // DR-0145: current GSR1 placement, descriptor/cipher and owned
-                // carrier/result APIs. Actual metadata review: no public
-                // placement constructors or generic device signer were added.
-                // DR-0154/0155: actual metadata delta +20/-0: closed prepared
-                // type (no public constructor), eight codec methods, PSR1
-                // constants/frame and defensive getters. Resources unchanged.
-                // DR-0156 adds exactly two purpose-separated historical host
-                // preparations, no constructor, grant or dispatch capability.
-                // DR-0157/0158: +2 methods, no new type/constructor/resource:
-                // host-verified absent-target preparation and a pure canonical
-                // replay-request digest. Neither grants admission authority.
-                // DR-0163: +2 verifier methods, no public type/constructor,
-                // resource or assembly-reference delta. Exact owned PMA history
-                // and a typed current policy; predecessor snapshots retired.
-                // DR-0162 memo replacement changes internal TypeRef/blob
-                // indices, not API: actual approved predecessor versus current
-                // decoded metadata/resources/references: 15093 equal rows.
-                // DR-0078 bounded threshold convergence: decoded API delta +3/-0,
-                // sealed DeepIdV2RouteNotBeforeException (no public constructor),
-                // readonly UInt32 duration property/getter only. No resource or
-                // AssemblyRef delta. Accept only current Debug/Release snapshots.
-                "Deep.Protocol|12992|9C26E38BBE7BE0DFC4E9E95F164766B006F3D9A7E3644BA9378B45AF9D9614D3",
-                "Deep.Protocol|12992|3AC6272C3F4A850ACFD00961C5C0BE5CD03D9C722F8AA00B1E9A4D4823ABCE59"
+                // Reviewed normal Debug/Release closure, 2026-11-04; never the
+                // recovery test seam. Actual current-source CreateSnapshot and
+                // decoded metadata: accepted12992 ->13166, +183/-9 rows.
+                // 247a483/482a1bc account for +104/-3; DR-0178 adds79
+                // (initial75 plus two defensive getters/property pairs).
+                // Removing the fresh6/7 author and its result removes six rows;
+                // exact retained6/7 decoding/verification remains available.
+                // Debug/Release decoded surfaces are identical. No AssemblyRef
+                // or resource delta; BIP39 remains the exact13116-byte LF input.
+                // New verified history/fact types have no public constructors;
+                // typed authoring grants no native custody or dispatch authority.
+                // See docs/route-history-checkpoint-2026-11-04.md and metadata01.
+                // Accept only these measured normal configurations; old
+                // fingerprints and package/runtime acceptance are not inferred.
+                "Deep.Protocol|13166|72E6B517E24F21C168FFD35FCCC8E7EF4053B4A44CDFA657DCC05EAFDD8BED15",
+                "Deep.Protocol|13166|46EDBDCC87665C622468C729691957A926AB1BA9CBEA5B233C232202C6F19A67"
             ],
             ["Deep.Protocol.MembershipRoutes"] =
             [

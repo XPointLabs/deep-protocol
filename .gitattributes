@@ -3,3 +3,4 @@ native/Deep.MlKem/vendor/mlkem-native/** text eol=lf
 native/Deep.MlDsa/vendor/mldsa-native/** text eol=lf
 src/Deep.Protocol/runtimes/** binary
 tests/Deep.Protocol.GoldenVectors/Vectors/*.json text eol=lf
+src/Deep.Protocol/Identity/Resources/Bip39/english.txt text eol=lf
