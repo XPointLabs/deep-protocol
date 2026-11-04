@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('Debug', 'Release')] [string] $Configuration = 'Release'
+    [ValidateSet('Debug', 'Release')] [string] $Configuration = 'Release',
+    [switch] $KeepArtifacts
 )
 
 $ErrorActionPreference = 'Stop'
@@ -180,6 +181,11 @@ finally {
         if (-not $resolvedRun.StartsWith($resolvedArtifacts, [StringComparison]::OrdinalIgnoreCase)) {
             throw "Unsafe witness cleanup path: $resolvedRun"
         }
-        [IO.Directory]::Delete($resolvedRun, $true)
+        if ($KeepArtifacts) {
+            Write-Host "DIAGNOSTIC retained package witness artifacts: $resolvedRun"
+        }
+        else {
+            [IO.Directory]::Delete($resolvedRun, $true)
+        }
     }
 }

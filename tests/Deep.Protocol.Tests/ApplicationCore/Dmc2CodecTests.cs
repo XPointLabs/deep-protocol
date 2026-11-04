@@ -1,6 +1,9 @@
 using System.Buffers.Binary;
 using System.Text;
+using System.Security.Cryptography;
 using Deep.Protocol.ApplicationCore;
+using Deep.Protocol.GroupV1;
+using ProtocolMagic = Deep.Protocol.Registry.DeepProtocolIdentifiers.Magic;
 
 namespace Deep.Protocol.Tests.ApplicationCore;
 
@@ -65,7 +68,6 @@ public sealed class Dmc2CodecTests
     }
 
     [Theory]
-    [InlineData(30)]
     [InlineData(65535)]
     public void ReservedKind_RejectsBeforePayload(int kind)
     {
@@ -77,6 +79,45 @@ public sealed class Dmc2CodecTests
         var exception = Assert.Throws<ApplicationCoreFormatException>(() => ApplicationCoreCodec.DecodeDmc2(canonical));
         Assert.Equal(ApplicationCoreValidationStage.TypedPayload, exception.Stage);
         Assert.Equal(ApplicationCoreRejection.ReservedContentKind, exception.Rejection);
+    }
+
+    [Fact]
+    public void GroupControlKind30_RequiresExactTypedCarrierAndKeepsGenericEmissionClosed()
+    {
+        var malformed = ApplicationCoreFixture.Message(ApplicationCoreCodec.CreateMessageCreatePayload("not a group carrier"),
+            expiresAt: 2_000).CanonicalBytes.ToArray();
+        BinaryPrimitives.WriteUInt16BigEndian(malformed.AsSpan(ApplicationCoreFixture.FieldOffset(malformed, 9)), 30);
+        var error = Assert.Throws<ApplicationCoreFormatException>(() => ApplicationCoreCodec.DecodeDmc2(malformed));
+        Assert.Equal(ApplicationCoreValidationStage.EmbeddedRecord, error.Stage);
+        Assert.Equal(ApplicationCoreRejection.EmbeddedRecordRejected, error.Rejection);
+        Assert.Equal("InvalidControlCarrier", Assert.IsType<GroupFormatException>(error.InnerException).Code);
+
+        // Canonical untrusted grammar data only; no sequencer/current authority
+        // is constructed, and the public generic author remains closed.
+        var network = ApplicationCoreFixture.Bytes(16, 0x11); var account = ApplicationCoreFixture.Bytes(32, 0x14);
+        var device = ApplicationCoreFixture.Bytes(32, 0x15); var scalar = GroupControlCipher.GeneratePrivateKey();
+        var raw = new byte[624];
+        try
+        {
+            var descriptor = GroupCodec.CreateForAuthoring(ProtocolMagic.GSR1,
+                [network, ApplicationCoreFixture.Bytes(32, 1), ApplicationCoreFixture.Bytes(32, 2), new byte[8], new byte[32],
+                 GroupCodec.ReferenceForAuthoring(ProtocolMagic.PMT2, ApplicationCoreFixture.Bytes(32, 3)),
+                 ApplicationCoreFixture.Bytes(32, 4), ApplicationCoreFixture.Bytes(32, 5), GroupControlCipher.PublicKey(scalar), device,
+                 GroupCodec.ReferenceForAuthoring(ProtocolMagic.DPD1, ApplicationCoreFixture.Bytes(32, 6)),
+                 new byte[] { 0, 0, 0, 0, 0, 0, 0, 1 }, new byte[] { 0, 0, 0, 0, 0, 0, 0, 3 }, ApplicationCoreFixture.Bytes(64, 7)]);
+            descriptor.Field(2).Span.CopyTo(raw); ApplicationCoreFixture.Bytes(32, 9).CopyTo(raw, 32);
+            descriptor.CanonicalBytes.Span.CopyTo(raw.AsSpan(64)); scalar.CopyTo(raw, 592);
+            var payload = GroupCodec.DecodeDmc2Payload(Dmc2ContentKind.GroupControlRendezvous, raw);
+            Assert.Throws<InvalidOperationException>(() => ApplicationCoreFixture.Message(payload, network, account, device, expiresAt: 2_000));
+            var framed = ApplicationCoreCodec.AuthorDmc2ForValidation(network, ApplicationCoreFixture.Bytes(32, 10),
+                ApplicationCoreFixture.Bytes(32, 11), account, device, 3, 1_000, 2_000, Dmc2Flags.None, [], payload);
+            var decoded = ApplicationCoreCodec.DecodeDmc2(framed.CanonicalBytes.Span);
+            var typed = Assert.IsType<GroupDmc2Payload>(decoded.ParsedPayload);
+            Assert.Equal(Dmc2ContentKind.GroupControlRendezvous, decoded.ContentKind);
+            Assert.Equal(descriptor.CanonicalBytes.ToArray(), typed.Record.CanonicalBytes.ToArray());
+            Assert.Equal(raw, typed.CanonicalBytes.ToArray());
+        }
+        finally { CryptographicOperations.ZeroMemory(scalar); CryptographicOperations.ZeroMemory(raw); }
     }
 
     [Fact]

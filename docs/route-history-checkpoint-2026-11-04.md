@@ -62,6 +62,34 @@ the reviewed repin. Normal Release and Debug graph checks both exited0;
 1295 source inputs and1744 metadata/binary inputs remained unchanged.
 This diagnostic does not qualify the full source suite or package/runtime gates.
 
-Remaining: Shared kind6/source/index integration, signed native tests, complete
-source and package gates, then same-profile CLI catch-up and delivery measurements. No
-runtime, performance, package or release acceptance is asserted here.
+The later canonical `route-history-20261104-full02` source gate is accepted:
+2640 passed, zero failed, seven explicitly declared platform/operator skips;
+2647 exact required cases, build/preflight/native/qualification exits all zero,
+1743 captured inputs unchanged. PowerShell5.1, SDK10.0.301 and the separate
+PowerShell7.6.5/.NET10 witness interpreter were recorded by the runner.
+The package ZIP/assembly/resource/API witness, including its hostile-package
+checks, passed as part of this run. The six standalone native-wrapper cases
+and one authenticated operator-capture case remain outside this accepted matrix.
+
+The original full01 receipt remains unaccepted (2636 passed, four failed, seven
+skipped). Three obsolete surface/codec expectations were reconciled with the
+existing typed group and route-recovery contracts, retaining generic-author,
+raw-key/delegate escape and nonforgeable-capability checks. The two exact case
+identity substitutions are owned by the root
+`docs/architecture/PROTOCOL-QUALIFICATION-BINDINGS-2026-11-04.md`.
+
+The package witness's two dependent assembly fingerprints were reviewed against
+actual retained normalized packages and their source DLLs. Public APIs/resources
+match the normal assemblies and accepted runtime baseline; the sole snapshot-row
+delta is `Deep.Protocol` AssemblyRef `1.0.0.0` to the witness version `0.0.0.0`.
+Only those two measured witness fingerprints were added. Normal fingerprints and
+validation rules are unchanged. The audit receipt is
+`artifacts/route-history-20261104-package-audit01/audit.json`, SHA256
+`9A75EFD37CE7102782AFB4A299B23F03C79D9441673E942E4F7FCD699F239652`.
+An optional `-KeepArtifacts` preserves disposable witness outputs for direct
+inspection; its default cleanup and all verification remain unchanged.
+
+Remaining: combined Shared runtime/source qualification, same-profile CLI
+catch-up and delivery measurements, and separately required native/operator and
+release evidence. Source/package-witness acceptance does not establish runtime,
+performance or release readiness.

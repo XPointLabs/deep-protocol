@@ -115,14 +115,12 @@ public sealed class PrivacyRoutingProductionBoundaryTests
     public void Capabilities_AreNonForgeable_AndCodecHasOnlyFourAsyncRuntimeMethods()
     {
         Assert.False(PrivacyRoutingCodec.RuntimeActivation);
-        Assert.Null(typeof(PrivacyRoutingCodec).Assembly.GetType(
-            "Deep.Protocol.DeepExtension.PrivacyRouting.VerifiedGroupControlPlacement"));
         foreach (var type in new[]
                  {
                      typeof(VerifiedOnionNetworkContext), typeof(OnionTrustedTimeLease),
                      typeof(VerifiedOnionPathContext), typeof(VerifiedOnionLocalNodeKey),
                      typeof(VerifiedOnionReceiveContext), typeof(VerifiedOnionNextHopTransport),
-                     typeof(VerifiedOnionEntryTransport),
+                      typeof(VerifiedOnionEntryTransport), typeof(VerifiedGroupControlPlacement),
                      typeof(VerifiedCanonicalOnionRequest), typeof(VerifiedOnionTerminalResult),
                      typeof(OnionReplayOpenLease), typeof(OnionReplyContext), typeof(OnionExitReplyContext)
                  })
@@ -157,10 +155,18 @@ public sealed class PrivacyRoutingProductionBoundaryTests
             typeof(OnionNetworkContextVerifier).GetMethods(
                     BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly)
                 .Select(static method => method.Name).Order().ToArray());
-        Assert.Equal(["BlobNodeIds", "CreateBlob", "CreateContactResolver", "CreateMailbox"],
+        Assert.Equal(["BlobNodeIds", "CreateBlob", "CreateContactResolver", "CreateGroupControl", "CreateMailbox"],
             typeof(OnionPathContextFactory).GetMethods(
                     BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly)
                 .Select(static method => method.Name).Order(StringComparer.Ordinal).ToArray());
+        var groupPath = typeof(OnionPathContextFactory).GetMethod(nameof(OnionPathContextFactory.CreateGroupControl))!;
+        Assert.Equal(typeof(VerifiedOnionPathContext), groupPath.ReturnType);
+        Assert.Equal(new[] { typeof(VerifiedGroupControlPlacement), typeof(ReadOnlyMemory<byte>), typeof(ReadOnlyMemory<byte>), typeof(ReadOnlyMemory<byte>) },
+            groupPath.GetParameters().Select(parameter => parameter.ParameterType).ToArray());
+        var groupPlacement = typeof(GroupControlPlacementVerifier).GetMethod(nameof(GroupControlPlacementVerifier.Create))!;
+        Assert.Equal(typeof(VerifiedGroupControlPlacement), groupPlacement.ReturnType);
+        Assert.Equal(new[] { typeof(VerifiedOnionNetworkContext), typeof(ReadOnlyMemory<byte>), typeof(ReadOnlyMemory<byte>) },
+            groupPlacement.GetParameters().Select(parameter => parameter.ParameterType).ToArray());
         var keyMethods = typeof(OnionLocalNodeKeyFactory).GetMethods(
             BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly);
         Assert.Equal(["Bind", "EnsureInstalledPublicKey"], keyMethods.Select(method => method.Name).Order().ToArray());

@@ -576,12 +576,20 @@ internal static class GraphPolicy
             ["Deep.Protocol.MembershipRoutes"] =
             [
                 "Deep.Protocol.MembershipRoutes|114|913FE3DB32E98222C2041D3DAB0B20CFE811A1CB09D1ECCE7E4C1BBACE20DE5B",
-                "Deep.Protocol.MembershipRoutes|114|A1606DE5B53325B39F507598375E1732EF390731E1819E643AA88235DEA86AA0"
+                "Deep.Protocol.MembershipRoutes|114|A1606DE5B53325B39F507598375E1732EF390731E1819E643AA88235DEA86AA0",
+                // Actual 0.0.0-dnp1witness package/source DLLs reviewed
+                // 2026-11-04: unchanged decoded API/resources; the sole
+                // snapshot-row delta is Deep.Protocol AssemblyRef1.0 ->0.0.
+                // See artifacts/route-history-20261104-package-audit01/audit.json.
+                "Deep.Protocol.MembershipRoutes|114|17C60BA2498A3A10E9805CB491FA5F1302383FE8E27271B7D0889B1BAEC58CB1"
             ],
             ["Deep.Protocol.ProfileCarrier"] =
             [
                 "Deep.Protocol.ProfileCarrier|352|889CD3CC5E7477A824F3D409A5D2868B5BB0C982E7586D3B795AD454FB5D7C91",
-                "Deep.Protocol.ProfileCarrier|352|823983167EE469F40F8B3D7AAA10268AA1D321B5BB5FAD7ECF98B6EAB1199A54"
+                "Deep.Protocol.ProfileCarrier|352|823983167EE469F40F8B3D7AAA10268AA1D321B5BB5FAD7ECF98B6EAB1199A54",
+                // Same measured package-only dependency identity delta;
+                // neither normal configuration nor the fingerprint rules change.
+                "Deep.Protocol.ProfileCarrier|352|490DAFBCFD88C31F119369383639ED283B988472B2072B5A4EC1A3D3EF6CB139"
             ],
             ["Deep.Protocol.GoldenVectors"] =
             [

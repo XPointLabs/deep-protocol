@@ -546,14 +546,24 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
         {
             "SignContactUpdateRendezvous", "SignCurrentContactBundle",
             "SignCurrentContactInvite", "SignCurrentContactPublicationRequest",
-            "SignCurrentContactRouteRecord", "SignCurrentPublicationSubmission", "SignGenesisDeviceCertificate"
+            "SignCurrentContactRouteRecord", "SignCurrentGroupControlRendezvous", "SignCurrentGroupRecord",
+            "SignCurrentPublicationSubmission", "SignCurrentRouteRecovery", "SignGenesisDeviceCertificate"
         }, friendCallableDeviceSigners.Select(method => method.Name).Order().ToArray());
+        Assert.All(friendCallableDeviceSigners.Where(method => method.Name.StartsWith("SignCurrentGroup", StringComparison.Ordinal)),
+            method => Assert.Equal(new[] { typeof(Deep.Protocol.GroupV1.GroupRecord), typeof(Deep.Protocol.GroupV1.VerifiedDeepIdV2GroupDirectory) },
+                method.GetParameters().Select(parameter => parameter.ParameterType).ToArray()));
         var currentSubmissionSigner = Assert.Single(friendCallableDeviceSigners,
             method => method.Name == "SignCurrentPublicationSubmission");
         Assert.Equal(new[] { typeof(Deep.Protocol.ContactV2.PublicationCurrentWireRequest),
             typeof(Deep.Protocol.ApplicationCore.VerifiedDca1V2),
             typeof(Deep.Protocol.ContactV1.ContactPublicationAuthorityWireRequest) },
             currentSubmissionSigner.GetParameters().Select(parameter => parameter.ParameterType).ToArray());
+        var routeRecoverySigner = Assert.Single(friendCallableDeviceSigners,
+            method => method.Name == "SignCurrentRouteRecovery");
+        Assert.Equal(new[] { typeof(Deep.Protocol.ContactV2.DeepIdV2ContactRouteRecoveryWireRequest), typeof(VerifiedDca1V2) },
+            routeRecoverySigner.GetParameters().Select(parameter => parameter.ParameterType).ToArray());
+        Assert.True(typeof(VerifiedDca1V2).IsSealed);
+        Assert.Empty(typeof(VerifiedDca1V2).GetConstructors(BindingFlags.Public | BindingFlags.Instance));
         var deviceSigner = Assert.Single(friendCallableDeviceSigners,
             method => method.Name == "SignGenesisDeviceCertificate");
         Assert.Contains(deviceSigner.GetParameters(), static parameter =>
@@ -568,9 +578,11 @@ public sealed partial class Dnp1IdentityAuthoringV1Tests
                 || typeof(Delegate).IsAssignableFrom(parameter.ParameterType));
             if (method != deviceSigner)
                 Assert.Contains(method.GetParameters(), parameter =>
-                    parameter.ParameterType == (method.Name == "SignContactUpdateRendezvous"
-                        ? typeof(Deep.Protocol.AccountDirectoryV1.VerifiedDeepIdV2DirectoryFreshness)
-                        : typeof(Deep.Protocol.ApplicationCore.VerifiedDca1V2)));
+                    parameter.ParameterType == (method.Name.StartsWith("SignCurrentGroup", StringComparison.Ordinal)
+                        ? typeof(Deep.Protocol.GroupV1.VerifiedDeepIdV2GroupDirectory)
+                        : method.Name == "SignContactUpdateRendezvous"
+                            ? typeof(Deep.Protocol.AccountDirectoryV1.VerifiedDeepIdV2DirectoryFreshness)
+                            : typeof(Deep.Protocol.ApplicationCore.VerifiedDca1V2)));
         });
         foreach (var intentType in typeof(Dnp1IdentityAuthoringV1).GetNestedTypes(
                      BindingFlags.NonPublic).Where(static type =>
