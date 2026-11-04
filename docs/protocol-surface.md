@@ -7,6 +7,21 @@ The production package closure is exactly `Deep.Protocol`,
 
 ## Production surface
 
+### DR-0178 bounded route history
+
+[DR-0178](../../docs/survival-program/decisions/DR-0178-paged-route-history-and-current-promotion.md)
+adds a closed Protocol history surface. Historical results expose verified public
+facts; delivery requires separate current qualification and the native owner's
+relationship, consent and durable decision checks. Native persistence implementation and consumer
+activation remain open. Codec/source evidence does not qualify retained-client,
+runtime or release behavior.
+
+The coordinated Shared cutover must use count8 for new commands and remove or
+disable the retained6/7 author entry while preserving exact pending originals
+and historical decoding. Consumers must rebuild and qualify the changed API and
+package graph together. This source slice authorizes no account reset or device
+operation.
+
 ### DR-0142 current DID2 group authority
 
 [DR-0142](../../docs/survival-program/decisions/DR-0142-current-did2-group-directory.md)

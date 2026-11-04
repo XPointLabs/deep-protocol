@@ -44,7 +44,7 @@ public sealed class VerifiedDeepIdV2UpdatedMailboxRoute : VerifiedDeepIdV2Mailbo
 /// <summary>Bounded independent route metadata verification. Previous event
 /// hashes/selectors are comparison inputs, not native/event authentication.
 /// Shared must separately derive their exact ordered custody under its lease.</summary>
-public static class DeepIdV2ContactRouteUpdateVerifier
+public static partial class DeepIdV2ContactRouteUpdateVerifier
 {
     public static async ValueTask<VerifiedDeepIdV2UpdatedMailboxRoute> VerifyCurrentSuccessorAsync(
         ParsedDeepIdV2ContactMailboxRoute originalPackage, VerifiedDeepIdV2DirectoryFreshness peer,
@@ -160,7 +160,7 @@ public static class DeepIdV2ContactRouteUpdateVerifier
         ContactCodec.VerifyDeviceSignature(route.Reachability, current.Device.Certificate.DeviceEd25519PublicKey.Span);
     }
 
-    private static void RequireHistoricalRoute(ParsedContactRouteClosure route, DeepIdV2RouteContext current)
+    internal static void RequireHistoricalRoute(ParsedContactRouteClosure route, DeepIdV2RouteContext current)
     {
         if (!current.Network.Closure!.RetainedPmts.Any(pmt => Fixed(pmt.CanonicalBytes.Span, route.Projection.CanonicalBytes.Span)))
             throw new CryptographicException("Private route history lost its protected projection lineage.");
@@ -194,7 +194,7 @@ public static class DeepIdV2ContactRouteUpdateVerifier
             throw new CryptographicException("Private route differs from its independently current device and signed capabilities.");
     }
 
-    private static void RequireOriginalScope(ParsedContactRouteClosure original, ParsedContactRouteClosure previous)
+    internal static void RequireOriginalScope(ParsedContactRouteClosure original, ParsedContactRouteClosure previous)
     {
         foreach (var tag in new[] { 1, 2, 5, 6, 7, 8, 14, 15 })
             if (!Fixed(original.Authorization.Field(tag).Span, previous.Authorization.Field(tag).Span))

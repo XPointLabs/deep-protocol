@@ -167,7 +167,7 @@ public static partial class DeepIdV2ContactRouteVerifier
         }
     }
 
-    private static void RequireHistoricalRouteBindings(ParsedXir1V2 invite,
+    internal static void RequireHistoricalRouteBindings(ParsedXir1V2 invite,
         ParsedContactRouteClosure route, DeepIdV2RouteContext current, ReadOnlySpan<byte> originalPmtReference)
     {
         if (!DeepIdV2RouteContext.Fixed(route.Route.Field(19).Span, route.Successor.Field(12).Span))

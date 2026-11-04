@@ -27,9 +27,16 @@ public sealed class VerifiedDeepIdV2ContactRouteRecordedHistory
             throw new CryptographicException("Recorded proposal history substituted its completed anchor.");
         return predecessor;
     }
-    internal void RequireAtCurrentContext(DeepIdV2RouteContext current)
+    internal void RequireAtCurrentContext(DeepIdV2RouteContext current) => RequireFacts(current, requireExpired: true);
+    internal void RequireFacts(DeepIdV2RouteContext current, bool requireExpired)
     {
-        Predecessor.RequireAtCurrentContext(current);
+        if (requireExpired) Predecessor.RequireAtCurrentContext(current);
+        else
+        {
+            DeepIdV2ContactRouteUpdateVerifier.RequireHistoricalRoute(Predecessor.Route, current);
+            DeepIdV2ContactRouteVerifier.RequireHistoricalRouteBindings(Predecessor.Invite, Predecessor.Route,
+                current, ContactCodec.ArtifactReference(ProtocolMagic.PMT2, Predecessor.Route.Projection).CanonicalBytes.Span);
+        }
         var previous = Predecessor;
         foreach (var pair in Pairs)
         {
@@ -41,34 +48,47 @@ public sealed class VerifiedDeepIdV2ContactRouteRecordedHistory
                 !DeepIdV2RouteContext.Fixed(request.DirectoryLookupKey.Span, current.Recipient.Freshness.QueriedDirectoryLeafKey.Span))
                 throw new CryptographicException("Recorded proposal changed its exact completed anchor or subject.");
             previous.RequireThresholdSuccessor(xra, threshold);
-            current.RequireRetainedAdvertisementFacts(xra, Predecessor.Route.Projection);
-            ContactCodec.ValidateThresholdRouteGraph(xra, threshold.LiveRoute, threshold.Successor, Predecessor.Route.Projection, threshold.Selection);
+            RequireIntrinsicPairFacts(pair, Predecessor.Route, current);
             var xrc = threshold.LiveRoute; var xss = threshold.Successor;
-            var original = XPointOnionCapabilityProducer.RequireRetainedIssuanceAuthority(current.Network, current.Authority,
-                xrc.Field(8), xrc.Field(9), DeepIdV2RouteContext.U64(xrc.Field(16).Span), DeepIdV2RouteContext.U64(xrc.Field(18).Span));
-            foreach (var (record, signature, start, expiry) in new[] { (threshold.Selection,11,8,9),(xrc,21,16,18),(xss,14,10,11) })
-            {
-                var issued = DeepIdV2RouteContext.U64(record.Field(start).Span); var until = DeepIdV2RouteContext.U64(record.Field(expiry).Span);
-                if (issued < original.NotBefore || until > original.ExpiresAt || issued > current.Lower)
-                    throw new CryptographicException("Recorded threshold lies outside its original signed scope.");
-                DeepIdV2RouteContext.VerifyWitnesses(record, signature, original);
-            }
-            var head = AccountDirectoryProtectedLkgFactory.Restore(current.Authority, pair.Response.ExactIssuanceAdh1, xrc.Field(19).Span[6..]);
-            var floor = current.Recipient.Freshness.NextProtectedLkg;
-            if (head.Head.MinimumReader != 2 || !DeepIdV2RouteContext.Fixed(head.Head.ExactXnaAuthorityCoreReference.Span,
-                    XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XNA1, original.CoreHash.Span)) ||
-                !DeepIdV2RouteContext.Fixed(xrc.Field(19).Span, xss.Field(12).Span) ||
-                head.LogGeneration < request.MinimumAdh1Generation || head.LogGeneration > floor.LogGeneration ||
-                (head.LogGeneration == request.MinimumAdh1Generation && !DeepIdV2RouteContext.Fixed(head.CoreHash.Span, request.MinimumAdh1CoreHash.Span)) ||
-                (head.LogGeneration == floor.LogGeneration && !DeepIdV2RouteContext.Fixed(head.CoreHash.Span, floor.CoreHash.Span)) ||
-                DeepIdV2RouteContext.U64(xrc.Field(16).Span) < head.Head.ValidFrom || DeepIdV2RouteContext.U64(xrc.Field(16).Span) >= head.Head.ValidUntil ||
-                DeepIdV2RouteContext.U64(xss.Field(10).Span) < head.Head.ValidFrom || DeepIdV2RouteContext.U64(xss.Field(10).Span) >= head.Head.ValidUntil)
-                throw new CryptographicException("Recorded threshold differs from its original authenticated directory issuance.");
             var expiredAt = new[] { DeepIdV2RouteContext.U64(xra.Field(13).Span), DeepIdV2RouteContext.U64(threshold.Selection.Field(9).Span),
                 DeepIdV2RouteContext.U64(xrc.Field(18).Span), DeepIdV2RouteContext.U64(xss.Field(11).Span) }.Min();
-            if (current.Lower < expiredAt) throw new CryptographicException("Recorded proposal remains live.");
+            if (requireExpired && current.Lower < expiredAt) throw new CryptographicException("Recorded proposal remains live.");
             previous = new(Predecessor.Invite, Predecessor.Route, xra, threshold);
         }
+    }
+    // Intrinsic original exchange facts only. Callers performing new admission
+    // must separately enforce every adjacent public predecessor before this helper.
+    internal static void RequireIntrinsicPairFacts(DeepIdV2ContactRouteRecordedPair pair,
+        ParsedContactRouteClosure anchorRoute, DeepIdV2RouteContext current)
+    {
+        var request = pair.Request; var threshold = Threshold(pair);
+        var xra = ContactCodec.Decode(ProtocolMagic.XRA1, request.ExactXra1.Span);
+        if (!DeepIdV2RouteContext.Fixed(request.ExactDca1.Span, current.Recipient.Authorization.Record.CanonicalBytes.Span) ||
+            !DeepIdV2RouteContext.Fixed(request.DirectoryLookupKey.Span, current.Recipient.Freshness.QueriedDirectoryLeafKey.Span))
+            throw new CryptographicException("Recorded proposal changed its original subject.");
+        current.RequireRetainedAdvertisementFacts(xra, anchorRoute.Projection);
+        ContactCodec.ValidateThresholdRouteGraph(xra, threshold.LiveRoute, threshold.Successor, anchorRoute.Projection, threshold.Selection);
+        var xrc = threshold.LiveRoute; var xss = threshold.Successor;
+        var original = XPointOnionCapabilityProducer.RequireRetainedIssuanceAuthority(current.Network, current.Authority,
+            xrc.Field(8), xrc.Field(9), DeepIdV2RouteContext.U64(xrc.Field(16).Span), DeepIdV2RouteContext.U64(xrc.Field(18).Span));
+        foreach (var (record, signature, start, expiry) in new[] { (threshold.Selection,11,8,9),(xrc,21,16,18),(xss,14,10,11) })
+        {
+            var issued = DeepIdV2RouteContext.U64(record.Field(start).Span); var until = DeepIdV2RouteContext.U64(record.Field(expiry).Span);
+            if (issued < original.NotBefore || until > original.ExpiresAt || issued > current.Lower)
+                throw new CryptographicException("Recorded threshold lies outside its original signed scope.");
+            DeepIdV2RouteContext.VerifyWitnesses(record, signature, original);
+        }
+        var head = AccountDirectoryProtectedLkgFactory.Restore(current.Authority, pair.Response.ExactIssuanceAdh1, xrc.Field(19).Span[6..]);
+        var floor = current.Recipient.Freshness.NextProtectedLkg;
+        if (head.Head.MinimumReader != 2 || !DeepIdV2RouteContext.Fixed(head.Head.ExactXnaAuthorityCoreReference.Span,
+                XPointNetworkCodec.EncodeCoreReference(ProtocolMagic.XNA1, original.CoreHash.Span)) ||
+            !DeepIdV2RouteContext.Fixed(xrc.Field(19).Span, xss.Field(12).Span) ||
+            head.LogGeneration < request.MinimumAdh1Generation || head.LogGeneration > floor.LogGeneration ||
+            (head.LogGeneration == request.MinimumAdh1Generation && !DeepIdV2RouteContext.Fixed(head.CoreHash.Span, request.MinimumAdh1CoreHash.Span)) ||
+            (head.LogGeneration == floor.LogGeneration && !DeepIdV2RouteContext.Fixed(head.CoreHash.Span, floor.CoreHash.Span)) ||
+            DeepIdV2RouteContext.U64(xrc.Field(16).Span) < head.Head.ValidFrom || DeepIdV2RouteContext.U64(xrc.Field(16).Span) >= head.Head.ValidUntil ||
+            DeepIdV2RouteContext.U64(xss.Field(10).Span) < head.Head.ValidFrom || DeepIdV2RouteContext.U64(xss.Field(10).Span) >= head.Head.ValidUntil)
+            throw new CryptographicException("Recorded threshold differs from its original authenticated directory issuance.");
     }
     internal void RequireSuccessor(DeepIdV2RouteContext current, ContactRecord xra, ParsedDeepIdV2RouteThreshold threshold)
     { RequireAtCurrentContext(current); Predecessor.AfterRecordedHistory(this).RequireThresholdSuccessor(xra, threshold); }
