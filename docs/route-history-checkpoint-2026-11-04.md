@@ -14,10 +14,17 @@ contact regressions. These structural fixtures do not prove signatures, durable
 adoption, transport, physical devices or connected delivery. The original
 focused01 receipt (96PASS/2FAIL from fixture capability bindings) is preserved.
 
+Follow-up `build05` and `focused03` also passed with zero warnings/errors and
+123 passing cases, with unchanged captured inputs. The atom now exposes defensive
+copies of its already parsed original XRC/XSS bytes, so Shared can derive F7
+identities without duplicating response wire offsets or inventing request data.
+These parse-only getters grant no verification or route authority.
+
 Actual metadata review attributed the previous unpinned net101 rows to
 `247a483` (+99) and `482a1bc` (+2), against a preserved assembly exactly matching
 the accepted12992-row snapshot. No assembly-reference or embedded-resource delta
-was found. DR-0178 adds75 reviewed rows before the coordinated old-author removal.
+was found. The initial DR-0178 slice adds75 reviewed rows before the getter
+follow-up and coordinated old-author removal.
 Current Debug/Release graph snapshots must be measured and repinned after that
 cutover; the old fingerprints have not been blindly replaced.
 

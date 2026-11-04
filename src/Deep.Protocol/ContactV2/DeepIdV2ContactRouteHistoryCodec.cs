@@ -29,6 +29,10 @@ public sealed class ParsedDeepIdV2ContactRouteHistoryAtom
     public ReadOnlyMemory<byte> ExactXra1 => Exact.AsMemory(578, 550).ToArray();
     /// <summary>Original ordinary V3 response.</summary>
     public ReadOnlyMemory<byte> ExactResponse => Exact.AsMemory(1132, ResponseLength).ToArray();
+    /// <summary>Original exact route record from the parsed ordinary response; no verification authority.</summary>
+    public ReadOnlyMemory<byte> ExactXrc1 => Response.ExactXrc1.ToArray();
+    /// <summary>Original exact successor record from the parsed ordinary response; no verification authority.</summary>
+    public ReadOnlyMemory<byte> ExactXss1 => Response.ExactXss1.ToArray();
     /// <summary>Exact untrusted completed XIR, or empty for a proposal atom. No historical or current authority.</summary>
     public ReadOnlyMemory<byte> ExactCompletedXir1V2 => IsCompleted ? Invite.CanonicalBytes : ReadOnlyMemory<byte>.Empty;
     /// <summary>Exact untrusted completed six-record closure, or empty for a proposal atom. No live route authority.</summary>
