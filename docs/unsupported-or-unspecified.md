@@ -24,7 +24,7 @@ current dispatch, holder, account or message authority.
 The source tree still contains pre-cutover PMA1/PMR1 producers and their
 membership/governance consumers. The actual source/package gates reject that
 remaining graph; see the
-[reproduced S00 failure and receipts](testing/s00-contact-baseline-2026-10-03.md#focused-recheck-2026-10-05).
+[reproduced S00 failure and receipts](https://github.com/XPointLabs/deep-protocol/blob/5920c3ce3af272bfb47bf3db7c6528791b262027/docs/testing/s00-contact-baseline-2026-10-03.md#focused-recheck-2026-10-05).
 Removal must follow actual compiled consumers and reviewed frozen API/evidence
 ownership. Renaming diagnostics, ignoring retired tokens, deleting failing
 assertions or enabling the old lane does not qualify its replacement.

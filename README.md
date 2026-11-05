@@ -1,5 +1,7 @@
 # Deep Protocol
 
+Current architecture: [Deep / XPoint specification](../docs/architecture/README.md).
+
 Production protocol libraries for Deep messaging, membership routes and self-hosted profile
 carriers. The repository targets .NET 10 and is a clean-break implementation: production packages
 contain no compatibility shims, aliases or fallback runtime paths.

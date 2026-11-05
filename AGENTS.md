@@ -1,12 +1,14 @@
 # Deep Protocol agent rules
 
+Current architecture: [Deep / XPoint specification](../docs/architecture/README.md).
+
 The workspace rules in `../AGENTS.md` apply. This file defines the protocol-specific closure.
 
 ## Production boundary
 
 The production package graph is exactly `Deep.Protocol`, `Deep.Protocol.MembershipRoutes` and
-`Deep.Protocol.ProfileCarrier`. `Deep.Protocol.Native*` is an isolated dark path and must remain
-absent from production projects, packages, resources and consumer lock graphs.
+`Deep.Protocol.ProfileCarrier`. `Deep.Protocol.Native*` is retired; current identity lives in `Deep.Protocol.Identity`.
+Do not restore old projects, packages, resources or consumer lock graphs.
 
 Frozen DNP1 registries, schemas, vectors and evidence ownership under the superproject's
 `docs/survival-program/releases/v3.0.0/specs/` are normative. Do not infer missing grammar or
@@ -35,8 +37,7 @@ dotnet test Deep.Protocol.slnx --no-build
 ./eng/Test-ProductionProtocolGraph.ps1 -Configuration Debug
 ```
 
-Run the evidence-ownership gate with the applicable mapping fragments. Run
-`Deep.Protocol.Dark.slnx` separately only for an authorized dark-path change.
+Run the evidence-ownership gate with the applicable mapping fragments. The retired dark solution is not an executable gate.
 
 Use the root canonical `scripts/Invoke-RepositoryTestGate.ps1 -Repository
 deep-protocol` for source qualification, with exact prior/focused references.
@@ -47,6 +48,7 @@ waives the graph/package gate above. Runtime theory rows may share a method
 definition or display name; use the root mapping implementation, not counts
 or a per-run parser. Windows local gates explicitly use PowerShell5.1.
 The nested executable witnesses require PowerShell7.6.5/.NET10 separately
-(DR-0117), compatible with the selected SDK architecture: use an
+([witness runtime](../docs/survival-program/README.md#witness-runtime)),
+compatible with the selected SDK architecture: use an
 available `pwsh` or explicit `-WitnessPowerShellPath`. Missing/wrong interpreter
 fails before full; installing it is not an implicit runner action.

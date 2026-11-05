@@ -437,7 +437,7 @@ if ($currentTarget.Count -ne 1 -or $currentTarget[0].name -cne 'PublicationCurre
     $currentTarget[0].maximumResponseBodyBytes -ne $currentContract.responseMaximumBytes -or
     $coordination.outerOnionOperation -ne 4 -or $coordination.placementRequestKind -ne 8 -or $coordination.placementServiceClass -ne 1 -or
     $oneTimeTarget.Count -ne 1 -or $oneTimeTarget[0].publicationKind -ne 2 -or
-    ($coordination.targets.id -join ',') -cne '1,2,5' -or ($coordination.retiredTargets -join ',') -cne '3,4' -or
+    ($coordination.targets.id -join ',') -cne '1,2,5,6' -or ($coordination.retiredTargets -join ',') -cne '3,4' -or
     $coordination.header.bytes + $currentContract.requestMaximumBytes -ne $currentContract.coordinationMaximumRequestBytes -or
     $coordination.header.bytes + $currentContract.responseMaximumBytes -ne $currentContract.coordinationMaximumResponseBytes -or
     $coordination.contactMaximumRequestBytes -ne $currentContract.coordinationMaximumRequestBytes -or
@@ -449,6 +449,37 @@ if ($currentTarget.Count -ne 1 -or $currentTarget[0].name -cne 'PublicationCurre
     $contactOperation[0].maxSuccessBytes -ne $currentContract.contactMaximumSuccessBytes -or
     $currentContract.coordinationMaximumResponseBytes -gt $currentContract.contactMaximumSuccessBytes) {
     throw 'DR-0125 current submission, XPL, one-time/retired targets or exact network bounds disagree.'
+}
+
+# DR-0078 already allocates target6 in the current codec/catalog. This checks
+# its closed metadata owner; it does not mint a new allocation or activate it.
+$recoveryOwner = 'contact-route-recovery-v1.registry.json'
+$recoveryPath = Join-Path $normativeRoot $recoveryOwner
+$recoverySchemaPath = Join-Path $normativeRoot 'contact-route-recovery-v1.registry.schema.json'
+if (-not (Test-Json -LiteralPath $recoveryPath -SchemaFile $recoverySchemaPath)) {
+    throw 'DR-0078 route-recovery contract violates its closed schema.'
+}
+$recovery = Get-Content -LiteralPath $recoveryPath -Raw | ConvertFrom-Json
+$recoveryTarget = @($coordination.targets | Where-Object id -EQ 6)
+$recoveryFields = 'id,name,decision,requestBodyVersion,responseBodyVersion,minimumRequestBodyBytes,maximumRequestBodyBytes,maximumResponseBodyBytes,maximumHistoryPairs,machineOwner'
+if ($recoveryTarget.Count -ne 1 -or
+    ($recoveryTarget[0].PSObject.Properties.Name -join ',') -cne $recoveryFields -or
+    $recoveryTarget[0].name -cne 'RouteRecovery' -or $recoveryTarget[0].decision -cne 'DR-0078' -or
+    $recoveryTarget[0].machineOwner -cne $recoveryOwner -or
+    $recoveryTarget[0].requestBodyVersion -ne $recovery.wire.requestVersion -or
+    $recoveryTarget[0].responseBodyVersion -ne $recovery.wire.responseVersion -or
+    $recoveryTarget[0].minimumRequestBodyBytes -ne $recovery.wire.modes[0].minimumRequestBytes -or
+    $recoveryTarget[0].maximumRequestBodyBytes -ne $recovery.wire.modes[1].maximumRequestBytes -or
+    $recoveryTarget[0].maximumResponseBodyBytes -ne $recovery.wire.maximumResponseBytes -or
+    $recoveryTarget[0].maximumHistoryPairs -ne $recovery.history.maximumPairs -or
+    $recovery.coordination.target -ne 6 -or $recovery.coordination.name -cne $recoveryTarget[0].name -or
+    $recovery.coordination.outerVersion -ne $coordination.header.version -or
+    $recovery.coordination.outerHeaderBytes -ne $coordination.header.bytes -or
+    $recovery.coordination.globalRequestMaximumBytes -ne $coordination.contactMaximumRequestBytes -or
+    $recovery.coordination.targetRequestMaximumBytes -ne $coordination.header.bytes + $recoveryTarget[0].maximumRequestBodyBytes -or
+    ($recovery.coordination.retiredTargets -join ',') -cne '3,4' -or
+    ($recovery.wire.modes.id -join ',') -cne '1,2' -or $recovery.runtimeActivation) {
+    throw 'DR-0078 target6 metadata differs from its existing closed recovery owner.'
 }
 
 $resolvedRecords = [Collections.Generic.List[object]]::new()

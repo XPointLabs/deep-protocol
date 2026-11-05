@@ -109,7 +109,7 @@ absent from the frozen XND1 contract. The separate canonical fields are preserve
 generation-zero, bounded nonzero IDs/keys, unique node IDs/hosts/origins and
 independently verified descriptor signatures remain required. Invalid identity
 metadata rejects before operational signer callbacks. Successor identity-key
-immutability is unchanged. See the [descriptor-key checkpoint](testing/s03-descriptor-keys-2026-10-04.md)
+immutability is unchanged. See the [descriptor-key checkpoint](https://github.com/XPointLabs/deep-protocol/blob/5920c3ce3af272bfb47bf3db7c6528791b262027/docs/testing/s03-descriptor-keys-2026-10-04.md)
 for the matching native mailbox consumer and remaining package/activation gates.
 Existing installed identities are not regenerated, migrated or rotated by this
 source change. Consumers require the matching source/package repin before use.
@@ -510,7 +510,7 @@ with service genesis. No public API, wire/suite/domain or error code changes.
 Both consumers must rebuild together. This does not change SQL custody, reset
 accounts, extend old intervals or activate replica publication. Source evidence
 and remaining qualification are in the
-[service-succession checkpoint](testing/s05-prekey-service-succession-2026-10-16.md).
+[service-succession checkpoint](https://github.com/XPointLabs/deep-protocol/blob/5920c3ce3af272bfb47bf3db7c6528791b262027/docs/testing/s05-prekey-service-succession-2026-10-16.md).
 
 For DR-0072 native-committed contact reconstruction, the additive bounded
 `ApplicationCoreVerifier.RequireRetainedContactHelloEndpointBindingsAsync` and
