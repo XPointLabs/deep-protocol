@@ -15,6 +15,45 @@ namespace Deep.Protocol.Tests.ContactV2;
 public sealed class DeepIdV2ContactRouteHistoryTests
 {
     [Theory]
+    [InlineData(1001UL, 2000UL, 1UL, "FutureCreation")]
+    [InlineData(999UL, 1000UL, 1UL, "ExpiredAnnouncement")]
+    [InlineData(999UL, 2000UL, 1UL, "CreationOutsideSignedRoute")]
+    [InlineData(1001UL, 1000UL, 1UL, "FutureCreation")]
+    public void CurrentAnnouncementWindowPreservesOrderedChecksAndClosedReasons(
+        ulong createdMilliseconds, ulong expiresMilliseconds, ulong upperSeconds, string expected)
+    {
+        // This existing parsed codec fixture has signed-field intervals [1,2).
+        // Test only the pure denial predicate, never a verified route/clock claim.
+        var route = Package(false).Route;
+        var error = Assert.Throws<CryptographicException>(() =>
+            DeepIdV2ContactRouteUpdateVerifier.RequireCurrentHistoryAnnouncementWindow(route,
+                createdMilliseconds, expiresMilliseconds, upperSeconds));
+        Assert.Equal("Announcement is outside its own or the signed route's current windows.", error.Message);
+        Assert.Equal(new CryptographicException().HResult, error.HResult);
+        Assert.Single(error.Data);
+        Assert.Equal(expected, error.Data["Deep.ContactRouteHistoryAnnouncement.Check"]);
+    }
+
+    [Fact]
+    public void CurrentAnnouncementWindowKeepsInclusiveCreationAndExclusiveExpiry()
+    {
+        var route = Package(false).Route;
+        DeepIdV2ContactRouteUpdateVerifier.RequireCurrentHistoryAnnouncementWindow(route, 1000, 1001, 1);
+        var expired = Assert.Throws<CryptographicException>(() =>
+            DeepIdV2ContactRouteUpdateVerifier.RequireCurrentHistoryAnnouncementWindow(route, 999, 1000, 1));
+        Assert.Equal("ExpiredAnnouncement", expired.Data["Deep.ContactRouteHistoryAnnouncement.Check"]);
+    }
+
+    [Fact]
+    public void CurrentAnnouncementWindowKeepsCheckedOverflowUnclassified()
+    {
+        var error = Assert.Throws<OverflowException>(() =>
+            DeepIdV2ContactRouteUpdateVerifier.RequireCurrentHistoryAnnouncementWindow(Package(false).Route,
+                0, ulong.MaxValue, ulong.MaxValue / 1000 + 1));
+        Assert.Empty(error.Data);
+    }
+
+    [Theory]
     [InlineData(1, 1)]
     [InlineData(1, 3)]
     [InlineData(2, 0)]

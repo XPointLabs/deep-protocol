@@ -358,13 +358,29 @@ public static partial class DeepIdV2ContactRouteUpdateVerifier
         DeepIdV2CurrentContactAuthorization? recipient = null;
         await WithHistoryContextAsync(endpoint, peer, network, authority, time, current => {
             RequireCurrentRoute(endpoint.Completed, current);
-            var created = message.CreatedAtUnixMilliseconds / 1000;
-            if (message.CreatedAtUnixMilliseconds > checked(current.Upper * 1000) ||
-                checked(current.Upper * 1000) >= message.ExpiresAtUnixMilliseconds || !CoversCreation(endpoint.Completed, created))
-                throw new CryptographicException("Announcement is outside its own or the signed route's current windows.");
+            RequireCurrentHistoryAnnouncementWindow(endpoint.Completed, message.CreatedAtUnixMilliseconds,
+                message.ExpiresAtUnixMilliseconds, current.Upper);
             recipient = current.Recipient;
         }, cancellationToken).ConfigureAwait(false);
         return new(endpoint.Completed, recipient!, network, authority, time, message.ExpiresAtUnixMilliseconds);
+    }
+
+    // Denial diagnostics only. The actual caller first authenticates the
+    // history/endpoint/current context; this pure predicate grants no authority.
+    internal static void RequireCurrentHistoryAnnouncementWindow(ParsedContactRouteClosure completed,
+        ulong createdMilliseconds, ulong expiresMilliseconds, ulong currentUpperSeconds)
+    {
+        var created = createdMilliseconds / 1000;
+        // Preserve the original ordered, short-circuit checks and overflow.
+        var failure = createdMilliseconds > checked(currentUpperSeconds * 1000) ? "FutureCreation" :
+            checked(currentUpperSeconds * 1000) >= expiresMilliseconds ? "ExpiredAnnouncement" :
+            !CoversCreation(completed, created) ? "CreationOutsideSignedRoute" : null;
+        if (failure is not null)
+        {
+            var error = new CryptographicException("Announcement is outside its own or the signed route's current windows.");
+            error.Data["Deep.ContactRouteHistoryAnnouncement.Check"] = failure;
+            throw error;
+        }
     }
 
     private static async ValueTask WithHistoryContextAsync(VerifiedDeepIdV2ContactRouteHistory state,
