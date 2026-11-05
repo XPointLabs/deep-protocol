@@ -153,8 +153,12 @@ public sealed class VerifiedDeepIdV2MailboxGrantIssuance
         var final = await ReadAsync(cancellationToken).ConfigureAwait(false);
         DeepIdV2MailboxGrantResultVerifier.RequireContinuous(first.Window, final.Window);
         DeepIdV2MailboxGrantIssuanceVerifier.Covers(final.Window, start, expiry);
+        // The final independently verified interval covers the signed request.
+        // Its lower endpoint is therefore a proven in-envelope witness and is
+        // never later than an intersecting client's upper endpoint. The issuer
+        // upper endpoint can be later despite honest intersecting intervals.
         var result = MailboxGrantResultAuthor.AuthorSuccess(request, route.ExactBytes.Span,
-            unsigned with { IssuerSignature = signature }, final.Window.UpperUnixSeconds,
+            unsigned with { IssuerSignature = signature }, final.Window.LowerUnixSeconds,
             DeepIdV2RouteContext.U64(request.Field(10).Span));
         cancellationToken.ThrowIfCancellationRequested(); return result.CanonicalBytes.ToArray();
     }

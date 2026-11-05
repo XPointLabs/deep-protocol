@@ -22,14 +22,14 @@ public sealed partial class MailboxRetainedReadIssuanceV2Tests
         var clientClock = new Time();
         var client = await MailboxHostAuthorityV2Verifier.VerifyAsync(state.Network,
             Fixture.Create().Authority, state.Host.RetainedReadPolicyBytes, new(clientClock));
-        state.Clock.Sample++;
+        state.Clock.Sample += 11; // Issuer lower231 is genuinely later than client upper230.
         var issuance = await state.Issuance();
         var response = await issuance.AuthorSuccessAsync(new Issuer());
         var exact = response.ToArray();
         var error = await Assert.ThrowsAsync<CryptographicException>(() =>
             client.VerifyRetainedReadSuccessAsync(state.Route.ExactBytes, state.Request, response).AsTask());
         Assert.Equal("IssuedAfterCurrentUpper", error.Data["Deep.MailboxRetainedRead.Check"]);
-        clientClock.Sample++;
+        clientClock.Sample += 11;
         var verified = await client.VerifyRetainedReadSuccessAsync(state.Route.ExactBytes, state.Request, response);
         Assert.Equal(exact, verified.ExactXmc2.ToArray());
         await verified.EnsureCurrentAsync();
@@ -353,15 +353,15 @@ public sealed partial class MailboxRetainedReadIssuanceV2Tests
     // fixture. Actual signed PMT lineage and two distinct current descriptor-key
     // attestations exercise this Protocol trust boundary; native read-back and
     // original publication admission must be proved by the coupled Node tests.
-    private static ParsedContactRouteClosure MakeRoute(ContactRecord pmt)
+    private static ParsedContactRouteClosure MakeRoute(ContactRecord pmt, ulong routeExpiry = 210)
     {
         var template=ContactCodecTests.Records.RouteClosure;
         ReadOnlyMemory<byte>[] Fields(ContactRecord record,int count)=>Enumerable.Range(1,count).Select(record.Field).ToArray();
         var xraFields=Fields(template.Xra,16);xraFields[0]=pmt.Field(1);xraFields[4]=ContactCodec.ArtifactReference("PMT2",pmt).CanonicalBytes;
-        xraFields[11]=U64(100);xraFields[12]=U64(210);var xra=ContactCodec.AuthorForOperationalAuthority("XRA1",xraFields);
+        xraFields[11]=U64(100);xraFields[12]=U64(routeExpiry);var xra=ContactCodec.AuthorForOperationalAuthority("XRA1",xraFields);
         var ranked=ContactRouteThresholdAuthor.RankReplicas(pmt.Field(1).Span,ContactCodec.ArtifactReference("PMT2",pmt).CanonicalBytes.Span,pmt.Field(6).Span,xra.Field(6).Span,pmt.Field(9).Span,2);
         var pmsFields=Fields(template.Pms,11);pmsFields[0]=pmt.Field(1);pmsFields[1]=ContactCodec.ArtifactReference("PMT2",pmt).CanonicalBytes;
-        pmsFields[2]=xra.Field(6);pmsFields[3]=pmt.Field(6);pmsFields[5]=ranked;pmsFields[7]=U64(100);pmsFields[8]=U64(210);
+        pmsFields[2]=xra.Field(6);pmsFields[3]=pmt.Field(6);pmsFields[5]=ranked;pmsFields[7]=U64(100);pmsFields[8]=U64(routeExpiry);
         pmsFields[6]=ContactCodec.Sha256Domain("Deep/XPoint/V1/PMS2/selection",ProjectPms(pmsFields.Take(6).ToArray()));
         var pms=ContactCodec.AuthorForOperationalAuthority("PMS2",pmsFields);
         var replicaRows=new byte[128];for(var i=0;i<2;i++){ranked.AsSpan(i*32,32).CopyTo(replicaRows.AsSpan(i*64));B(32,(byte)(0x80+i)).CopyTo(replicaRows,i*64+32);}
@@ -369,13 +369,13 @@ public sealed partial class MailboxRetainedReadIssuanceV2Tests
         xrcFields[5]=ContactCodec.ArtifactReference("PMT2",pmt).CanonicalBytes;xrcFields[6]=pms.ArtifactHash;xrcFields[7]=pmt.Field(5);xrcFields[14]=replicaRows;
         // Genesis issuance must occur inside this original PMT interval;
         // the generic template's issuance time belongs to another fixture.
-        xrcFields[15]=U64(100);xrcFields[16]=U64(100);xrcFields[17]=U64(210);xrcFields[18]=pmt.Field(14);var xrc=ContactCodec.AuthorForOperationalAuthority("XRC1",xrcFields);
+        xrcFields[15]=U64(100);xrcFields[16]=U64(100);xrcFields[17]=U64(routeExpiry);xrcFields[18]=pmt.Field(14);var xrc=ContactCodec.AuthorForOperationalAuthority("XRC1",xrcFields);
         var xssFields=Fields(template.Xss,14);xssFields[0]=pmt.Field(1);xssFields[3]=xrc.CoreHash;xssFields[4]=ContactCodec.ArtifactReference("XRC1",xrc).CanonicalBytes;
         xssFields[5]=xssFields[4];xssFields[6]=ContactCodec.ArtifactReference("PMT2",pmt).CanonicalBytes;xssFields[7]=pmt.Field(5);xssFields[8]=pms.ArtifactHash;
-        xssFields[9]=U64(100);xssFields[10]=U64(210);xssFields[11]=pmt.Field(14);var xss=ContactCodec.AuthorForOperationalAuthority("XSS1",xssFields);
+        xssFields[9]=U64(100);xssFields[10]=U64(routeExpiry);xssFields[11]=pmt.Field(14);var xss=ContactCodec.AuthorForOperationalAuthority("XSS1",xssFields);
         var xrrFields=Fields(template.Xrr,20);xrrFields[0]=pmt.Field(1);xrrFields[4]=ContactCodec.ArtifactReference("XRA1",xra).CanonicalBytes;
         xrrFields[5]=ContactCodec.ArtifactReference("XRC1",xrc).CanonicalBytes;xrrFields[6]=ContactCodec.ArtifactReference("XSS1",xss).CanonicalBytes;
-        xrrFields[7]=ContactCodec.ArtifactReference("PMT2",pmt).CanonicalBytes;xrrFields[8]=pms.ArtifactHash;xrrFields[15]=U64(100);xrrFields[16]=U64(210);
+        xrrFields[7]=ContactCodec.ArtifactReference("PMT2",pmt).CanonicalBytes;xrrFields[8]=pms.ArtifactHash;xrrFields[15]=U64(100);xrrFields[16]=U64(routeExpiry);
         var xrr=ContactCodec.AuthorForOperationalAuthority("XRR1",xrrFields);
         return ContactRouteClosureCodec.Decode(ContactRouteClosureCodec.EncodeRecords([xrr,xra,xrc,xss,pmt,pms]));
     }

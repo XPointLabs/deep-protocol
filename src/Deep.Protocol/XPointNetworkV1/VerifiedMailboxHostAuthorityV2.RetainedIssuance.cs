@@ -72,8 +72,11 @@ public sealed class VerifiedMailboxRetainedReadIssuanceV2
             throw new CryptographicException("Retained read signer returned an invalid signature.");
         var final = await host.ReadRetainedIssuanceAsync(request, route, readUntil, evidence, cancellationToken).ConfigureAwait(false);
         DeepIdV2MailboxGrantResultVerifier.RequireContinuous(first.Window, final.Window);
+        // The final trusted interval still covers this exact signed request.
+        // Project its proven lower endpoint, as current Deposit/Retrieve do;
+        // an honest overlapping client's upper need not reach our upper.
         var result = MailboxGrantResultAuthor.AuthorSuccess(request, route.ExactBytes.Span,
-            unsigned with { IssuerSignature = signature }, final.Window.UpperUnixSeconds, U64(request.Field(10).Span));
+            unsigned with { IssuerSignature = signature }, final.Window.LowerUnixSeconds, U64(request.Field(10).Span));
         await host.RequireRetainedReadSuccessAsync(request, result, route, readUntil, cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested(); return result.CanonicalBytes.ToArray();
     }
