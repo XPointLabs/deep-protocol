@@ -83,11 +83,13 @@ public static partial class ApplicationCoreCodec
         var logical = logicalMessage32.ToArray(); var conversation = conversation32.ToArray();
         var first = await DeepIdV2RouteContext.ReadAsync(sender, network, authority, time, ct).ConfigureAwait(false);
         var created = checked(first.Upper * 1000);
+        var maximumLifetimeSeconds = payload.Mode is DeepIdV2ContactRouteHistoryMode.Announcement or
+            DeepIdV2ContactRouteHistoryMode.EvidenceAndAnnouncement ? 3_600UL : 120UL;
+        // The nonce-bound proof must be current for authoring and its final
+        // recheck. Its deadline is not the retained control's event lifetime.
         var expiry = Math.Min(first.LogicalRecordExpiryCeiling, Math.Min(network.MaximumRecordExpiryUnixSeconds,
-            Math.Min(network.Closure!.View.ExpiresAt, checked(first.Lower + 120))));
+            Math.Min(network.Closure!.View.ExpiresAt, checked(first.Lower + maximumLifetimeSeconds))));
         expiry = Math.Min(expiry, sender.Freshness.NextProtectedLkg.Head.ValidUntil);
-        var proof = sender.Freshness;
-        expiry = Math.Min(expiry, checked(proof.TrustedLowerUnixSeconds + proof.FreshnessDeadlineMonotonicSeconds - proof.MonotonicSample));
         if (announcement is not null)
         {
             DeepIdV2ContactRouteUpdateVerifier.RequireCurrentRoute(announcement.Completed, first);

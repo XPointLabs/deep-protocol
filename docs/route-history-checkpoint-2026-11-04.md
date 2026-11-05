@@ -89,6 +89,19 @@ validation rules are unchanged. The audit receipt is
 An optional `-KeepArtifacts` preserves disposable witness outputs for direct
 inspection; its default cleanup and all verification remain unchanged.
 
+The 2026-11-05 follow-up under DR-0178 changes only fresh count8 author policy.
+Announcement-bearing modes2/3 use at most one hour; evidence-only mode1 and
+history-request mode4 retain a120-second maximum. Every existing signed
+authority, DCA, device, network record, view, ADH and applicable completed-route
+ceiling still clips the event. The authoring nonce proof remains current through
+the final callback recheck, but its capability deadline no longer clips the serialized
+event lifetime. Existing events retain their exact original expiry. Receiver,
+dispatch, response-request currentness/correlation and native custody checks,
+the generic seven-day contact-control wire bound, and the separate recorded-
+recovery request interface are unchanged. Genuine Shared author fixtures provide
+the signed lifetime/callback cases; the67 Protocol framing cases make no authority
+claim. This follow-up has not yet been built or qualified.
+
 Remaining: combined Shared runtime/source qualification, same-profile CLI
 catch-up and delivery measurements, and separately required native/operator and
 release evidence. Source/package-witness acceptance does not establish runtime,
