@@ -20,6 +20,32 @@ public sealed class AuthoredVerifiedContactRouteHistoryControl
 
 public static partial class ApplicationCoreCodec
 {
+    /// <summary>Reads a prospective announcement expiry from the same current signed ceilings as the author. This planning scalar grants no authoring or delivery permission.</summary>
+    /// <param name="endpoint">The independently verified exact endpoint to announce.</param>
+    /// <param name="sender">Current sender authorization.</param>
+    /// <param name="network">Current verified network.</param>
+    /// <param name="authority">The network authority.</param>
+    /// <param name="time">Independent trusted time.</param>
+    /// <param name="cancellationToken">Cancellation for this read.</param>
+    /// <returns>A prospective expiry in Unix milliseconds. Actual authoring must independently recheck it.</returns>
+    public static async ValueTask<ulong> ReadVerifiedContactRouteHistoryAnnouncementExpiryAsync(
+        VerifiedDeepIdV2ContactRouteHistory endpoint, DeepIdV2CurrentContactAuthorization sender,
+        VerifiedOnionNetworkContext network, VerifiedXPointNetworkAuthority authority,
+        OnionTrustedTimeAuthority time, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(endpoint); ArgumentNullException.ThrowIfNull(sender);
+        ArgumentNullException.ThrowIfNull(network); ArgumentNullException.ThrowIfNull(authority);
+        ArgumentNullException.ThrowIfNull(time);
+        var first = await DeepIdV2RouteContext.ReadAsync(sender, network, authority, time, cancellationToken).ConfigureAwait(false);
+        var expires = HistoryControlExpiryMilliseconds(DeepIdV2ContactRouteHistoryMode.Announcement,
+            first, sender, network, endpoint);
+        var final = await first.RecheckAsync(cancellationToken).ConfigureAwait(false);
+        DeepIdV2ContactRouteUpdateVerifier.RequireCurrentRoute(endpoint.Completed, final);
+        if (checked(final.Upper * 1000) >= expires)
+            throw new CryptographicException("History expiry planning lost its current control lifetime.");
+        cancellationToken.ThrowIfCancellationRequested(); return expires;
+    }
+
     /// <summary>Authors a bounded page or endpoint announcement exclusively from
     /// independently verified public originals. A request hash supplies correlation only.</summary>
     public static async ValueTask<AuthoredVerifiedContactRouteHistoryControl> AuthorVerifiedContactRouteHistoryPageAsync(
@@ -83,7 +109,21 @@ public static partial class ApplicationCoreCodec
         var logical = logicalMessage32.ToArray(); var conversation = conversation32.ToArray();
         var first = await DeepIdV2RouteContext.ReadAsync(sender, network, authority, time, ct).ConfigureAwait(false);
         var created = checked(first.Upper * 1000);
-        var maximumLifetimeSeconds = payload.Mode is DeepIdV2ContactRouteHistoryMode.Announcement or
+        var expires = HistoryControlExpiryMilliseconds(payload.Mode, first, sender, network, announcement);
+        var result = AuthorDmc2Core(network.NetworkId.Span, logical, conversation,
+            sender.Authorization.Binding.Record.DeepAccountId.Span, sender.Authorization.Record.PublisherDeviceId.Span,
+            sequence, created, expires, Dmc2Flags.None, [], payload);
+        var final = await first.RecheckAsync(ct).ConfigureAwait(false);
+        if (checked(final.Upper * 1000) >= expires) throw new CryptographicException("History author lost current control lifetime.");
+        if (announcement is not null) DeepIdV2ContactRouteUpdateVerifier.RequireCurrentRoute(announcement.Completed, final);
+        ct.ThrowIfCancellationRequested(); return result;
+    }
+
+    private static ulong HistoryControlExpiryMilliseconds(DeepIdV2ContactRouteHistoryMode mode,
+        DeepIdV2RouteContext first, DeepIdV2CurrentContactAuthorization sender,
+        VerifiedOnionNetworkContext network, VerifiedDeepIdV2ContactRouteHistory? announcement)
+    {
+        var maximumLifetimeSeconds = mode is DeepIdV2ContactRouteHistoryMode.Announcement or
             DeepIdV2ContactRouteHistoryMode.EvidenceAndAnnouncement ? 3_600UL : 120UL;
         // The nonce-bound proof must be current for authoring and its final
         // recheck. Its deadline is not the retained control's event lifetime.
@@ -98,14 +138,8 @@ public static partial class ApplicationCoreCodec
                 .Min(part => DeepIdV2RouteContext.U64(part.Item1.Field(part.Item2).Span)));
         }
         var expires = checked(expiry * 1000);
-        if (expires <= created) throw new CryptographicException("Current authority cannot cover a fresh history control.");
-        var result = AuthorDmc2Core(network.NetworkId.Span, logical, conversation,
-            sender.Authorization.Binding.Record.DeepAccountId.Span, sender.Authorization.Record.PublisherDeviceId.Span,
-            sequence, created, expires, Dmc2Flags.None, [], payload);
-        var final = await first.RecheckAsync(ct).ConfigureAwait(false);
-        if (checked(final.Upper * 1000) >= expires) throw new CryptographicException("History author lost current control lifetime.");
-        if (announcement is not null) DeepIdV2ContactRouteUpdateVerifier.RequireCurrentRoute(announcement.Completed, final);
-        ct.ThrowIfCancellationRequested(); return result;
+        if (expires <= checked(first.Upper * 1000)) throw new CryptographicException("Current authority cannot cover a fresh history control.");
+        return expires;
     }
 
     private static bool SameHistory(VerifiedDeepIdV2ContactRouteHistory a, VerifiedDeepIdV2ContactRouteHistory b) =>
