@@ -350,11 +350,7 @@ public static partial class DeepIdV2ContactRouteUpdateVerifier
         VerifiedXPointNetworkAuthority authority, OnionTrustedTimeAuthority time,
         CancellationToken cancellationToken = default)
     {
-        var message = ApplicationCoreCodec.DecodeDmc2(exactDmc2.Span);
-        var payload = RequireHistoryMessage(endpoint, message);
-        if (payload.Mode is not (DeepIdV2ContactRouteHistoryMode.Announcement or DeepIdV2ContactRouteHistoryMode.EvidenceAndAnnouncement) ||
-            !Fixed(payload.RightCursor.Span, endpoint.Cursor.Span))
-            throw new CryptographicException("Announcement has no independently verified exact endpoint.");
+        var message = RequireEndpointAnnouncement(endpoint, exactDmc2);
         DeepIdV2CurrentContactAuthorization? recipient = null;
         await WithHistoryContextAsync(endpoint, peer, network, authority, time, current => {
             RequireCurrentRoute(endpoint.Completed, current);
@@ -363,6 +359,48 @@ public static partial class DeepIdV2ContactRouteUpdateVerifier
             recipient = current.Recipient;
         }, cancellationToken).ConfigureAwait(false);
         return new(endpoint.Completed, recipient!, network, authority, time, message.ExpiresAtUnixMilliseconds);
+    }
+
+    /// <summary>Reads only whether an authenticated announcement is expired for maintenance scheduling. Other invalid windows or current authority failures reject; the result grants no delivery or reintroduction permission.</summary>
+    /// <param name="endpoint">Independently verified exact historical endpoint.</param>
+    /// <param name="exactDmc2">The caller's authenticated native announcement.</param>
+    /// <param name="peer">Independently current peer freshness.</param>
+    /// <param name="network">Current verified network context.</param>
+    /// <param name="authority">The verified network authority.</param>
+    /// <param name="time">Independent trusted time.</param>
+    /// <param name="cancellationToken">Cancellation for this read.</param>
+    /// <returns>True only for announcement expiry after every other check passes. Neither result is effect permission.</returns>
+    public static async ValueTask<bool> IsVerifiedHistoryAnnouncementExpiredForMaintenanceAsync(
+        VerifiedDeepIdV2ContactRouteHistory endpoint, ReadOnlyMemory<byte> exactDmc2,
+        VerifiedDeepIdV2DirectoryFreshness peer, VerifiedOnionNetworkContext network,
+        VerifiedXPointNetworkAuthority authority, OnionTrustedTimeAuthority time,
+        CancellationToken cancellationToken = default)
+    {
+        var message = RequireEndpointAnnouncement(endpoint, exactDmc2); var expired = false;
+        await WithHistoryContextAsync(endpoint, peer, network, authority, time, current =>
+        {
+            RequireCurrentRoute(endpoint.Completed, current);
+            var upper = checked(current.Upper * 1000);
+            if (message.CreatedAtUnixMilliseconds > upper)
+                ThrowAnnouncementWindowFailure("FutureCreation");
+            // Expiry alone must never conceal a creation outside the exact
+            // signed route. Diagnostic exception.Data is not consulted here.
+            if (!CoversCreation(endpoint.Completed, message.CreatedAtUnixMilliseconds / 1000))
+                ThrowAnnouncementWindowFailure("CreationOutsideSignedRoute");
+            expired |= upper >= message.ExpiresAtUnixMilliseconds;
+        }, cancellationToken).ConfigureAwait(false);
+        return expired;
+    }
+
+    private static ParsedDmc2 RequireEndpointAnnouncement(VerifiedDeepIdV2ContactRouteHistory endpoint,
+        ReadOnlyMemory<byte> exactDmc2)
+    {
+        var message = ApplicationCoreCodec.DecodeDmc2(exactDmc2.Span);
+        var payload = RequireHistoryMessage(endpoint, message);
+        if (payload.Mode is not (DeepIdV2ContactRouteHistoryMode.Announcement or DeepIdV2ContactRouteHistoryMode.EvidenceAndAnnouncement) ||
+            !Fixed(payload.RightCursor.Span, endpoint.Cursor.Span))
+            throw new CryptographicException("Announcement has no independently verified exact endpoint.");
+        return message;
     }
 
     // Denial diagnostics only. The actual caller first authenticates the
@@ -376,11 +414,14 @@ public static partial class DeepIdV2ContactRouteUpdateVerifier
             checked(currentUpperSeconds * 1000) >= expiresMilliseconds ? "ExpiredAnnouncement" :
             !CoversCreation(completed, created) ? "CreationOutsideSignedRoute" : null;
         if (failure is not null)
-        {
-            var error = new CryptographicException("Announcement is outside its own or the signed route's current windows.");
-            error.Data["Deep.ContactRouteHistoryAnnouncement.Check"] = failure;
-            throw error;
-        }
+            ThrowAnnouncementWindowFailure(failure);
+    }
+
+    private static void ThrowAnnouncementWindowFailure(string failure)
+    {
+        var error = new CryptographicException("Announcement is outside its own or the signed route's current windows.");
+        error.Data["Deep.ContactRouteHistoryAnnouncement.Check"] = failure;
+        throw error;
     }
 
     private static async ValueTask WithHistoryContextAsync(VerifiedDeepIdV2ContactRouteHistory state,
