@@ -88,9 +88,7 @@ internal sealed partial class TripleRatchetState
                     offset += componentLength;
                 }
 
-                foreach (var item in _skipped.OrderBy(static item => item.Key.EcN)
-                             .ThenBy(static item => item.Key.SckaEpoch)
-                             .ThenBy(static item => item.Key.SckaN))
+                foreach (var item in _skipped.OrderBy(static item => item.Key, DurableCounterOrder))
                 {
                     WriteSkippedKey(encoded.AsSpan(offset, DurableSkippedKeySize), item.Value);
                     offset += DurableSkippedKeySize;
@@ -239,13 +237,16 @@ internal sealed partial class TripleRatchetState
             throw new MessagingCryptoException(
                 MessagingCryptoError.SkippedKeyLimitExceeded,
                 "The durable skipped-key count exceeds 2048.");
-        foreach (var item in _skipped)
+        RatchetCounterTuple? prior = null;
+        foreach (var item in _skipped.OrderBy(static item => item.Key, DurableCounterOrder))
         {
             if (item.Key != item.Value.Counters || item.Key.EcChain.IsZero ||
-                item.Key.EcChain == ReceiveEcChain && item.Key.EcN >= NextExpectedReceiveEcN)
+                item.Key.EcChain == ReceiveEcChain && item.Key.EcN >= NextExpectedReceiveEcN ||
+                prior.HasValue && CompareCounterNumbers(prior.Value, item.Key) == 0)
                 throw new MessagingCryptoException(
                     MessagingCryptoError.TransitionRejected,
                     "A durable skipped key is not bound to a prior receive counter.");
+            prior = item.Key;
         }
         _ = ComputeDurableEncodedLength(_componentState?.Length ?? 0, _skipped.Count);
     }
@@ -343,7 +344,7 @@ internal sealed partial class TripleRatchetState
             var counters = ReadCounter(entry);
             if (counters.EcChain.IsZero ||
                 counters.EcChain == receiveEcChain && counters.EcN >= nextReceive ||
-                prior.HasValue && CompareCounter(prior.Value, counters) >= 0)
+                prior.HasValue && (CompareCounterNumbers(prior.Value, counters) == 0 || CompareCounter(prior.Value, counters) >= 0))
                 throw new MessagingCryptoException(
                     MessagingCryptoError.InvalidInput,
                     "Durable skipped keys must be unique, prior to the receive frontier, and canonically ordered.");
@@ -421,20 +422,32 @@ internal sealed partial class TripleRatchetState
         BinaryPrimitives.ReadUInt64BigEndian(source[40..]),
         BinaryPrimitives.ReadUInt64BigEndian(source[48..]));
 
+    // Every genuine receive step advances the global PQ frontier, so numeric
+    // triplet ties are unreachable and reject at both durable boundaries. Keep
+    // the existing numeric commitment transcript; chain is a final total-order
+    // discriminator, not a substitute for the owner's exact TRS1 hash fence.
+    private static readonly IComparer<RatchetCounterTuple> DurableCounterOrder =
+        Comparer<RatchetCounterTuple>.Create(CompareCounter);
+
+    private static int CompareCounterNumbers(RatchetCounterTuple left, RatchetCounterTuple right)
+    {
+        var ec = left.EcN.CompareTo(right.EcN);
+        if (ec != 0) return ec;
+        var epoch = left.SckaEpoch.CompareTo(right.SckaEpoch);
+        return epoch != 0 ? epoch : left.SckaN.CompareTo(right.SckaN);
+    }
+
     private static int CompareCounter(RatchetCounterTuple left, RatchetCounterTuple right)
     {
+        var numbers = CompareCounterNumbers(left, right);
+        if (numbers != 0) return numbers;
         var chainA = left.EcChain.A.CompareTo(right.EcChain.A);
         if (chainA != 0) return chainA;
         var chainB = left.EcChain.B.CompareTo(right.EcChain.B);
         if (chainB != 0) return chainB;
         var chainC = left.EcChain.C.CompareTo(right.EcChain.C);
         if (chainC != 0) return chainC;
-        var chainD = left.EcChain.D.CompareTo(right.EcChain.D);
-        if (chainD != 0) return chainD;
-        var ec = left.EcN.CompareTo(right.EcN);
-        if (ec != 0) return ec;
-        var epoch = left.SckaEpoch.CompareTo(right.SckaEpoch);
-        return epoch != 0 ? epoch : left.SckaN.CompareTo(right.SckaN);
+        return left.EcChain.D.CompareTo(right.EcChain.D);
     }
 
     private static void WriteSkippedKey(Span<byte> destination, SkippedComponentKey skipped)

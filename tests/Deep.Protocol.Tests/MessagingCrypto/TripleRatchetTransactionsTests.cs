@@ -671,6 +671,7 @@ public sealed partial class TripleRatchetTransactionsTests
         internal Func<ulong, bool> FreshContribution { get; init; } = static _ => false;
         internal bool ReusePqTuple { get; init; }
         internal bool ReusePqKey { get; init; }
+        internal bool BindPqKeyToChainAndCounter { get; init; }
         internal bool BreakFirstPredecessor { get; init; }
         internal byte[]? SendHeaderNetworkOverride { get; init; }
         internal RatchetCounterTuple? SendHeaderCounterOverride { get; init; }
@@ -786,7 +787,8 @@ public sealed partial class TripleRatchetTransactionsTests
             return new RatchetComponentKeyMaterial(
                 new RatchetCounterTuple(ecChain, ecN, sckaEpoch, sckaN),
                 SHA256.HashData(Encoding.ASCII.GetBytes($"ec{ecN}")),
-                SHA256.HashData(Encoding.ASCII.GetBytes(ReusePqKey ? "pq-reused" : $"pq{ecN}")),
+                SHA256.HashData(Encoding.ASCII.GetBytes(ReusePqKey ? "pq-reused" :
+                    BindPqKeyToChainAndCounter ? $"pq{Convert.ToHexString(ecChain.ToArray())}:{sckaEpoch}:{sckaN}" : $"pq{ecN}")),
                 new PqStepEvidence(prior, next, fresh));
         }
     }

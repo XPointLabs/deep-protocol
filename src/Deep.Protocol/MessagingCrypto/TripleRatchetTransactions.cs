@@ -1271,9 +1271,7 @@ internal sealed partial class TripleRatchetState : IDisposable
             hash.AppendData(_receivePqStateCommitment);
             hash.AppendData(_sendPqStateCommitment);
             hash.AppendData(componentHash);
-            foreach (var item in _skipped.OrderBy(static item => item.Key.EcN)
-                         .ThenBy(static item => item.Key.SckaEpoch)
-                         .ThenBy(static item => item.Key.SckaN))
+            foreach (var item in _skipped.OrderBy(static item => item.Key, DurableCounterOrder))
             {
                 var skippedCommitment = item.Value.StateCommitment(Binding.Commitment.Span);
                 hash.AppendData(skippedCommitment);
