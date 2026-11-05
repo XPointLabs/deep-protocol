@@ -283,21 +283,19 @@ internal sealed class DeepIdV2RouteContext
             recipient.Authorization, reading.BootId.Span, reading.SampleSeconds);
         var dtt = AccountDirectoryDtt1Codec.Decode(fresh.ExactDtt1.Span);
         var head = AccountDirectoryAdh1Codec.Decode(fresh.ExactAdh1.Span);
-        if (!Fixed(network.NetworkId.Span, authority.NetworkId.Span) ||
-            !Fixed(network.NetworkId.Span, fresh.NetworkId.Span) ||
-            !Fixed(closure.View.FieldSpan(7), authority.AuthorityCoreReference.Span) ||
-            !Fixed(closure.Head.FieldSpan(8), authority.AuthorityCoreReference.Span) ||
-            !Fixed(head.ExactXnaAuthorityCoreReference.Span, authority.AuthorityCoreReference.Span) ||
-            !Fixed(dtt.AuthorizingXna1CoreReference.Span, authority.AuthorityCoreReference.Span) ||
-            !Fixed(head.WitnessPolicyHash.Span, authority.DirectoryWitnessPolicyHash.Span) ||
-            !Fixed(dtt.WitnessPolicyHash.Span, authority.DirectoryWitnessPolicyHash.Span) ||
-            !Fixed(((IVerifiedDirectoryNetworkTime)fresh).ExactAdh1CoreReference.Span, closure.Adh1CoreReference) ||
-            !Fixed(dtt.CurrentXnv1CoreHash.Span, closure.View.CoreHash.Span) ||
-            dtt.CurrentXnv1Generation != closure.View.ViewGeneration ||
-            !Fixed(reading.BootId.Span, closure.FreshnessBootId) ||
-            reading.SampleSeconds < closure.FreshnessMonotonicSample ||
-            reading.SampleSeconds >= closure.FreshnessDeadlineMonotonicSeconds)
-            throw new CryptographicException("The current DID2 recipient and network do not share exact directory/view authority.");
+        Require(Fixed(network.NetworkId.Span, authority.NetworkId.Span), DeepIdV2RouteContextCheck.NetworkAuthority);
+        Require(Fixed(network.NetworkId.Span, fresh.NetworkId.Span), DeepIdV2RouteContextCheck.RecipientNetwork);
+        Require(Fixed(closure.View.FieldSpan(7), authority.AuthorityCoreReference.Span), DeepIdV2RouteContextCheck.ViewAuthority);
+        Require(Fixed(closure.Head.FieldSpan(8), authority.AuthorityCoreReference.Span), DeepIdV2RouteContextCheck.HeadAuthority);
+        Require(Fixed(head.ExactXnaAuthorityCoreReference.Span, authority.AuthorityCoreReference.Span), DeepIdV2RouteContextCheck.DirectoryAuthority);
+        Require(Fixed(dtt.AuthorizingXna1CoreReference.Span, authority.AuthorityCoreReference.Span), DeepIdV2RouteContextCheck.TimeAuthority);
+        Require(Fixed(head.WitnessPolicyHash.Span, authority.DirectoryWitnessPolicyHash.Span), DeepIdV2RouteContextCheck.DirectoryWitnessPolicy);
+        Require(Fixed(dtt.WitnessPolicyHash.Span, authority.DirectoryWitnessPolicyHash.Span), DeepIdV2RouteContextCheck.TimeWitnessPolicy);
+        Require(Fixed(dtt.CurrentXnv1CoreHash.Span, closure.View.CoreHash.Span), DeepIdV2RouteContextCheck.ViewHash);
+        Require(dtt.CurrentXnv1Generation == closure.View.ViewGeneration, DeepIdV2RouteContextCheck.ViewGeneration);
+        Require(Fixed(reading.BootId.Span, closure.FreshnessBootId), DeepIdV2RouteContextCheck.ClockBoot);
+        Require(reading.SampleSeconds >= closure.FreshnessMonotonicSample, DeepIdV2RouteContextCheck.ClockRegression);
+        Require(reading.SampleSeconds < closure.FreshnessDeadlineMonotonicSeconds, DeepIdV2RouteContextCheck.ObservationExpiry);
         ulong lower, upper;
         try
         {
@@ -317,7 +315,16 @@ internal sealed class DeepIdV2RouteContext
         result.Covers(device.Certificate.IssuedAtUnixSeconds, device.Certificate.ExpiresAtUnixSeconds, DeepIdV2RouteTimeArtifact.DeviceCertificate);
         result.Covers(recipient.Authorization.Record.NotBeforeUnixSeconds, recipient.Authorization.Record.ExpiresAtUnixSeconds, DeepIdV2RouteTimeArtifact.Dca1);
         result.Covers(U64(closure.Pmt.FieldSpan(11)), U64(closure.Pmt.FieldSpan(12)), DeepIdV2RouteTimeArtifact.Pmt2);
+        // A directory-only mismatch is classified after every other binding
+        // and signed/current time check, so it cannot hide a terminal refusal.
+        Require(Fixed(((IVerifiedDirectoryNetworkTime)fresh).ExactAdh1CoreReference.Span,
+            closure.Adh1CoreReference), DeepIdV2RouteContextCheck.DirectoryHead);
         return result;
+
+        static void Require(bool matches, DeepIdV2RouteContextCheck check)
+        {
+            if (!matches) throw new DeepIdV2RouteContextException(check);
+        }
     }
 
     internal async ValueTask<DeepIdV2RouteContext> RecheckAsync(CancellationToken ct)
