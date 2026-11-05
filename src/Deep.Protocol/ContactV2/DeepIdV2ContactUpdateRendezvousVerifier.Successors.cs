@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using Deep.Protocol.AccountDirectoryV1;
 using Deep.Protocol.ContactV1;
 using Deep.Protocol.DeepExtension.PrivacyRouting;
+using Deep.Protocol.XPointNetworkV1;
 
 namespace Deep.Protocol.ContactV2;
 
@@ -12,9 +13,9 @@ public static partial class DeepIdV2ContactUpdateRendezvousVerifier
     public static async ValueTask<VerifiedDeepIdV2ContactUpdateRendezvous> VerifySuccessorChainAsync(
         ReadOnlyMemory<byte> originalXur, ReadOnlyMemory<byte> acceptedHead, IReadOnlyList<ReadOnlyMemory<byte>> successors,
         VerifiedDeepIdV2DirectoryFreshness freshness, VerifiedOnionNetworkContext network,
-        OnionTrustedTimeAuthority trustedTime, CancellationToken cancellationToken = default)
+        VerifiedXPointNetworkAuthority authority, OnionTrustedTimeAuthority trustedTime, CancellationToken cancellationToken = default)
     {
-        var tip = await VerifyChainAsync(originalXur, acceptedHead, successors, freshness, network,
+        var tip = await VerifyChainAsync(originalXur, acceptedHead, successors, freshness, network, authority,
             null, trustedTime, cancellationToken).ConfigureAwait(false);
         return new(tip, freshness);
     }
@@ -23,18 +24,18 @@ public static partial class DeepIdV2ContactUpdateRendezvousVerifier
     public static async ValueTask VerifyRecordedSuccessorChainAsync(ReadOnlyMemory<byte> originalXur,
         ReadOnlyMemory<byte> acceptedHead, IReadOnlyList<ReadOnlyMemory<byte>> successors,
         VerifiedDeepIdV2DirectoryFreshness freshness, VerifiedOnionNetworkContext network,
-        ulong eventCreatedAtUnixSeconds, OnionTrustedTimeAuthority trustedTime, CancellationToken cancellationToken = default)
+        VerifiedXPointNetworkAuthority authority, ulong eventCreatedAtUnixSeconds, OnionTrustedTimeAuthority trustedTime, CancellationToken cancellationToken = default)
     {
-        _ = await VerifyChainAsync(originalXur, acceptedHead, successors, freshness, network,
+        _ = await VerifyChainAsync(originalXur, acceptedHead, successors, freshness, network, authority,
             eventCreatedAtUnixSeconds, trustedTime, cancellationToken).ConfigureAwait(false);
     }
 
     private static async ValueTask<ContactRecord> VerifyChainAsync(ReadOnlyMemory<byte> genesisBytes,
         ReadOnlyMemory<byte> acceptedHead, IReadOnlyList<ReadOnlyMemory<byte>> successors,
         VerifiedDeepIdV2DirectoryFreshness freshness, VerifiedOnionNetworkContext network,
-        ulong? historicalTime, OnionTrustedTimeAuthority trustedTime, CancellationToken ct)
+        VerifiedXPointNetworkAuthority authority, ulong? historicalTime, OnionTrustedTimeAuthority trustedTime, CancellationToken ct)
     {
-        ArgumentNullException.ThrowIfNull(freshness); ArgumentNullException.ThrowIfNull(network);
+        ArgumentNullException.ThrowIfNull(freshness); ArgumentNullException.ThrowIfNull(network); ArgumentNullException.ThrowIfNull(authority);
         ArgumentNullException.ThrowIfNull(trustedTime); ArgumentNullException.ThrowIfNull(successors);
         ct.ThrowIfCancellationRequested();
         int count = successors.Count;
@@ -57,7 +58,9 @@ public static partial class DeepIdV2ContactUpdateRendezvousVerifier
         if (!includesAcceptedHead)
             throw new CryptographicException("Rendezvous continuation diverges from its accepted head.");
         var first = await trustedTime.ReadCurrentAsync(ct).ConfigureAwait(false);
-        DeepIdV2ContactUpdateRendezvousAuthor.RequireCurrent(freshness, network, first);
+        var directory = AccountDirectoryAdh1Codec.Decode(freshness.ExactAdh1.Span);
+        var witness = AccountDirectoryDtt1Codec.Decode(freshness.ExactDtt1.Span);
+        var initialBounds = PeerWindow(first);
         RequireIssuerBinding(genesis, freshness, first);
         foreach (var record in records)
         {
@@ -68,20 +71,45 @@ public static partial class DeepIdV2ContactUpdateRendezvousVerifier
         ct.ThrowIfCancellationRequested();
         if (final.SampleSeconds < first.SampleSeconds || !Fixed(final.BootId.Span, first.BootId.Span))
             throw new CryptographicException("Rendezvous chain verification crossed a clock discontinuity.");
-        DeepIdV2ContactUpdateRendezvousAuthor.RequireCurrent(freshness, network, final);
+        var finalBounds = PeerWindow(final);
         if (historicalTime is { } at)
         {
-            var elapsed = checked(final.SampleSeconds - freshness.MonotonicSample);
-            if (at > checked(freshness.TrustedUpperUnixSeconds + elapsed) ||
+            if (at > checked(freshness.TrustedUpperUnixSeconds + (final.SampleSeconds - freshness.MonotonicSample)) ||
                 at < U64(previous.FieldSpan(11)) || at >= U64(previous.FieldSpan(12)))
                 throw new CryptographicException("The rendezvous tip did not cover the native event.");
         }
         else
         {
-            RequireLiveInterval(previous, freshness, first);
-            RequireLiveInterval(previous, freshness, final);
+            if (U64(previous.FieldSpan(11)) > initialBounds.Lower || U64(previous.FieldSpan(12)) <= finalBounds.Upper)
+                throw new CryptographicException("The rendezvous tip does not cover the joined trusted-time interval.");
         }
         return previous;
+
+        (ulong Lower, ulong Upper) PeerWindow(OnionMonotonicReading now)
+        {
+            network.EnsureCurrent();
+            if (freshness.ResultKind != AccountDirectoryAdp1ResultKind.CurrentValue || freshness.CurrentCheckpoint is null ||
+                !freshness.IsCurrentAtMonotonic(now.BootId.Span, now.SampleSeconds))
+                throw new CryptographicException("Rendezvous continuation requires a current peer directory observation.");
+            DeepIdV2RouteContext.RequireDirectoryBindings(freshness, network, authority, now, directory, witness);
+            var closure = network.Closure!;
+            var peerElapsed = checked(now.SampleSeconds - freshness.MonotonicSample);
+            var networkElapsed = checked(now.SampleSeconds - closure.FreshnessMonotonicSample);
+            var lower = Math.Min(checked(freshness.TrustedLowerUnixSeconds + peerElapsed), checked(closure.TrustedLowerUnixSeconds + networkElapsed));
+            var upper = Math.Max(checked(freshness.TrustedUpperUnixSeconds + peerElapsed), checked(closure.TrustedUpperUnixSeconds + networkElapsed));
+            DeepIdV2RouteTimeCoverage.Require(lower, upper, authority.NotBefore, authority.ExpiresAt, DeepIdV2RouteTimeArtifact.Xna1);
+            DeepIdV2RouteTimeCoverage.Require(lower, upper, closure.View.NotBefore, closure.View.ExpiresAt, DeepIdV2RouteTimeArtifact.Xnv1);
+            DeepIdV2RouteTimeCoverage.Require(lower, upper, closure.Head.ValidFrom, closure.Head.ValidUntil, DeepIdV2RouteTimeArtifact.Xnh1);
+            DeepIdV2RouteTimeCoverage.Require(lower, upper, directory.ValidFrom, directory.ValidUntil, DeepIdV2RouteTimeArtifact.Adh1);
+            var device = freshness.CurrentCheckpoint.Directory.Identity.ActiveDevices.SingleOrDefault(d =>
+                Fixed(d.Certificate.DeviceId.Span, genesis.FieldSpan(13))) ??
+                throw new CryptographicException("Rendezvous continuation issuer is no longer an active device.");
+            DeepIdV2RouteTimeCoverage.Require(lower, upper, device.Certificate.IssuedAtUnixSeconds,
+                device.Certificate.ExpiresAtUnixSeconds, DeepIdV2RouteTimeArtifact.DeviceCertificate);
+            if (!Fixed(((IVerifiedDirectoryNetworkTime)freshness).ExactAdh1CoreReference.Span, closure.Adh1CoreReference))
+                throw new DeepIdV2RouteContextException(DeepIdV2RouteContextCheck.DirectoryHead);
+            return (lower, upper);
+        }
     }
 
     internal static void RequireSuccessor(ContactRecord previous, ContactRecord next)

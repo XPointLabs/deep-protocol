@@ -48,7 +48,7 @@ public static partial class ApplicationCoreCodec
         }
         var payload = DeepIdV2ContactRouteHistoryCodec.Decode(bytes, endpoint.Original.NetworkId.Span);
         _ = await DeepIdV2ContactUpdateRendezvousVerifier.VerifySuccessorChainAsync(anchor, anchor,
-            payload.RendezvousSuccessors, sender.Freshness, network, time, cancellationToken).ConfigureAwait(false);
+            payload.RendezvousSuccessors, sender.Freshness, network, authority, time, cancellationToken).ConfigureAwait(false);
         var message = await AuthorHistoryControlCoreAsync(payload, sender, network, authority, endpoint.Original.ConversationId,
             logicalMessage32, senderClientSequence, time, cancellationToken, endpoint).ConfigureAwait(false);
         _ = await DeepIdV2ContactRouteUpdateVerifier.VerifyHistoryPageAsync(endpoint, message.CanonicalBytes,

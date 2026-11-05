@@ -219,7 +219,7 @@ public static partial class DeepIdV2ContactRouteUpdateVerifier
         if (payload.Mode == DeepIdV2ContactRouteHistoryMode.HistoryRequest)
             throw new CryptographicException("A remote request cursor cannot advance local history.");
         RequireHistoryLeft(before, payload);
-        await VerifyCarriedRendezvousAsync(before, message, peer, network, time, cancellationToken).ConfigureAwait(false);
+        await VerifyCarriedRendezvousAsync(before, message, peer, network, authority, time, cancellationToken).ConfigureAwait(false);
         VerifiedDeepIdV2ContactRouteHistory? after = null;
         await WithHistoryContextAsync(before, peer, network, authority, time, current => {
             var state = before;
@@ -358,7 +358,7 @@ public static partial class DeepIdV2ContactRouteUpdateVerifier
         CancellationToken cancellationToken = default)
     {
         var message = RequireEndpointAnnouncement(endpoint, exactDmc2);
-        await VerifyCarriedRendezvousAsync(endpoint, message, peer, network, time, cancellationToken).ConfigureAwait(false);
+        await VerifyCarriedRendezvousAsync(endpoint, message, peer, network, authority, time, cancellationToken).ConfigureAwait(false);
         DeepIdV2CurrentContactAuthorization? recipient = null;
         await WithHistoryContextAsync(endpoint, peer, network, authority, time, current => {
             RequireCurrentRoute(endpoint.Completed, current);
@@ -385,7 +385,7 @@ public static partial class DeepIdV2ContactRouteUpdateVerifier
         CancellationToken cancellationToken = default)
     {
         var message = RequireEndpointAnnouncement(endpoint, exactDmc2); var expired = false;
-        await VerifyCarriedRendezvousAsync(endpoint, message, peer, network, time, cancellationToken).ConfigureAwait(false);
+        await VerifyCarriedRendezvousAsync(endpoint, message, peer, network, authority, time, cancellationToken).ConfigureAwait(false);
         await WithHistoryContextAsync(endpoint, peer, network, authority, time, current =>
         {
             RequireCurrentRoute(endpoint.Completed, current);
@@ -403,13 +403,13 @@ public static partial class DeepIdV2ContactRouteUpdateVerifier
 
     private static ValueTask VerifyCarriedRendezvousAsync(VerifiedDeepIdV2ContactRouteHistory endpoint,
         ParsedDmc2 message, VerifiedDeepIdV2DirectoryFreshness peer, VerifiedOnionNetworkContext network,
-        OnionTrustedTimeAuthority time, CancellationToken ct)
+        VerifiedXPointNetworkAuthority authority, OnionTrustedTimeAuthority time, CancellationToken ct)
     {
         var records = ((ContactRouteHistoryDmc2Payload)message.ParsedPayload).RendezvousSuccessors;
         if (records.Count == 0) return ValueTask.CompletedTask;
         var genesis = endpoint.OriginalRendezvous;
         return DeepIdV2ContactUpdateRendezvousVerifier.VerifyRecordedSuccessorChainAsync(genesis, genesis,
-            records, peer, network, message.CreatedAtUnixMilliseconds / 1000, time, ct);
+            records, peer, network, authority, message.CreatedAtUnixMilliseconds / 1000, time, ct);
     }
 
     private static ParsedDmc2 RequireEndpointAnnouncement(VerifiedDeepIdV2ContactRouteHistory endpoint,

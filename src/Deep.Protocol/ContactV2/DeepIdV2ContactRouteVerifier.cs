@@ -283,19 +283,7 @@ internal sealed class DeepIdV2RouteContext
             recipient.Authorization, reading.BootId.Span, reading.SampleSeconds);
         var dtt = AccountDirectoryDtt1Codec.Decode(fresh.ExactDtt1.Span);
         var head = AccountDirectoryAdh1Codec.Decode(fresh.ExactAdh1.Span);
-        Require(Fixed(network.NetworkId.Span, authority.NetworkId.Span), DeepIdV2RouteContextCheck.NetworkAuthority);
-        Require(Fixed(network.NetworkId.Span, fresh.NetworkId.Span), DeepIdV2RouteContextCheck.RecipientNetwork);
-        Require(Fixed(closure.View.FieldSpan(7), authority.AuthorityCoreReference.Span), DeepIdV2RouteContextCheck.ViewAuthority);
-        Require(Fixed(closure.Head.FieldSpan(8), authority.AuthorityCoreReference.Span), DeepIdV2RouteContextCheck.HeadAuthority);
-        Require(Fixed(head.ExactXnaAuthorityCoreReference.Span, authority.AuthorityCoreReference.Span), DeepIdV2RouteContextCheck.DirectoryAuthority);
-        Require(Fixed(dtt.AuthorizingXna1CoreReference.Span, authority.AuthorityCoreReference.Span), DeepIdV2RouteContextCheck.TimeAuthority);
-        Require(Fixed(head.WitnessPolicyHash.Span, authority.DirectoryWitnessPolicyHash.Span), DeepIdV2RouteContextCheck.DirectoryWitnessPolicy);
-        Require(Fixed(dtt.WitnessPolicyHash.Span, authority.DirectoryWitnessPolicyHash.Span), DeepIdV2RouteContextCheck.TimeWitnessPolicy);
-        Require(Fixed(dtt.CurrentXnv1CoreHash.Span, closure.View.CoreHash.Span), DeepIdV2RouteContextCheck.ViewHash);
-        Require(dtt.CurrentXnv1Generation == closure.View.ViewGeneration, DeepIdV2RouteContextCheck.ViewGeneration);
-        Require(Fixed(reading.BootId.Span, closure.FreshnessBootId), DeepIdV2RouteContextCheck.ClockBoot);
-        Require(reading.SampleSeconds >= closure.FreshnessMonotonicSample, DeepIdV2RouteContextCheck.ClockRegression);
-        Require(reading.SampleSeconds < closure.FreshnessDeadlineMonotonicSeconds, DeepIdV2RouteContextCheck.ObservationExpiry);
+        RequireDirectoryBindings(fresh, network, authority, reading, head, dtt);
         ulong lower, upper;
         try
         {
@@ -321,10 +309,34 @@ internal sealed class DeepIdV2RouteContext
             closure.Adh1CoreReference), DeepIdV2RouteContextCheck.DirectoryHead);
         return result;
 
-        static void Require(bool matches, DeepIdV2RouteContextCheck check)
-        {
-            if (!matches) throw new DeepIdV2RouteContextException(check);
-        }
+    }
+
+    // A peer DTT is bound to that peer's independently challenged directory
+    // query. Its authenticated authority, view and clock must agree with the
+    // network observation even though the two DTT nonces differ.
+    internal static void RequireDirectoryBindings(VerifiedDeepIdV2DirectoryFreshness fresh,
+        VerifiedOnionNetworkContext network, VerifiedXPointNetworkAuthority authority,
+        OnionMonotonicReading reading, AccountDirectoryAdh1 head, AccountDirectoryDtt1 dtt)
+    {
+        var closure = network.Closure!;
+        Require(Fixed(network.NetworkId.Span, authority.NetworkId.Span), DeepIdV2RouteContextCheck.NetworkAuthority);
+        Require(Fixed(network.NetworkId.Span, fresh.NetworkId.Span), DeepIdV2RouteContextCheck.RecipientNetwork);
+        Require(Fixed(closure.View.FieldSpan(7), authority.AuthorityCoreReference.Span), DeepIdV2RouteContextCheck.ViewAuthority);
+        Require(Fixed(closure.Head.FieldSpan(8), authority.AuthorityCoreReference.Span), DeepIdV2RouteContextCheck.HeadAuthority);
+        Require(Fixed(head.ExactXnaAuthorityCoreReference.Span, authority.AuthorityCoreReference.Span), DeepIdV2RouteContextCheck.DirectoryAuthority);
+        Require(Fixed(dtt.AuthorizingXna1CoreReference.Span, authority.AuthorityCoreReference.Span), DeepIdV2RouteContextCheck.TimeAuthority);
+        Require(Fixed(head.WitnessPolicyHash.Span, authority.DirectoryWitnessPolicyHash.Span), DeepIdV2RouteContextCheck.DirectoryWitnessPolicy);
+        Require(Fixed(dtt.WitnessPolicyHash.Span, authority.DirectoryWitnessPolicyHash.Span), DeepIdV2RouteContextCheck.TimeWitnessPolicy);
+        Require(Fixed(dtt.CurrentXnv1CoreHash.Span, closure.View.CoreHash.Span), DeepIdV2RouteContextCheck.ViewHash);
+        Require(dtt.CurrentXnv1Generation == closure.View.ViewGeneration, DeepIdV2RouteContextCheck.ViewGeneration);
+        Require(Fixed(reading.BootId.Span, closure.FreshnessBootId), DeepIdV2RouteContextCheck.ClockBoot);
+        Require(reading.SampleSeconds >= closure.FreshnessMonotonicSample, DeepIdV2RouteContextCheck.ClockRegression);
+        Require(reading.SampleSeconds < closure.FreshnessDeadlineMonotonicSeconds, DeepIdV2RouteContextCheck.ObservationExpiry);
+    }
+
+    private static void Require(bool matches, DeepIdV2RouteContextCheck check)
+    {
+        if (!matches) throw new DeepIdV2RouteContextException(check);
     }
 
     internal async ValueTask<DeepIdV2RouteContext> RecheckAsync(CancellationToken ct)
