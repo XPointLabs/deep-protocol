@@ -61,6 +61,30 @@ public sealed partial class AccountDirectoryFreshnessVerificationTests
             var result = await Verify(valid);
             Assert.Equal(valid, result.ExactXur1.ToArray());
             Assert.Same(freshness, result.Freshness);
+            var successorFields = fields.ToArray();
+            successorFields[3] = RendezvousU64(1);
+            successorFields[4] = SHA256.HashData(valid);
+            successorFields[11] = RendezvousU64(freshness.TrustedUpperUnixSeconds + 45);
+            var successorRecord = ContactCodec.Decode(ProtocolMagic.XUR1, Exact(successorFields));
+            DeepIdV2ContactUpdateRendezvousVerifier.RequireSuccessor(result.Record, successorRecord);
+            var reading = await new RendezvousClock().ReadAsync(default);
+            DeepIdV2ContactUpdateRendezvousVerifier.RequireSignedDevice(successorRecord, freshness, reading);
+            await Assert.ThrowsAsync<CryptographicException>(async () => await Verify(successorRecord.CanonicalBytes.ToArray()));
+            var tampered = ContactCodec.Decode(ProtocolMagic.XUR1, Exact(successorFields, damage: true));
+            Assert.Throws<CryptographicException>(() => DeepIdV2ContactUpdateRendezvousVerifier.RequireSignedDevice(tampered, freshness, reading));
+            foreach (var change in new[] { 1, 2, 3, 4, 6, 7, 8, 11 })
+            {
+                var fork = successorFields.ToArray();
+                fork[change] = change switch
+                {
+                    3 => RendezvousU64(2),
+                    11 => fields[11],
+                    _ => Bytes(32, 0x98)
+                };
+                var signedFork = ContactCodec.Decode(ProtocolMagic.XUR1, Exact(fork));
+                Assert.Throws<CryptographicException>(() =>
+                    DeepIdV2ContactUpdateRendezvousVerifier.RequireSuccessor(result.Record, signedFork));
+            }
             var callerOwned = valid.ToArray();
             var copied = await Verify(callerOwned, new RendezvousClock(onRead: () => callerOwned[^1] ^= 1));
             Assert.Equal(valid, copied.ExactXur1.ToArray());

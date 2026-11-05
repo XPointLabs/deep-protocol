@@ -75,12 +75,28 @@ public sealed class ContactRouteHistoryDmc2Payload : Dmc2Payload
     public ReadOnlyMemory<byte> RequestEventHash => Exact.AsMemory(915, 32).ToArray();
     /// <summary>At most three untrusted public evidence atoms.</summary>
     public IReadOnlyList<ParsedDeepIdV2ContactRouteHistoryAtom> Atoms { get; }
+
+    /// <summary>Signed rendezvous continuations in a count9 private announcement. Parsing alone grants no authority.</summary>
+    public IReadOnlyList<ReadOnlyMemory<byte>> RendezvousSuccessors
+    {
+        get
+        {
+            if (Exact[72] != 9) return Array.Empty<ReadOnlyMemory<byte>>();
+            var offset = DeepIdV2ContactRouteHistoryCodec.HeaderBytes;
+            var records = new ReadOnlyMemory<byte>[BinaryPrimitives.ReadUInt16BigEndian(Exact.AsSpan(offset))];
+            offset += 2;
+            for (var i = 0; i < records.Length; i++, offset += 538)
+                records[i] = Exact.AsSpan(offset, 538).ToArray();
+            return records;
+        }
+    }
 }
 
 /// <summary>Canonical count8 grammar. All signatures, lineage and native custody require verification.</summary>
 public static class DeepIdV2ContactRouteHistoryCodec
 {
     public const int HeaderBytes = 1024, CursorBytes = 112, MaximumPayloadBytes = 32768;
+    public const int MaximumRendezvousSuccessors = (MaximumPayloadBytes - HeaderBytes - 2) / 538;
     public const int MaximumAtoms = 3, MaximumProposalAtomBytes = 16311, MaximumCompletedAtomBytes = 28635;
     internal const int AtomPrefixBytes = 1132;
 
@@ -110,7 +126,7 @@ public static class DeepIdV2ContactRouteHistoryCodec
     public static ContactRouteHistoryDmc2Payload Decode(ReadOnlySpan<byte> bytes, ReadOnlySpan<byte> networkId16)
     {
         if (networkId16.Length != 16 || bytes.Length is < HeaderBytes or > MaximumPayloadBytes ||
-            bytes[72] != 8 || bytes[73] != 1 || bytes[74] is < 1 or > 4 || bytes[75] > MaximumAtoms ||
+            bytes[72] is not (8 or 9) || bytes[73] != 1 || bytes[74] is < 1 or > 4 || bytes[75] > MaximumAtoms ||
             bytes.Slice(76, 4).IndexOfAnyExcept((byte)0) >= 0 || bytes.Slice(947, 77).IndexOfAnyExcept((byte)0) >= 0 ||
             bytes[..32].IndexOfAnyExcept((byte)0) < 0 || bytes.Slice(40, 32).IndexOfAnyExcept((byte)0) < 0)
             throw new FormatException("Route history header is not canonical.");
@@ -123,6 +139,22 @@ public static class DeepIdV2ContactRouteHistoryCodec
         // First scan every enclosing length; malformed aggregates cannot reach nested decoders.
         var offset = HeaderBytes;
         for (var index = 0; index < bytes[75]; index++) _ = ReadAtom(bytes, ref offset);
+        if (bytes[72] == 9)
+        {
+            if (bytes[74] != (byte)DeepIdV2ContactRouteHistoryMode.Announcement || bytes[75] != 0 ||
+                bytes.Length < HeaderBytes + 2 || bytes.Slice(915, 32).IndexOfAnyExcept((byte)0) >= 0)
+                throw new FormatException("Invalid rendezvous continuation carrier.");
+            var count = BinaryPrimitives.ReadUInt16BigEndian(bytes[offset..]); offset += 2;
+            if (count is < 1 or > MaximumRendezvousSuccessors || bytes.Length - offset != count * 538)
+                throw new FormatException("Invalid rendezvous continuation framing.");
+            for (var i = 0; i < count; i++, offset += 538)
+            {
+                var record = ContactCodec.Decode(ProtocolMagic.XUR1, bytes.Slice(offset, 538));
+                if (!record.FieldSpan(1).SequenceEqual(networkId16) ||
+                    BinaryPrimitives.ReadUInt64BigEndian(record.FieldSpan(4)) != (ulong)i + 1)
+                    throw new FormatException("Rendezvous continuation changed network or generation order.");
+            }
+        }
         if (offset != bytes.Length) throw new FormatException("Route history has trailing bytes.");
         var anchor = DeepIdV2InviteRendezvousCodec.Decode(bytes.Slice(304, 611));
         if (!anchor.Field(1).Span.SequenceEqual(networkId16) ||

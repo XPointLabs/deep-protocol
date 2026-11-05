@@ -20,6 +20,43 @@ public sealed class AuthoredVerifiedContactRouteHistoryControl
 
 public static partial class ApplicationCoreCodec
 {
+    /// <summary>Authors a private route announcement carrying the signed continuation of the original contact's XUR1.</summary>
+    public static async ValueTask<AuthoredVerifiedContactRouteHistoryControl> AuthorVerifiedContactRouteHistoryRendezvousAnnouncementAsync(
+        VerifiedDeepIdV2ContactRouteHistory endpoint, ReadOnlyMemory<byte> originalXur,
+        IReadOnlyList<ReadOnlyMemory<byte>> successors, DeepIdV2CurrentContactAuthorization sender,
+        VerifiedOnionNetworkContext network, VerifiedXPointNetworkAuthority authority, ReadOnlyMemory<byte> logicalMessage32,
+        ulong senderClientSequence, OnionTrustedTimeAuthority time, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(endpoint); ArgumentNullException.ThrowIfNull(successors);
+        ArgumentNullException.ThrowIfNull(sender);
+        cancellationToken.ThrowIfCancellationRequested();
+        int count = successors.Count;
+        var anchor = endpoint.OriginalRendezvous;
+        if (!CryptographicOperations.FixedTimeEquals(anchor.Span, originalXur.Span) ||
+            count is < 1 or > DeepIdV2ContactRouteHistoryCodec.MaximumRendezvousSuccessors)
+            throw new CryptographicException("Rendezvous announcement lost its native contact anchor or exceeds capacity.");
+        var header = HistoryPayload(endpoint, endpoint, DeepIdV2ContactRouteHistoryMode.Announcement, new byte[32], []).Exact;
+        var bytes = new byte[header.Length + 2 + count * 538];
+        header.CopyTo(bytes, 0); bytes[72] = 9;
+        BinaryPrimitives.WriteUInt16BigEndian(bytes.AsSpan(header.Length), checked((ushort)count));
+        var offset = header.Length + 2;
+        for (var i = 0; i < count; i++, offset += 538)
+        {
+            var record = successors[i];
+            if (record.Length != 538) throw new CryptographicException("Invalid rendezvous record size.");
+            record.Span.CopyTo(bytes.AsSpan(offset, 538));
+        }
+        var payload = DeepIdV2ContactRouteHistoryCodec.Decode(bytes, endpoint.Original.NetworkId.Span);
+        _ = await DeepIdV2ContactUpdateRendezvousVerifier.VerifySuccessorChainAsync(anchor, anchor,
+            payload.RendezvousSuccessors, sender.Freshness, network, time, cancellationToken).ConfigureAwait(false);
+        var message = await AuthorHistoryControlCoreAsync(payload, sender, network, authority, endpoint.Original.ConversationId,
+            logicalMessage32, senderClientSequence, time, cancellationToken, endpoint).ConfigureAwait(false);
+        _ = await DeepIdV2ContactRouteUpdateVerifier.VerifyHistoryPageAsync(endpoint, message.CanonicalBytes,
+            sender.Freshness, network, authority, time, cancellationToken).ConfigureAwait(false);
+        _ = await DeepIdV2ContactRouteUpdateVerifier.VerifyCurrentHistoryAnnouncementAsync(endpoint, message.CanonicalBytes,
+            sender.Freshness, network, authority, time, cancellationToken).ConfigureAwait(false);
+        return new(message);
+    }
     /// <summary>Reads a prospective announcement expiry from the same current signed ceilings as the author. This planning scalar grants no authoring or delivery permission.</summary>
     /// <param name="endpoint">The independently verified exact endpoint to announce.</param>
     /// <param name="sender">Current sender authorization.</param>

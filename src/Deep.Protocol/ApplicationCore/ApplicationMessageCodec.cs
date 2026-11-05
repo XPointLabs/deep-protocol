@@ -660,7 +660,7 @@ public static partial class ApplicationCoreCodec
 
     private static Dmc2Payload DecodeContactRouteUpdate(ReadOnlySpan<byte> payload, ReadOnlySpan<byte> network)
     {
-        if (payload.Length >= 73 && payload[72] == 8)
+        if (payload.Length >= 73 && payload[72] is 8 or 9)
             return DeepIdV2ContactRouteHistoryCodec.Decode(payload, network);
         if (payload.Length is < 4_215 or > 32_768 || payload[72] is < 6 or > 7 || (payload[72] == 6 && payload.Length > 23_367))
             PayloadInvalid(ApplicationCoreRejection.InvalidFieldLength, "ContactRouteUpdate has a noncanonical closure count or total length.");

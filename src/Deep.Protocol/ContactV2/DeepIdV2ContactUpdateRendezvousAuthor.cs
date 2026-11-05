@@ -19,6 +19,26 @@ public static class DeepIdV2ContactUpdateRendezvousAuthor
         ReadOnlyMemory<byte> metadataX25519PublicKey32, ulong issuedAtUnixSeconds,
         ulong expiresAtUnixSeconds, OnionTrustedTimeAuthority trustedTime,
         CancellationToken cancellationToken = default)
+        => await AuthorAsync(null, freshness, network, deviceSecrets, metadataKeyId32,
+            metadataX25519PublicKey32, issuedAtUnixSeconds, expiresAtUnixSeconds, trustedTime, cancellationToken).ConfigureAwait(false);
+
+    /// <summary>Renews an exact device-signed predecessor for the same direction and metadata key. The caller owns the accepted predecessor and the atomic selection of the resulting record.</summary>
+    public static ValueTask<VerifiedDeepIdV2ContactUpdateRendezvous> AuthorSuccessorAsync(
+        ReadOnlyMemory<byte> exactPrevious, VerifiedDeepIdV2DirectoryFreshness freshness,
+        VerifiedOnionNetworkContext network, OwnedGenesisDeviceSecrets deviceSecrets, ulong issuedAtUnixSeconds,
+        ulong expiresAtUnixSeconds, OnionTrustedTimeAuthority trustedTime, CancellationToken cancellationToken = default)
+    {
+        if (exactPrevious.Length != 538) throw new ArgumentException("Invalid XUR1 predecessor length.", nameof(exactPrevious));
+        var previous = ContactCodec.Decode(ProtocolMagic.XUR1, exactPrevious.Span);
+        return AuthorAsync(previous, freshness, network, deviceSecrets, previous.Field(8), previous.Field(9),
+            issuedAtUnixSeconds, expiresAtUnixSeconds, trustedTime, cancellationToken);
+    }
+
+    private static async ValueTask<VerifiedDeepIdV2ContactUpdateRendezvous> AuthorAsync(
+        ContactRecord? previous, VerifiedDeepIdV2DirectoryFreshness freshness, VerifiedOnionNetworkContext network,
+        OwnedGenesisDeviceSecrets deviceSecrets, ReadOnlyMemory<byte> metadataKeyId32,
+        ReadOnlyMemory<byte> metadataX25519PublicKey32, ulong issuedAtUnixSeconds,
+        ulong expiresAtUnixSeconds, OnionTrustedTimeAuthority trustedTime, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(freshness);
         ArgumentNullException.ThrowIfNull(network);
@@ -39,6 +59,14 @@ public static class DeepIdV2ContactUpdateRendezvousAuthor
             var first = await trustedTime.ReadCurrentAsync(cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
             RequireCurrent(freshness, network, first);
+            if (previous is not null)
+            {
+                DeepIdV2ContactUpdateRendezvousVerifier.RequireSignedDevice(previous, freshness, first);
+                if (!previous.FieldSpan(13).SequenceEqual(deviceSecrets.DeviceId.Bytes.Span) ||
+                    issuedAtUnixSeconds < BinaryPrimitives.ReadUInt64BigEndian(previous.FieldSpan(11)) ||
+                    expiresAtUnixSeconds <= BinaryPrimitives.ReadUInt64BigEndian(previous.FieldSpan(12)))
+                    throw new CryptographicException("A rendezvous renewal must extend the owned original.");
+            }
             var elapsed = checked(first.SampleSeconds - freshness.MonotonicSample);
             if (issuedAtUnixSeconds > checked(freshness.TrustedLowerUnixSeconds + elapsed) ||
                 expiresAtUnixSeconds <= checked(freshness.TrustedUpperUnixSeconds + elapsed))
@@ -53,8 +81,10 @@ public static class DeepIdV2ContactUpdateRendezvousAuthor
                 publicKey.AsSpan().SequenceEqual(device.Certificate.DeviceX25519PublicKey.Span))
                 throw new CryptographicException("The rendezvous validity/key role differs from current authority.");
             var placeholder = new byte[64]; placeholder[^1] = 1;
-            fields = [freshness.NetworkId, Random32(), Random32(), U64(0), new byte[32],
-                network.Closure.PmtArtifactReference.ToArray(), Random32(), keyId, publicKey, new byte[] { 0, 7 },
+            var generation = previous is null ? 0UL : checked(BinaryPrimitives.ReadUInt64BigEndian(previous.FieldSpan(4)) + 1);
+            fields = [freshness.NetworkId, previous?.Field(2) ?? Random32(), previous?.Field(3) ?? Random32(),
+                U64(generation), previous?.ArtifactHash ?? new byte[32],
+                network.Closure.PmtArtifactReference.ToArray(), previous?.Field(7) ?? Random32(), keyId, publicKey, new byte[] { 0, 7 },
                 U64(issuedAtUnixSeconds), U64(expiresAtUnixSeconds), device.Certificate.DeviceId,
                 new ContactArtifactReference(ProtocolMagic.DPD1, 1, device.Certificate.CanonicalHash.Span).CanonicalBytes,
                 placeholder];
@@ -62,13 +92,17 @@ public static class DeepIdV2ContactUpdateRendezvousAuthor
             signature = deviceSecrets.SignContactUpdateRendezvous(provisional, freshness);
             fields[14] = signature;
             var record = ContactCodec.AuthorForOperationalAuthority(ProtocolMagic.XUR1, fields);
-            DeepIdV2ContactUpdateRendezvousVerifier.RequireCurrentIssuer(record, freshness, first);
+            DeepIdV2ContactUpdateRendezvousVerifier.RequireSignedDevice(record, freshness, first);
             var final = await trustedTime.ReadCurrentAsync(cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
             if (final.SampleSeconds < first.SampleSeconds || !final.BootId.Span.SequenceEqual(first.BootId.Span))
                 throw new CryptographicException("Rendezvous authoring crossed a protected clock discontinuity.");
             RequireCurrent(freshness, network, final);
-            DeepIdV2ContactUpdateRendezvousVerifier.RequireCurrentIssuer(record, freshness, final);
+            DeepIdV2ContactUpdateRendezvousVerifier.RequireSignedDevice(record, freshness, final);
+            var elapsedFinal = checked(final.SampleSeconds - freshness.MonotonicSample);
+            if (issuedAtUnixSeconds > checked(freshness.TrustedLowerUnixSeconds + elapsedFinal) ||
+                expiresAtUnixSeconds <= checked(freshness.TrustedUpperUnixSeconds + elapsedFinal))
+                throw new CryptographicException("Rendezvous expired during authoring.");
             return new VerifiedDeepIdV2ContactUpdateRendezvous(record, freshness);
         }
         finally
@@ -81,7 +115,7 @@ public static class DeepIdV2ContactUpdateRendezvousAuthor
         }
     }
 
-    private static void RequireCurrent(VerifiedDeepIdV2DirectoryFreshness proof,
+    internal static void RequireCurrent(VerifiedDeepIdV2DirectoryFreshness proof,
         VerifiedOnionNetworkContext network, OnionMonotonicReading reading)
     {
         network.EnsureCurrent();

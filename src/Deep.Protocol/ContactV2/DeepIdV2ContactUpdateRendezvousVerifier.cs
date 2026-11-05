@@ -24,7 +24,7 @@ public sealed class VerifiedDeepIdV2ContactUpdateRendezvous
         DeepIdV2ContactUpdateRendezvousVerifier.RequireCurrentIssuer(Record, Freshness, reading);
 }
 
-public static class DeepIdV2ContactUpdateRendezvousVerifier
+public static partial class DeepIdV2ContactUpdateRendezvousVerifier
 {
     public static bool RuntimeActivation => false;
 
@@ -56,6 +56,12 @@ public static class DeepIdV2ContactUpdateRendezvousVerifier
         VerifiedDeepIdV2DirectoryFreshness freshness, OnionMonotonicReading reading)
     {
         RequireIssuerBinding(record, freshness, reading);
+        RequireLiveInterval(record, freshness, reading);
+    }
+
+    private static void RequireLiveInterval(ContactRecord record,
+        VerifiedDeepIdV2DirectoryFreshness freshness, OnionMonotonicReading reading)
+    {
         ulong lower, upper;
         try
         {
@@ -76,6 +82,14 @@ public static class DeepIdV2ContactUpdateRendezvousVerifier
     internal static void RequireIssuerBinding(ContactRecord record,
         VerifiedDeepIdV2DirectoryFreshness freshness, OnionMonotonicReading reading)
     {
+        if (U64(record.FieldSpan(4)) != 0 || record.FieldSpan(5).IndexOfAnyExcept((byte)0) >= 0)
+            throw new CryptographicException("First contact requires the original rendezvous.");
+        RequireSignedDevice(record, freshness, reading);
+    }
+
+    internal static void RequireSignedDevice(ContactRecord record,
+        VerifiedDeepIdV2DirectoryFreshness freshness, OnionMonotonicReading reading)
+    {
         if (freshness.ResultKind != AccountDirectoryAdp1ResultKind.CurrentValue ||
             !freshness.IsCurrentAtMonotonic(reading.BootId.Span, reading.SampleSeconds))
             throw new CryptographicException("A fresh current DID2 directory checkpoint is required for the rendezvous.");
@@ -93,7 +107,8 @@ public static class DeepIdV2ContactUpdateRendezvousVerifier
             !Fixed(entry.Dpd1Reference.CanonicalHash.Span, device.Certificate.CanonicalHash.Span) ||
             !Fixed(record.FieldSpan(14), new ContactArtifactReference(ProtocolMagic.DPD1, 1,
                 device.Certificate.CanonicalHash.Span).CanonicalBytes.Span) ||
-            U64(record.FieldSpan(4)) != 0 || record.FieldSpan(5).IndexOfAnyExcept((byte)0) >= 0 ||
+            U64(record.FieldSpan(11)) < device.Certificate.IssuedAtUnixSeconds ||
+            U64(record.FieldSpan(12)) > device.Certificate.ExpiresAtUnixSeconds ||
             BinaryPrimitives.ReadUInt16BigEndian(record.FieldSpan(10)) != 0x0007)
             throw new CryptographicException("The inbound rendezvous differs from its current DID2 device authority.");
         try { ContactCodec.VerifyDeviceSignature(record, device.Certificate.DeviceEd25519PublicKey.Span); }

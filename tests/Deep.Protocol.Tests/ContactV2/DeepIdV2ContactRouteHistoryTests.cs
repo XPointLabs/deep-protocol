@@ -14,6 +14,36 @@ namespace Deep.Protocol.Tests.ContactV2;
 /// do not assert signature verification, native custody, current routing or E2E.</summary>
 public sealed class DeepIdV2ContactRouteHistoryTests
 {
+    [Fact]
+    public void RendezvousCarrierRoundTripsExactSuccessorAndRejectsAmbiguousFraming()
+    {
+        var network = Package(false).Authorization.NetworkId;
+        var genesis = ContactCodecTests.Records.Xur;
+        var fields = Enumerable.Range(1, 15).Select(genesis.Field).ToArray();
+        fields[0] = network;
+        fields[3] = new byte[8]; BinaryPrimitives.WriteUInt64BigEndian(MemoryMarshal.AsMemory(fields[3]).Span, 1);
+        fields[4] = genesis.ArtifactHash;
+        var record = ContactCodecValidation.AuthorRecord("XUR1", fields).CanonicalBytes;
+        var header = Page(2, []);
+        var carrier = new byte[header.Length + 2 + 538]; header.CopyTo(carrier, 0);
+        carrier[72] = 9;
+        BinaryPrimitives.WriteUInt16BigEndian(carrier.AsSpan(header.Length), 1);
+        record.Span.CopyTo(carrier.AsSpan(header.Length + 2));
+        var payload = DeepIdV2ContactRouteHistoryCodec.Decode(carrier, network.Span);
+        var parsed = ApplicationCoreCodec.DecodeDmc2(Event(payload).CanonicalBytes.Span);
+        var embedded = Assert.IsType<ContactRouteHistoryDmc2Payload>(parsed.ParsedPayload);
+        var copy = Assert.Single(embedded.RendezvousSuccessors);
+        Assert.Equal(record.ToArray(), copy.ToArray());
+        MemoryMarshal.AsMemory(copy).Span.Clear();
+        Assert.Equal(record.ToArray(), Assert.Single(embedded.RendezvousSuccessors).ToArray());
+        Assert.Throws<FormatException>(() => DeepIdV2ContactRouteHistoryCodec.Decode(carrier.AsSpan(0, carrier.Length - 1), network.Span));
+        foreach (var (offset, value) in new[] { (72, 8), (74, 4), (75, 1), (915, 1), (1025, 0), (1025, 60) })
+        {
+            var hostile = carrier.ToArray(); hostile[offset] = (byte)value;
+            Assert.Throws<FormatException>(() => DeepIdV2ContactRouteHistoryCodec.Decode(hostile, network.Span));
+        }
+    }
+
     [Theory]
     [InlineData(1001UL, 2000UL, 1UL, "FutureCreation")]
     [InlineData(999UL, 1000UL, 1UL, "ExpiredAnnouncement")]
